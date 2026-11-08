@@ -1,109 +1,24 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
-import { MoreHorizontal, Play, Search, X } from "lucide-react";
-import type { MediaNode, RadioStation } from "@shared/model";
-import type { Favorite, PlaylistItem } from "@shared/model";
-import { favoriteKey } from "@shared/model";
-import { mediaKind, type MediaKind } from "@/lib/media";
-import { tt } from "@/api";
+import { Search } from "lucide-react";
 import { useStore } from "@/store";
 import { EmptyState } from "@/components/chrome/EmptyState";
-import { SortChip } from "@/components/controls/SortChip";
-import { MediaRow } from "@/components/media/MediaRow";
-import { StationRow } from "@/components/media/StationRow";
-import { RowMenu } from "@/components/media/RowMenu";
-import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
-import { PresetPicker } from "@/components/library/LibraryMenus";
-import { favoriteAct, isFavorited, toggleFavorite } from "@/lib/favorites";
-import { activatePlaylist } from "@/lib/playlists";
 import {
-  fromFavorite,
-  fromNode,
-  refToFavorite,
-  refToPlaylistItem,
-  type MediaRef,
-} from "@/lib/mediaRef";
-import { refSiblings } from "@/lib/infoSteps";
-import { openArtistInLibrary, saveRefToPreset } from "@/lib/mediaActions";
-import {
-  albumMenuItems,
-  artistMenuItems,
-  trackMenuItems,
-  type MediaMenuItem,
-} from "@/lib/mediaMenus";
-import { RowAction } from "@/components/media/RowAction";
-import { RowHeart } from "@/components/media/RowHeart";
-import { Segmented } from "@/components/controls/Segmented";
-import { playStation, playingStationName, RADIO_DEBOUNCE_MS, stationMenuItems } from "@/lib/radio";
-import { useStationTuning } from "@/hooks/useStationTuning";
-import { useLitPresets } from "@/hooks/useLitPresets";
-import { cx, matchesFilter } from "@/lib/format";
-import { Chip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
-import {
-  SEARCH_CATEGORIES,
   layoutGroups,
-  moreCount,
   orderByNav,
-  orderRows,
   seedHidden,
   toggleHidden,
   type SearchCategoryId,
-  type SearchGroup,
 } from "@/lib/searchGroups";
-import { menuAt, openMenuOn } from "@/lib/menuAt";
-import { KeyedList } from "@/components/controls/KeyedList";
-import { nameKey } from "@shared/keys";
-
-/** Below this, a query matches half the library and every station on earth. */
-const MIN_RADIO_CHARS = 2;
-/** A group's row as this screen builds it: the sort key the name sort reads,
- *  the kind the library's sub-headings section by, and the rendered row. */
-type SearchRow = { key: string; sortKey: string; kind?: MediaKind; node: React.ReactNode };
-
-/**
- * Only two sorts GENERALIZE across five heterogeneous groups.
- *
- * 'relevance' is each source's own ranking (the index's for library, most-
- * listened for the directory, recency for the local collections) and is the
- * neutral, non-reversible default — same contract as the library results chip.
- * Name is the one field every result has. Artist and year are library-shaped;
- * a playlist, a preset and a station have neither, and date-added is
- * favorites-shaped. Those sorts live on the owning screens, which have them.
- */
-const SEARCH_SORTS: Array<{ value: "relevance" | "name"; label: string; noReverse?: boolean }> = [
-  { value: "relevance", label: "Relevance", noReverse: true },
-  { value: "name", label: "Name" },
-];
-
-/**
- * The session's last query — module scope, like the library's scroll and
- * find-recall memories. Coming back to Search mid-thought should show what you
- * were looking for, and this is never a setting.
- */
-let lastQuery = "";
-// …and the library partition, the same way (it reset to All on every return)
-let lastLibKind: "all" | "artists" | "albums" | "tracks" = "all";
-// …and the RESULTS of the last query (2026-08-22): a return used to re-run
-// every search from scratch and the scroll could only settle once the
-// radio directory had answered again. Seeded on mount for the same query;
-// the effects still refresh in the background and swap in what changed.
-let lastResults: {
-  query: string;
-  lib: MediaNode[];
-  libTotal: number;
-  radio: RadioStation[] | null;
-} | null = null;
-/*
- * Hidden categories and the sort are PERSISTED view defaults (settings
- * searchHidden/searchSort — the 2026-08-06 ruling), unlike the query above.
- * searchHidden null means "never customized": the mount seeds from navHidden —
- * a row you've hidden from the rail is a row you've said you don't use, so
- * search starts without it, as a DEFAULT only (the chip is still there, still
- * counted, one click from coming back; navHidden has never meant "disabled").
- * An explicit CHIP choice persists and wins from then on. The "+N more"
- * isolate is a session gesture, not a preference — it narrows the live view
- * without rewriting the default.
- */
+import { nodeKind, searchMemory, type LibKind } from "@/components/search/searchKit";
+import { useSearchQuery } from "@/components/search/useSearchQuery";
+import { useSearchResults } from "@/components/search/useSearchResults";
+import { useSearchActions } from "@/components/search/useSearchActions";
+import { useSearchMenus } from "@/components/search/useSearchMenus";
+import { useSearchGroups } from "@/components/search/useSearchGroups";
+import { SearchBox } from "@/components/search/SearchBox";
+import { SearchRail } from "@/components/search/SearchRail";
+import { SearchResults } from "@/components/search/SearchResults";
 
 /**
  * Unified search: one box over library, favorites, playlists, presets and
@@ -128,9 +43,16 @@ let lastResults: {
  * down for a concrete reason — the Recently Played screen has no play action at
  * all (it's a read-only log), so its results would be the only ones you
  * couldn't act on. Revisit if that screen gains one.
+ *
+ * ITS PARTS (0.16.0's tidy, before the design pass's one Search with scopes):
+ * components/search holds the query and its focus (useSearchQuery), the results
+ * (useSearchResults), a click's action (useSearchActions), the ⋯ menus
+ * (useSearchMenus), the five categories as data (useSearchGroups), and the box,
+ * the category rail and the results list. This screen holds what they share:
+ * the hidden categories, the library partition, and the layout of the groups.
  */
 export function SearchScreen(): React.JSX.Element {
-  const [query, setQuery] = useState(lastQuery);
+  const { query, setQuery, inputRef } = useSearchQuery();
   const navHidden = useStore((s) => s.settings.navHidden);
   const navOrder = useStore((s) => s.settings.navOrder);
   const storedHidden = useStore((s) => s.settings.searchHidden);
@@ -138,386 +60,30 @@ export function SearchScreen(): React.JSX.Element {
   const [hidden, setHidden] = useState<Set<SearchCategoryId>>(() =>
     seedHidden(storedHidden, navHidden),
   );
-  const sort = useStore((s) => s.settings.searchSort);
-  const sortReversed = useStore((s) => s.settings.searchSortReversed);
-  const [libKind, setLibKind] = useState<"all" | "artists" | "albums" | "tracks">(lastLibKind);
+  const [libKind, setLibKind] = useState<LibKind>(searchMemory.libKind);
   useEffect(() => {
-    lastLibKind = libKind;
+    searchMemory.libKind = libKind;
   }, [libKind]);
   // the results list keeps its spot across a trip to another screen
   const resultsScroll = useScrollMemory("search");
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  const favorites = useStore((s) => s.favorites);
-  const playlists = useStore((s) => s.playlists);
-  const presets = useStore((s) => s.presets?.presets ?? null);
-  // Over ALL presets, not the filtered results: uniqueness-based matching
-  // (duplicate saved queues light only an unambiguous match) must see the
-  // same field the Presets screen sees, or a filter can fake uniqueness.
-  const litPresets = useLitPresets(presets ?? []);
-  const connection = useStore((s) => s.connection);
-  const openInLibrary = useStore((s) => s.openInLibrary);
-  const requestLibrarySearch = useStore((s) => s.requestLibrarySearch);
-  const mediaIndex = useStore((s) => s.mediaIndex);
-  const jumpToPlaylist = useStore((s) => s.jumpToPlaylist);
-  const setScreen = useStore((s) => s.setScreen);
-  const setScreenFilter = useStore((s) => s.setScreenFilter);
-  const showToast = useStore((s) => s.showToast);
-  const connected = connection.phase === "connected";
   // OFF is absolute — the category isn't offered at all, so there is no chip to
   // switch back on and no way to reach the directory from here. HIDDEN is the
   // softer state above it: offered, off by default, one click away.
   const radioDirectory = useStore((s) => s.settings.radioDirectory);
 
-  useEffect(() => {
-    lastQuery = query;
-  }, [query]);
-
-  // ⌘F / the nav / the palette all land here; the ask carries an id so a
-  // request made before this mounted still focuses, and can't re-fire later.
-  const searchRequest = useStore((s) => s.searchRequest);
-  const clearSearchRequest = useStore((s) => s.clearSearchRequest);
-  const doneReq = useRef(-1);
-  /** A seeded query whose select() must wait for its VALUE to commit. */
-  const selectPending = useRef<string | null>(null);
-  /** The pending focus frame — cancelled only by a newer one or by unmount, never by the effect re-running. */
-  const focusFrame = useRef(0);
-  useEffect(() => {
-    const asked = searchRequest != null && doneReq.current !== searchRequest.id;
-    if (searchRequest) {
-      doneReq.current = searchRequest.id;
-      // A seeded ask (the Library→Search pivot: "Search everywhere for X")
-      // replaces the recalled query. Chips stay as they are — the point of a
-      // pivot is seeing which collections answer, so nothing gets hidden.
-      // The select happens in the [query] effect below, NOT here: selecting in
-      // this effect's frame grabs the OLD value, and the seeded value's commit
-      // then collapses the caret to the end — which silently killed ⌘←'s
-      // just-landed navigation after a pivot.
-      if (asked && searchRequest.query != null) {
-        selectPending.current = searchRequest.query;
-        setQuery(searchRequest.query);
-      }
-      clearSearchRequest();
-    } else if (doneReq.current !== -1) {
-      // the re-run after an ask was cleared: the ask's own frame below is
-      // already scheduled and must survive this run (cancelling it here is
-      // what used to lose the select — S on this screen focused but never
-      // selected the recalled query)
-      return;
-    }
-    // FOCUS ON THE NEXT FRAME, never synchronously in the effect. Arriving here
-    // by pressing `S` means this mount happens during that keydown, and a synchronous
-    // focus hands the keystroke's own default action to the newly focused
-    // input — which typed the "s" into the box (the query read "smock").
-    // A frame later the keystroke is long finished.
-    // INTENT PREPARES, HISTORY RESTORES (2026-08-23): S, the nav row, ⌘F and a
-    // pivot are intent to type, so the box takes focus. Back/Forward is
-    // restoration — the query, the results and the scroll come back as they
-    // were, and the focus state they were left in was "not in the box"
-    // (hotkeys and ⌘← don't fire from inside it) — so the box stays blurred
-    // and the next ⌘→ is history again, not a caret move. S re-focuses.
-    if (!asked && useStore.getState().arrivedByHistory) return;
-    cancelAnimationFrame(focusFrame.current);
-    focusFrame.current = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      // find idiom: an asked-for search arrives with the recalled query
-      // selected, so typing replaces it. A plain visit leaves the caret alone.
-      if (asked && selectPending.current == null) inputRef.current?.select();
-    });
-  }, [searchRequest, clearSearchRequest]);
-  useEffect(() => () => cancelAnimationFrame(focusFrame.current), []);
-  // The seeded-ask select, once the value it belongs to is really in the box.
-  useEffect(() => {
-    if (selectPending.current == null || query !== selectPending.current) return;
-    selectPending.current = null;
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, [query]);
-
   const q = query.trim();
 
-  // ---- local groups: straight off the store, no awaiting anything
-
-  const favResults = useMemo(() => {
-    if (!q) return [];
-    return favorites.filter((f) =>
-      f.kind === "station"
-        ? matchesFilter(q, [f.name])
-        : matchesFilter(q, [f.title, f.artist, f.album]),
-    );
-  }, [q, favorites]);
-
-  const playlistResults = useMemo(() => {
-    // Name only. Matching a playlist by the tracks INSIDE it sounds helpful and
-    // isn't: every playlist holding a common artist would answer every query.
-    if (!q) return [];
-    return playlists.filter((p) => matchesFilter(q, [p.name]));
-  }, [q, playlists]);
-
-  const presetResults = useMemo(() => {
-    if (!q) return [];
-    return (presets ?? []).filter((p) => p.name && matchesFilter(q, [p.name]));
-  }, [q, presets]);
-
-  // ---- library: index-backed, so also instant, but it crosses the IPC bridge
-
-  const [libResults, setLibResults] = useState<MediaNode[]>(() =>
-    lastResults?.query === lastQuery ? lastResults.lib : [],
-  );
-  const [libTotal, setLibTotal] = useState(() =>
-    lastResults?.query === lastQuery ? lastResults.libTotal : 0,
-  );
-  const libSeq = useRef(0);
-  useEffect(() => {
-    if (!q) {
-      setLibResults([]);
-      setLibTotal(0);
-      return;
-    }
-    if (seededQuery.current != null && seededQuery.current !== q) seededQuery.current = null; // a different query lifts the skip
-    if (seededQuery.current === q) return; // seeded from memory: nothing to fetch
-    const seq = ++libSeq.current;
-    void (async () => {
-      try {
-        const groups = await tt.mediaSearchAll(q);
-        if (seq !== libSeq.current) return; // superseded by a newer keystroke
-        setLibResults(groups.flatMap((g) => g.items));
-        setLibTotal(groups.reduce((n, g) => n + g.total, 0));
-      } catch {
-        if (seq !== libSeq.current) return;
-        setLibResults([]);
-        setLibTotal(0);
-      }
-    })();
-  }, [q]);
-
-  // ---- radio: the one network call. Debounced, superseded, and allowed to
-  // ---- fail without taking the local groups down with it.
-
-  const [radio, setRadio] = useState<RadioStation[] | null>(() =>
-    lastResults?.query === lastQuery ? lastResults.radio : null,
-  );
-  // The query this mount was SEEDED for: its library and radio effects skip
-  // the fetch while q is still that query (the rows are already the answer;
-  // the radio lookup is a network call and showed as a fresh search on every
-  // return — user, 2026-08-23). A different query lifts the skip INSIDE the
-  // effects, never in a cleanup: StrictMode's simulated unmount runs every
-  // cleanup and re-runs every effect, and a cleanup that nulled this ref made
-  // every history return refetch under `npm run dev` (user, 2026-08-23 —
-  // "it still takes a second to load more tracks in") while the built app
-  // was fine.
-  const seededQuery = useRef<string | null>(
-    lastResults?.query === lastQuery && lastQuery ? lastQuery : null,
-  );
-  useEffect(() => {
-    if (q) lastResults = { query: q, lib: libResults, libTotal, radio };
-  }, [q, libResults, libTotal, radio]);
-  const [radioPending, setRadioPending] = useState(false);
-  const [radioFailed, setRadioFailed] = useState(false);
-  const radioSeq = useRef(0);
-  useEffect(() => {
-    // Hidden means DON'T ASK. radio-browser is the only third party this screen
-    // touches, and the app promises that a lookup you've turned off makes zero
-    // requests — hiding the group while still querying every keystroke would
-    // break that quietly. There is no separate "disable radio" setting; this
-    // chip is it, and it persists for the session like the rest of the rail.
-    if (!radioDirectory || hidden.has("radio") || q.length < MIN_RADIO_CHARS) {
-      radioSeq.current++;
-      setRadio(null);
-      setRadioPending(false);
-      setRadioFailed(false);
-      return;
-    }
-    if (seededQuery.current != null && seededQuery.current !== q) seededQuery.current = null; // a different query lifts the skip
-    if (seededQuery.current === q) return; // seeded from memory: no lookup, no spinner
-    const seq = ++radioSeq.current;
-    setRadioPending(true);
-    setRadioFailed(false);
-    const t = setTimeout(() => {
-      void (async () => {
-        try {
-          const stations = await tt.radioSearch(q);
-          if (seq !== radioSeq.current) return;
-          setRadio(stations);
-        } catch {
-          if (seq !== radioSeq.current) return;
-          setRadio(null);
-          setRadioFailed(true);
-        } finally {
-          if (seq === radioSeq.current) setRadioPending(false);
-        }
-      })();
-    }, RADIO_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [q, hidden, radioDirectory]);
-
-  // ---- actions. Every one delegates to the same helper its own screen uses.
-
-  const playNode = (node: MediaNode): void => {
-    const udn = node.serverUdn;
-    if (!udn) return;
-    // an ARTIST opens their page in the Library (2026-10-11): Search's results are the indexes',
-    // and the page is built from them, the same on every server
-    if (nodeKind(node) === "artist") {
-      openArtistInLibrary(node.title);
-      return;
-    }
-    if (node.isContainer) {
-      openInLibrary({
-        serverUdn: udn,
-        objectId: node.id,
-        titlePath: [node.title],
-        title: node.title,
-        upnpClass: node.upnpClass,
-        fromSearch: true,
-      });
-      return;
-    }
-    void tt.mediaQueueAdd(udn, node.id, "PLAY_NOW");
-  };
-
-  const openFavorite = (f: Favorite): void => {
-    if (f.kind === "station") {
-      void playStation({ url: f.url, name: f.name, favicon: f.favicon });
-      return;
-    }
-    const media = f;
-    if (media.kind === "album") {
-      void favoriteAct(media, async (udn, id) => {
-        await tt.mediaBrowse(udn, id, media.titlePath ?? [media.title]);
-        openInLibrary({
-          serverUdn: udn,
-          objectId: id,
-          titlePath: media.titlePath ?? [media.title],
-          title: media.title,
-          fromSearch: true,
-        });
-      });
-      return;
-    }
-    void (async () => {
-      const res = await favoriteAct(media, (udn, id) => tt.mediaQueueAdd(udn, id, "PLAY_NOW"));
-      if (res === "missing" || res === "no-server") {
-        showToast({ kind: "error", text: `Couldn't find “${media.title}”` });
-      }
-    })();
-  };
-
-  // WHAT a library result is — the ONE classifier (lib/media), shared with the
-  // Library's own results filter. The index returns artists, albums AND tracks,
-  // and until the kind was on the row the click contract read as arbitrary: a
-  // track played, an album navigated, and nothing said which was which.
-  const nodeKind = (n: MediaNode): MediaKind => mediaKind(n.upnpClass, n.isContainer);
-  const kindLabel = (k: MediaKind): string => k[0].toUpperCase() + k.slice(1);
-
-  /** Hearted, by its copy — null fav (artists, identity-less) = no heart. */
-  const refFavorited = (ref: MediaRef): boolean => {
-    const fav = refToFavorite(ref);
-    return fav != null && isFavorited(fav, favorites);
-  };
-
-  // ---- the ⋯ (and right-click): items built at open time from the shared
-  // ---- per-entity builders, so a result's menu is the same menu the Library,
-  // ---- Queue and Favorites show for the same thing
-  const [rowMenu, setRowMenu] = useState<{
-    title: string;
-    x: number;
-    y: number;
-    items: MediaMenuItem[];
-  } | null>(null);
-  const [playlistFor, setPlaylistFor] = useState<{
-    label: string;
-    x: number;
-    y: number;
-    resolve(): Promise<PlaylistItem[]>;
-  } | null>(null);
-  const [presetFor, setPresetFor] = useState<{ ref: MediaRef; x: number; y: number } | null>(null);
-
-  const openNodeMenu = (node: MediaNode, e: React.MouseEvent): void => {
-    e.preventDefault();
-    e.stopPropagation();
-    const ref = fromNode(node);
-    const udn = node.serverUdn;
-    const at = menuAt(e);
-    const queueVerb = (action: "PLAY_NOW" | "PLAY_NEXT" | "APPEND" | "REPLACE") =>
-      udn ? () => void tt.mediaQueueAdd(udn, node.id, action) : undefined;
-    const caps = {
-      playNow: queueVerb("PLAY_NOW"),
-      playNext: queueVerb("PLAY_NEXT"),
-      append: queueVerb("APPEND"),
-      replaceQueue: queueVerb("REPLACE"),
-      saveToPreset: () => setPresetFor({ ref, ...at }),
-      addToPlaylist: () =>
-        setPlaylistFor({
-          label: node.title,
-          ...at,
-          resolve: async () => {
-            if (!node.isContainer) return [refToPlaylistItem(ref)];
-            if (!udn) return [];
-            // an album expands to its TRACKS — a playlist stores tracks
-            const children = await tt.mediaBrowse(udn, node.id, []);
-            return children
-              .filter((c) => !c.isContainer)
-              .map((c) => refToPlaylistItem(fromNode(c, udn)));
-          },
-        }),
-    };
-    const kind = nodeKind(node);
-    const items =
-      kind === "artist"
-        ? artistMenuItems(ref, { openArtistPage: () => openArtistInLibrary(node.title) })
-        : kind === "album"
-          ? albumMenuItems(ref, {
-              ...caps,
-              openInLibrary: () => playNode(node), // container click contract: open
-            })
-          : trackMenuItems(ref, {
-              ...caps,
-              // Info steps through the library's results as shown (lib/infoSteps)
-              infoList: refSiblings(libShown, node, (n) => fromNode(n)),
-            });
-    setRowMenu({ title: node.title, ...at, items });
-  };
-
-  const openFavMenu = (f: Favorite, e: React.MouseEvent): void => {
-    if (f.kind === "station") return; // stations: heart + click; no menu anywhere
-    const media = f;
-    e.preventDefault();
-    e.stopPropagation();
-    const ref = fromFavorite(media);
-    const at = menuAt(e);
-    const favQueue = (action: "PLAY_NEXT" | "APPEND" | "REPLACE") => () =>
-      void favoriteAct(media, (udn, id) => tt.mediaQueueAdd(udn, id, action));
-    const caps = {
-      playNext: favQueue("PLAY_NEXT"),
-      append: favQueue("APPEND"),
-      replaceQueue: favQueue("REPLACE"),
-      saveToPreset: () => setPresetFor({ ref, ...at }),
-      addToPlaylist: () =>
-        setPlaylistFor({
-          label: media.title,
-          ...at,
-          resolve: async () => {
-            if (media.kind === "track") return [refToPlaylistItem(ref)];
-            const items: PlaylistItem[] = [];
-            await favoriteAct(media, async (udn, id) => {
-              const children = await tt.mediaBrowse(udn, id, media.titlePath ?? [media.title]);
-              for (const c of children)
-                if (!c.isContainer) items.push(refToPlaylistItem(fromNode(c, udn)));
-            });
-            return items;
-          },
-        }),
-    };
-    setRowMenu({
-      title: media.title,
-      ...at,
-      items:
-        media.kind === "album"
-          ? albumMenuItems(ref, { ...caps, playNow: () => openFavorite(f) })
-          : trackMenuItems(ref, { ...caps, playNow: () => openFavorite(f) }),
-    });
-  };
+  const {
+    favResults,
+    playlistResults,
+    presetResults,
+    libResults,
+    libTotal,
+    radio,
+    radioPending,
+    radioFailed,
+  } = useSearchResults(q, hidden, radioDirectory);
+  const { playNode, openFavorite } = useSearchActions();
 
   // Library sub-filter, offered only when the library IS the screen — the same
   // All/Artists/Albums/Tracks partition its own results screen uses.
@@ -528,252 +94,28 @@ export function SearchScreen(): React.JSX.Element {
     [libResults, libKind],
   );
 
-  const favStationUrls = useMemo(
-    () =>
-      new Set(favorites.filter((f) => f.kind === "station").map((f) => (f as { url: string }).url)),
-    [favorites],
+  const { openNodeMenu, openFavMenu, setRowMenu, overlays } = useSearchMenus(
+    libShown,
+    playNode,
+    openFavorite,
   );
 
-  // The library group answers from the INDEXES only; a server that isn't
-  // indexed (yet, or ever) is invisible here. What the Library can do about it
-  // depends on the server: one that answers UPnP Search itself is asked directly
-  // by the Library's search box; a Browse-only one (the streamer's USB stick)
-  // has no search until its index is built, from its card in the Library.
-  // Silent disagreement between the two searches is what erodes trust — so when
-  // that gap exists, this screen says so, and says which (user, 2026-09-17).
-  const libUnindexed = useMemo(() => mediaIndex.filter((x) => x.state !== "ready"), [mediaIndex]);
-  const libLive = useMemo(() => libUnindexed.filter((x) => x.searchable !== false), [libUnindexed]);
-  const libBrowseOnly = useMemo(
-    () => libUnindexed.filter((x) => x.searchable === false),
-    [libUnindexed],
-  );
-
-  // Station rows light up like the Radio screen's — same audible-name match,
-  // same tuning-in window, from the same shared helpers, so the row for a
-  // playing stream can't be lit on one screen and dead on the other.
-  const playState = useStore((s) => s.playState);
-  const radioPlayingName = playingStationName(playState);
-  const { tuningUrl, play: playRadio } = useStationTuning(radioPlayingName);
-
-  // ---- The five categories, as data. Every group renders from this list, so a
-  // ---- chip, a count, a cap and a sort can't disagree about what a category
-  // ---- is. The ORDER is the NAV RAIL'S (user, 2026-07-25): one spatial habit
-  // ---- for the whole app, so scanning results reuses the muscle memory the
-  // ---- sidebar built. Since the rail became user-reorderable (2026-07-26)
-  // ---- that means the USER'S order, read live below — the rationale transfers
-  // ---- wholesale, and a rail someone deliberately arranged is a stronger
-  // ---- claim on their muscle memory than our default ever was. The literal's
-  // ---- own order is now just a starting point for that sort.
-  // ---- (Radio used to be defended as "last anyway, which suits the group that
-  // ---- arrives late". It isn't a rule: if the user puts Radio first, Radio
-  // ---- goes first, and its own pending state already handles arriving late.)
-
-  const built: Array<SearchGroup<SearchRow>> = [
-    {
-      id: "library",
-      ...SEARCH_CATEGORIES.library,
-      total: libTotal,
-      rows: libShown.map((node) => {
-        const ref = fromNode(node);
-        const fav = refToFavorite(ref);
-        return {
-          key: `${node.serverUdn}:${node.id}`,
-          sortKey: node.title,
-          kind: nodeKind(node),
-          node: (
-            <MediaRow
-              title={node.title}
-              subtitle={[node.artist, node.serverName].filter(Boolean).join(" — ")}
-              artUrl={node.artUrl}
-              artistName={nodeKind(node) === "artist" ? node.title : null}
-              kind={nodeKind(node)}
-              badge={kindLabel(nodeKind(node))}
-              duration={nodeKind(node) === "track" ? node.durationSecs : undefined}
-              actions={
-                <>
-                  {/* A container's click OPENS it, so playing needs its own
-                      button; a track's click already plays. */}
-                  {node.isContainer && nodeKind(node) !== "artist" && (
-                    <RowAction
-                      icon={Play}
-                      label={`Play ${node.title}`}
-                      onClick={() => {
-                        if (node.serverUdn)
-                          void tt.mediaQueueAdd(node.serverUdn, node.id, "PLAY_NOW");
-                      }}
-                    />
-                  )}
-                  <RowAction
-                    icon={MoreHorizontal}
-                    label="More actions"
-                    onClick={(e) => openNodeMenu(node, e)}
-                  />
-                  {fav && (
-                    <RowHeart
-                      favorited={refFavorited(ref)}
-                      held={false}
-                      onHeart={() => void toggleFavorite(fav)}
-                    />
-                  )}
-                </>
-              }
-              onClick={() => playNode(node)}
-              onContextMenu={(e) => openNodeMenu(node, e)}
-            />
-          ),
-        };
-      }),
-    },
-    {
-      id: "presets",
-      ...SEARCH_CATEGORIES.presets,
-      total: presetResults.length,
-      rows: presetResults.map((p) => ({
-        key: String(p.id ?? p.name),
-        sortKey: p.name ?? "",
-        node: (
-          <MediaRow
-            title={p.name ?? `Preset ${p.id}`}
-            subtitle={p.type}
-            artUrl={p.art_url}
-            kind="preset"
-            badge="Preset"
-            meta={p.id != null ? `#${p.id}` : undefined}
-            // NOT `p.is_playing` — the device's flag is untrustworthy in both
-            // directions; useLitPresets is the one derivation (see its memo).
-            playing={p.id != null && litPresets.has(p.id)}
-            dimmed={!connected}
-            onClick={() => {
-              if (p.id != null) void tt.command({ type: "recallPreset", presetId: p.id });
-            }}
-          />
-        ),
-      })),
-    },
-    {
-      id: "playlists",
-      ...SEARCH_CATEGORIES.playlists,
-      total: playlistResults.length,
-      rows: playlistResults.map((p) => ({
-        key: p.id,
-        sortKey: p.name,
-        node: (
-          <MediaRow
-            title={p.name}
-            subtitle={`${p.items.length} ${p.items.length === 1 ? "track" : "tracks"}`}
-            kind="playlist"
-            badge="Playlist"
-            // never dimmed: the row's CLICK opens the playlist, which is local
-            // and fine offline — only the Play action needs the streamer, and
-            // activatePlaylist reports that failure itself
-            actions={
-              <RowAction
-                icon={Play}
-                label={`Play ${p.name}`}
-                onClick={() => void activatePlaylist(p)}
-              />
-            }
-            onClick={() => jumpToPlaylist(p.id)}
-          />
-        ),
-      })),
-    },
-    {
-      id: "favorites",
-      ...SEARCH_CATEGORIES.favorites,
-      total: favResults.length,
-      rows: favResults.map((f) => ({
-        key: favoriteKey(f),
-        sortKey: f.kind === "station" ? f.name : f.title,
-        node: (
-          <MediaRow
-            title={f.kind === "station" ? f.name : f.title}
-            subtitle={
-              f.kind === "station"
-                ? "Station"
-                : [f.artist, f.kind === "album" ? "Album" : f.album].filter(Boolean).join(" — ")
-            }
-            artUrl={f.kind === "station" ? f.favicon : f.artUrl}
-            kind={f.kind === "station" ? "station" : f.kind}
-            badge={f.kind === "station" ? "Station" : f.kind === "album" ? "Album" : "Track"}
-            duration={f.kind === "track" ? (f.durationSecs ?? null) : undefined}
-            dimmed={!connected}
-            actions={
-              <>
-                {f.kind !== "station" && (
-                  <RowAction
-                    icon={MoreHorizontal}
-                    label="More actions"
-                    onClick={(e) => openFavMenu(f, e)}
-                  />
-                )}
-                <RowHeart
-                  favorited
-                  held={false}
-                  onHeart={() => void tt.favoriteRemove(favoriteKey(f))}
-                />
-              </>
-            }
-            onClick={() => openFavorite(f)}
-            onContextMenu={(e) => openFavMenu(f, e)}
-          />
-        ),
-      })),
-    },
-  ];
-
-  // The directory setting decides whether this category EXISTS. Pushed after
-  // the literal rather than filtered out of it, so "off" leaves no chip, no
-  // count and no way to reach radio-browser from this screen at all.
-  if (radioDirectory) {
-    built.push({
-      id: "radio",
-      ...SEARCH_CATEGORIES.radio,
-      total: radio?.length ?? 0,
-      pending: radioPending,
-      // Hidden and never asked: we don't KNOW the count, and printing 0 would
-      // claim we looked. The chip stays live so it can be switched back on.
-      unknown: hidden.has("radio") && radio === null,
-      rows: (radio ?? []).map((st) => {
-        const playing = radioPlayingName != null && nameKey(st.name) === radioPlayingName;
-        const favorited = favStationUrls.has(st.url);
-        const heart = (): void =>
-          void toggleFavorite({
-            kind: "station",
-            name: st.name,
-            url: st.url,
-            favicon: st.favicon,
-            radioBrowserUuid: st.uuid !== st.url ? st.uuid : null,
-          });
-        return {
-          key: st.uuid,
-          sortKey: st.name,
-          node: (
-            <StationRow
-              station={st}
-              playing={playing}
-              tuning={!playing && tuningUrl === st.url}
-              favorited={favorited}
-              onHeart={heart}
-              onPlay={() => void playRadio(st)}
-              // its heart from the keyboard ("."), whose button the results list keeps out of
-              // the Tab order
-              onMenu={(e) => {
-                e.preventDefault();
-                setRowMenu({
-                  title: st.name,
-                  ...menuAt(e),
-                  items: stationMenuItems({ favorited, onHeart: heart }),
-                });
-              }}
-              // no onSave: save-to-preset belongs to the Radio screen, where
-              // the panel has room — omitting the prop omits the button
-            />
-          ),
-        };
-      }),
-    });
-  }
+  const built = useSearchGroups({
+    libShown,
+    libTotal,
+    presetResults,
+    playlistResults,
+    favResults,
+    radio,
+    radioPending,
+    hidden,
+    radioDirectory,
+    playNode,
+    openFavorite,
+    openNodeMenu,
+    openFavMenu,
+    setRowMenu,
+  });
 
   // THE USER'S NAV ORDER, applied live (not seeded once like `hidden` — a
   // reorder should land on this screen immediately, whereas a hide is a
@@ -782,18 +124,6 @@ export function SearchScreen(): React.JSX.Element {
   // count, cap and row stays exactly where it was built.
   const cats = orderByNav(built, navOrder);
   const { shown: shownCats, isolated, cap, anyResults, anyPending } = layoutGroups(cats, hidden);
-
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): every result one list, one Tab stop, up and down
-  // through the categories in their order; Enter does what a result's click does, "." its menu
-  const LIB_KINDS = new Set<string | undefined>(["artist", "album", "track"]);
-  const resultLines = shownCats.reduce((n, c) => {
-    const rows = c.rows.slice(0, cap);
-    return (
-      n + (c.id === "library" ? rows.filter((r) => LIB_KINDS.has(r.kind)).length : rows.length)
-    );
-  }, 0);
-  const rowOf = (el: HTMLElement | null): HTMLElement | null =>
-    el?.firstElementChild instanceof HTMLElement ? el.firstElementChild : null;
 
   const toggleCat = (id: SearchCategoryId): void => {
     // hiding the last visible category shows everything again (the rule in lib/searchGroups)
@@ -804,161 +134,24 @@ export function SearchScreen(): React.JSX.Element {
 
   return (
     <div className="h-full flex flex-col">
-      <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
-        <ScreenTitle>Search</ScreenTitle>
-        <div className="relative flex-1 max-w-xl">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-faint" />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              // Just-landed after a pivot (the seeded query arrives selected):
-              // ⌘← NAVIGATES back to where the pivot left — the library search
-              // bar's exact rule. Once the selection collapses, ⌘-arrows are
-              // ordinary text-editing keys again; the blurred-box case is
-              // handled globally (useShortcuts).
-              if ((e.metaKey || e.altKey) && !e.ctrlKey && e.key === "ArrowLeft") {
-                const el = e.currentTarget;
-                const s = useStore.getState();
-                if (
-                  s.navBackStack.length > 0 &&
-                  el.selectionStart === 0 &&
-                  el.selectionEnd === el.value.length &&
-                  el.value.length > 0
-                ) {
-                  e.preventDefault();
-                  s.goBack();
-                  return;
-                }
-              }
-              if (e.key !== "Escape") return;
-              // Escape RELEASES FOCUS and keeps the query (2026-08-23, the
-              // app-wide rule — see FilterInput). The box takes focus on
-              // arrival and screen keys are suppressed while an input has it,
-              // so the blur is what gives the keyboard back; the query and its
-              // results are remembered for the return anyway.
-              e.stopPropagation(); // ...before it closes anything else
-              e.currentTarget.blur();
-            }}
-            placeholder="Search everything"
-            aria-label="Search everything"
-            data-search-input
-            className="no-drag w-full bg-bg rounded-lg ring-1 ring-edge focus:ring-edge2 outline-none pl-9 pr-8 py-2 text-[13.5px] placeholder:text-faint"
-          />
-          {query && (
-            <button
-              onClick={() => {
-                setQuery("");
-                inputRef.current?.focus();
-              }}
-              aria-label="Clear search"
-              className="no-drag absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-faint hover:text-ink transition-colors"
-            >
-              <X size={14} />
-            </button>
-          )}
-        </div>
-      </header>
+      <SearchBox query={query} setQuery={setQuery} inputRef={inputRef} />
 
-      {rowMenu && (
-        <RowMenu
-          title={rowMenu.title}
-          at={{ x: rowMenu.x, y: rowMenu.y }}
-          onClose={() => setRowMenu(null)}
-          items={rowMenu.items}
-        />
-      )}
-      {playlistFor && (
-        <AddToPlaylistPanel
-          label={playlistFor.label}
-          at={{ x: playlistFor.x, y: playlistFor.y }}
-          onClose={() => setPlaylistFor(null)}
-          resolve={playlistFor.resolve}
-        />
-      )}
-      {presetFor && (
-        <PresetPicker
-          picker={{ node: { title: presetFor.ref.title }, x: presetFor.x, y: presetFor.y }}
-          onClose={() => setPresetFor(null)}
-          onSave={async (slot, name) => {
-            await saveRefToPreset(presetFor.ref, slot, name);
-            setPresetFor(null);
-          }}
-        />
-      )}
+      {overlays}
 
       {/* The category rail: what was searched, how much each holds, and which
           are showing. Counts are the POINT — a category with 0 still gets a
           chip, because "we looked and found nothing" is an answer and its
           absence would read as "we didn't look". */}
       {q && (
-        <div className={`no-drag flex items-center ${GAP_BETWEEN} flex-wrap px-8 pb-3`}>
-          {/* The library is the only category with KINDS inside it (the index
-              answers artists, albums and tracks). Its partition appears once
-              the library is the screen — same All/Artists/Albums/Tracks
-              Segmented its own results use, and a partition is single-select
-              by the app's rule, unlike the multi-select category chips. */}
-          {isolated && shownCats[0]?.id === "library" && (
-            <Segmented<"all" | "artists" | "albums" | "tracks">
-              value={libKind}
-              onChange={setLibKind}
-              options={[
-                { value: "all", label: "All" },
-                { value: "artists", label: "Artists" },
-                { value: "albums", label: "Albums" },
-                { value: "tracks", label: "Tracks" },
-              ]}
-            />
-          )}
-          <div className={`flex flex-wrap items-center ${GAP_WITHIN}`}>
-            {cats.map((c) => {
-              // THREE states, not two: matched-and-showing, matched-and-hidden,
-              // and NOTHING TO SHOW. The third is disabled rather than merely
-              // unlit — a chip you can toggle to no effect is a lie about what
-              // is behind it. It still renders, because "we looked here and
-              // found nothing" is the answer it exists to give.
-              const empty = c.total === 0 && !c.pending && !c.unknown;
-              const on = !hidden.has(c.id) && !empty;
-              return (
-                <Chip
-                  key={c.id}
-                  state={empty ? "disabled" : on ? "active" : "idle"}
-                  data-search-chip={c.id}
-                  data-on={on}
-                  data-empty={empty || undefined}
-                  onClick={() => !empty && toggleCat(c.id)}
-                  disabled={empty}
-                  aria-pressed={on}
-                  title={empty ? `No ${c.label.toLowerCase()} matches` : undefined}
-                  // the Chip is a flex box (one toolbar height), so a bare space
-                  // between label and count would collapse — the gap is explicit
-                  className={cx("gap-1.5", !empty && "motion-safe:active:scale-95")}
-                >
-                  {c.label}
-                  <span className="tabular-nums fade-dark">
-                    {c.pending ? "…" : c.unknown ? "—" : c.total}
-                  </span>
-                </Chip>
-              );
-            })}
-          </div>
-          <div className="flex-1" />
-          {/* Only two sorts generalize across five heterogeneous groups: each
-              source's own ranking, and A–Z. Artist/year are library-shaped and
-              date-added is favorites-shaped — those live on the owning screens,
-              which already sort by them. */}
-          <SortChip
-            sorts={SEARCH_SORTS}
-            neutral="relevance"
-            value={sort}
-            reversed={sortReversed}
-            onChange={(v) => {
-              void saveSettings({ searchSort: v, searchSortReversed: false });
-            }}
-            onToggleReverse={() => void saveSettings({ searchSortReversed: !sortReversed })}
-          />
-        </div>
+        <SearchRail
+          isolated={isolated}
+          shownCats={shownCats}
+          libKind={libKind}
+          setLibKind={setLibKind}
+          cats={cats}
+          hidden={hidden}
+          toggleCat={toggleCat}
+        />
       )}
 
       <div ref={resultsScroll} className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
@@ -973,189 +166,18 @@ export function SearchScreen(): React.JSX.Element {
             />
           </div>
         ) : (
-          <KeyedList
-            label="Results"
-            count={resultLines}
-            onEnter={(_i, el) => rowOf(el)?.click()}
-            onMenu={(_i, el) => openMenuOn(rowOf(el))}
-            className="max-w-2xl space-y-6"
-          >
-            {(item) => {
-              let line = 0;
-              return (
-                <>
-                  {!anyResults && !anyPending && (
-                    <EmptyState
-                      icon={Search}
-                      title={`Nothing found for “${q}”`}
-                      caption={
-                        hidden.size > 0
-                          ? "Some categories are hidden. Try showing them again."
-                          : "Try fewer words."
-                      }
-                    />
-                  )}
-
-                  {shownCats.map((c) => {
-                    if (c.rows.length === 0 && !c.pending && !(c.id === "radio" && radioFailed))
-                      return null;
-                    const ordered = orderRows(c.rows, sort, sortReversed);
-                    const more = moreCount(c.total, ordered.length, cap);
-                    return (
-                      <section key={c.id} className="space-y-1.5">
-                        <div className="flex items-baseline gap-2 px-1">
-                          {/* the CATEGORY heading — tagged so it can't be confused
-                        with the kind sub-headings below it, which share the
-                        microlabel look */}
-                          <span data-search-group={c.id} className="microlabel">
-                            {c.label}
-                          </span>
-                          <span className="text-[11px] text-faint tabular-nums">{c.total}</span>
-                          {c.pending && (
-                            <span className="text-[11px] text-faint motion-safe:animate-pulse">
-                              searching…
-                            </span>
-                          )}
-                          <div className="flex-1" />
-                          {more > 0 &&
-                            (isolated ? (
-                              // Already the whole screen and STILL more — the rest
-                              // lives on the owning screen, which has the room and
-                              // the sorting for it.
-                              c.owner ? (
-                                <button
-                                  data-search-more={c.id}
-                                  onClick={() => {
-                                    setScreenFilter(c.owner!.filterKey, q);
-                                    setScreen(c.owner!.screen);
-                                  }}
-                                  className="text-[11.5px] text-amber hover:brightness-110 transition-all"
-                                >
-                                  See all {c.total} in {c.label} →
-                                </button>
-                              ) : c.id === "library" ? (
-                                // The library's deeper tool IS its own search —
-                                // complete results, four sorts, live reach into
-                                // unindexed servers. Handing the query over (rather
-                                // than dead-ending at "narrow the search") is what
-                                // teaches the two-tier model: Search skims, the
-                                // Library digs.
-                                <button
-                                  data-search-more={c.id}
-                                  onClick={() => requestLibrarySearch(q)}
-                                  className="text-[11.5px] text-amber hover:brightness-110 transition-all"
-                                >
-                                  See all {c.total} in the Library →
-                                </button>
-                              ) : (
-                                <span className="text-[11.5px] text-faint">
-                                  +{more} more. Narrow the search to see them.
-                                </span>
-                              )
-                            ) : (
-                              // Not isolated: showing more of THIS is the obvious
-                              // meaning of the click, and it keeps you on the screen.
-                              <button
-                                data-search-more={c.id}
-                                onClick={() =>
-                                  setHidden(
-                                    new Set(cats.filter((x) => x.id !== c.id).map((x) => x.id)),
-                                  )
-                                }
-                                className="text-[11.5px] text-amber hover:brightness-110 transition-all"
-                              >
-                                +{more} more →
-                              </button>
-                            ))}
-                        </div>
-                        {c.id === "radio" && radioFailed && (
-                          <div className="text-[12.5px] text-faint">
-                            Couldn&rsquo;t reach the station directory. Everything above is local
-                            and unaffected.
-                          </div>
-                        )}
-                        {/* SECTIONED BY KIND once the library owns the screen. The
-                      taxonomy is closed at three (lib/media), and the Library's
-                      own results already read artists → albums → tracks — the
-                      hierarchy order, artists make albums, albums contain
-                      tracks. Mixed into one list it read as an unsorted jumble:
-                      the order was always artists→albums→tracks, but nothing
-                      said so. Headings ALWAYS (user, 2026-07-25) — six rows
-                      split three ways still beats six rows that look shuffled. */}
-                        {c.id === "library"
-                          ? (["artist", "album", "track"] as const).map((k) => {
-                              const inKind = ordered.slice(0, cap).filter((r) => r.kind === k);
-                              if (inKind.length === 0) return null;
-                              return (
-                                <div key={k} className="space-y-1.5">
-                                  <div className="microlabel pt-2 px-1 fade-dark">
-                                    {k === "artist"
-                                      ? "Artists"
-                                      : k === "album"
-                                        ? "Albums"
-                                        : "Tracks"}{" "}
-                                    <span className="tabular-nums">{inKind.length}</span>
-                                  </div>
-                                  {inKind.map((r) => (
-                                    <div key={r.key} {...item(line++)} className="rounded-xl">
-                                      {r.node}
-                                    </div>
-                                  ))}
-                                </div>
-                              );
-                            })
-                          : ordered.slice(0, cap).map((r) => (
-                              <div key={r.key} {...item(line++)} className="rounded-xl">
-                                {r.node}
-                              </div>
-                            ))}
-                      </section>
-                    );
-                  })}
-
-                  {/* The coverage confession — deliberately OUTSIDE the sections, so
-                it still shows when the library group found nothing precisely
-                BECAUSE the content lives on an unindexed server. */}
-                  {libLive.length > 0 && !hidden.has("library") && (
-                    <div
-                      data-search-unindexed="live"
-                      className="flex items-baseline gap-2 text-[12px] text-faint"
-                    >
-                      <span className="min-w-0">
-                        {libLive.length === 1
-                          ? `${libLive[0].serverName} isn't in the search index. Search in the Library asks it directly.`
-                          : `${libLive.length} media servers aren't in the search index. Search in the Library asks them directly.`}
-                      </span>
-                      <button
-                        onClick={() => requestLibrarySearch(q)}
-                        className="shrink-0 text-amber hover:brightness-110 transition-all"
-                      >
-                        Search the Library →
-                      </button>
-                    </div>
-                  )}
-                  {libBrowseOnly.length > 0 && !hidden.has("library") && (
-                    <div
-                      data-search-unindexed="browse"
-                      className="flex items-baseline gap-2 text-[12px] text-faint"
-                    >
-                      <span className="min-w-0">
-                        {libBrowseOnly.length === 1
-                          ? `${libBrowseOnly[0].serverName} can't be searched until its index is built, from its card in the Library.`
-                          : `${libBrowseOnly.length} media servers can't be searched until their indexes are built, from their cards in the Library.`}
-                      </span>
-                      <button
-                        onClick={() => setScreen("library")}
-                        className="shrink-0 text-amber hover:brightness-110 transition-all"
-                      >
-                        Open the Library →
-                      </button>
-                    </div>
-                  )}
-                </>
-              );
-            }}
-          </KeyedList>
+          <SearchResults
+            q={q}
+            shownCats={shownCats}
+            cats={cats}
+            cap={cap}
+            isolated={isolated}
+            anyResults={anyResults}
+            anyPending={anyPending}
+            hidden={hidden}
+            setHidden={setHidden}
+            radioFailed={radioFailed}
+          />
         )}
       </div>
     </div>
