@@ -54,6 +54,37 @@ describe("a FLAC file in frames", () => {
     });
 });
 
+// A FILE BIGGER THAN THE BUFFER (0.15.0, the mutation probe: every file above fits the splitter's
+// first megabyte, so its growth and its compaction past half the buffer ran in no test)
+describe("a FLAC file bigger than the splitter's buffer", () => {
+  const l = drumTrack(120, 16, 44100, { hats: true }).samples;
+  const bytes = synthFlac([l, l.map((v) => v * 0.5)], 44100, 4096);
+  it("still rebuilds its audio exactly, pushed whole or in pieces", () => {
+    expect(bytes.length).toBeGreaterThan(1 << 21);
+    const whole = split(bytes, bytes.length);
+    const audio = Buffer.concat(whole.map((f) => Buffer.from(f.data)));
+    expect(audio.equals(Buffer.from(bytes.subarray(bytes.length - audio.length)))).toBe(true);
+    for (const piece of [4096, 300_000]) {
+      const parts = split(bytes, piece);
+      expect(parts.map((f) => f.sample)).toEqual(whole.map((f) => f.sample));
+      expect(Buffer.concat(parts.map((f) => Buffer.from(f.data))).equals(audio)).toBe(true);
+    }
+  });
+});
+
+describe("a stream that isn't a FLAC file", () => {
+  it("is refused at its first bytes", () => {
+    expect(() =>
+      new FlacFrames().push(Uint8Array.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0])),
+    ).toThrow(/not a FLAC stream/);
+  });
+  it("is refused when its metadata ends with no STREAMINFO", () => {
+    // fLaC, then one last metadata block of type 4 (a comment), four bytes long
+    const noInfo = Uint8Array.from([0x66, 0x4c, 0x61, 0x43, 0x84, 0, 0, 4, 1, 2, 3, 4, 0xff, 0xf8]);
+    expect(() => new FlacFrames().push(noInfo)).toThrow(/no STREAMINFO/);
+  });
+});
+
 // A DAMAGED FILE (0.15.0, the 0.14 re-score: one missing frame made the splitter hold the rest of
 // the file and hand the decoder a single frame of it)
 describe("a damaged FLAC file", () => {

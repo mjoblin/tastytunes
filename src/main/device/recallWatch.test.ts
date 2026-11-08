@@ -82,6 +82,28 @@ describe("a preset recall that loaded nothing, decided once", () => {
     expect(dead).toEqual([7]);
   });
 
+  it("is a recall that worked when what plays changed, even if it changes back before 8 s", () => {
+    const { w, dead, state, tick } = rig();
+    w.recalled(24, false);
+    tick(2000);
+    state.sig = "b";
+    w.onPlayback();
+    tick(2000);
+    state.sig = "a";
+    w.onPlayback();
+    tick(DEAD_RECALL_MS);
+    expect(dead).toEqual([]);
+  });
+
+  it("checks what plays when the clock ends, so a playback event that never came can't kill it", () => {
+    const { w, dead, state, tick } = rig();
+    w.recalled(24, false);
+    tick(3000);
+    state.sig = "b";
+    tick(DEAD_RECALL_MS);
+    expect(dead).toEqual([]);
+  });
+
   it("stops watching when told to", () => {
     const { w, dead, tick } = rig();
     w.recalled(9, false);
