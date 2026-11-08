@@ -1,24 +1,24 @@
 import { useEffect, useState } from "react";
 import { CLEAR_RECENTS } from "@/lib/recents";
-import { LISTEN_FLOOR_SECS, type AppSettings, type ListeningRecordStats } from "@shared/model";
+import { LISTEN_FLOOR_SECS, type ListeningRecordStats } from "@shared/model";
 import { tt } from "@/api";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { useStore } from "@/store";
 import { fmtCount } from "@/lib/format";
 import { HeaderChip } from "@/components/chrome/Chrome";
-import { SettingRow, Toggle, fmtBytes } from "@/components/settings/SettingsKit";
+import {
+  SettingRow,
+  Toggle,
+  fmtBytes,
+  type SectionProps,
+  SettingsCard,
+} from "@/components/settings/SettingsKit";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The History section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
 
-export function HistorySection({
-  settings,
-  save,
-}: {
-  settings: AppSettings;
-  save(patch: Partial<AppSettings>): Promise<void>;
-}): React.JSX.Element {
+export function HistorySection({ settings, save }: SectionProps): React.JSX.Element {
   const [fetched, setFetched] = useState<ListeningRecordStats | null>(null);
   useEffect(() => {
     void tt.listeningStats().then(setFetched);
@@ -44,7 +44,7 @@ export function HistorySection({
         is the kind of thing it makes possible. The Recent list, below, is a shorter log with a
         separate switch.
       </p>
-      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+      <SettingsCard>
         <Toggle
           label="Listening record"
           hint={`Keeps a local log of what plays and for how long (local media, radio, AirPlay and other sources) in plain files. A play is recorded when its track changes or stops, if it played for at least ${LISTEN_FLOOR_SECS} seconds by then. The record stays on this computer.`}
@@ -126,10 +126,10 @@ export function HistorySection({
             Couldn&apos;t write to the record: {stats.writeError}
           </div>
         )}
-      </div>
+      </SettingsCard>
       {/* THE RECENT LIST (moved here from Behavior, 2026-09-17): the other local log,
           named for the view it fills, beside the record so both switches are found together */}
-      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+      <SettingsCard>
         <Toggle
           label="Recent list"
           hint="The Recent view on the History screen (H) and the tray panel's Recent tab: the last tracks and stations played, kept only on this computer. Separate from the listening record above. Off stops adding to it."
@@ -153,7 +153,7 @@ export function HistorySection({
             Clear
           </button>
         </SettingRow>
-      </div>
+      </SettingsCard>
       {confirmClear.popover}
     </section>
   );

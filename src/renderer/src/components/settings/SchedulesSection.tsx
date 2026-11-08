@@ -1,11 +1,11 @@
 import { AlarmClock, Plus, Trash2, X } from "lucide-react";
-import { type AppSettings, type Schedule } from "@shared/model";
+import { type Schedule } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import { Switch } from "@/components/controls/Switch";
 import { HeaderChip, PrimaryButton } from "@/components/chrome/Chrome";
-import { NumberField } from "@/components/settings/SettingsKit";
+import { NumberField, type SectionProps } from "@/components/settings/SettingsKit";
 import { Segmented } from "@/components/controls/Segmented";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
@@ -83,13 +83,7 @@ function describeSchedule(s: Schedule): string {
  * day-of-week chips, wake/standby, and (for wake) optional preset + volume.
  * Executed by the main process; honest caveat up top about app-must-be-running.
  */
-export function SchedulesSection({
-  settings,
-  save,
-}: {
-  settings: AppSettings;
-  save(patch: Partial<AppSettings>): Promise<void>;
-}): React.JSX.Element {
+export function SchedulesSection({ settings, save }: SectionProps): React.JSX.Element {
   const presets = useStore((s) => s.presets?.presets ?? null);
   const showToast = useStore((s) => s.showToast);
   const missed = useStore((s) => s.missedSchedule);

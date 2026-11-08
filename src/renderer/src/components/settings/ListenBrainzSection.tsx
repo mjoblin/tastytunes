@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { type AppSettings } from "@shared/model";
 import { tt } from "@/api";
-import { SettingRow, Toggle } from "@/components/settings/SettingsKit";
+import { SettingRow, Toggle, type SectionProps } from "@/components/settings/SettingsKit";
 import { SecretKeyRow, type SecretKeySpec } from "@/components/settings/SecretKey";
 
 // The ListenBrainz section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
@@ -41,13 +40,7 @@ const lbToken = (scrobbling: boolean): SecretKeySpec => ({
   removeQuestion: "Remove your ListenBrainz token? Scrobbling stops until you add it again.",
 });
 
-export function ListenBrainzSection({
-  settings,
-  save,
-}: {
-  settings: AppSettings;
-  save(patch: Partial<AppSettings>): Promise<void>;
-}): React.JSX.Element {
+export function ListenBrainzSection({ settings, save }: SectionProps): React.JSX.Element {
   // THE TOKEN IS WRITE-ONLY HERE (0.13.0 round 10, the secrets store): the window learns only
   // whether one is saved and how it ends; it is pasted in, replaced or removed, never shown
   const [stored, setStored] = useState<{

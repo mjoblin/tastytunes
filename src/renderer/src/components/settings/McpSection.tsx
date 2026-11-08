@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
-import { DEFAULT_SETTINGS, type AppSettings, type McpBind, type McpSettings } from "@shared/model";
+import { DEFAULT_SETTINGS, type McpBind, type McpSettings } from "@shared/model";
 import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from "@shared/mcpCatalog";
 import { AGENTS_GUIDE_URL } from "@shared/ipc";
 import { tt } from "@/api";
@@ -14,19 +14,15 @@ import {
   Toggle,
   NumberField,
   useCopied,
+  type SectionProps,
+  SettingsCard,
 } from "@/components/settings/SettingsKit";
 import { Segmented } from "@/components/controls/Segmented";
 
 // The MCP section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
 
-export function McpSection({
-  settings,
-  save,
-}: {
-  settings: AppSettings;
-  save(patch: Partial<AppSettings>): Promise<void>;
-}): React.JSX.Element {
+export function McpSection({ settings, save }: SectionProps): React.JSX.Element {
   const mcp = settings.mcp;
   const lan = mcp.bind === "lan";
   const status = useStore((s) => s.mcpStatus);
@@ -84,7 +80,7 @@ export function McpSection({
 
   return (
     <section className="space-y-3">
-      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+      <SettingsCard>
         <Toggle
           label="MCP server"
           hint="Let AI agents and other MCP clients see and control the streamer over the Model Context Protocol."
@@ -298,7 +294,7 @@ export function McpSection({
             })}
           </div>
         </div>
-      </div>
+      </SettingsCard>
     </section>
   );
 }

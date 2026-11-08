@@ -9,48 +9,26 @@ import {
   History,
   LayoutGrid,
   Library,
-  Monitor,
-  Moon,
   Palette,
   SlidersHorizontal,
-  Sun,
 } from "lucide-react";
 import { version } from "../../../../package.json";
-import {
-  type AlignH,
-  type AlignV,
-  type AmbientArtMode,
-  type AmbientCoverage,
-  CARD_GAP_RANGE,
-  CARD_SIZE_RANGE,
-  type MotionMode,
-  type ThemePreference,
-} from "@shared/model";
 import { useStore } from "@/store";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
-import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
 import { cx } from "@/lib/format";
-import { SignalDot } from "@/components/device/SignalLamp";
-import { HeaderChip, PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
+import { PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
-import { ActionLinks } from "@/components/settings/ActionLinks";
-import { McpSection } from "@/components/settings/McpSection";
-import { SchedulesSection } from "@/components/settings/SchedulesSection";
+import { AppearanceSection } from "@/components/settings/AppearanceSection";
+import { LayoutSection } from "@/components/settings/LayoutSection";
+import { BehaviorSection } from "@/components/settings/BehaviorSection";
+import { ConnectionsSection } from "@/components/settings/ConnectionsSection";
 import { LibrariesSection } from "@/components/settings/LibrariesSection";
 import { HistorySection } from "@/components/settings/HistorySection";
-import { FanartKeyRow } from "@/components/settings/FanartKeyRow";
-import { ListenBrainzSection } from "@/components/settings/ListenBrainzSection";
 import { UpdatesSection } from "@/components/settings/UpdatesSection";
-import { SidebarSection } from "@/components/settings/SidebarSection";
-import {
-  SettingRow,
-  Toggle,
-  SliderSetting,
-  NumberField,
-  LegendRow,
-  CacheRow,
-} from "@/components/settings/SettingsKit";
-import { Segmented } from "@/components/controls/Segmented";
+import { SchedulesSection } from "@/components/settings/SchedulesSection";
+import { McpSection } from "@/components/settings/McpSection";
+import { StatusLampsSection } from "@/components/settings/StatusLampsSection";
+import { type SectionProps } from "@/components/settings/SettingsKit";
 
 const TABS = [
   { id: "appearance", label: "Appearance", icon: Palette },
@@ -66,9 +44,24 @@ const TABS = [
 ] as const;
 type SettingsTab = (typeof TABS)[number]["id"];
 
+/** Each tab's section, keyed by the tab: a tab can't exist without its section, nor a section
+ *  without its tab (0.16.0's tidy; before, the tab list and a chain of `tab === …` renders had
+ *  to agree by hand). */
+const PANELS: Record<SettingsTab, (props: SectionProps) => React.JSX.Element> = {
+  appearance: AppearanceSection,
+  layout: LayoutSection,
+  behavior: BehaviorSection,
+  connections: ConnectionsSection,
+  libraries: LibrariesSection,
+  history: HistorySection,
+  updates: UpdatesSection,
+  schedules: SchedulesSection,
+  agents: McpSection,
+  lamps: StatusLampsSection,
+};
+
 export function SettingsScreen(): React.JSX.Element {
   const settings = useStore((s) => s.settings);
-  const setShortcutsOpen = useStore((s) => s.setShortcutsOpen);
   const setInfoOpen = useStore((s) => s.setInfoOpen);
 
   const save = useStore((s) => s.saveSettings);
@@ -84,6 +77,7 @@ export function SettingsScreen(): React.JSX.Element {
     void save({ settingsTab: id });
   };
   const panelRef = useScrollMemory(`settings:${tab}`);
+  const Panel = PANELS[tab];
 
   const update = useStore((s) => s.update);
   // One-shot deep link (the nav update dot lands on Updates); consume + clear.
@@ -153,411 +147,10 @@ export function SettingsScreen(): React.JSX.Element {
             or it clips when the panel narrows to exactly max-w-2xl */}
         <div key={tab} ref={panelRef} className="flex-1 min-w-0 overflow-y-auto p-px">
           <div className="max-w-2xl space-y-8">
-            {tab === "appearance" && (
-              <section className="space-y-3">
-                <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
-                  <SettingRow
-                    label="Theme"
-                    hint="The faceplate: warm near-black, or warm paper. System follows your OS appearance."
-                  >
-                    <Segmented<ThemePreference>
-                      value={settings.theme}
-                      onChange={(theme) => void save({ theme })}
-                      options={[
-                        { value: "dark", label: "Dark", icon: <Moon size={12} /> },
-                        { value: "light", label: "Light", icon: <Sun size={12} /> },
-                        { value: "system", label: "System", icon: <Monitor size={12} /> },
-                      ]}
-                    />
-                  </SettingRow>
-
-                  <SettingRow
-                    label="Display font"
-                    hint="The font for titles and big text. Click a font name to see how it looks."
-                  >
-                    <div className="flex flex-wrap justify-end gap-1.5 max-w-[340px]">
-                      {DISPLAY_FONTS.map((f) => (
-                        <button
-                          key={f.id}
-                          onClick={() => void save({ displayFont: f.id })}
-                          style={{ fontFamily: f.stack }}
-                          className={cx(
-                            "px-3 py-1.5 rounded-lg ring-1 text-[13px] transition-colors",
-                            settings.displayFont === f.id
-                              ? "ring-gold/50 bg-golddim text-gold"
-                              : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2",
-                          )}
-                        >
-                          {f.label}
-                        </button>
-                      ))}
-                    </div>
-                  </SettingRow>
-
-                  <SettingRow
-                    label="Ambient album art"
-                    hint="Blur the playing album's art across the whole window."
-                  >
-                    <Segmented<AmbientArtMode>
-                      value={settings.ambientArt}
-                      onChange={(ambientArt) => void save({ ambientArt })}
-                      options={[
-                        { value: "off", label: "Off" },
-                        { value: "now-playing", label: "Now Playing" },
-                        { value: "all", label: "All screens" },
-                      ]}
-                    />
-                  </SettingRow>
-
-                  <div
-                    className={cx(
-                      settings.ambientArt === "off" && "opacity-40 pointer-events-none",
-                    )}
-                  >
-                    <SettingRow
-                      label="Ambient coverage"
-                      hint="Wash just the content area, or the whole window including the nav and transport bar."
-                    >
-                      <Segmented<AmbientCoverage>
-                        value={settings.ambientCoverage}
-                        onChange={(ambientCoverage) => void save({ ambientCoverage })}
-                        options={[
-                          { value: "main", label: "Main area" },
-                          { value: "window", label: "Entire window" },
-                        ]}
-                      />
-                    </SettingRow>
-                  </div>
-
-                  <Toggle
-                    label="Vignette"
-                    hint="Darken the edges of the ambient backdrop for a bit of depth."
-                    checked={settings.vignette}
-                    disabled={settings.ambientArt === "off"}
-                    onChange={(vignette) => void save({ vignette })}
-                  />
-
-                  <SettingRow
-                    label="Now Playing placement"
-                    hint="Where the art and track details sit on the Now Playing screen."
-                  >
-                    <div className="flex flex-col items-end gap-2">
-                      <Segmented<AlignH>
-                        value={settings.nowPlayingAlignH}
-                        onChange={(nowPlayingAlignH) => void save({ nowPlayingAlignH })}
-                        options={[
-                          { value: "left", label: "Left" },
-                          { value: "center", label: "Center" },
-                          { value: "right", label: "Right" },
-                        ]}
-                      />
-                      <Segmented<AlignV>
-                        value={settings.nowPlayingAlignV}
-                        onChange={(nowPlayingAlignV) => void save({ nowPlayingAlignV })}
-                        options={[
-                          { value: "top", label: "Top" },
-                          { value: "center", label: "Middle" },
-                          { value: "bottom", label: "Bottom" },
-                        ]}
-                      />
-                    </div>
-                  </SettingRow>
-
-                  <Toggle
-                    label="Accent follows album art"
-                    hint="Tint controls and glows with the playing album's dominant color. The tastytunes gold (the logo and the playing markers) never changes."
-                    checked={settings.accentFollowsArt}
-                    onChange={(accentFollowsArt) => void save({ accentFollowsArt })}
-                  />
-
-                  <Toggle
-                    // "Waveforms" undersold it (the terminology pass, 2026-09-17): this is the
-                    // switch for every measurement made from the audio file — Analyze audio,
-                    // the dynamic range and loudness readouts, the tempo, the scenes' pulse
-                    label="Audio analysis"
-                    // The second sentence exists only until the first measurement
-                    // proves the feature real here (settings.waveformSeen) —
-                    // an honest answer for the household whose toggles would
-                    // otherwise never visibly do anything.
-                    hint={
-                      settings.waveformSeen
-                        ? "Reads audio files from your local media server to measure each track: its waveform, dynamic range, loudness and tempo, and the pulse the scenes draw to. Off reads nothing."
-                        : "Reads audio files from your local media server to measure each track: its waveform, dynamic range, loudness and tempo, and the pulse the scenes draw to. Off reads nothing. Nothing measured yet. A track from a local media server is measured the first time it plays."
-                    }
-                    checked={settings.waveforms}
-                    onChange={(waveforms) => void save({ waveforms })}
-                  />
-
-                  <Toggle
-                    label="Waveform as the seek bar"
-                    hint="Displays the playing track's waveform as the seek bar. The plain bar returns for radio and tracks without a waveform."
-                    disabled={!settings.waveforms}
-                    checked={settings.waveformSeekBar}
-                    onChange={(waveformSeekBar) => void save({ waveformSeekBar })}
-                  />
-
-                  <Toggle
-                    label="Waveform on the Now Playing screen"
-                    hint="Displays the playing track's waveform under the album art, with its peak and loudness details."
-                    disabled={!settings.waveforms}
-                    checked={settings.waveformNowPlaying}
-                    onChange={(waveformNowPlaying) => void save({ waveformNowPlaying })}
-                  />
-                </div>
-
-                <Toggle
-                  label="Album art from audio files"
-                  hint="When a media server sends small artwork, the full picture is read from the audio file itself, for the Now Playing screen, Full-screen display mode and album headers. Reads from your media server over your local network."
-                  checked={settings.artFromFiles}
-                  onChange={(artFromFiles) => void save({ artFromFiles })}
-                />
-              </section>
-            )}
-
-            {tab === "layout" && (
-              <>
-                <section className="space-y-3">
-                  <div className="microlabel">card grids</div>
-                  <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
-                    <SliderSetting
-                      label="Card size"
-                      hint="Base width of each card."
-                      min={CARD_SIZE_RANGE.min}
-                      max={CARD_SIZE_RANGE.max}
-                      unit="px"
-                      value={settings.presetCardSize}
-                      onCommit={(presetCardSize) => void save({ presetCardSize })}
-                    />
-
-                    <SliderSetting
-                      label="Card gap"
-                      hint="Space between cards."
-                      min={CARD_GAP_RANGE.min}
-                      max={CARD_GAP_RANGE.max}
-                      unit="px"
-                      value={settings.presetGap}
-                      onCommit={(presetGap) => void save({ presetGap })}
-                    />
-
-                    <Toggle
-                      label="Fill rows"
-                      hint="Stretch cards so each row spans the full width, sizes flexing with the window. Off keeps cards at the exact size above."
-                      checked={settings.presetFillRows}
-                      onChange={(presetFillRows) => void save({ presetFillRows })}
-                    />
-
-                    <Toggle
-                      label="Format and DR on album cards"
-                      hint="Displays each album's format and quality under its name wherever albums are shown as cards, and its dynamic range once Audio analysis has measured it."
-                      checked={settings.albumCardFormat}
-                      onChange={(albumCardFormat) => void save({ albumCardFormat })}
-                    />
-
-                    <Toggle
-                      label="Format and DR on track cards"
-                      hint="Displays each track's format and quality under its name in the Tracks view, and its dynamic range once Audio analysis has measured it."
-                      checked={settings.trackCardFormat}
-                      onChange={(trackCardFormat) => void save({ trackCardFormat })}
-                    />
-                  </div>
-                </section>
-
-                <SidebarSection />
-              </>
-            )}
-
-            {tab === "behavior" && (
-              <section className="space-y-3">
-                <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
-                  {/* First in the section (user call, 2026-08-03): the panel is the
-                app's reach-without-a-window face, and this is its switch. */}
-                  <Toggle
-                    label="Menu bar icon"
-                    hint="Add a TastyTunes icon to the menu bar to control the streamer without opening the full TastyTunes app. (Found in the system tray on Windows and Linux)."
-                    checked={settings.tray}
-                    onChange={(tray) => void save({ tray })}
-                  />
-
-                  <SettingRow
-                    label="Animations"
-                    hint="Motion effects: hover growth, the small equalizer bars that indicate what's playing, smooth scrolling. System follows your OS Reduce Motion setting."
-                  >
-                    <Segmented<MotionMode>
-                      value={settings.motion}
-                      onChange={(motion) => void save({ motion })}
-                      options={[
-                        { value: "on", label: "On" },
-                        { value: "off", label: "Off" },
-                        { value: "system", label: "System" },
-                      ]}
-                    />
-                  </SettingRow>
-
-                  <Toggle
-                    label="Media keys"
-                    hint="Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background."
-                    checked={settings.mediaKeys}
-                    onChange={(mediaKeys) => void save({ mediaKeys })}
-                  />
-
-                  <ActionLinks />
-
-                  <Toggle
-                    label="Track-change notifications"
-                    hint="Show a system notification when the track changes while TastyTunes is in the background."
-                    checked={settings.notifications}
-                    onChange={(notifications) => void save({ notifications })}
-                  />
-
-                  <SettingRow
-                    label="Keyboard shortcuts"
-                    hint="Press ? anywhere in the app for the full list. Key hints also appear in menu items and control tooltips."
-                  >
-                    <HeaderChip
-                      onClick={() => setShortcutsOpen(true)}
-                      className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
-                    >
-                      View shortcuts
-                    </HeaderChip>
-                  </SettingRow>
-
-                  <SettingRow
-                    label="Volume limit (%)"
-                    hint="Caps the volume TastyTunes will set. The streamer's remote and other apps aren't affected. Leave empty for no limit."
-                  >
-                    <NumberField
-                      value={settings.volumeLimitPercent}
-                      min={10}
-                      max={100}
-                      allowEmpty
-                      placeholder="—"
-                      widthClass="w-20"
-                      onCommit={(volumeLimitPercent) => void save({ volumeLimitPercent })}
-                    />
-                  </SettingRow>
-                </div>
-              </section>
-            )}
-
-            {tab === "connections" && (
-              <section className="space-y-3">
-                {/* everything here talks to a service outside the LAN — each row says
-              exactly what leaves the machine, and off always means zero requests */}
-                <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
-                  <Toggle
-                    label="Lyrics on Now Playing"
-                    hint="Adds a lyrics panel to the Now Playing screen, fetched (when open) from lrclib.net. Sends the current track's title and artist to LRCLIB; off means no requests will be sent."
-                    checked={settings.lyrics}
-                    onChange={(lyrics) => void save({ lyrics })}
-                  />
-
-                  <Toggle
-                    label="Current lyric line"
-                    hint="Shows the live synced lyric under the track details on Now Playing (hidden while the full panel is open). Looks up each track as it plays, the same LRCLIB request as above."
-                    disabled={!settings.lyrics}
-                    checked={settings.lyricsLine}
-                    onChange={(lyricsLine) => void save({ lyricsLine })}
-                  />
-
-                  <Toggle
-                    label="Liner notes"
-                    hint="The panel on Now Playing with Artist, Album and Track tabs: Wikipedia summaries, release details and track credits matched via MusicBrainz, fetched when you open them. Also shows a CD's track names on the Queue screen and artists' photos in the Library. Sends the current artist, album and track names, an artist's name when you open their page, the names of the artists in your library to have their photos ready, an artist's name when you look for a picture of them on Wikimedia Commons, or a CD's MusicBrainz release. Off means no requests will be sent. The panel's Stream tab stays either way."
-                    checked={settings.artistInfo}
-                    onChange={(artistInfo) => void save({ artistInfo })}
-                  />
-
-                  <FanartKeyRow lookups={settings.artistInfo} />
-
-                  <Toggle
-                    label="Missing album art"
-                    hint="Fills in art the media server doesn't have: MusicBrainz identifies the album, the Cover Art Archive supplies the image. Server art always wins."
-                    checked={settings.albumArtLookup}
-                    onChange={(albumArtLookup) => void save({ albumArtLookup })}
-                  />
-
-                  <Toggle
-                    label="Internet radio directory"
-                    hint="Finds stations through radio-browser.info: the Radio screen's search and top lists, and the radio results in unified search. Sends what you type. Off means no requests will be sent. Favorited stations still play either way: a favorite keeps its own stream URL."
-                    checked={settings.radioDirectory}
-                    onChange={(radioDirectory) => void save({ radioDirectory })}
-                  />
-
-                  <ListenBrainzSection settings={settings} save={save} />
-
-                  <CacheRow />
-                </div>
-              </section>
-            )}
-
-            {tab === "libraries" && <LibrariesSection settings={settings} save={save} />}
-
-            {tab === "history" && <HistorySection settings={settings} save={save} />}
-
-            {tab === "updates" && <UpdatesSection settings={settings} save={save} />}
-
-            {tab === "schedules" && <SchedulesSection settings={settings} save={save} />}
-
-            {tab === "agents" && <McpSection settings={settings} save={save} />}
-
-            {tab === "lamps" && (
-              <section className="space-y-3">
-                <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
-                  <div>
-                    <div className="text-[13.5px] mb-0.5">Connection</div>
-                    <div className="text-[11.5px] text-faint mb-2.5">
-                      Shown beside each streamer in the device picker and on the Device screen.
-                    </div>
-                    <div className="space-y-2">
-                      <LegendRow
-                        swatch={<span className="led led-on" />}
-                        label="Connected"
-                        desc="Live link to the streamer."
-                      />
-                      <LegendRow
-                        swatch={<span className="led led-busy" />}
-                        label="Connecting"
-                        desc="Establishing or re-establishing the connection."
-                      />
-                      <LegendRow
-                        swatch={<span className="led led-off" />}
-                        label="Offline"
-                        desc="No connection to a streamer."
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="text-[13.5px] mb-0.5">Signal quality</div>
-                    <div className="text-[11.5px] text-faint mb-2.5">
-                      Appears in the transport bar and beside the Now Playing badges while something
-                      is playing. Click it for the full signal chain.
-                    </div>
-                    <div className="space-y-2">
-                      <LegendRow
-                        swatch={<SignalDot quality="hires" />}
-                        label="Hi-res lossless"
-                        desc="Lossless above CD quality (or MQA)."
-                      />
-                      <LegendRow
-                        swatch={<SignalDot quality="lossless" />}
-                        label="Lossless"
-                        desc="Bit-perfect CD quality."
-                      />
-                      <LegendRow
-                        swatch={<SignalDot quality="lossy" />}
-                        label="Lossy"
-                        desc="Compressed stream (internet radio, Bluetooth, AAC/MP3)."
-                      />
-                    </div>
-                  </div>
-                </div>
-              </section>
-            )}
+            <Panel settings={settings} save={save} />
           </div>
         </div>
       </div>
     </div>
   );
 }
-
-// ------------------------------------------------------------- ai agents (mcp)

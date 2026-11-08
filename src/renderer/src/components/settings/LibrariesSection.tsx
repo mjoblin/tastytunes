@@ -7,19 +7,19 @@ import { fmtCount } from "@/lib/format";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { PickerPill } from "@/components/controls/PickerPill";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
-import { SettingRow, Toggle, fmtBytes } from "@/components/settings/SettingsKit";
+import {
+  SettingRow,
+  Toggle,
+  fmtBytes,
+  type SectionProps,
+  SettingsCard,
+} from "@/components/settings/SettingsKit";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The Libraries section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
 
-export function LibrariesSection({
-  settings,
-  save,
-}: {
-  settings: AppSettings;
-  save(patch: Partial<AppSettings>): Promise<void>;
-}): React.JSX.Element {
+export function LibrariesSection({ settings, save }: SectionProps): React.JSX.Element {
   const statuses = useStore((s) => s.mediaIndex);
 
   const age = (at: number | null): string => {
@@ -33,7 +33,7 @@ export function LibrariesSection({
 
   return (
     <section className="space-y-3">
-      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+      <SettingsCard>
         <Toggle
           label="Build indexes automatically"
           hint="Automatically index each searchable media server when the streamer connects, and rebuild when the server reports changes. Off means indexes only build from the buttons below. Either way, a playlist or “Open in Library” rebuilds an index that has gone out of date, as the streamer's USB drive does after standby."
@@ -88,7 +88,7 @@ export function LibrariesSection({
         ))}
 
         <ArtThumbsRow />
-      </div>
+      </SettingsCard>
     </section>
   );
 }

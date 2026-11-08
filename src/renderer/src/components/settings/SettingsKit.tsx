@@ -6,6 +6,7 @@ import { Slider, useSliderDraft } from "@/components/controls/Slider";
 import { Switch } from "@/components/controls/Switch";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import type { AppSettings } from "@shared/model";
 
 // The Settings screen's rows and controls, shared by its sections (split out of
 // SettingsScreen.tsx 2026-09-13 with the sections): a setting row, the toggle, the
@@ -13,6 +14,19 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 // and the byte formatter; the copy row and its feedback since the URL scheme (0.12.0), shared by
 // the agents room and the action links. The segmented switch is the app's one Segmented
 // (components/controls) since 2026-09-13; the kit had carried a near-copy.
+
+/** What every Settings tab's section is handed: the settings and their save (one name for the
+ *  shape each section spelled out, 0.16.0's tidy). */
+export interface SectionProps {
+  settings: AppSettings;
+  save(patch: Partial<AppSettings>): Promise<void>;
+}
+
+/** A settings card: its ring, its ground and its rows' spacing, the look's one home (0.16.0's tidy,
+ *  before the design pass restyles Settings; ten copies of the class list before). */
+export function SettingsCard({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">{children}</div>;
+}
 
 export const fmtBytes = (b: number): string =>
   b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;

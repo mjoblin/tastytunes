@@ -1,24 +1,23 @@
 import { useState } from "react";
 import { ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { version } from "../../../../../package.json";
-import { type AppSettings, type UpdateCheckResult } from "@shared/model";
+import { type UpdateCheckResult } from "@shared/model";
 import { REPO_URL } from "@shared/ipc";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { HeaderChip, PrimaryButton } from "@/components/chrome/Chrome";
-import { SettingRow, Toggle } from "@/components/settings/SettingsKit";
+import {
+  SettingRow,
+  Toggle,
+  type SectionProps,
+  SettingsCard,
+} from "@/components/settings/SettingsKit";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The Updates section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
 
-export function UpdatesSection({
-  settings,
-  save,
-}: {
-  settings: AppSettings;
-  save(patch: Partial<AppSettings>): Promise<void>;
-}): React.JSX.Element {
+export function UpdatesSection({ settings, save }: SectionProps): React.JSX.Element {
   const update = useStore((s) => s.update);
   // Manual-check feedback: 'checking' while in flight, then the outcomes the
   // consent panel won't announce itself ('none' / 'error'; 'update' clears
@@ -32,7 +31,7 @@ export function UpdatesSection({
 
   return (
     <section className="space-y-3">
-      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+      <SettingsCard>
         <SettingRow label="Version" hint="The build you're running.">
           <span className="flex items-center gap-2.5">
             <span className="font-mono text-[12px] text-dim">v{version}</span>
@@ -57,7 +56,7 @@ export function UpdatesSection({
           checked={settings.updateCheck}
           onChange={(updateCheck) => void save({ updateCheck })}
         />
-      </div>
+      </SettingsCard>
 
       {update ? (
         <UpdatePanel />
