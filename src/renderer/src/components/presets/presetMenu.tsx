@@ -24,24 +24,59 @@ import { PopoverStop, usePresetVolumePopover } from "./presetVolume";
  * a blank) is found by what it last played (listeningRecord.presetLastAlbum): that play's
  * picture, or its album and artist, in every library that has it. `by` says which way it was
  * found and `last` names the album History has, for the repair's words.
+ *
+ * AND A COVER CAN CHANGE TOO (0.15.0-rc.2, his preset 22 "Dark All Day", 2026-11-08): Asset gave
+ * the album a new cover id (the old one still served from its cache), so the picture matched
+ * nothing and the repair offered nothing, with the album in the library under its own name. An
+ * album preset whose picture matches nothing goes on to History, then to its own name (the
+ * streamer names an album preset after the album), each match shown before it is saved. A station
+ * or a saved queue never does: a name is no fingerprint for those.
  */
-export async function presetAlbums(
-  preset: PresetItem,
-): Promise<{ albums: MediaNode[]; by: "picture" | "history" | null; last: string | null }> {
+export async function presetAlbums(preset: PresetItem): Promise<{
+  albums: MediaNode[];
+  by: "picture" | "history" | "name" | null;
+  last: string | null;
+}> {
   const pools = await tt.mediaIndexPools();
   const all = pools.flatMap((pool) => pool.albums);
   const pictured = (url: string): MediaNode[] => all.filter((a) => a.artUrl === url);
-  if (preset.art_url) return { albums: pictured(preset.art_url), by: "picture", last: null };
+  if (preset.art_url) {
+    const byArt = pictured(preset.art_url);
+    if (byArt.length > 0 || !isAlbumPreset(preset))
+      return { albums: byArt, by: "picture", last: null };
+  }
   const last = preset.id == null ? null : await tt.presetLastAlbum(preset.id);
-  if (!last) return { albums: [], by: null, last: null };
-  const byPicture = last.artUrl ? pictured(last.artUrl) : [];
-  if (byPicture.length > 0) return { albums: byPicture, by: "history", last: last.album };
-  const named = all.filter(
-    (a) =>
-      nameKey(a.title) === nameKey(last.album) &&
-      (last.artist == null || nameKey(a.artist) === nameKey(last.artist)),
+  if (last) {
+    const byPicture = last.artUrl ? pictured(last.artUrl) : [];
+    if (byPicture.length > 0) return { albums: byPicture, by: "history", last: last.album };
+    const named = all.filter(
+      (a) =>
+        nameKey(a.title) === nameKey(last.album) &&
+        (last.artist == null || nameKey(a.artist) === nameKey(last.artist)),
+    );
+    if (named.length > 0 || !isAlbumPreset(preset))
+      return { albums: named, by: "history", last: last.album };
+  }
+  const own = isAlbumPreset(preset) && preset.name ? nameKey(preset.name) : null;
+  const byName = own ? all.filter((a) => nameKey(a.title) === own) : [];
+  if (byName.length > 0) return { albums: byName, by: "name", last: last?.album ?? null };
+  return {
+    albums: [],
+    by: last ? "history" : preset.art_url ? "picture" : null,
+    last: last?.album ?? null,
+  };
+}
+
+/** A library album's preset, by its class: the Evo calls a library album's preset type "UPnP"
+ *  (read 2026-10-17; the mock had "MEDIA"), a station "Radio", an input "Input", and a saved
+ *  queue is a "MediaQueue" with a collage of covers. One home: the ⋯ menu's library verbs and the
+ *  repair's fallbacks past the picture. */
+export function isAlbumPreset(preset: PresetItem): boolean {
+  return (
+    /^stream\.media/.test(preset.class ?? "") &&
+    preset.type !== "MediaQueue" &&
+    !(preset.art_urls && preset.art_urls.length > 1)
   );
-  return { albums: named, by: "history", last: last.album };
 }
 
 /** The preset's one album, or null when no album, or more than one, is it. */
@@ -82,13 +117,8 @@ export function usePresetMenu(
   // so a choice turns into its popover in place
   const [from, setFrom] = useState<{ x: number; y: number } | null>(null);
   const here = (): { x: number; y: number } => from ?? { x: 0, y: 0 };
-  // A MEDIA PRESET by its class: the Evo calls a library album's preset type "UPnP" (read
-  // 2026-10-17; the mock had "MEDIA"), a station "Radio", an input "Input", and a saved queue is a
-  // "MediaQueue" with a collage of covers, nothing to open
-  const media =
-    /^stream\.media/.test(preset.class ?? "") &&
-    preset.type !== "MediaQueue" &&
-    !(preset.art_urls && preset.art_urls.length > 1);
+  // a library album's preset has an album to open; a station, an input or a saved queue has none
+  const media = isAlbumPreset(preset);
   const withAlbum = (then: (album: MediaNode) => void): void => {
     void presetAlbum(preset).then((album) => {
       if (album) then(album);

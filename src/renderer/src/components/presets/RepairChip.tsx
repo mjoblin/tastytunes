@@ -12,7 +12,7 @@ import { PopoverChrome } from "@/hooks/usePopover";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { cardChip } from "@/components/chrome/Chrome";
 import { ConfirmActions } from "@/components/chrome/Confirm";
-import { presetAlbums } from "./presetMenu";
+import { isAlbumPreset, presetAlbums } from "./presetMenu";
 
 /**
  * A preset that points at content its media server no longer resolves. The
@@ -61,7 +61,7 @@ export function RepairChip({
     setPick(0);
     setFailed(null);
     setOpen(true);
-    // the artwork is the fingerprint: same art url, same album, current id (presetAlbums)
+    // the artwork is the fingerprint, then History, then an album preset's name (presetAlbums)
     setFound(await presetAlbums(preset));
   };
 
@@ -148,7 +148,9 @@ export function RepairChip({
               {found != null && match == null && (
                 <span className="block text-[11px] text-faint mt-2.5">
                   {found.by === "picture"
-                    ? "No match in the library index for this preset's artwork, so there's nothing safe to save. Re-save it by hand from the Library."
+                    ? isAlbumPreset(preset)
+                      ? "No match in the library index for this preset's artwork or name, so there's nothing safe to save. Re-save it by hand from the Library."
+                      : "No match in the library index for this preset's artwork, so there's nothing safe to save. Re-save it by hand from the Library."
                     : found.last != null
                       ? `This preset last played “${found.last}”, which isn't in the library index. Re-save it by hand from the Library.`
                       : "This preset has no picture to match by, and History has no plays of it. Re-save it by hand from the Library."}
@@ -156,13 +158,20 @@ export function RepairChip({
               )}
               {found != null && match != null && (
                 <>
-                  {(found.by === "history" || found.albums.length > 1) && (
-                    <span className="block text-[11px] text-faint mt-2.5">
+                  {(found.by !== "picture" || found.albums.length > 1) && (
+                    <span
+                      data-preset-repair-by={found.by}
+                      className="block text-[11px] text-faint mt-2.5"
+                    >
                       {found.by === "picture"
                         ? "More than one album has this preset's picture. Choose the one to save."
-                        : found.albums.length > 1
-                          ? "This preset last played this album, and there's more than one copy. Choose the one to save."
-                          : "This preset last played this album."}
+                        : found.by === "name"
+                          ? found.albums.length > 1
+                            ? "More than one album has the same name as the preset. Choose the one to save."
+                            : "This album has the same name as the preset."
+                          : found.albums.length > 1
+                            ? "This preset last played this album, and there's more than one copy. Choose the one to save."
+                            : "This preset last played this album."}
                     </span>
                   )}
                   {found.albums.length > 1 ? (

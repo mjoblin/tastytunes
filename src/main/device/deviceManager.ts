@@ -67,7 +67,7 @@ import { errorMessage } from "@shared/guards";
 import { queueAdd } from "../media/upnpBrowser";
 import { demoHost, stopDemoStreamer } from "../servers/demoStreamer";
 import type { MediaQueueAction } from "@shared/model";
-import { RecallWatch } from "./recallWatch";
+import { RecallWatch, recallSignature } from "./recallWatch";
 
 interface Cache {
   playState: ZonePlayState | null;
@@ -250,21 +250,14 @@ export class DeviceManager {
   // one clock for a recall that loaded nothing (0.15.0): every recall the app sends is watched
   // here; the record and the windows hear the answer
   private readonly recallWatch = new RecallWatch({
-    signature: () => this.playbackSignature(),
+    // what a recall changes in the play state, never the queue list a wake re-reads (recallWatch)
+    signature: () => recallSignature(this.cache.playState),
     awake: () => this.cache.systemPower == null || this.cache.systemPower.power === "ON",
     onDead: (id) => {
       listeningRecord.recallCameToNothing(id);
       this.push({ kind: "presetRecallDead", id });
     },
   });
-
-  /** What plays, as the recall watch compares it: the state, the queue entry and the title, and
-   *  the queue's position and size (what the Presets screen compared before 0.15.0). */
-  private playbackSignature(): string {
-    const ps = this.cache.playState;
-    const q = this.cache.queue;
-    return JSON.stringify([ps?.state, ps?.queue_id, ps?.metadata?.title, q?.play_id, q?.total]);
-  }
 
   connect(host: string, opts?: { remember?: boolean; demo?: boolean }): void {
     this.recallWatch.cancel();
@@ -799,7 +792,7 @@ export class DeviceManager {
         listeningRecord.onQueue(
           (this.cache.queue.items ?? []).map((i) => i.id).filter((id): id is number => id != null),
         );
-        this.recallWatch.onPlayback();
+        // the queue list is not what the recall watch compares (the app re-reads it on a wake)
         // Mid-batch (playlist activation) the cache stays current but the
         // renderer hears nothing — one authoritative push lands at the end.
         if (this.queueOps.batching) return;

@@ -27,7 +27,12 @@ function urlsMatch(a: string, b: string): boolean {
  *  - media (album) presets only report `is_playing` transiently around the
  *    recall; any later read returns false (vibinui's own TODO: "When the UI is
  *    refreshed, a stream.media.upnp preset will have an is_playing of false,
- *    even if it was playing").
+ *    even if it was playing"), and
+ *  - a recall the firmware IGNORES (a preset whose album the server no longer
+ *    has) sets the flag and keeps it: his preset 22 read is_playing true while
+ *    another album played (0.15.0-rc.2, 2026-11-08). So the flag lights an album
+ *    preset only while what plays has no art or album to compare (mid-recall,
+ *    before the words), and a preset main has said came to nothing never lights.
  * So the answer is derived statelessly: radio_id is authoritative for
  * stations, saved queues match on an exact signature or an art fingerprint,
  * album presets match by art URL or name against the current track. Stateless
@@ -63,6 +68,7 @@ export function useLitPresets(
   const systemPower = useStore((s) => s.systemPower);
   const waking = useStore((s) => s.waking);
   const lastRecalledPresetId = useStore((s) => s.lastRecalledPresetId);
+  const deadPresets = useStore((s) => s.deadPresets);
   const queueSignatures = useStore((s) => s.settings.queueSignatures);
 
   const activeSource = activeSourceId(zoneState, nowPlaying);
@@ -93,7 +99,7 @@ export function useLitPresets(
     [queue],
   );
 
-  return useMemo(() => {
+  const derived = useMemo(() => {
     const lit = new Set<number>();
     if (asleep) return lit;
     const mediaOk = activeSource == null || activeSource === "MEDIA_PLAYER";
@@ -111,8 +117,8 @@ export function useLitPresets(
     const mqContent = (p: PresetItem): boolean => (sigOf(p) != null ? sigMatch(p) : fingerprint(p));
     const albumMatch = (p: PresetItem): boolean => {
       if (!mediaOk) return false;
-      if (p.is_playing === true) return true; // transiently correct after recall
-      if (!md) return false;
+      // the flag only while there is nothing to compare: what plays overrules it (see above)
+      if (md?.art_url == null && md?.album == null) return p.is_playing === true;
       if (p.art_url != null && md.art_url != null && urlsMatch(p.art_url, md.art_url)) return true;
       if (p.name != null && md.album != null) {
         if (p.name === md.album) return true;
@@ -197,4 +203,12 @@ export function useLitPresets(
     asleep,
     wakeRecallId,
   ]);
+  // a preset main has said came to nothing is not playing, whatever matched it
+  return useMemo(
+    () =>
+      deadPresets.some((id) => derived.has(id))
+        ? new Set([...derived].filter((id) => !deadPresets.includes(id)))
+        : derived,
+    [derived, deadPresets],
+  );
 }
