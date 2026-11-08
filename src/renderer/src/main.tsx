@@ -72,7 +72,7 @@ if (isTray) document.documentElement.classList.add("tray");
 // lights float OVER the content, so every screen header reserves room for
 // them. Everywhere else the frame is native and sits ABOVE the web contents,
 // where that reservation is just a band of dead space at the top of the
-// window (user report 2026-08-03, Windows). One class, one CSS var.
+// window (on Windows). One class, one CSS var.
 if (!/mac/i.test(navigator.platform)) document.documentElement.classList.add("native-frame");
 
 const root = (window.__ttRoot ??= ReactDOM.createRoot(document.getElementById("root")!));

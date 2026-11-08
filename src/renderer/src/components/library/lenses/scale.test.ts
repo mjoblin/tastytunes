@@ -15,12 +15,12 @@ import { scaleLibrary, scaleRecord } from "@shared/scaleFixture";
 import { talliesOf, viewOf } from "@/lib/playStatsView";
 import { lensIndexOf } from "./useLensIndex";
 
-// THE LIBRARY AT 50,000 TRACKS (0.13.0 round 2; the 0.11 re-score: "nothing proves the app above
-// 5,000 tracks"). The work each Library surface does on its data, run on the scale fixture at
+// THE LIBRARY AT 50,000 TRACKS (0.13.0 round 2: nothing proved the app above 5,000 tracks). The
+// work each Library surface does on its data, run on the scale fixture at
 // 5,000 and at 50,000 tracks. Each is held to growing about as the library does (ten times the
 // tracks may cost up to 25 times the time, where a step that compares every track with every
 // other costs 100: the first run caught History's Rediscover shelves at 62) and to a time at
-// 50,000 about six times what his Mac takes (2026-10-24, in ms: the index 43, every album's
+// 50,000 about six times what a Mac took (2026-10-24, in ms: the index 43, every album's
 // tracks and chip 36, a 20,000-play record 63, every tally and the plays sort 300, the hearts 31,
 // the shelves 84), headroom for slower CI machines.
 

@@ -9,7 +9,7 @@ import { WeatherState } from "./weather";
  * TERRAIN. A slow flyover of a ridge that is the track's own loudness: the
  * past behind (left), the next minute ahead (right), now a third of the way
  * across, lit from behind the far ridge by a glow whose reach is the current
- * loudness (it was a sun in the sky: a kids'-book disc, at the user's word).
+ * loudness (it was a sun in the sky, which read as a kids'-book disc).
  * The lines stand as signposts at their times, so you see the words coming
  * before they arrive.
  */
@@ -102,8 +102,8 @@ export class Terrain implements Scene {
       return boxAt(ci, r) * (1 - t) + boxAt(ci + 1, r) * t;
     };
 
-    // the sky, lit by the loudness and wearing the section's weather (scenes/weather, the
-    // second agent's): a chorus warms it toward gold and brightens it, a quiet passage lets
+    // the sky, lit by the loudness and wearing the section's weather (scenes/weather): a
+    // chorus warms it toward gold and brightens it, a quiet passage lets
     // the stars through and lays mist over the far ranges
     const W = this.weather.step(f);
     const sky = ctx.createLinearGradient(0, 0, 0, h * 0.8);
@@ -147,15 +147,15 @@ export class Terrain implements Scene {
 
     // THE LIGHT BEHIND THE RIDGE, at now. The source sits just below the far crest, so the sky
     // glows from behind the land and the ridges stand against it. Its reach is the loudness
-    // (height stays loudness, at the user's word); a kick flashes it and a drop flares it
+    // (height stays loudness); a kick flashes it and a drop flares it
     this.glowPulse = easeTowards(this.glowPulse, 0, f.dt, 0.15);
     for (const hit of f.hits)
       if (hit.type === "kick") this.glowPulse = Math.max(this.glowPulse, hit.strength);
     if (f.drop?.onDrop) this.glowPulse = Math.max(this.glowPulse, 1.4);
     const pulse = Math.min(1, this.glowPulse);
     const farCrest = h * LAYERS[0].base - heightAt(f.position, LAYERS[0].win) * h * LAYERS[0].amp;
-    // the source sits a little under the crest (the user: "drop the light a bit lower, so its
-    // impact is a bit more subtle"): the ridge hides most of the core and the sky takes the rest
+    // the source sits a little under the crest, so its light is subtler: the ridge hides most
+    // of the core and the sky takes the rest
     const srcY = farCrest + h * 0.035;
     // through mist the light spreads further and thinner
     const reach = h * (0.24 + 0.3 * f.slowLoud) * (1 + 0.25 * this.glowPulse) * (1 + 0.5 * W.haze);
@@ -265,7 +265,7 @@ export class Terrain implements Scene {
         // while a line is the one being heard its approach values hold at their peak (as if it
         // were still arriving), so the gold ramp takes over from where the approach left off.
         // Gated on the future alone they fell to nothing the instant the line began, and the
-        // sign shrank and paled for most of a second before growing back (the user's word)
+        // sign shrank and paled for most of a second before growing back
         const isNow = i === index;
         const dEff = isNow ? 0 : d;
         const ahead = isNow || d > 0;

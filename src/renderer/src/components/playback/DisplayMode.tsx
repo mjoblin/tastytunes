@@ -23,15 +23,15 @@ import type { SceneId } from "@/components/display/scenes/types";
 import { onScreenKey } from "@/lib/keyboardOwner";
 
 /**
- * THE CAPTION'S CHIP (0.13.0 round 6; his call 2026-10-24, option C on the decision page): the
+ * THE CAPTION'S CHIP (0.13.0 round 6): the
  * caption at the display's foot, the track and its artist, and the clock beside it sit in the
  * frosted surface the scene toast wears (FROSTED, one home for both) whenever a scene draws
  * behind them. Over a scene whose foot is dark (the paper Sea, Tide) the bare caption all but
  * vanished; the chip reads over any scene and asks nothing of one, so a scene to come cannot
  * break it. Its padding steps the chip out around the words, which keep their place (left-4 and
  * px-3 are left-7's 28px). On a scene the corners hold still when the cursor idles: the chip is
- * their quiet, and the old fade to 60% faded the chip too, letting the scene through (S142
- * measured the caption at 1.6:1 on Sea in light); off a scene the bare clock fades as before.
+ * their quiet, and the old fade to 60% faded the chip too, letting the scene through (the
+ * caption measured 1.6:1 on Sea in light); off a scene the bare clock fades as before.
  */
 const FROSTED = "rounded-full bg-panel/85 ring-1 ring-edge backdrop-blur";
 const SCENE_CHIP = cx(FROSTED, "px-3 py-0.5");
@@ -66,17 +66,17 @@ export function DisplayMode(): React.JSX.Element {
   const [scenesOpen, setScenesOpen] = useState(false);
   // the picker opens at once and fades out at the house beat (useFadePresence, the
   // modals' and the panels' 140 ms), taking no clicks while it is leaving; a fade IN hid
-  // its heavy mount behind zero opacity and read as a delay (the user, 2026-09-13)
+  // its heavy mount behind zero opacity and read as a delay
   const pickerFade = useFadePresence(scenesOpen, { enter: false });
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { shuffled, active } = useShuffledScene(settings.displayScene, meta);
   const stage: SceneId | null = isAbstract(active) ? active : null;
   const feed = useSceneFeed(stage != null || scenesOpen);
-  // THE ART STANDS IN (2026-09-15, the user: "match the tile. show the art during radio
-  // and other sources with no local media data"): with nothing real to draw the wall shows
-  // the Sleeve's face, as the Now Playing tile does, and says why in a line above the corner
-  // — the scene used to keep drawing on the feed's sines whatever played
+  // THE ART STANDS IN: with nothing real to draw (radio, or another source with no local
+  // media data) the wall shows the Sleeve's face, as the Now Playing tile does, and says why
+  // in a line above the corner; the scene used to keep drawing on the feed's sines whatever
+  // played
   const { live: sceneLive, idle: sceneIdle } = useSceneLive(
     stage != null,
     stage ? sceneNeeds(stage) : "analysis",
@@ -196,7 +196,7 @@ export function DisplayMode(): React.JSX.Element {
           className={cx(
             // The clock shares the lyric line's vertical band (bottom-16), clear of
             // the waveform strip below — one bottom edge for everything that
-            // floats above the strip (user call, 2026-08-30).
+            // floats above the strip.
             "absolute bottom-16 font-mono text-[13px] text-dim transition-opacity",
             onScene ? cx(SCENE_CHIP, "right-4") : cx("right-7", cursorIdle && "opacity-60"),
           )}
@@ -406,7 +406,7 @@ function DisplayLyric(): React.JSX.Element | null {
 }
 
 /** The time of day in the user's own clock form ("1:06 AM" here, "01:06" where the day has
- *  24 hours): the bare "01:06" read as an unexplained number (user, 2026-09-07). */
+ *  24 hours): the bare "01:06" read as an unexplained number. */
 function timeNow(): string {
   return new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }

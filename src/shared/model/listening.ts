@@ -421,8 +421,7 @@ export interface ListeningEventBase {
  *  another app built never carries it, so a reader must say "started from
  *  TastyTunes", never "played from a preset". */
 /**
- * WHAT THE STREAMER WAS DOING WHEN IT WENT TO SLEEP (0.10.0, user ask 2026-10-06: "the state i
- * was in when i put the streamer in standby is being resumed"). The streamer reports nothing
+ * WHAT THE STREAMER WAS DOING WHEN IT WENT TO SLEEP (0.10.0). The streamer reports nothing
  * while it sleeps, so the app keeps this itself, per streamer, saved across restarts: the
  * standby face offers it and Resume puts it back. Four kinds, from what the Evo keeps through
  * network standby (live-probed 2026-10-06): a queue track (the same entry comes back paused,

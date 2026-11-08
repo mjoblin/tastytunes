@@ -152,7 +152,7 @@ export function SceneCanvas({
         return;
       }
       raf = requestAnimationFrame(loop);
-      // REDUCED MOTION SOFTENS A SCENE, IT DOES NOT STOP ONE (user, 2026-10-06): a scene runs
+      // REDUCED MOTION SOFTENS A SCENE, IT DOES NOT STOP ONE: a scene runs
       // only because someone picked it by name (both surfaces default to the album art), so
       // it runs at its full rate and each scene softens itself through the frame's reduced
       // flag (slower, no sprays, no entrances); what nobody picked stays still: the picker's

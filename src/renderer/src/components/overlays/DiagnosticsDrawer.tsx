@@ -46,8 +46,8 @@ export function DiagnosticsDrawer(): React.JSX.Element {
   };
   const [filter, setFilter] = useState<Filter>("all");
   const [paused, setPaused] = useState(false);
-  // drag-resizable from the top edge (user, 2026-09-12): the Now Playing
-  // drawers' grip and hook, turned on their side; bottom-anchored, so up grows
+  // drag-resizable from the top edge: the Now Playing drawers' grip and hook,
+  // turned on their side; bottom-anchored, so up grows
   const {
     size: height,
     dragging,

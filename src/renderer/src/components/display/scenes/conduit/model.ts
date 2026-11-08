@@ -44,9 +44,9 @@ export function signAngle(index: number): number {
  *  the axis in a 62° frame, so a sign 36° up the wall (its top near 390 above the eye)
  *  starts leaving the frame about eleven seconds out and its middle is gone at seven and a
  *  half. Ten seconds put a sign already clipping as its line began, and a long line was
- *  largely out of view before it was done (user, 2026-09-07). Sixteen kept a sign whole
- *  for the first five seconds of its line; the user then asked for halfway back, so
- *  thirteen, then a little closer still: eleven and a half, whole for the first second of
+ *  largely out of view before it was done. Sixteen kept a sign whole for the first five
+ *  seconds of its line; halfway back from that was thirteen, then a little closer still:
+ *  eleven and a half, whole for the first second of
  *  its line and readable for four or so, larger again on the wall. */
 export const SIGN_LEAD_SECONDS = 11.5;
 

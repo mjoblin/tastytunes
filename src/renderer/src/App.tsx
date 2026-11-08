@@ -53,7 +53,7 @@ export default function App(): React.JSX.Element {
   useIndexingToast();
   useDriveWaitToast();
   useArtistChoicesKept();
-  // a skipped track's measuring stops with its download (0.14.0, his A3)
+  // a skipped track's measuring stops with its download (0.14.0)
   useStopSkippedAnalysis();
 
   const screen = useStore((s) => s.screen);
@@ -335,7 +335,7 @@ function ConnectGate(): React.JSX.Element {
   const discovering = useStore((s) => s.discovering);
   // Forgetting is the one unreconstructible act on this screen — an eco
   // streamer that's off can't re-teach itself until it next wakes — and a
-  // tester lost one to a stray click (rc.1, 2026-08-31). The anchored
+  // stray click lost one in testing (rc.1). The anchored
   // popover, never the in-place morph: the × must not move under the cursor.
   const forgetConfirm = useConfirmPopover();
   const knownDevices = useStore((s) => s.settings.knownDevices);
@@ -357,7 +357,7 @@ function ConnectGate(): React.JSX.Element {
   // retry demotes to a status line and the full surface — found streamers,
   // remembered streamers, manual entry — comes back. Eco standby skips the
   // doubt: eco powers the network off, so the device is not coming back on
-  // its own (the multi-streamer eco report, 2026-08-30). The reconnect
+  // its own. The reconnect
   // itself keeps running underneath; if the device returns, it still wins.
   const [stuck, setStuck] = useState(false);
   useEffect(() => {
@@ -408,8 +408,8 @@ function ConnectGate(): React.JSX.Element {
   // whether or not the sweep can see it right now, so sliding between
   // "answering" and "remembered" changes only the card's brightness — which
   // transition-colors already fades. The first cut let the third line come
-  // and go with liveness and the card resized with every sweep (user,
-  // 2026-08-30). Only a never-connected stranger gets the two-line card,
+  // and go with liveness and the card resized with every sweep.
+  // Only a never-connected stranger gets the two-line card,
   // and a stranger never transitions to remembered (only connecting writes
   // the book, and a connect leaves this gate).
   const foundUdns = new Set(devices.map((d) => d.udn).filter(Boolean));
@@ -499,7 +499,7 @@ function ConnectGate(): React.JSX.Element {
                     </div>
                     {/* Stacked on purpose — in a 288px card these wrap mid-
                         phrase as one line, and a deliberate stack reads
-                        calmer than an accidental wrap (user, 2026-08-30). */}
+                        calmer than an accidental wrap. */}
                     <div className="font-mono text-[10.5px] text-faint truncate">
                       {row.model}
                       {FACT_SEP}
@@ -554,7 +554,7 @@ function ConnectGate(): React.JSX.Element {
               onClick={() => void tt.discover()}
               disabled={discovering}
               // Fixed width: the label alternates with the background sweep
-              // and the row must not breathe with it (user, 2026-08-30).
+              // and the row must not breathe with it.
               className="min-w-[128px] text-center text-[13px] px-4 py-2 rounded-lg bg-amber text-bg font-medium hover:brightness-110 transition-all disabled:opacity-50"
             >
               {discovering ? "Searching…" : "Find streamers"}
@@ -634,7 +634,7 @@ function ConnectGate(): React.JSX.Element {
  *  covers the gap between the wake finishing and the streamer arriving (see
  *  useWakeHold). The copy keys on it so the face reads asleep → Waking… →
  *  gone; keying on `waking` alone made it read asleep → Waking… → asleep
- *  again for the seconds the recall was still in flight (the reported
+ *  again for the seconds the recall was still in flight (a visible
  *  flip-flop).
  */
 function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
@@ -660,7 +660,7 @@ function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
       {/* EVERY LINE HOLDS ITS HEIGHT whether or not it has content — the face
           is a centred flex column, so a line that unmounts re-centres the
           whole stack and the lamp visibly jumps as the copy changes. This was
-          fixed once, lost, and reported again (2026-08-03); the tray panel's
+          fixed once and then lost again; the tray panel's
           standby face reserves all three lines for the same reason. */}
       <div>
         <div className="font-display text-2xl text-dim flex items-center justify-center gap-2.5 min-h-[32px]">

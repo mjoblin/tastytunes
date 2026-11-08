@@ -12,12 +12,12 @@ import { audioCaps, EQ_GAIN_MAX, EQ_GAIN_MIN } from "@shared/smoip";
 const BAND_LABELS = ["80", "120", "315", "800", "2k", "5k", "8k"];
 const GAIN_SPAN = EQ_GAIN_MAX - EQ_GAIN_MIN;
 
-// NO built-in preset curves — a deliberate user decision (2026-07-19), don't
-// re-add. Mirroring the official app's preset NAMES with invented curves
-// would mislead: its presets are client-side state inside the Cambridge app
-// (invisible on the wire), so "TV" here could never sound like "TV" there.
-// Presets in TastyTunes are exactly the user's own saved gain-sets
-// (settings.eqPresets); the one built-in affordance is the Flat RESET button.
+// NO built-in preset curves, deliberately; don't re-add. Mirroring the official
+// app's preset NAMES with invented curves would mislead: its presets are
+// client-side state inside the Cambridge app (invisible on the wire), so "TV"
+// here could never sound like "TV" there. Presets in TastyTunes are exactly the
+// user's own saved gain-sets (settings.eqPresets); the one built-in affordance
+// is the Flat RESET button.
 
 const gainsMatch = (bands: Array<{ gain: number }>, gains: number[]): boolean =>
   gains.length >= bands.length && bands.every((b, i) => Math.abs(b.gain - gains[i]) < 0.05);
@@ -217,7 +217,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
               {/* The scale column mirrors a band column's exact structure —
                   the h-36 block plus INVISIBLE value/freq spacers — so its
                   labels sit level with the tracks: "0" lands exactly on the
-                  zero tick (it used to float mid-column, user catch). */}
+                  zero tick (it used to float mid-column). */}
               <div className="flex flex-col items-end gap-1 pr-1.5">
                 <div className="relative h-36 w-5 text-right">
                   <span className="absolute right-0 top-0 -translate-y-1/2 text-[10px] text-faint leading-none">
@@ -378,7 +378,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
               />
               <span className="w-12 text-[10.5px] text-faint shrink-0">R</span>
               {/* centered = "0", matching the tilt readout (a lone middot
-                  here read as a mystery speck — user catch) */}
+                  here read as a mystery speck) */}
               <span
                 className="font-mono text-[11px] text-dim w-8 text-right shrink-0"
                 data-balance-value
@@ -574,7 +574,7 @@ function BandSlider({
         onPointerCancel={() => setDragGain(null)}
       >
         {/* bare track + always-visible thumb — a mixing-desk fader, not a
-            bar chart (a zero-anchored fill read as "gold bars", user pass) */}
+            bar chart (a zero-anchored fill read as gold bars) */}
         <div ref={trackRef} className="relative w-[3px] h-full rounded-full bg-veil2">
           {/* hairline 0 dB tick across the track */}
           <div

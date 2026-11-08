@@ -4,11 +4,11 @@ import { fetchArtistInfo } from "./artistInfo";
 import { getJson, WD, WIKI } from "./mb";
 import { nameKey } from "@shared/keys";
 
-// MORE PHOTOS TO CHOOSE FROM (0.14.0, his call 2026-10-25 on a user's email, Plex's picture
-// editor): the photos in the artist's Wikimedia Commons category, found the way the article is
-// (MusicBrainz → Wikipedia), then its Wikidata item's Commons category (P373), no key needed
-// (decisions/0001). a-ha's holds 36 where its article shows a few. Each offer carries its full
-// size, shown under its tile, and its file page. Cached per artist, settled answers only.
+// MORE PHOTOS TO CHOOSE FROM (0.14.0, like Plex's picture editor): the photos in the artist's
+// Wikimedia Commons category, found the way the article is (MusicBrainz → Wikipedia), then its
+// Wikidata item's Commons category (P373), no key needed. a-ha's holds 36 where its article
+// shows a few. Each offer carries its full size, shown under its tile, and its file page.
+// Cached per artist, settled answers only.
 
 export const COMMONS = process.env["TASTYTUNES_COMMONS_URL"] ?? "https://commons.wikimedia.org";
 

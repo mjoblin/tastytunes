@@ -9,8 +9,8 @@ import { keepArt, shownBefore } from "@/lib/artKeep";
  * would show as an empty box with a broken-image glyph). Keying the failure
  * to the exact URL means a track change retries automatically.
  *
- * A FAILED LOAD IS RETRIED before it is believed (2026-09-06, user: the app
- * restarted while AirPlay played and the hero stayed an icon though the
+ * A FAILED LOAD IS RETRIED before it is believed (when the app restarted
+ * while AirPlay played, the hero stayed an icon though the
  * streamer showed the cover). The streamer's small HTTP server takes the
  * startup burst — presets, queue, system info, and this same art URL asked
  * for by the capture, the accent and the picture at once — and one refused
@@ -18,7 +18,7 @@ import { keepArt, shownBefore } from "@/lib/artKeep";
  * track's URL never changes. Two retries, a beat apart, with a cache-busting
  * query so the browser does not hand back the failure; data URLs are never
  * retried. While a retry waits the FALLBACK shows, never the failed <img>:
- * Chromium paints a broken-image glyph on one (user, 2026-09-06).
+ * Chromium paints a broken-image glyph on one.
  *
  * `fallbackArt` (an album's artist + title) tries the Cover Art Archive
  * before giving up on the icon: consulted ONLY when the server offered no
@@ -34,10 +34,10 @@ const SLOW_MS = 300;
  * lazy loading starts a picture 1,250px before it scrolls into view, looking past the scroller's
  * edge; a mask on the scroller or any ancestor (a fade-top, the Library's ring room) cuts that
  * look-ahead back to the visible box, and a server's album cards below the fold never loaded
- * until scrolled to (S84 caught it). So a lazy picture UNDER A MASK watches its nearest scroller
+ * until scrolled to. So a lazy picture UNDER A MASK watches its nearest scroller
  * itself, with the same reach, and turns eager when it comes within it. Anywhere else Chromium's
- * own lazy loading is left alone, as it always was (the look-ahead everywhere was suspected in
- * his lenses' pictures not loading, 2026-10-22). One observer per scroller, shared by every
+ * own lazy loading is left alone, as it always was (the look-ahead everywhere was suspected when
+ * a lens's pictures did not load). One observer per scroller, shared by every
  * picture in it.
  */
 const NEAR_MARGIN = "1250px 0px";
@@ -115,9 +115,9 @@ function watchNear(el: Element, onNear: () => void): () => void {
   };
 }
 
-/** Where a picture taller than it is wide is cropped to the square (0.11.0, his Madonna: the top
- *  of her head cut off): artists' photos are mostly portraits with the head in the top third,
- *  and a centered crop takes as much off the top as the bottom. */
+/** Where a picture taller than it is wide is cropped to the square (0.11.0: an artist's
+ *  photo lost the top of the head): artists' photos are mostly portraits with the head in
+ *  the top third, and a centered crop takes as much off the top as the bottom. */
 export const PORTRAIT_POSITION = "50% 20%";
 /** Taller than wide by more than a rounding error. */
 export const isPortrait = (w: number, h: number): boolean => w > 0 && h > w * 1.02;
@@ -244,8 +244,8 @@ export function ArtImage({
           }
           if (base === src) {
             // ease in only a picture the well waited for; one from the cache is
-            // just there, as it would be with no indicator at all (user, 2026-09-14:
-            // the header's picture looked as if it loaded again after its card)
+            // just there, as it would be with no indicator at all (the
+            // header's picture looked as if it loaded again after its card)
             if (slow) setEased(src);
             setLoaded(src);
             // a card's picture stays in the window for when its card comes back (lib/artKeep)

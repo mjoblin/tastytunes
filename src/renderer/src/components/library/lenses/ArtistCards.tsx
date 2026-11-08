@@ -7,13 +7,11 @@ import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGr
 import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
 import { keyedEvent } from "@/lib/menuAt";
 
-// The Artists lens as cards (0.13.0 round 12; a user's suggestion, 2026-10-25: "a degree of uniformity
-// across the Album, Artist and Tracks sections ... only the Albums section gives a choice of
-// displaying by rows or by cards"; his picks the same day on the decision page "Artists as
-// Cards"). The cards are the Albums lens's own (ContainerCard: an artist container takes main's
-// picture, the portrait crop, the ⋯ and no Play) in the Albums lens's grid (useCardGrid), with
-// the line the artist's row says under the name. A click opens the artist's page
-// (decisions/0012). The Library's one Rows or Cards choice decides the view, as it does for
+// The Artists lens as cards (0.13.0 round 12: only the Albums lens offered rows or cards, and
+// the three lenses read better alike). The cards are the Albums lens's own (ContainerCard: an
+// artist container takes main's picture, the portrait crop, the ⋯ and no Play) in the Albums
+// lens's grid (useCardGrid), with the line the artist's row says under the name. A click opens
+// the artist's page. The Library's one Rows or Cards choice decides the view, as it does for
 // Albums and an artist's page.
 
 /**
@@ -147,7 +145,7 @@ export function ArtistCards({
     });
     return () => cancelAnimationFrame(raf);
   }, [revealAt, placed]);
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the cards' four arrows; Enter is a card's click
+  // FROM THE KEYBOARD (0.14.0): the cards' four arrows; Enter is a card's click
   // (the artist's page), "." its More menu
   const keys = useListKeys({
     count: artists.length,

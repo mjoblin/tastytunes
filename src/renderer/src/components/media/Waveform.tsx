@@ -19,9 +19,9 @@ import { draw } from "./waveformDraw";
 // A TRACK'S WAVEFORM, its faces: the Stream tab's panel, display mode's strip, Now Playing's, the
 // Info window's, the playback bar's seek track, and the DR and loudness chips. The analysis they draw
 // lives in waveformAnalysis.ts (the module's account of how a track is measured and kept is there),
-// the drawing in waveformDraw.ts (0.15.0, the hygiene pass).
+// the drawing in waveformDraw.ts (0.15.0).
 
-/** How far a file being measured has got, in place of its figures (0.14.0, his A1). */
+/** How far a file being measured has got, in place of its figures (0.14.0). */
 function MeasuringLine({ at }: { at: { ready: number; of: number } }): React.JSX.Element {
   return (
     <div className="mt-1.5 font-mono text-[10.5px] text-faint" data-waveform-measuring>
@@ -31,7 +31,7 @@ function MeasuringLine({ at }: { at: { ready: number; of: number } }): React.JSX
   );
 }
 
-/** The absent line, with Try again when the file's server stopped sending it (0.14.0, his A3). */
+/** The absent line, with Try again when the file's server stopped sending it (0.14.0). */
 function AbsentLine({
   serverUdn,
   objectId,
@@ -55,7 +55,7 @@ function AbsentLine({
             retryAnalysis(serverUdn, objectId);
             onRetry?.();
           }}
-          // no transition: Info's frosted shell fades as a whole (S11)
+          // no transition: Info's frosted shell fades as a whole
           className="shrink-0 rounded-md px-1.5 py-px ring-1 ring-edge text-dim hover:bg-veil2 hover:text-ink"
         >
           Try again
@@ -113,7 +113,7 @@ function fmtDb(v: number): string {
 /** The database's traffic-light convention (red = crushed, green = open;
  *  DR14 was the campaign's target), translated into the house palette:
  *  ember for the loudness-war band, the app's own gold for the middle,
- *  sage for a genuinely dynamic master. ONE home for the bands (S21) —
+ *  sage for a genuinely dynamic master. ONE home for the bands —
  *  the stats badge and Now Playing's format chip both read it. */
 export function drTone(dr: number): { tone: string; word: string } {
   if (dr <= 7) return { tone: "#bc5a45", word: "compressed" };
@@ -209,7 +209,7 @@ export function Waveform({
             }}
           />
           {analysis.partial ? (
-            // the file still arriving (0.14.0, his A1): how far, in place of the figures
+            // the file still arriving (0.14.0): how far, in place of the figures
             <MeasuringLine at={analysis.partial} />
           ) : (
             <div className="mt-1.5 font-mono text-[10.5px] text-faint">
@@ -337,7 +337,7 @@ export function NowPlayingWaveform(): React.JSX.Element | null {
 
   useEffect(() => {
     // The envelope, like fullscreen: at art width its silhouette reads as
-    // form; position shows as the played/unplayed split (user, 2026-08-30).
+    // form; position shows as the played/unplayed split.
     if (canvasRef.current && ready)
       draw(canvasRef.current, analysis, progress, { strip: false, style: "envelope" });
   }, [analysis, ready, progress]);
@@ -406,7 +406,7 @@ export function InfoWaveform({
       ) : state === null ? (
         <AbsentLine serverUdn={serverUdn} objectId={objectId} onRetry={onAnalyze} />
       ) : state === "loading" ? (
-        // the file still arriving (0.14.0, his A1): drawn so far, how far in place of the figures
+        // the file still arriving (0.14.0): drawn so far, how far in place of the figures
         <>
           <canvas ref={canvasRef} className="w-full h-16 block" />
           {partial?.partial && <MeasuringLine at={partial.partial} />}
@@ -421,9 +421,9 @@ export function InfoWaveform({
               {FACT_SEP}crest {fmtDb(state.crestDb)}
               {state.lufs != null && `${FACT_SEP}${fmtLufs(state.lufs)}`}
             </div>
-            {/* AN EARLIER VERSION'S MEASUREMENT (0.12.0, his ask for a way to re-measure one
+            {/* AN EARLIER VERSION'S MEASUREMENT (0.12.0, a way to re-measure one
                 track): the verb that measures it again, an icon at the end of the measurements'
-                line with the reason in its tip, taking no row of its own (his call); its tempo
+                line with the reason in its tip, taking no row of its own; its tempo
                 and key say nothing meanwhile (shared/model's currentFeatures) */}
             {state.outdated && (
               <button
@@ -432,7 +432,7 @@ export function InfoWaveform({
                 onClick={onAnalyze}
                 aria-label="Analyze audio again"
                 data-tip="Measured by an earlier version of TastyTunes. Analyze audio again."
-                // no transition inside the frosted shell (S11): the shell fades as a whole
+                // no transition inside the frosted shell: the shell fades as a whole
                 className="tip-top tip-end -my-1 shrink-0 rounded-md p-1 text-dim hover:bg-veil2 hover:text-ink"
               >
                 <AudioLines size={14} />
@@ -450,7 +450,7 @@ export function InfoWaveform({
  * the file facts, because DR is a property of the master beside codec, rate
  * and depth: Now Playing's chip row, both Info modals' header chips, the
  * Format sections' Dynamic range row. Never a second time beside a waveform
- * (user call, 2026-09-01: one home per fact).
+ * (one home per fact).
  */
 /** The album's (or track's) integrated loudness as a chip beside DR — neutral
  *  tone: a loudness is a fact about a master, not a verdict. */
@@ -488,7 +488,7 @@ export function DrChip({ dr }: { dr: number }): React.JSX.Element | null {
 /** Now Playing's format row wears the playing track's DR — at the END of the
  *  chips, before the lamp: a verdict about the master beside the verdict
  *  about the signal, facts first, the lamp still the row's closing mark; a
- *  late arrival nudges only the lamp (user call, 2026-09-01). */
+ *  late arrival nudges only the lamp. */
 export function PlayingDrChip(): React.JSX.Element | null {
   const dr = usePlayingDr();
   return dr == null ? null : <DrChip dr={dr} />;
@@ -517,7 +517,7 @@ function SeekTrack({ analysis, shown }: { analysis: Analysis; shown: number }): 
   useEffect(() => {
     // Bars stay for the CONTROL — segments read as grabbable — but at the
     // pre-upgrade density: ~2.25px pitch reproduces the 240-bucket look at
-    // the bar's usual width; the finer pitch read as busy (user, 2026-08-30).
+    // the bar's usual width; the finer pitch read as busy.
     if (canvasRef.current)
       draw(canvasRef.current, analysis, shown, { strip: true, style: "bars", pitch: 2.25 });
   }, [analysis, shown]);

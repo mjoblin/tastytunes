@@ -225,7 +225,7 @@ export function LibraryScreen(): React.JSX.Element {
   const tailNode = path.at(-1)?.node;
   const arrived = tailNode != null && standIns.has(tailNode);
   const lensPools = useIndexPools(lens != null || tailVol != null || arrived);
-  // a server's album cards take the format line too (0.14.0, his D6 pick: every album card,
+  // a server's album cards take the format line too (0.14.0: every album card,
   // behind the same switch): the index's tracks give each its format, asked only while shown
   const formatLine = useStore((s) => s.settings.albumCardFormat);
   const folderPools = useIndexPools(formatLine && cards && lens == null);
@@ -1017,7 +1017,7 @@ export function LibraryScreen(): React.JSX.Element {
               !albumNode &&
               (searchMode ? containers.length > 0 : rawContainerCount > 0) && (
                 // the Library's one Rows or Cards, the format line and the card grid's size, gap
-                // and Fill rows (0.14.0, his D5 pick: the menu wherever the button was)
+                // and Fill rows (0.14.0: the menu wherever the button was)
                 <ViewOptions kind="folders" />
               )}
           </div>
@@ -1134,7 +1134,7 @@ export function LibraryScreen(): React.JSX.Element {
         onScroll={(e) => {
           // Recorded as you scroll, not only when you navigate: leaving for
           // another screen UNMOUNTS this one, and the album you were halfway
-          // down came back at the top (user, 2026-08-22).
+          // down came back at the top.
           if (artistPage && atRoot && !searchMode) {
             artistPageScroll.set(artistPage.toLowerCase(), e.currentTarget.scrollTop);
             return;
@@ -1143,7 +1143,7 @@ export function LibraryScreen(): React.JSX.Element {
           const key = nodeKey(serverUdn, path);
           if (loadedKey.current === key) scrollMemory.set(key, e.currentTarget.scrollTop);
         }}
-        // RING ROOM at the top edge (docs/renderer.md; his call, 2026-10-21, when the doors'
+        // RING ROOM at the top edge (when the doors'
         // label went and their hover glow was cut flat at this edge): the scroller reaches 24px
         // up under the header and the trail, padded by as much, so nothing moves and a hover
         // glow has room above the first row; the strip fades rather than cuts (fade-top), clear
@@ -1152,14 +1152,14 @@ export function LibraryScreen(): React.JSX.Element {
         // glow and any row scrolled up dissolve under the heading; a row scrolled into view stops
         // below the strip (scroll-pt-6). The header and the trail sit above the scroller, their
         // controls clickable over the strip. Only while the PAGE scrolls: a lens scrolls its own
-        // columns, and a mask around them stopped Chromium's own lazy loading inside them (his
+        // columns, and a mask around them stopped Chromium's own lazy loading inside them (the
         // lenses' pictures, 0.12.0-rc.3), so a lens keeps the page as it was. Under the mask
         // ArtImage looks ahead for its lazy pictures itself (S84).
         style={{ "--fade-top-clear": "12px", "--fade-top-solid": "24px" } as React.CSSProperties}
         className={cx(
           // stable gutter: without it the scrollbar's appearance shifts every
           // right-aligned control as listings shrink/grow (macOS always-on
-          // scrollbars — the "filter box moves" report)
+          // scrollbars)
           "flex-1 px-8 [scrollbar-gutter:stable]",
           // every lens scrolls its own column under its toolbar (the miller view's columns, the
           // tracks list, the albums grid since 2026-10-11) — the page must not; the artist page
@@ -1229,7 +1229,7 @@ export function LibraryScreen(): React.JSX.Element {
           ) : (
             <TracksLens
               // the rows and the cards are two views, each from its own top and spot; the Tracks
-              // view's own Rows or Cards since 0.13.0-rc.4 (his note on "View Options")
+              // view's own Rows or Cards since 0.13.0-rc.4
               key={tracksCards ? "cards" : "rows"}
               pools={lensPools}
               actions={lensActions}
@@ -1367,7 +1367,7 @@ export function LibraryScreen(): React.JSX.Element {
             container lists only. */}
         {/* floats over the list (toast entrance, popover surface) — in flow
             it pushed the rows being picked; anchored to the screen root, so
-            the scroller neither clips nor carries it (user, 2026-08-27) */}
+            the scroller neither clips nor carries it */}
         {!atRoot && state === "ready" && selTracks.size > 0 && (
           <SelectionBar
             count={selTracks.size}

@@ -13,29 +13,28 @@ import { cx } from "@/lib/format";
  */
 
 /**
- * TOOLBAR SPACING, TWO TIERS (user call 2026-09-01: every control row sat at
- * one 6px gap, which read cramped AND said nothing about grouping). Controls
- * that do one kind of job sit GAP_WITHIN apart (the facet pickers; sort +
- * layout; the queue's three save verbs); kinds sit GAP_BETWEEN apart (the
- * text filter | a partition | the facets | a verb | the sort chip). A text
- * filter is always its own group — typing is a different kind of act from
- * clicking. The between tier carries a smaller row gap so a wrapping rail
- * (the Search categories) stacks close. Every toolbar row reads these two
- * names; a raw gap class on a control row is drift (S55). Sized 6px / 12px
- * (user, 2026-09-02: one level down from the first cut's 8 / 16 — the
- * distinction, not the air, was the point).
+ * TOOLBAR SPACING, TWO TIERS (every control row once sat at one 6px gap, which
+ * read cramped AND said nothing about grouping). Controls that do one kind of
+ * job sit GAP_WITHIN apart (the facet pickers; sort + layout; the queue's three
+ * save verbs); kinds sit GAP_BETWEEN apart (the text filter | a partition | the
+ * facets | a verb | the sort chip). A text filter is always its own group —
+ * typing is a different kind of act from clicking. The between tier carries a
+ * smaller row gap so a wrapping rail (the Search categories) stacks close.
+ * Every toolbar row reads these two names; a raw gap class on a control row is
+ * drift (S55). Sized 6px / 12px (one level down from the first cut's 8 / 16,
+ * since the distinction, not the air, was the point).
  */
 export const GAP_WITHIN = "gap-1.5";
 export const GAP_BETWEEN = "gap-x-3 gap-y-1.5";
 
 /**
- * A CHIP ON A CARD'S PICTURE (0.13.0-rc.3, his pick of three on the decision page: circles
- * everywhere): the ⋯, the heart, the playing and tuning status, a preset's volume and repair.
- * Round, as the big pictures' chips are (Now Playing's art, the artist page's picture), and one
- * size, 32px, the controls' height; solid where theirs are frosted, since a blur behind every
- * card's chips costs too much on a computer without graphics acceleration. Unlike the recipes
- * below it carries its size, which is the grammar; the corner and the glyph's color stay at the
- * call site. `alert` rings it in the alert color (a preset that didn't load).
+ * A CHIP ON A CARD'S PICTURE (0.13.0-rc.3, circles everywhere): the ⋯, the heart, the playing and
+ * tuning status, a preset's volume and repair. Round, as the big pictures' chips are (Now
+ * Playing's art, the artist page's picture), and one size, 32px, the controls' height; solid where
+ * theirs are frosted, since a blur behind every card's chips costs too much on a computer without
+ * graphics acceleration. Unlike the recipes below it carries its size, which is the grammar; the
+ * corner and the glyph's color stay at the call site. `alert` rings it in the alert color (a
+ * preset that didn't load).
  */
 export const cardChip = (alert = false): string =>
   cx(
@@ -130,7 +129,7 @@ export function Chip({
       className={cx(
         // h-8: the toolbar height every control shares (FilterInput, HeaderChip's
         // p-2 + 16px glyph, PrimaryButton, Segmented) — a 26px pill beside a 32px
-        // filter box read as a different row (user, 2026-09-01)
+        // filter box read as a different row
         "inline-flex items-center rounded-full h-8 px-3 text-[12px] ring-1 transition-all",
         state === "disabled"
           ? "ring-edge/60 bg-panel/40 text-faint/50 cursor-default"
@@ -177,9 +176,9 @@ export function PrimaryButton({
         "hover:brightness-110 disabled:opacity-40 disabled:shadow-none",
         // a disabled primary is INERT, not merely dim: no hover lift, no press
         // squash (Chromium keeps matching :active on a disabled button, so the
-        // Tracks lens's waiting Play these still animated under a click —
-        // user, 2026-09-01), and the arrow cursor of a native disabled control
-        // rather than the web's scolding not-allowed sign
+        // Tracks lens's waiting Play these still animated under a click), and
+        // the arrow cursor of a native disabled control rather than the web's
+        // scolding not-allowed sign
         "disabled:hover:brightness-100 motion-safe:disabled:active:scale-100 disabled:cursor-default",
         "motion-safe:active:scale-95 transition-all",
         className,

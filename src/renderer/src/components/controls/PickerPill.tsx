@@ -12,24 +12,24 @@ import { cx, fmtCount } from "@/lib/format";
  * grew its own facets): the Albums and Tracks lenses' Genre / Decade / Format
  * / DR / Played pickers and the Timeline's Source / Period.
  *
- * THE PILL HOLDS ITS WIDTH (user, 2026-10-10: choosing a genre resized the pill and moved
- * everything after it). Every label the pill can show sits in one grid cell, the shown one
- * as text and the rest invisible, so the pill is as wide as its widest label whatever is
- * chosen, up to LABEL_MAX_PX; a longer label truncates and the pill's tip names it. The
- * invisible ones draw their label from a data attribute (::before), so they give width and
- * nothing else: no text for a reader, a search or a screen reader. The options narrow as the
- * other facets do, so the labels a pill has offered this session are remembered (per id,
- * bounded by the library's own facet values): the width grows to a new widest, never shrinks.
- * A SETTING'S CHOICE TOO (`choice`, 0.13.0, his ask: Settings › Libraries' Recently added list in
- * "the app's dropdown widget" rather than a native select): always one value, so no clearing row
- * and a pick never toggles off, no counts, the chip in its resting look (gold says a filter is on),
- * the list under the chip's right edge.
- * INSIDE A FILTER BOX (`inline`, 0.13.0-rc.4, his picks on "Filter Scope": the Tracks lens's
- * "search in" sits in the filter box, where a toolbar already full has no room for a chip): the
- * same label held at its widest, the same list and counts, drawn as the box's own text, gold when
- * a value is chosen; the clearing row may carry its count too (`clearCount`).
+ * THE PILL HOLDS ITS WIDTH (choosing a genre once resized the pill and moved everything after
+ * it). Every label the pill can show sits in one grid cell, the shown one as text and the rest
+ * invisible, so the pill is as wide as its widest label whatever is chosen, up to
+ * LABEL_MAX_PX; a longer label truncates and the pill's tip names it. The invisible ones draw
+ * their label from a data attribute (::before), so they give width and nothing else: no text
+ * for a reader, a search or a screen reader. The options narrow as the other facets do, so the
+ * labels a pill has offered this session are remembered (per id, bounded by the library's own
+ * facet values): the width grows to a new widest, never shrinks.
+ * A SETTING'S CHOICE TOO (`choice`, 0.13.0: Settings › Libraries' Recently added list in the app's
+ * own dropdown rather than a native select): always one value, so no clearing row and a pick never
+ * toggles off, no counts, the chip in its resting look (gold says a filter is on), the list under
+ * the chip's right edge.
+ * INSIDE A FILTER BOX (`inline`, 0.13.0-rc.4: the Tracks lens's "search in" sits in the filter
+ * box, where a toolbar already full has no room for a chip): the same label held at its widest,
+ * the same list and counts, drawn as the box's own text, gold when a value is chosen; the clearing
+ * row may carry its count too (`clearCount`).
  */
-// 112 (user, 2026-10-11, from comparison shots): at 160 one long genre ("Contemporary Hip Hop")
+// 112 (from comparison shots): at 160 one long genre ("Contemporary Hip Hop")
 // set its pill's width and the lens row wrapped at a 1,180 px window; at 112 the row fits
 const LABEL_MAX_PX = 112;
 const offered = new Map<string, Set<string>>();

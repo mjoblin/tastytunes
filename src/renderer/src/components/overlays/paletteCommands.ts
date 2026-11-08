@@ -273,9 +273,8 @@ export function buildCommands(ctx: CommandContext): Command[] {
       });
     }
     if (allow("toggle_repeat")) {
-      // every mode but the one that is on, so any can be chosen directly (user, 2026-10-05:
-      // "can/should it show all 3 allowing me to choose?"), as Sources lists every source but
-      // the active one; the first is where the button's press goes (off, all, one, off)
+      // every mode but the one that is on, so any can be chosen directly, as Sources lists every
+      // source but the active one; the first is where the button's press goes (off, all, one, off)
       const next = nextRepeatMode(repeatModeOf(playState));
       const LABEL = { off: "Repeat off", all: "Repeat all", one: "Repeat one" } as const;
       for (const mode of [next, nextRepeatMode(next)]) {

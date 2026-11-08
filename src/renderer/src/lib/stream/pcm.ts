@@ -2,7 +2,7 @@
  * A WAV OR AIFF FILE IN PIECES (0.14.0, analysis with no size limit): their samples are stored as
  * they are, so they need no decoder, only their header and the arithmetic that turns an integer
  * sample into the float a decoder gives. AIFF is new to analysis with this: Chromium's whole-file
- * decode refuses it (ops decoder-probe), so AIFF files were never measured.
+ * decode refuses it (measured), so AIFF files were never measured.
  *
  * THE SAME FLOATS AS CHROMIUM'S DECODE: an integer sample becomes a float the way Chromium's own
  * decode makes it (media's FixedSampleTypeTraits: a negative value over the type's magnitude, a

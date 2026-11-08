@@ -10,8 +10,7 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
  * THE STATS CARD (0.9.0, the listening record's last reading surface, built
- * 2026-09-15 at the user's word as "Your year" and widened the same day at
- * his call to the period the Stats view shows — past week, past month,
+ * as "Your year" and widened to the period the Stats view shows — past week, past month,
  * past year, all time): the view's figures drawn to a canvas and handed
  * back as a PNG. ONE HOME for the numbers: everything here is a
  * ListeningStats from lib/historyStats, the very objects the Stats view

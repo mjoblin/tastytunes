@@ -71,14 +71,14 @@ import { nameKey } from "@shared/keys";
 
 /**
  * The Info modal: everything the server said about a piece of media, laid out
- * plainly (user ask, 2026-08-16). The rows and headers stay quiet on purpose
- * — THIS is where the detail lives. Three sections when they apply: what it
- * is (identity), how it's encoded (format), where it came from (source).
- * For an album, the caller hands over the tracks it already knows belong to
- * it, so runtime / size / format / composers are summed here, the same
- * derivations the album leaf and the lens use (albumFormat, albumComposers)
- * — never a second reading. "Copy as JSON" hands the raw node(s) to the
- * clipboard for bug reports.
+ * plainly. The rows and headers stay quiet on purpose — THIS is where the
+ * detail lives. Three sections when they apply: what it is (identity), how
+ * it's encoded (format), where it came from (source). For an album, the
+ * caller hands over the tracks it already knows belong to it, so runtime /
+ * size / format / composers are summed here, the same derivations the album
+ * leaf and the lens use (albumFormat, albumComposers) — never a second
+ * reading. "Copy as JSON" hands the raw node(s) to the clipboard for bug
+ * reports.
  */
 
 // A step shows the next track whole (lib/infoSteps): its analysis looked up and its cover
@@ -99,8 +99,8 @@ function preloadImage(src: string): Promise<void> {
 }
 
 /** A track's place in the header's small label, as Now Playing says it: "track 4 of 12", with
- *  its disc on an album of several; plain "track" without a number (0.12.0, his ask once the
- *  ‹ › made moving between tracks easy). */
+ *  its disc on an album of several; plain "track" without a number (0.12.0, once the ‹ ›
+ *  made moving between tracks easy). */
 function trackLabel(node: MediaNode, count: number | null): string {
   const pos = trackPosition(node);
   if (pos == null) return "track";
@@ -256,10 +256,10 @@ function MediaInfoBody({
     trackDrs && trackDrs.length > 0
       ? { min: Math.min(...trackDrs), max: Math.max(...trackDrs) }
       : null;
-  // ---- from an album to its tracks and back (0.12.0, his word on the mockup): a row of the
-  // album's Tracks section opens that track's Info, ‹ › stepping the album in its order, and
-  // the track's album name comes back to this album as it was; a track's Info opened anywhere
-  // else finds its album by name in the index
+  // ---- from an album to its tracks and back (0.12.0): a row of the album's Tracks section
+  // opens that track's Info, ‹ › stepping the album in its order, and the track's album name
+  // comes back to this album as it was; a track's Info opened anywhere else finds its album by
+  // name in the index
   const orderedTracks = useMemo(
     () => (kind === "album" && tracks && tracks.length > 0 ? orderTracks(tracks) : null),
     [kind, tracks],
@@ -321,7 +321,7 @@ function MediaInfoBody({
     void analyzeAlbum(given, udn, []).then(() => setCoverageNonce((n) => n + 1));
   };
   const headerDr = kind === "track" ? trackDr : kind === "album" ? albumDr : null;
-  // NO LOUDNESS CHIP in this header (0.12.0, his call: seven chips wrapped to a second row): a
+  // NO LOUDNESS CHIP in this header (0.12.0: seven chips wrapped to a second row): a
   // track's loudness ends the waveform's caption just below and has its Format row, an album's
   // its Album row; the header keeps the format and DR. The Library's album header keeps its chip
   // the catalog facts line — the Library album header's exact string (one
@@ -412,8 +412,7 @@ function MediaInfoBody({
       </span>
     );
   // Lists read as ROWS, the name in ink and its facts quiet beside it — a
-  // "·"-joined sentence made a shelf of albums look like a paragraph
-  // (user, 2026-08-16).
+  // "·"-joined sentence made a shelf of albums look like a paragraph.
   const rows = (items: { name: string; meta: string | null }[], max: number): React.ReactNode =>
     items.length === 0 ? null : (
       <ul className="space-y-0.5" data-info-list>
@@ -534,7 +533,7 @@ function MediaInfoBody({
           </div>
           {kind === "track" && node.album && albumUp ? (
             // a row of two names that each shorten with an ellipsis: the album name is a button,
-            // which a truncating line would drop whole for "…" (his Now Playing ⌘I, 2026-10-17)
+            // which a truncating line would drop whole for "…"
             <div className="mt-0.5 flex min-w-0 text-[13px] text-dim" data-info-subtitle>
               {node.artist && <span className="max-w-[50%] shrink-0 truncate">{node.artist}</span>}
               {node.artist && <span className="shrink-0 whitespace-pre"> · </span>}
@@ -545,7 +544,7 @@ function MediaInfoBody({
           )}
           {/* two registers (lib/mediaFacts): collection facts as prose, then
               the format TOKENS as chips with the DR chip closing the row —
-              the clothes Now Playing taught the eye (user call, 2026-09-01) */}
+              the clothes Now Playing taught the eye */}
           {factsLine && (
             <div className="mt-1.5 text-[12.5px] text-faint" data-info-facts>
               {factsLine}

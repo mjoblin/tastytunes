@@ -8,8 +8,8 @@ import { fmtRelative, fmtTime } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
- * "Pick up where you left off" on the standby face (rebuilt in 0.10.0 from the user's ask,
- * 2026-10-06: "the state i was in when i put the streamer in standby is being resumed").
+ * "Pick up where you left off" on the standby face (rebuilt in 0.10.0 so that what resumes is
+ * the state the streamer was in when it went to standby).
  * It offers what the streamer was doing when it went to sleep (HeldState, kept by main,
  * since the streamer says nothing while it sleeps), and Resume puts it back: the same queue
  * entry from the same point (a preset's or a playlist's track included, nothing added to the
@@ -19,7 +19,7 @@ import { FACT_SEP } from "@/lib/mediaFacts";
  * short to record; agents keep that reading (history_resume). The ✕ dismisses this standby's
  * offer for good (it survives a restart; the next standby brings a new one), and the face
  * then shows nothing in its place: the old "Not now" fell back to a Last played line naming
- * the same track (user, 2026-10-06). The Last played line is for a streamer with nothing
+ * the same track. The Last played line is for a streamer with nothing
  * held at all.
  */
 

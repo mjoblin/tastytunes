@@ -4,7 +4,7 @@ import type { MouseEvent as ReactMouseEvent } from "react";
  * WHERE A MENU OPENS for the event that asked (0.13.0): at the pointer for a click or a
  * right-click, and under the control for a key press (Space or Enter on a ⋯, the context-menu
  * key), which has no pointer: the browser reports 0, 0, and every menu opened in the window's
- * top-left corner once round 4 let the keyboard reach the ⋯ (his try, 2026-10-25, a Queue row's ⋯
+ * top-left corner once round 4 let the keyboard reach the ⋯ (a Queue row's ⋯
  * opened over the sidebar). One home for every menu's anchor, so no caller remembers the rule.
  */
 export function menuAt(e: {
@@ -49,7 +49,7 @@ export function keyedEvent(el: HTMLElement | null): ReactMouseEvent<HTMLElement>
 }
 
 /**
- * An item's More menu from the keyboard (K4) through its own right-click: every row and card
+ * An item's More menu from the keyboard through its own right-click: every row and card
  * opens its menu on a right-click (the app-wide rule), so a list whose rows keep their menu to
  * themselves asks that way, and menuAt anchors it under the item.
  */

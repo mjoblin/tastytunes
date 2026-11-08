@@ -289,7 +289,7 @@ export function DeviceScreen(): React.JSX.Element {
                 simply don't carry — guest/IoT VLANs, a streamer on ethernet
                 while the Mac is on a mesh AP, VPNs, and virtual machines (a
                 VM on NAT reaches the streamer fine and never hears a
-                multicast reply — user, 2026-08-04). For those people this
+                multicast reply). For those people this
                 field is not a fallback, it IS the way in, and it used to sit
                 unlabelled under a hairline looking like a developer setting.
 
@@ -370,14 +370,14 @@ export function DeviceScreen(): React.JSX.Element {
           {/* ------------------------------------------------- system / sources / eq */}
           {/* The tab labelled "System" holds identity + the §10 device controls.
             It was "Streamer", which said nothing on a screen that is entirely
-            the streamer (user call 2026-07-25). The STORED id stays 'streamer'
+            the streamer. The STORED id stays 'streamer'
             — renaming it would cost a settings migration for no visible gain.
             "Info & Settings" was considered and rejected: "Settings" collides
             with the app's own Settings screen. */}
           {systemInfo && connectedHost && (
             <section className="space-y-3">
               {/* Tabs left, web admin right — the button belongs to the DEVICE,
-                not to one tab (user call 2026-07-25; it used to sit at the
+                not to one tab (it used to sit at the
                 bottom of the Streamer card, out of sight and reading as a
                 streamer-info thing). Right-aligned lands it flush with the
                 edge of the tab body below it. */}

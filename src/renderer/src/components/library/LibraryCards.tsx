@@ -172,7 +172,7 @@ export function ContainerCard({
           whose whole-card click IS the play action) */}
       <button
         className="block w-full cursor-pointer"
-        // a keyed list is one Tab stop (K1): its cards are reached with the arrows
+        // a keyed list is one Tab stop: its cards are reached with the arrows
         tabIndex={inList ? -1 : undefined}
         onClick={onEnter}
         onPointerDown={(e) => {
@@ -233,7 +233,7 @@ export function ContainerCard({
         {note && (
           // LAST, under the names: the card's own artist and year are what it
           // says about itself, and a surface's fact goes after them, never
-          // between them (user, 2026-09-11). Inside the card, so it lifts with
+          // between them. Inside the card, so it lifts with
           // it — a line outside is covered the moment the card glows.
           <div data-card-note className="text-[11px] text-faint/80 tabular-nums truncate text-left">
             {note}
@@ -286,12 +286,11 @@ export function ContainerCard({
 }
 
 /**
- * A CARD'S ART ACTIONS, BESIDE ITS OWN BUTTON (0.14.0, his K4 pick on the design page "TastyTunes
- * 0.14.0 Design"): Play and More were spans drawn inside the card's button, a control within a
- * control that nothing could name or reach. They are real buttons now, laid over the art where
- * they were (the card's p-2 inset, the art's square), named for VoiceOver and kept out of the
- * Tab order: the keyboard reaches them through the card's More menu. The layer takes no pointer
- * itself, so the card under it still opens.
+ * A CARD'S ART ACTIONS, BESIDE ITS OWN BUTTON (0.14.0): Play and More were spans drawn inside
+ * the card's button, a control within a control that nothing could name or reach. They are real
+ * buttons now, laid over the art where they were (the card's p-2 inset, the art's square), named
+ * for VoiceOver and kept out of the Tab order: the keyboard reaches them through the card's More
+ * menu. The layer takes no pointer itself, so the card under it still opens.
  */
 export function ArtActions({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -302,8 +301,8 @@ export function ArtActions({ children }: { children: React.ReactNode }): React.J
 }
 
 /**
- * A TRACK'S CARD (0.13.0-rc.4, his picks on "Tracks as Cards": the Tracks lens follows the
- * Library's one Rows or Cards choice, and a track card's click plays). The album card's look for
+ * A TRACK'S CARD (0.13.0-rc.4: the Tracks lens follows the Library's one Rows or Cards choice,
+ * and a track card's click plays). The album card's look for
  * a track: its cover, the title, and under it what the caller says (the artist and the album, or
  * the figure the list is sorted by). Its click is a track row's: a selection chord picks, any
  * other click plays, so Play blooms in the middle as on the Queue's and the presets' cards; the
@@ -438,8 +437,8 @@ export function TrackCard({
 }
 
 /**
- * A LINE WITH A COPY'S CHIP (0.13.0-rc.4, his pick on "Card details": the chip never takes more
- * than half the line, so the artist keeps the other half): two columns no wider than their text,
+ * A LINE WITH A COPY'S CHIP (0.13.0-rc.4: the chip never takes more than half the line, so the
+ * artist keeps the other half): two columns no wider than their text,
  * the line's free width shared equally between them, so each keeps up to half and either uses
  * what the other leaves, the chip at the line's right end, and either shortened with "…" past its
  * share. The name's column is always there, empty when there is no name.
@@ -468,7 +467,7 @@ export function CardBadge({ label, tip }: { label: string; tip?: string }): Reac
 }
 
 /**
- * AN ALBUM CARD'S FORMAT LINE (0.13.0-rc.4, his picks on "Card details"): the status lamp's glyph
+ * AN ALBUM CARD'S FORMAT LINE (0.13.0-rc.4): the status lamp's glyph
  * for its quality, its format, and DR's badge at the right once Audio analysis has measured it,
  * one tip over the line in two short lines (the format, then the dynamic range) so a tip under a
  * narrow card stays about its width. Held at its height when nothing is known, so every card in
@@ -486,8 +485,8 @@ function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Elemen
       data-card-format={details.label ?? ""}
       data-tip={tip || undefined}
       className={cx(
-        // text-dim, not the names' faint: new text clears 0016's floor in dark too (S139, the
-        // rc.4 gate: at faint/80 the line sat near 2.8 to 1 on the dark card)
+        // text-dim, not the names' faint: new text clears the contrast floor in dark too (at
+        // faint/80 the line sat near 2.8 to 1 on the dark card, 0.13.0-rc.4)
         "mt-1.5 h-4 flex items-center gap-1 min-w-0 text-[10.5px] text-dim tabular-nums text-left",
         tip && "tip-bottom tip-lines",
       )}

@@ -60,8 +60,8 @@ function ssdpSearch(timeoutMs: number): Promise<string[]> {
     // A send to a DEAD unicast target surfaces here as an ICMP refusal
     // (ECONNREFUSED) — which is exactly what a powered-off streamer's port
     // does. Ending the sweep on it would let one dead device silence every
-    // live one (the multi-streamer eco report), so errors are swallowed and
-    // the timeout above is the only closer.
+    // live one (a multi-streamer household on eco standby), so errors are
+    // swallowed and the timeout above is the only closer.
     socket.on("error", () => {});
 
     socket.on("message", (msg) => {
@@ -109,7 +109,7 @@ async function fetchDescription(location: string): Promise<DeviceDescription | n
     // ONE spelling for identity: the description writes "uuid:X" where
     // /system/info writes bare "X", and the device book keys on the latter —
     // an unstripped prefix made every remembered streamer fail to match its
-    // own live discovery and render twice (user, 2026-08-30).
+    // own live discovery and render twice.
     udn: String(device.UDN ?? "").replace(/^uuid:/i, ""),
   };
 }

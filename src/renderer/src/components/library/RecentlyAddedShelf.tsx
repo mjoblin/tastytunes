@@ -17,19 +17,18 @@ import { menuAt } from "@/lib/menuAt";
 import { gridColumnsOf, ListKeysContext, useListKeys } from "@/hooks/useListKeys";
 import { keyedEvent } from "@/lib/menuAt";
 
-/** The shelf's cards against the reader's card size (his calls, 2026-10-25: "a little smaller"
- *  at the decision page, then on his own library 0.8 read "a little small", 0.9 next, then
- *  "let's try 100%"): the card size itself, each card its own width rather than stretched. */
+/** The shelf's cards against the reader's card size (0.8 and then 0.9 read a little small on a
+ *  real library): the card size itself, each card its own width rather than stretched. */
 const SHELF_SCALE = 1;
 
 /**
- * RECENTLY ADDED ON THE LIBRARY'S FRONT PAGE (0.13.0 round 9, his pick on the decision page: a
- * shelf under the doors). One row of the albums known to be recent, in shared/recentlyAdded's
+ * RECENTLY ADDED ON THE LIBRARY'S FRONT PAGE (0.13.0 round 9: a shelf under the doors). One row
+ * of the albums known to be recent, in shared/recentlyAdded's
  * order (the dated newest first, then a server's own list), as History's Rediscover shelves show
  * theirs: the Library's own album cards, at a step under the reader's card size and not stretched,
- * each saying when it arrived where the app knows it (his pick: "when it arrived, where known"),
- * on the card's note line under its names (his rule, 2026-09-11: a surface's fact goes after the
- * card's own). See all opens the Albums lens in the same order. Not there when nothing is known.
+ * each saying when it arrived where the app knows it, on the card's note line under its names (a
+ * surface's fact goes after the card's own). See all opens the Albums lens in the same order. Not
+ * there when nothing is known.
  */
 export function RecentlyAddedShelf({ seeAll }: { seeAll(): void }): React.JSX.Element | null {
   const pools = useIndexPools();
@@ -49,7 +48,7 @@ export function RecentlyAddedShelf({ seeAll }: { seeAll(): void }): React.JSX.El
     y: number;
     items: MediaMenuItem[];
   } | null>(null);
-  // FROM THE KEYBOARD (0.15.0, the 0.14 re-score): the shelf one Tab stop, the arrows across its
+  // FROM THE KEYBOARD (0.15.0): the shelf one Tab stop, the arrows across its
   // cards, Enter opens an album as its click does, "." its More menu (Play is there)
   const shown = albums.slice(0, columns);
   const gridEl = useRef<HTMLDivElement | null>(null);

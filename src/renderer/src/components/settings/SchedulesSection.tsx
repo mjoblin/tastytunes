@@ -153,8 +153,8 @@ export function SchedulesSection({ settings, save }: SectionProps): React.JSX.El
             {/* UNCONTROLLED while editing (defaultValue, not value): Chrome's
                 time input emits "" mid-edit — after the first minute digit —
                 and a controlled value would snap the field back between the
-                two keystrokes (user, 2026-08-24: "it only changes the second
-                of the two digits"). Complete values commit on change. */}
+                two keystrokes, so only the second of the two digits would
+                change. Complete values commit on change. */}
             <input
               type="time"
               key={s.id}

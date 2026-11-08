@@ -103,7 +103,7 @@ export interface FavoriteMedia {
   /** Track length in seconds, captured at heart time (tracks; null when the
    *  source had none — favorites hearted before this field show blank). */
   durationSecs?: number | null;
-  /** WHICH COPY the heart is on (0.13.0, his call: each copy its own, across servers): its
+  /** WHICH COPY the heart is on (0.13.0: each copy its own, across servers): its
    *  server and item at heart time, or the moment it was made. It makes favoriteKey one per
    *  copy, so two copies of one album can each be hearted. Absent on hearts from before, whose
    *  server, item, picture and length still say which copy they are (heartOf). */

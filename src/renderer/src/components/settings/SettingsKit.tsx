@@ -22,8 +22,8 @@ export interface SectionProps {
   save(patch: Partial<AppSettings>): Promise<void>;
 }
 
-/** A settings card: its ring, its ground and its rows' spacing, the look's one home (0.16.0's tidy,
- *  before the design pass restyles Settings; ten copies of the class list before). */
+/** A settings card: its ring, its ground and its rows' spacing, the look's one home (0.16.0's tidy;
+ *  ten copies of the class list before). */
 export function SettingsCard({ children }: { children: React.ReactNode }): React.JSX.Element {
   return <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">{children}</div>;
 }
@@ -44,8 +44,8 @@ export function CacheRow(): React.JSX.Element {
     void tt.lookupCacheStats().then(setStats);
   }, []);
   const empty = stats != null && stats.entries === 0;
-  // a cache clears with the record's confirm (user, 2026-09-14): the copies come back
-  // on their own, but filling them again can take a while, and the ask is a quick one
+  // a cache clears with the record's confirm: the copies come back on their own, but
+  // filling them again can take a while, and the ask is a quick one
   const confirmClear = useConfirmPopover();
   return (
     <SettingRow

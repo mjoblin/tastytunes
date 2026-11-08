@@ -394,7 +394,7 @@ function buildDemo(host: string): {
 
   function handlePresetSave(body: Dict, res: ServerResponse): void {
     const didl = String(body.didl ?? "");
-    // a preset saved from a DIDL with an empty title is listed "[No title]" (his slot 24, 2026-10-28)
+    // a preset saved from a DIDL with an empty title is listed "[No title]" (read 2026-10-28)
     const title = didl.match(/<dc:title>(.*?)<\/dc:title>/)?.[1] || "[No title]";
     const artU = didl.match(/<upnp:albumArtURI>(.*?)<\/upnp:albumArtURI>/)?.[1] ?? null;
     const list = DATA["/presets/list"] as { presets: Array<Dict & { id: number }> };

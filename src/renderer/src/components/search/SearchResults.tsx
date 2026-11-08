@@ -46,7 +46,7 @@ export function SearchResults({
   // by the Library's search box; a Browse-only one (the streamer's USB stick)
   // has no search until its index is built, from its card in the Library.
   // Silent disagreement between the two searches is what erodes trust — so when
-  // that gap exists, this screen says so, and says which (user, 2026-09-17).
+  // that gap exists, this screen says so, and says which.
   const libUnindexed = useMemo(() => mediaIndex.filter((x) => x.state !== "ready"), [mediaIndex]);
   const libLive = useMemo(() => libUnindexed.filter((x) => x.searchable !== false), [libUnindexed]);
   const libBrowseOnly = useMemo(
@@ -54,7 +54,7 @@ export function SearchResults({
     [libUnindexed],
   );
 
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): every result one list, one Tab stop, up and down
+  // FROM THE KEYBOARD (0.14.0): every result one list, one Tab stop, up and down
   // through the categories in their order; Enter does what a result's click does, "." its menu
   const LIB_KINDS = new Set<string | undefined>(["artist", "album", "track"]);
   const resultLines = shownCats.reduce((n, c) => {
@@ -167,13 +167,13 @@ export function SearchResults({
                     </div>
                   )}
                   {/* SECTIONED BY KIND once the library owns the screen. The
-                      taxonomy is closed at three (lib/media), and the Library's
-                      own results already read artists → albums → tracks — the
-                      hierarchy order, artists make albums, albums contain
-                      tracks. Mixed into one list it read as an unsorted jumble:
-                      the order was always artists→albums→tracks, but nothing
-                      said so. Headings ALWAYS (user, 2026-07-25) — six rows
-                      split three ways still beats six rows that look shuffled. */}
+                      taxonomy is closed at three (lib/media), and the Library's own
+                      results already read artists → albums → tracks — the hierarchy
+                      order, artists make albums, albums contain tracks. Mixed into
+                      one list it read as an unsorted jumble: the order was always
+                      artists→albums→tracks, but nothing said so. Headings ALWAYS:
+                      six rows split three ways still beats six rows that look
+                      shuffled. */}
                   {c.id === "library"
                     ? (["artist", "album", "track"] as const).map((k) => {
                         const inKind = ordered.slice(0, cap).filter((r) => r.kind === k);

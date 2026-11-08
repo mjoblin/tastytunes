@@ -33,17 +33,17 @@ import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
  * and its grid, the card click opening the album in the Library and the corner
  * bloom playing it.
  *
- * ONE SCROLLER, the screen's (user call, 2026-09-11: "vertical, in a grid …
- * vertically contained"). A section shows COLLAPSED_ROWS rows of its grid and
- * grows STEP_ROWS at a time on ask — never its own scrollport: a second
- * scrollbar in the same column makes the wheel do different things a few pixels
- * apart, gives the screen more than one spot to remember, and clips the cards'
- * hover lift at every section edge. The cut lands on a row boundary at any width
- * because the grid's columns are computed from the width the cards actually get,
- * the same arithmetic `repeat(auto-fill, …)` does.
+ * ONE SCROLLER, the screen's, vertical and in a grid. A section shows
+ * COLLAPSED_ROWS rows of its grid and grows STEP_ROWS at a time on ask —
+ * never its own scrollport: a second scrollbar in the same column makes the
+ * wheel do different things a few pixels apart, gives the screen more than
+ * one spot to remember, and clips the cards' hover lift at every section
+ * edge. The cut lands on a row boundary at any width because the grid's
+ * columns are computed from the width the cards actually get, the same
+ * arithmetic `repeat(auto-fill, …)` does.
  *
- * GROWING IN STEPS, AND A HELD HEADING (user, 2026-09-11: opening a long list
- * leaves you "struggling to find the buttons to expand/reduce again"). Three
+ * GROWING IN STEPS, AND A HELD HEADING (opening a long list left the controls
+ * to expand and collapse it hard to find). Three
  * hundred albums in one press is seventy rows of cards with the way back at
  * either far end, so each ask adds a few rows, and the heading of the section
  * you are inside — with Collapse on it once that section has grown — is held at
@@ -53,13 +53,13 @@ import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
  * on the bare ground above the scroller and the scroller's `fade-top` dissolves
  * the cards before they reach it, with the next section's heading pushing it
  * away as it arrives. A sticky heading inside the scroller had to carry its own
- * background, and that band read as a seam over the ambient wash (user,
- * 2026-09-11: "super aggressive and not in keeping with the app") — and a mask
+ * background, and that band read as a seam over the ambient wash, heavy and
+ * out of keeping with the app — and a mask
  * on the scroller would dissolve a heading inside it anyway.
  *
- * EVERY HEADING IS DRAWN ABOVE THE SCROLLER, not only the held one (user,
- * 2026-09-11: the held titles must feel "SOLID, without any popping … no weird
- * 1-or-more pixel popping, no weird flickering as titles change"). The heading
+ * EVERY HEADING IS DRAWN ABOVE THE SCROLLER, not only the held one: the held
+ * titles must stay solid, with no popping by a pixel or more and no flicker
+ * as titles change. The heading
  * rows in the list keep their place but are invisible; a layer over the
  * scroller carries one row per section, and each row rides on its twin's place
  * until that place reaches the label's home at the top edge, where it stays,
@@ -121,7 +121,7 @@ export function HistoryRediscover({
   const { events, years, allLoaded } = useWholeRecord(streamer);
   const recordOn = useStore((s) => s.settings.listeningRecord);
   const pools = useIndexPools(true);
-  // each card's format line, as the Albums view's cards have it (0.14.0, his D6 pick: the line on
+  // each card's format line, as the Albums view's cards have it (0.14.0: the line on
   // every album card, behind the same switch)
   const index = useLensIndex(pools ?? NO_POOLS);
   const detailsOf = useCardDetails(pools ? index : null);
@@ -152,7 +152,7 @@ export function HistoryRediscover({
     if (n === 0) return;
     // RECTS, not offsetTop: offsetTop is rounded to whole pixels while every
     // other position here is fractional, and that leftover half pixel is a
-    // visible step (user, 2026-09-11: "a very small pop down"). A row's rects
+    // visible step, a small pop down. A row's rects
     // move together with its transform, so their difference is the label's
     // inset whatever the transform is doing — and a row hidden by visibility
     // still has them (display:none would read 0, and once did).
@@ -389,7 +389,7 @@ export function HistoryRediscover({
               className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-center gap-2 px-5 h-8"
             >
               {/* THE TITLE TAKES THE POINTER and sends the section back to its
-                  first row (user, 2026-09-11: the click fell through to the card
+                  first row (the click fell through to the card
                   under it). The container-scoped helper, never scrollIntoView —
                   and it jumps instead of gliding under reduced motion. The
                   heading row lands at the list's top padding, which is where the
@@ -409,9 +409,9 @@ export function HistoryRediscover({
                 // the section's RULE rides the tip, with the click hint after
                 // it: the detail line explains the list once, on arrival, and a
                 // held heading that repeats it spends a card row's height on
-                // text that never changes (user call, 2026-09-11)
+                // text that never changes
                 data-tip={`${s.detail} Click to go back to the top.`}
-                // NOT BRIGHTENED while held (user call, 2026-09-11): the row IS
+                // NOT BRIGHTENED while held: the row IS
                 // the heading, in the heading's own colour, held or riding.
                 // Hover still lifts to ink: :hover outranks .microlabel, where
                 // the bare utility would tie and lose to it.
@@ -516,7 +516,7 @@ function Section({
   /** What the next ask would reveal — the control says the true number. */
   const step = Math.min(remaining, columns * STEP_ROWS);
   const grown = rows > COLLAPSED_ROWS;
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): each section's grid one Tab stop, all four arrows,
+  // FROM THE KEYBOARD (0.14.0): each section's grid one Tab stop, all four arrows,
   // Enter opens the album as its click does, "." its More menu; Show more stays its own stop
   const keys = useListKeys({
     count: shown.length,

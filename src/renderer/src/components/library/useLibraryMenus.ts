@@ -62,7 +62,7 @@ export function useLibraryMenus(d: {
   const linkable = (node: MediaNode, pool: "albums" | "artists"): boolean => {
     const idx = mediaIndexStatuses.find((x) => x.udn === nodeUdn(node));
     // an artist goes to their page, which the index builds whether or not the server lists
-    // artists (the Evo's USB drive lists none)
+    // artists (the streamer's USB drive lists none)
     return idx?.state === "ready" && (pool === "artists" || idx[pool] > 0);
   };
 
@@ -119,8 +119,8 @@ export function useLibraryMenus(d: {
     return pool ? albumTracksOf(node, pool) : undefined;
   };
   // a track's "of 12" on its disc for the Info header: the open album's own listing when the
-  // track is in it (an album browsed from the server's folders has no index pools; his Only God
-  // Was Above Us read "track 1"), else the index
+  // track is in it (an album browsed from the server's folders has no index pools, and its
+  // track read "track 1"), else the index
   const discCountForInfo = (node: MediaNode): number | null => {
     if (node.isContainer) return null;
     const { albumNode, allTracks } = late.current;
@@ -279,8 +279,8 @@ export function useLibraryMenus(d: {
       showNotice("Couldn't create the playlist.");
     }
   };
-  // an album's, and since 0.12.0 a track's (his ask: one track measured again, as an album's
-  // sweep does; a current analysis is kept, an earlier version's re-measured)
+  // an album's, and since 0.12.0 a track's (one track measured again, as an album's sweep
+  // does; a current analysis is kept, an earlier version's re-measured)
   const analyzeVerbs = (node: MediaNode): MediaMenuItem[] | undefined => {
     const track = !node.isContainer;
     if (!waveformsOn || (!track && !isAlbumClass(node.upnpClass))) return undefined;

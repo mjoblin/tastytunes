@@ -78,11 +78,11 @@ describe("copiesOf: which copies a play's facts could be", () => {
     const usb = node({
       id: "u",
       serverUdn: "uuid:evo",
-      artUrl: "http://192.168.50.45:8080/a/1.jpg",
+      artUrl: "http://192.168.1.45:8080/a/1.jpg",
     });
-    const nas = node({ id: "n", artUrl: "http://192.168.50.10:9790/minimserver/x.jpg" });
-    expect(copiesOf({ host: "192.168.50.10" }, [usb, nas], nodeFacts)).toEqual([nas]);
-    expect(copiesOf({ host: "192.168.50.45" }, [usb, nas], nodeFacts)).toEqual([usb]);
+    const nas = node({ id: "n", artUrl: "http://192.168.1.10:9790/minimserver/x.jpg" });
+    expect(copiesOf({ host: "192.168.1.10" }, [usb, nas], nodeFacts)).toEqual([nas]);
+    expect(copiesOf({ host: "192.168.1.45" }, [usb, nas], nodeFacts)).toEqual([usb]);
   });
 
   it("prefers the picture's own address over everything else", () => {
@@ -226,7 +226,7 @@ const asItem = (n: MediaNode) => ({
 describe("heartOf: the heart a copy carries", () => {
   const jp = album({ id: "jp", artUrl: "http://nas/Toto IV (JP)/folder.jpg" });
   const us = album({ id: "us", artUrl: "http://nas/Toto IV (US)/folder.jpg" });
-  const usb = album({ id: "u", serverUdn: "uuid:evo", artUrl: "http://192.168.50.45:8080/a.jpg" });
+  const usb = album({ id: "u", serverUdn: "uuid:evo", artUrl: "http://192.168.1.45:8080/a.jpg" });
   const library = [jp, us, usb];
 
   it("lights the copy a heart from before 0.13.0 was made on, and no other", () => {
@@ -256,7 +256,7 @@ describe("heartOf: the heart a copy carries", () => {
   });
 
   it("finds a drive copy's heart after a standby moved its picture", () => {
-    const b = heart({ serverUdn: "uuid:evo", artUrl: "http://192.168.50.45:8080/old-mount/a.jpg" });
+    const b = heart({ serverUdn: "uuid:evo", artUrl: "http://192.168.1.45:8080/old-mount/a.jpg" });
     expect(heartOf(asItem(usb), [b], library)).toBe(b);
     expect(heartOf(asItem(us), [b], library)).toBeNull();
   });

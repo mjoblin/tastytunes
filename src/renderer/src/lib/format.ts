@@ -146,7 +146,7 @@ export function deriveNowPlaying(
 
   // THE CD (see isCdPlayback): a disc's table of contents is never a track's title. Stopped,
   // the disc itself is what is loaded, so it reads as its album and artist over its track
-  // count and length; playing, now_playing's line1 names the track (the owner's readout),
+  // count and length; playing, now_playing's line1 names the track,
   // whatever play_state's title turns out to hold.
   if (isCdPlayback(md, display)) {
     const toc = cdToc(md?.title);
@@ -279,6 +279,6 @@ export const activeSourceId = (
   nowPlaying: { source: { id: string | null } | null } | null,
 ): string | null => zoneState?.source ?? nowPlaying?.source?.id ?? null;
 
-/** A count in the user's locale style — "4,590 tracks" (user, 2026-09-01);
+/** A count in the user's locale style — "4,590 tracks";
  *  one home, so every large number the app prints agrees. */
 export const fmtCount = (n: number): string => n.toLocaleString();

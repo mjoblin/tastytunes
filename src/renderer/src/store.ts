@@ -91,7 +91,7 @@ export interface LibrarySpot {
 /**
  * One step of navigation history: the spot being LEFT — a screen, plus the
  * Library's snapshot when that screen was the Library. ONE STACK across
- * screens and within the Library (2026-08-23, user ask): back undoes the most
+ * screens and within the Library: back undoes the most
  * recent navigation whatever kind it was — the browser rule, and the only one
  * people can predict. Two stacks (screen-level and folder-level) made ⌘← in an
  * album mean "parent folder" even when you had just arrived from the Queue.
@@ -113,7 +113,7 @@ export interface LibraryNodeTarget {
   /** A track to land on: scrolled to and flashed once the album's listing lands. */
   track?: string;
   /** The track's id and length, so of two tracks with its title the landing finds the one meant
-   *  (components/library/landing; a user's twins, 0.12.0-rc.3). */
+   *  (components/library/landing; twin tracks, 0.12.0-rc.3). */
   trackId?: string | null;
   trackSecs?: number | null;
   /** The target's own class, for the stand-in node the Library lands on (an artist opened
@@ -159,7 +159,7 @@ export interface AnalysisProgress {
   key: string;
   album: string;
   /** The track being measured, counted from 1, so the first reads "1/12" ("0/12" felt like
-   *  nothing had started, his look 2026-10-30); 0 until the first begins, and no count shows. */
+   *  nothing had started); 0 until the first begins, and no count shows. */
   at: number;
   /** 0 while the sweep is still counting (browse in flight). */
   total: number;
@@ -273,7 +273,7 @@ interface TTState {
    * Same-host reconnects deliberately keep the last state (a blip must not
    * flash the UI empty), but the last power push before an eco power-off says
    * "standby" — and trusting it walled Now Playing with the sleeping face for
-   * a beat after every power-on (user, 2026-08-30). A WALL needs current
+   * a beat after every power-on. A WALL needs current
    * certainty; the stale value stays readable for ordinary rows.
    */
   systemPowerFresh: boolean;
@@ -794,7 +794,7 @@ export const useStore = create<TTState>((set, get) => ({
    * and resets to the source list; ARRIVING from another screen picks up where
    * the last visit left off.
    *
-   * This reverses T3 (2026-07-17), which bumped on every navigation because
+   * This reverses the old rule (2026-07-17), which bumped on every navigation because
    * "Library means the front door" and there was no other way back to the top.
    * There are two now — re-clicking the nav row from inside the screen, and the
    * breadcrumb root — so the reset keeps its escape hatch while a browse tree

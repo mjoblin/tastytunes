@@ -85,7 +85,7 @@ export function AlbumHeader(
             edge from the first pending frame (a quick rise, not the line's 300 ms wait, which
             left a moment with no border; the ring is a shadow, so the size never moves) and
             settling back slowly when the picture lands; a cached picture lands before the
-            rise shows (user, 2026-09-14); its size is dragged from the corner, one size with
+            rise shows; its size is dragged from the corner, one size with
             the artist header's (HeaderArt, 0.11.0) */}
         <HeaderArt
           art={art}
@@ -101,8 +101,8 @@ export function AlbumHeader(
                 pinned to its bottom: a header without a composer line is
                 exactly the art's height on every album (the track list starts
                 at one place), the verbs sit on the art's bottom edge, and only
-                a composer line or a wrapped title grows the header (user call,
-                2026-09-05, measured: 153px of 160 without, ~180 with). A picture dragged
+                a composer line or a wrapped title grows the header (measured:
+                153px of 160 without, ~180 with). A picture dragged
                 larger leaves the column as it is, the verbs following the words rather than
                 pinned to a bottom edge far below them (0.11.0). */}
         <div className="min-w-0 pt-1 flex min-h-[160px] flex-col gap-1.5">
@@ -157,7 +157,7 @@ export function AlbumHeader(
             )}
             {/* the format TOKENS as chips, the DR chip (or the sweep's
                     pulse in its place) closing the row — two registers, one
-                    home (lib/mediaFacts; user call, 2026-09-01) */}
+                    home (lib/mediaFacts) */}
             {(allTracks.length > 0 || albumDrShown != null || albumSweeping) && (
               <div className="flex flex-wrap items-center gap-1.5 pt-1" data-album-chips>
                 {albumFormatChips(allTracks).map((b) => (
@@ -188,7 +188,7 @@ export function AlbumHeader(
               </div>
             )}
             {/* the credit gets 8px of air above (6px here + the group's
-                    2px rhythm) so it reads as its own thought (user, 2026-09-05) */}
+                    2px rhythm) so it reads as its own thought */}
             {albumComposerLine && (
               <div className="text-[12.5px] text-faint pt-1.5" data-album-composers>
                 {albumComposerLine}
@@ -200,7 +200,7 @@ export function AlbumHeader(
               data-tip="Replaces the queue"
               // no queue-ack flash on the album screen: the whole-header
               // pulse read as a glitch and even the art square was ruled
-              // extra (user, 2026-08-24) — the button's own press state and
+              // extra — the button's own press state and
               // the playing row lighting up are feedback enough here
               onClick={() => void playContainer(albumNode, null)}
               className="tip-bottom flex items-center gap-2 px-4 py-2 rounded-full bg-amber text-bg text-[13px] font-medium motion-safe:active:scale-95 transition-all"
@@ -235,14 +235,14 @@ export function AlbumHeader(
       {/* a box set's volumes as the app's own picker — one pill per volume,
             the open one lit, on its own row above the tracks they switch (the
             app's Segmented-above-its-listing idiom; moved out of the header
-            column, which is sized to sit beside the art — user placement,
-            2026-08-27). The old faint ‹ › facts line went unnoticed as
+            column, which is sized to sit beside the art). The old faint ‹ › facts line went
+            unnoticed as
             navigation. */}
       {setSiblings && (
         <div className="-mt-1.5 pb-5 flex" data-album-set>
           {/* px-4 pills: a volume row is a few short labels with room to
                 spare, so they wear looser padding than the dense partition
-                controls (user, 2026-08-27) */}
+                controls */}
           <Segmented<string>
             className="[&>button]:px-4"
             value={albumNode.id}
@@ -262,9 +262,9 @@ export function AlbumHeader(
 }
 
 /**
- * THE COMPACT BAR (0.13.0 round 5; his call 2026-10-24, option B on the decision page): once the
- * header's verbs have scrolled away on a long album, the trail tightens instead of a bar arriving.
- * The album's crumb gains its cover (AlbumCrumbArt) and the header's Play, heart and menu join the
+ * THE COMPACT BAR (0.13.0 round 5): once the header's verbs have scrolled away on a long album,
+ * the trail tightens instead of a bar arriving. The album's crumb gains its cover (AlbumCrumbArt)
+ * and the header's Play, heart and menu join the
  * trail's right end (AlbumCompactVerbs), the same verbs with the same handlers, so the album keeps
  * its identity and its Play in reach. Pinning the header was ruled out: at the smallest window
  * (800x520) it left about 150px for tracks. LibraryScreen decides when (the verbs' row out of

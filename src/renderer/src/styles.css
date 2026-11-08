@@ -15,8 +15,8 @@
 @custom-variant focus-kbd (:root[data-keyboard-nav] &:focus-visible);
 /* KEYBOARD REVEAL (0.13.0 round 4, the accessibility second layer): what a group shows on hover it
    shows while keyboard focus is anywhere in it, so a row's or a card's hidden buttons appear when
-   Tab reaches them instead of being focused invisible (the 0.11 re-score). Every hover reveal
-   carries this twin (the lint rule hover-reveal-keyboard). And since 0.14.0 (his K1 to K5) a
+   Tab reaches them instead of being focused invisible. Every hover reveal
+   carries this twin (the lint rule hover-reveal-keyboard). And since 0.14.0 a
    keyed list's CURRENT item shows them too while the list has the keyboard, as a hovered row does
    (the list holds the focus, hooks/useListKeys, so focus-within never reaches the row). */
 @custom-variant group-kbd {
@@ -41,8 +41,8 @@
      .font-display zoom rule below so all display text stays visually matched. */
   --font-display-scale: 1;
   /* signal-quality lamps (SIGNAL_COLORS in lib/format.ts reads these).
-     GOLD / BLUE / GREY, not amber / green / grey (2026-08-21, a colour-vision
-     request): amber and green both land on the yellow side for red-green
+     GOLD / BLUE / GREY, not amber / green / grey (2026-08-21):
+     amber and green both land on the yellow side for red-green
      colour blindness (~1 in 12 men) and the two good lamps collapsed into
      one; gold and blue sit on the blue-yellow axis those eyes keep, and the
      luminance steps with quality so greyscale still reads brighter = better.
@@ -98,7 +98,7 @@
    left to right along the well's bottom edge after 300 ms in view, only while
    the image is pending; the picture eases in when it lands (.art-in). It began
    as a faint band sweeping the whole well: too dramatic, and its angle looked
-   wrong (user, 2026-09-14). The line takes the theme's dim ink, fading in
+   wrong. The line takes the theme's dim ink, fading in
    and out at its ends, so light and dark need no rule of their own. Reduced
    motion shows the plain well. */
 @keyframes art-shimmer {
@@ -123,7 +123,7 @@
   display: block;
   width: 50%;
   height: 100%;
-  /* soft at both ends, not a solid strip (user, 2026-09-14) */
+  /* soft at both ends, not a solid strip */
   background: linear-gradient(to right, transparent, var(--color-dim) 50%, transparent);
   opacity: 0.55;
   animation: art-shimmer 1.4s linear infinite;
@@ -154,12 +154,12 @@
   --font-wordmark: "Fraunces Variable", Georgia, serif;
 
   /* warm near-black "faceplate" palette (dark is the default theme). Lifted from #0e0d0b to
-     #12110f, where the navigation panel's tint sat over it (user call, 2026-11-01: the main area
+     #12110f, where the navigation panel's tint sat over it (the main area
      matching the navigation panel as it was, after #1c1a17 read brighter than expected in the
      installed app); panel, raised and the playing tile by the same step. The text levels
      stay where they were, set by their steps from each other rather than by their contrast on
-     the ground: in dark, elegance wins over the contrast floor (user call, 2026-10-31,
-     decisions/0016), and a dim lifted to hold its contrast read too close to the ink */
+     the ground: in dark, elegance wins over the contrast floor,
+     and a dim lifted to hold its contrast read too close to the ink */
   --color-bg: #12110f;
   --color-panel: #191715;
   --color-raised: #211e1a;
@@ -210,11 +210,11 @@
   /* Firmer ink and edges: paper offers no glow to carry definition. */
   --color-edge: rgb(30 20 5 / 0.14);
   --color-edge2: rgb(30 20 5 / 0.26);
-  /* LIGHT-MODE LEGIBILITY (0.13.0, his calls 2026-10-24, held to decisions/0016: 4.5:1 where the
+  /* LIGHT-MODE LEGIBILITY (0.13.0, held to 4.5:1 where the
      text sits, measured on the darkest tenth of its real backgrounds). Each text color a step
      darker than it was (#241d12, #5f5749, #736c5c), its warmth kept: the old ones were tuned on
      bare paper, and most text sits on darker tinted panels and the wash (faint measured a median
-     3.9:1 where it sat). Dark mode is left as it is (0016's named exception). */
+     3.9:1 where it sat). Dark mode is left as it is. */
   --color-ink: #1a140b;
   --color-dim: #4a4338;
   --color-faint: #60594a;
@@ -228,8 +228,8 @@
   --color-amberink: color-mix(in srgb, rgb(var(--amber-rgb)) 69%, black);
   --color-amberink-wash: color-mix(in srgb, rgb(var(--amber-rgb)) 57%, black);
   --color-amberbutton: color-mix(in srgb, rgb(var(--amber-rgb)) 78%, black);
-  /* the alert and the LED's green AS TEXT (0.15.0, the 0.14 re-score: 4.07 and 2.79 to 1 on the
-     page, under 0016's floor), and the alert deeper still on its own wash; the LED's dot and the
+  /* the alert and the LED's green AS TEXT (0.15.0: 4.07 and 2.79 to 1 on the
+     page, under the 4.5:1 floor), and the alert deeper still on its own wash; the LED's dot and the
      icons keep the bright forms */
   --color-alertink: #a53d2c;
   --color-alertink-wash: #8f3424;
@@ -264,15 +264,14 @@ body {
   outline: 2px solid color-mix(in srgb, var(--color-ink) 70%, transparent);
   outline-offset: 2px;
 }
-/* THE RING WAITS FOR THE KEYBOARD (0.11.0, user 2026-10-10: "the accessibility borders often
-   seem to turn on when i don't want them"): Chromium's :focus-visible lights after any key, so
+/* THE RING WAITS FOR THE KEYBOARD (0.11.0): Chromium's :focus-visible lights after any key, so
    a clicked chip rang at the next hotkey and a menu closed with Escape rang its trigger. The
    ring shows once Tab has moved focus (lib/inputModality marks the root, a pointer press
    clears it): a keyboard user keeps every ring, a pointer user sees none. */
 :root:not([data-keyboard-nav]) :focus-visible {
   outline: none;
 }
-/* THE RING IS ALWAYS ROUNDED (user, 2026-10-06): an outline follows its element's radius, so a
+/* THE RING IS ALWAYS ROUNDED: an outline follows its element's radius, so a
    square element (the wordmark, the volume slider, the time) drew a square ring. A focused
    element with no radius of its own takes one; in the base layer, so every rounded-*
    utility (a pill, a circle) keeps its own shape */
@@ -292,7 +291,7 @@ select:focus-visible,
 [contenteditable]:focus-visible {
   outline: none;
 }
-/* A KEYED LIST'S CURRENT ITEM WEARS THE RING (0.14.0, his K5; hooks/useListKeys): the list holds
+/* A KEYED LIST'S CURRENT ITEM WEARS THE RING (0.14.0, hooks/useListKeys): the list holds
    the focus and names its current item, so the ring is drawn on the item while the list has the
    keyboard, and on the list itself once Escape has given the arrows back */
 [data-list-keys][data-list-active]:focus-visible {
@@ -531,7 +530,7 @@ img {
    neutral elevation (light). Overrides the resting ring utilities on hover. */
 .card-hover-glow:hover,
 .card-glow-held {
-  /* bloom radii/spread at 75% of the original 26/62+12 (user call) —
+  /* bloom radii/spread at 75% of the original 26/62+12 —
      the 2px definition ring is outline, not glow, and keeps its size */
   box-shadow:
     0 0 0 2px rgb(255 255 255 / 0.32),
@@ -707,7 +706,7 @@ img {
   /* overflow-y-auto makes overflow-x compute to auto too, and with CLASSIC
      (always-shown) scrollbars Chromium's scrollable-overflow math conjures a
      few phantom px under the vertical bar — a horizontal scrollbar with
-     nothing to see (user hit it on the Queue). Vertical scrollers never
+     nothing to see (seen on the Queue). Vertical scrollers never
      scroll sideways in this app; anything that genuinely needs both axes
      says overflow-x-auto explicitly (utilities layer, wins over base). */
   .overflow-y-auto {
@@ -885,10 +884,9 @@ img {
 /* THE SCENE TILE LETS THE PAGE THROUGH, A LITTLE (Now Playing, the dark theme): a slight
    opacity, so the page and the ambient wash, when it is on, show through the whole tile
    evenly, at a few percent. Not a blend: a lighten blend handed every pixel darker than the
-   panel to the panel, which is most of any scene, and the tile went transparent (the user,
-   2026-09-12: "i wanted it to be subtle"). One compositor layer at an alpha, nothing
-   measurable beside the scene's own render. On paper (the light theme) the tile stays
-   sealed. */
+   panel to the panel, which is most of any scene, and the tile went transparent. One
+   compositor layer at an alpha, nothing measurable beside the scene's own render. On paper
+   (the light theme) the tile stays sealed. */
 .scene-float {
   opacity: 0.92;
 }
@@ -896,15 +894,15 @@ img {
   opacity: 1;
 }
 
-/* THE LIBRARY'S DOORS (0.12.0-rc.3, his ask: our own entry points looked like the streamer's).
+/* THE LIBRARY'S DOORS (0.12.0-rc.3: our own entry points looked like the streamer's).
    Three wide doors, each a picture of its lens from the reader's library (DoorArt) under its
    title. Every size follows the door's own width: --front is the front item's size, and the
    rest of a composition is a fraction of it, so the crate, the cluster and the waveforms scale
-   with the window. FLAT (his call, 2026-10-23, the cards read as dated): the door is the app's
+   with the window. FLAT (the cards read as dated): the door is the app's
    card surface with the neutral edge, no blurred backdrop and no fade; the pictures stand
    straight at full brightness, each with the hairline every album picture has and a ring of the
    door's surface where they overlap; and the words sit on that surface below the pictures, never
-   over them (WCAG AA where the text sits, decisions/0016). A door is at most 480px wide (his call: on a wide screen a third
+   over them (WCAG AA where the text sits). A door is at most 480px wide (on a wide screen a third
    of the row was a long, short strip), and past that the row leaves the room to its right, as
    the source cards below do; at most 320px tall, what the widest door's picture and words need
    to clear the top and each other (at 300 the front cover touched the title). A door under 250px drops its outer pair; a row under 720px
@@ -918,7 +916,7 @@ img {
   .lib-doors-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 480px));
-    /* 24px apart, half again the first 16 (his call, 2026-10-23) */
+    /* 24px apart, half again the first 16 */
     gap: 24px;
     padding-top: 8px;
   }
@@ -928,7 +926,7 @@ img {
     height: clamp(196px, 26cqi, 320px);
     border-radius: 18px;
     /* the card surface at half, as the source cards and every album card are, so the ambient
-       wash shows through (his eye, 2026-10-23: they sat heavy as the page's only opaque cards) */
+       wash shows through (they sat heavy as the page's only opaque cards) */
     background: color-mix(in oklab, var(--color-raised) 50%, transparent);
     box-shadow: 0 0 0 1px var(--color-edge);
   }
@@ -939,8 +937,8 @@ img {
     overflow: hidden;
   }
   /* the band's top sits low enough that the front item clears the door's top by 24px: at the
-     480px cap the front cover (206px) all but fills the band (210px of 300) and touched the top
-     (his eye, 2026-10-21); a narrower door has the room already and keeps 2% */
+     480px cap the front cover (206px) all but fills the band (210px of 300) and touched the top;
+     a narrower door has the room already and keeps 2% */
   .lib-door-art {
     position: absolute;
     z-index: 1;
@@ -1157,8 +1155,8 @@ img {
 }
 
 /* LIGHT-MODE LEGIBILITY, THE RULES (0.13.0; the colors are the light tokens above). Light only,
-   unlayered so they win over the utilities they adjust: dark mode is left exactly as it is
-   (decisions/0016). Held by the suite's text survey (S139). */
+   unlayered so they win over the utilities they adjust: dark mode is left exactly as it is.
+   Held by the suite's text survey (S139). */
 /* the system's own smoothing: antialiased (every text, both themes) lays down 12 to 30% less ink
    for dark text on paper; light text on the dark faceplate keeps it */
 :root.light body {

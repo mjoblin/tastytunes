@@ -124,7 +124,7 @@ export function PlaylistsScreen(): React.JSX.Element {
   const [presetFor, setPresetFor] = useState<{ item: PlaylistItem; x: number; y: number } | null>(
     null,
   );
-  // A sort picker rather than manual ordering (user call 2026-07-24): manual
+  // A sort picker rather than manual ordering: manual
   // order fights the recency sort that already does useful work and needs an
   // `order` field maintained forever, for control a picker gives at a fraction
   // of the cost. 'updated' is the neutral default the store already writes in.
@@ -236,7 +236,7 @@ export function PlaylistsScreen(): React.JSX.Element {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // FROM THE KEYBOARD (0.14.0, his K1 to K9): the playlists one Tab stop, Enter opens one as its
+  // FROM THE KEYBOARD (0.14.0): the playlists one Tab stop, Enter opens one as its
   // click does; its tracks another, "." a track's More menu, Delete removes it with Undo, and
   // Option with up or down moves it, ONE change to the playlist on Option's release
   const listKeys = useListKeys({

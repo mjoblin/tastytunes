@@ -94,7 +94,7 @@ export function PresetsScreen(): React.JSX.Element {
   // URL or name against the current track. Stateless means it also works at
   // startup, when every flag reads false.
   // A LIT PRESET MEANS "THIS IS PLAYING" — so nothing lights while the streamer
-  // is asleep or on its way back (user report 2026-07-26: clicking a preset in
+  // is asleep or on its way back (clicking a preset in
   // standby scrolled to the PREVIOUSLY-played one first, then to the clicked
   // one). Wake-on-intent holds a play-shaped command for ~3s (ensureAwake:
   // ON → readiness → 2.5s settle) and the waking device re-announces its
@@ -199,7 +199,7 @@ export function PresetsScreen(): React.JSX.Element {
     void tt.command({ type: "presetMove", from: active.id as number, to: over.id as number });
   };
 
-  // FROM THE KEYBOARD (0.14.0, his K1 to K8): Presets one Tab stop; up and down through the
+  // FROM THE KEYBOARD (0.14.0): Presets one Tab stop; up and down through the
   // rows, all four in the cards; Enter recalls as a click does, "." the preset's More menu (its
   // repair there too), and Option with up or down moves it, ONE presetMove on Option's release
   // (shown moved until the streamer's new list arrives). Presets aren't removed in the app.
@@ -253,7 +253,7 @@ export function PresetsScreen(): React.JSX.Element {
     [presetGap, cards],
   );
 
-  // A REPAIR IS MAINTENANCE, NOT PLAYBACK (user, 2026-07-27: repairing a preset
+  // A REPAIR IS MAINTENANCE, NOT PLAYBACK (repairing a preset
   // scrolled the list to the last-played one). Writing a slot makes the device
   // re-push /presets/list — measured ~4.3s later on the Evo, where the mock
   // broadcasts instantly — and the follow effect must not treat anything that
@@ -315,7 +315,7 @@ export function PresetsScreen(): React.JSX.Element {
             total={allItems.length}
           />
           <div className={`flex items-center ${GAP_WITHIN}`}>
-            {/* Rows or Cards and the cards' size, gap and Fill rows (0.14.0, his D5 pick) */}
+            {/* Rows or Cards and the cards' size, gap and Fill rows (0.14.0) */}
             <ViewOptions kind="presets" />
             <HeaderChip
               data-tip="Scroll to the playing preset"

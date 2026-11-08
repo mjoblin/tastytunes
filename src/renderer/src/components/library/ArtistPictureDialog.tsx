@@ -23,28 +23,26 @@ import { useLensIndex } from "@/components/library/lenses/useLensIndex";
 import { nameKey } from "@shared/keys";
 
 /**
- * CHOOSING AN ARTIST'S PICTURE (0.13.0 round 7; a user's report, 2026-10-24: Wikipedia's lead image is
- * often a poor stage photo). An artist's menu opens this, anywhere (ArtistPictureHost): the images in the
+ * CHOOSING AN ARTIST'S PICTURE (0.13.0 round 7: Wikipedia's lead image is often a poor stage
+ * photo). An artist's menu opens this, anywhere (ArtistPictureHost): the images in the
  * artist's Wikipedia article (with Liner notes on), the covers of their albums in the library,
  * and a picture file, copied into the app's data so the original can move. One is chosen and
- * "Use this picture" keeps it until another is chosen or the menu's reset clears it
- * (decisions/0013: the person asks). Main checks the choice is one it offered
- * (ipc/lookups setArtistChoice).
+ * "Use this picture" keeps it until another is chosen or the menu's reset clears it (the person
+ * asks). Main checks the choice is one it offered (ipc/lookups setArtistChoice).
  *
- * ONE TAB PER SOURCE (his look, 2026-10-25: "the layout is awkward. the modal moves as things pop
- * in"): Wikipedia, fanart.tv, Album covers and File, each with how many it holds, over a grid of a
- * fixed size that alone scrolls, so nothing moves as the sources answer. It opens on the tab
+ * ONE TAB PER SOURCE (the modal moved as pictures popped in): Wikipedia, fanart.tv, Album
+ * covers and File, each with how many it holds, over a grid of a fixed size that alone
+ * scrolls, so nothing moves as the sources answer. It opens on the tab
  * holding the picture chosen now, else Wikipedia's, moving once to the first tab with pictures
  * if that one answers empty before a tab is clicked. A source that cannot answer says why in its
  * tab (Liner notes off, no fanart.tv key) with the way to Settings › Connections.
  *
- * MORE TO CHOOSE FROM, AND A LOOK FIRST (0.14.0, his call on a user's email, Plex's picture
- * editor): a Commons tab, the photos in the artist's Wikimedia Commons category the article
- * doesn't show; and every picture opens large before it is used (double-click it, or its corner
+ * MORE TO CHOOSE FROM, AND A LOOK FIRST (0.14.0, as Plex's picture editor has it): a Commons
+ * tab, the photos in the artist's Wikimedia Commons category the article doesn't show; and
+ * every picture opens large before it is used (double-click it, or its corner
  * button), with its full size and file page where its source says (Wikipedia, Commons), the
  * tab's others a step away (the arrow keys or the chevrons) and "Use this picture" there too.
- * The size is the large view's alone (his look, 2026-10-30: "let's not show the resolution for
- * these images"; it was under each tile).
+ * The size is the large view's alone (it was under each tile).
  */
 type Tile = {
   key: string;
@@ -62,9 +60,8 @@ type Tile = {
 };
 type Source = "wiki" | "commons" | "fanart" | "covers" | "file";
 
-/** Four tiles to a row in the dialog's width, with room for the scrollbar (his look, 2026-10-30:
- *  "this feels a bit cramped", then "larger still, with a slightly larger gap"; they were 88
- *  with an 8 gap, five to a row). */
+/** Four tiles to a row in the dialog's width, with room for the scrollbar (they were 88 with an
+ *  8 gap, five to a row, which felt cramped). */
 const TILE_PX = 140;
 const GAP_PX = 16;
 /** Three rows of tiles and their gaps, with the ring's room: the grid's fixed height, the same
@@ -298,7 +295,7 @@ export function ArtistPictureDialog({
       className="w-[42rem] max-w-[calc(100vw-3rem)] p-5"
     >
       <div data-artist-picture-dialog className="relative">
-        {/* the app's close X at the top right, beside Cancel (his ask, 2026-10-30); its margin
+        {/* the app's close X at the top right, beside Cancel; its margin
             keeps the heading's line height, so nothing below moves */}
         <div className="flex items-center gap-2">
           <div className="min-w-0 flex-1 text-[13px] font-medium text-ink">Picture for {name}</div>
@@ -340,7 +337,7 @@ export function ArtistPictureDialog({
           />
         </div>
         {/* a fixed height that alone scrolls; p-1 inside, -m-1 outside: room for a chosen
-            tile's ring, which the scroller would otherwise cut at its edge (his look, 2026-10-25) */}
+            tile's ring, which the scroller would otherwise cut at its edge */}
         <div
           data-artist-picture-tab={tab}
           className="mt-3 -mx-1 max-h-[calc(100vh-13rem)] overflow-y-auto p-1"
@@ -501,8 +498,8 @@ export function ArtistPictureDialog({
 }
 
 /** The chosen line: which picture "Use this picture" means, the one in use now or a new one,
- *  and where it comes from, with a small copy of it (his look, 2026-10-30: the tile's own label,
- *  "Commons photo 2", didn't say it was the current picture). */
+ *  and where it comes from, with a small copy of it (the tile's own label, "Commons photo 2",
+ *  didn't say it was the current picture). */
 function Chosen({
   url,
   current,
@@ -618,7 +615,7 @@ function Tiles({
               data-artist-picture-tile={kind}
               data-selected={on || undefined}
               // a cover's tooltip names its album; the others' would only repeat the tab and a
-              // place in it (his look, 2026-10-30), so only VoiceOver hears them
+              // place in it, so only VoiceOver hears them
               title={kind === "cover" ? t.label : undefined}
               onClick={() => onSelect(t.key)}
               onDoubleClick={() => onOpen(t)}
@@ -776,7 +773,7 @@ function StepButton({
 const NO_POOLS: MediaIndexPools[] = [];
 
 /**
- * THE ONE CHOOSER (0.13.0 rc.3, his pick: "Choose a picture" in the artist's menu everywhere):
+ * THE ONE CHOOSER (0.13.0 rc.3: "Choose a picture" in the artist's menu everywhere):
  * every artist menu opens it through the store (mediaMenus artistPictureItems), so the cards, the
  * rows, Search and the artist page share one dialog, mounted once in App. The covers are the
  * caller's when it has its own (the artist page's albums), else the artist's albums in the

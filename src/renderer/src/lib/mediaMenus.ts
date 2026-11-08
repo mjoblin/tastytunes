@@ -160,7 +160,7 @@ export function albumMenuItems(ref: MediaRef, caps: MediaMenuCaps = {}): MediaMe
 }
 
 /**
- * An artist's PICTURE verbs (0.13.0 rc.3, his pick: in the artist's menu everywhere, so a wrong
+ * An artist's PICTURE verbs (0.13.0 rc.3: in the artist's menu everywhere, so a wrong
  * picture spotted among the Artists view's cards is changed there): Choose a picture… opens the
  * one chooser (ArtistPictureHost), and once a picture is chosen the reset, named for what comes
  * back. Derived like the heart, from the window's map of chosen pictures (lib/artistPictures).

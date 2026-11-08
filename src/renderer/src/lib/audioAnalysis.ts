@@ -34,8 +34,8 @@ export interface AnalyzeAlbumResult {
 }
 
 /**
- * ANALYZE AUDIO ALWAYS DOES REAL WORK (0.12.0, his ask: "what if the user wants to force a
- * reanalysis?"). The tracks with no analysis, or one an earlier version wrote, are measured; when
+ * ANALYZE AUDIO ALWAYS DOES REAL WORK (0.12.0), so a reanalysis can always be
+ * forced. The tracks with no analysis, or one an earlier version wrote, are measured; when
  * there are none, every track is measured again from its file. A current analysis of an unchanged
  * file comes out the same, but a file replaced under the same title, artist, album and length
  * keeps its old one otherwise. True when the sweep should measure again.
@@ -48,7 +48,7 @@ async function againIfDone(tracks: readonly MediaNode[]): Promise<boolean> {
 /** The reason Analyze audio is disabled on the streamer's own server: its
  *  ContentDirectory hands out device-internal file paths for the audio, not
  *  HTTP, so the bytes are out of reach by design (investigated 2026-08-29; a
- *  user's "Read 0 of 13 tracks" on a stick, 2026-09-16). */
+ *  sweep of a stick ended at "Read 0 of 13 tracks"). */
 export const USB_ANALYSIS_HINT = "Tracks on the streamer's USB drive can't be read.";
 
 export async function analyzeAlbum(
@@ -149,7 +149,7 @@ async function sweepTracks(
   for (let i = 0; i < tracks.length; i++) {
     progress(i + 1, tracks.length);
     const t = tracks[i];
-    // a sweep's measuring never stops for a skip (0.14.0, his A3)
+    // a sweep's measuring never stops for a skip (0.14.0)
     const a = await analyzeTrack(t.serverUdn ?? serverUdn, t.id, audioAnalysisKey(t), {
       force,
       keep: true,

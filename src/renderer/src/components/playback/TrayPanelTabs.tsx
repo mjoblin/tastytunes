@@ -184,7 +184,7 @@ export function QueueTab({
   // scrollable ancestor including the window.
   // pad 8: detailed rows are RINGED cards, and the ring is a box-shadow
   // outside the row's border box — a flush follow-scroll clipped the playing
-  // row's gold ring at the scrollport edge (user, 2026-08-04, seen switching
+  // row's gold ring at the scrollport edge (seen switching
   // compact -> detailed). 8px matches the body's own pb-2 rhythm.
   useEffect(() => {
     scrollToVisible(playingRow.current, 8);
@@ -396,8 +396,8 @@ export function PresetsTab({
               // The slot number moved out of the second line and into a
               // position cell beside the name: "Preset N" under every row was
               // boilerplate wearing a subtitle's clothes — 24 rows all saying
-              // the same word — where the queue's second line actually varies
-              // (user call, 2026-08-04). The cell is fixed-width and padded,
+              // the same word — where the queue's second line actually varies.
+              // The cell is fixed-width and padded,
               // so names share one left edge from slot 1 to slot 99.
               slot={p.id as number}
               title={p.name ?? `Preset ${p.id}`}
@@ -521,7 +521,7 @@ export function PlaylistsTab({
             subtitle={mine ? progress : undefined}
             // COMPACT: count and runtime together where the time sits —
             // "3 tracks · 11 min", the status line's own dot with a touch
-            // more air on each side (user call, 2026-08-04). One fact, one
+            // more air on each side. One fact, one
             // place; splitting its two halves across the row's full width
             // read as two facts.
             meta={
@@ -677,7 +677,7 @@ function TabEmpty({
 /**
  * QUEUE AND PRESETS ARE DEVICE STATE. With no streamer they'd otherwise show
  * the last one's — a full queue sitting under a panel header that says "No
- * streamer connected" (user, 2026-08-04). Playlists and Recent are local and
+ * streamer connected". Playlists and Recent are local and
  * stay honest offline, which is exactly why only these two go quiet.
  */
 function useOffline(): boolean {

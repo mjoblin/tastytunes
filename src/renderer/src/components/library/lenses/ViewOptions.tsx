@@ -17,16 +17,16 @@ import { Slider, useSliderDraft } from "@/components/controls/Slider";
 import { Switch } from "@/components/controls/Switch";
 
 /** The view a menu dresses: albums (the Albums view and the artist page), artists, tracks, a
- *  server's folders, the Queue or Presets (the last three since 0.14.0, his D5 and D6 picks on
- *  "View Options": the menu wherever a Rows or Cards button was). */
+ *  server's folders, the Queue or Presets (the last three since 0.14.0: the menu wherever a
+ *  Rows or Cards button was). */
 export type ViewKind = "albums" | "artists" | "tracks" | "folders" | "queue" | "presets";
 
-// Each kind's own Rows or Cards and Format and DR (his note on "View Options": albums and tracks
-// keep separate display settings). The Artists view shares the albums' Rows or Cards, the
+// Each kind's own Rows or Cards and Format and DR (albums and tracks keep separate display
+// settings). The Artists view shares the albums' Rows or Cards, the
 // Library's one choice before tracks had their own, and has no format line; a server's folders
 // share the albums' both (the one Library choice they always followed); the Queue has Rows, Cards
 // or Albums and Presets Rows or Cards, neither a format line (0.14.0). Card size, gap and Fill
-// rows are every card grid's, as in Settings › Layout (his answer, 2026-10-26).
+// rows are every card grid's, as in Settings › Layout.
 const layoutOf = (s: AppSettings, kind: ViewKind): QueueLayout =>
   kind === "tracks"
     ? s.lensTracksLayout
@@ -90,17 +90,17 @@ const sameAs = (s: AppSettings, patch: Partial<AppSettings>): boolean =>
 const session: { reopen: ViewKind | null; undos: number[] } = { reopen: null, undos: [] };
 
 /**
- * VIEW OPTIONS (0.13.0-rc.4, his picks on "View Options": one button with Rows or Cards inside,
- * the sliders icon, every card option in Settings › Layout, on the Library's views first). One
- * button at a view's toolbar end, beside Sort, in place of the Rows or Cards button it holds: Rows
- * or Cards, the format line's switch where the view has one, card size, gap and Fill rows (the
- * cards follow a slider as it moves), and on the albums' and tracks' menus a button that copies
- * the other's Rows or Cards and Format and DR (his note: users may want albums and tracks to
- * differ, and an easy way to match them). The same settings Settings › Layout holds, so the two
- * always agree. NOTHING IN IT IS A ONE-WAY DOOR (his ask: "i want the user to feel like they're
- * not getting into an unwanted/unexpected state when playing with these settings"): every change
- * goes on the undo stack (Cmd-Z), the menu's own Undo steps back through the changes made since
- * it opened, and Reset to defaults puts everything it holds back, itself undoable.
+ * VIEW OPTIONS (0.13.0-rc.4: one button with Rows or Cards inside, the sliders icon, every card
+ * option in Settings › Layout, on the Library's views first). One button at a view's toolbar
+ * end, beside Sort, in place of the Rows or Cards button it holds: Rows or Cards, the format
+ * line's switch where the view has one, card size, gap and Fill rows (the cards follow a slider
+ * as it moves), and on the albums' and tracks' menus a button that copies the other's Rows or
+ * Cards and Format and DR (albums and tracks may differ, with an easy way to match them). The
+ * same settings Settings › Layout holds, so the two always agree. NOTHING IN IT IS A ONE-WAY
+ * DOOR (playing with these settings never leaves the reader in an unwanted or unexpected
+ * state): every change goes on the undo stack (Cmd-Z), the menu's own Undo steps back through
+ * the changes made since it opened, and Reset to defaults puts everything it holds back, itself
+ * undoable.
  */
 export function ViewOptions({ kind }: { kind: ViewKind }): React.JSX.Element {
   const [open, setOpenState] = useState(() => {
@@ -320,8 +320,8 @@ function MenuRow({
 }
 
 /**
- * A setting's slider in the menu, over Settings › Layout's range. THE CARDS FOLLOW IT AS IT MOVES
- * (his ask: "can we also live-update the size/gap while tweaking"): each value goes to the store
+ * A setting's slider in the menu, over Settings › Layout's range. THE CARDS FOLLOW IT AS IT
+ * MOVES: each value goes to the store
  * alone, at most once a frame, and only the release saves it (one save, one undo entry); a drag
  * abandoned with Escape puts back the value it began from (useSliderDraft).
  */

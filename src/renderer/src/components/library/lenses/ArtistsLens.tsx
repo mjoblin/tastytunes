@@ -73,7 +73,7 @@ export function focusArtistsLens(name: string): void {
 
 /** How far from the column's top a revealed artist lands — about a row and
  *  a half of context above it, so the eye reads where it is rather than
- *  finding the row pinned to the edge (user call, 2026-09-01). */
+ *  finding the row pinned to the edge. */
 const REVEAL_PAD = 84;
 /** Past this many artists the column renders only the rows near the viewport
  *  (useWindowedList); below it, every row, exactly as before (0.11.0 sweep, for review). */
@@ -132,7 +132,7 @@ export function ArtistsLens({
    *  one step in from the selected artist (the Albums heading's link, a double-click), and
    *  the cards' click. */
   onOpenArtistPage?(name: string): void;
-  /** The Library's one Rows or Cards choice (libraryLayout; his pick, 2026-10-25): rows are the
+  /** The Library's one Rows or Cards choice (libraryLayout): rows are the
    *  three columns, cards the grid (ArtistCards). */
   cards: boolean;
   cardSize: number;
@@ -165,8 +165,8 @@ export function ArtistsLens({
   // THE ARTIST YOU ASKED FOR IS ALWAYS IN THE COLUMN. Albums only is the
   // standing preference for browsing; a landing (Elsewhere's Go to artist, a
   // track's name link, the Queue) names one artist, and a credit-only name
-  // hidden by the filter left the lens open on nothing (user, 2026-09-12:
-  // Ellie Goulding, "credited on 1 track"). The selection is the exception,
+  // hidden by the filter left the lens open on nothing (an artist credited
+  // on a single track). The selection is the exception,
   // so the setting is untouched and the row leaves with the next selection.
   const baseArtists = useMemo(
     () =>
@@ -250,7 +250,7 @@ export function ArtistsLens({
   useEffect(() => keepSelectionInSight(), [shownArtists]);
   const albumsColRef = useRef<HTMLDivElement | null>(null);
   const tracksColRef = useRef<HTMLDivElement | null>(null);
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): each column one Tab stop, up and down within it,
+  // FROM THE KEYBOARD (0.14.0): each column one Tab stop, up and down within it,
   // left and right between the three; Enter is a row's click (an artist or an album picked, a
   // track played), "." its More menu
   const artistKeys = useListKeys({
@@ -299,8 +299,8 @@ export function ArtistsLens({
     requestAnimationFrame(() => {
       // the artists column defers to a pending reveal (below): under
       // StrictMode's double mount a second restore used to land AFTER the
-      // reveal's frame and put the old scroll back (user, 2026-09-01: "same
-      // as before" in the dev build while the built app passed)
+      // reveal's frame and put the old scroll back (in the dev build, while
+      // the built app passed)
       if (!artistsMem.reveal) artistsColRef.current?.scrollTo({ top: artistsMem.scroll.artists });
       albumsColRef.current?.scrollTo({ top: artistsMem.scroll.albums });
       tracksColRef.current?.scrollTo({ top: artistsMem.scroll.tracks });
@@ -505,7 +505,7 @@ export function ArtistsLens({
                           // SELECTED is "open here" — the Playlists sidebar's amber, so it
                           // reads apart from gold (= playing); a row that is both keeps
                           // the playing signals (gold title, eqbars) on the amber fill
-                          // (user, 2026-09-02: the selection "didn't look distinctive").
+                          // (a plainer selection did not read as distinct).
                           // PLAYING is the app-wide row treatment — fill, ring and glow
                           // (row-playing), the same as ContainerRow and every track row —
                           // and it rides on top of the selection: a fill and an edge.
@@ -543,7 +543,7 @@ export function ArtistsLens({
                         )}
                         {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu
                       is open: the ↗ to the artist's page, as an album row's ↗ opens the album
-                      (user, 2026-10-11: a click here selects, the ↗ goes there), and the ⋯,
+                      (a click here selects, the ↗ goes there), and the ⋯,
                       the same artist menu the right-click opens */}
                         <div
                           className={cx(
@@ -649,7 +649,7 @@ export function ArtistsLens({
                         // SELECTED is "open here" — the Playlists sidebar's amber, so it
                         // reads apart from gold (= playing); a row that is both keeps
                         // the playing signals (gold title, eqbars) on the amber fill
-                        // (user, 2026-09-02: the selection "didn't look distinctive").
+                        // (a plainer selection did not read as distinct).
                         // PLAYING is the app-wide row treatment — fill, ring and glow
                         // (row-playing), the same as ContainerRow and every track row —
                         // and it rides on top of the selection: a fill and an edge.
@@ -683,9 +683,9 @@ export function ArtistsLens({
                         </div>
                       </div>
                       {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu
-                      is open (user, 2026-10-11: "do the same for the album rows too"), the
-                      title fading under them: the ↗ opens the album, the ⋯ its menu (a plain
-                      folder has none; its slot stays, so every ↗ sits on one line) */}
+                      is open, as the artist rows' do, the title fading under them: the ↗ opens
+                      the album, the ⋯ its menu (a plain folder has none; its slot stays, so
+                      every ↗ sits on one line) */}
                       <div
                         className={cx(
                           "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2.5 transition-opacity",

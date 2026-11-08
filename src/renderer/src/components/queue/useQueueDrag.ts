@@ -8,13 +8,13 @@ import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite } from "@/lib/mediaRef";
 import { flashNavTarget, navDropTargetAt } from "@/lib/navDrop";
 
-// The Queue's DRAG AND DROP, lifted out of QueueScreen (2026-09-13, the first
-// lift of the screen's hygiene round, the Library's pattern): the batch and
-// single drags with the Finder rule at drag start, the insertion line from
-// live geometry driven by the pointer, the drag-to-rail handoff, the block
-// move with its sequenced device commands and undo, the drop, the cancel and
-// the Favorites drop's heart. The screen keeps the rows, the drag overlay and
-// the FLIP landing, and takes the state back under the old names.
+// The Queue's DRAG AND DROP, lifted out of QueueScreen (2026-09-13, the
+// Library's pattern): the batch and single drags with the Finder rule at drag
+// start, the insertion line from live geometry driven by the pointer, the
+// drag-to-rail handoff, the block move with its sequenced device commands and
+// undo, the drop, the cancel and the Favorites drop's heart. The screen keeps
+// the rows, the drag overlay and the FLIP landing, and takes the state back
+// under the old names.
 
 type Store = ReturnType<typeof useStore.getState>;
 
@@ -67,16 +67,16 @@ export function useQueueDrag(d: {
   const lastPtRef = useRef<{ x: number; y: number } | null>(null);
   /** Pointer anywhere over the rail: the line hides and a release without a
    *  real target does NOTHING — no line, no move (the line-is-the-promise
-   *  rule; user, 2026-08-30: releasing on Radio performed the queue move). */
+   *  rule: releasing on Radio once performed the queue move). */
   const overRailRef = useRef(false);
   /** The pointer while over the rail — anchors the cursor-fixed ghost. */
   const [railPt, setRailPt] = useState<{ x: number; y: number } | null>(null);
   // THE INSERTION-LINE MODEL for batch drags (the Spotify/Music/Finder
-  // contract, chosen with the user 2026-08-27 after the lift felt
-  // unpredictable with gapped selections): the rows hold still — no lift,
-  // no make-room — a stacked chip rides the cursor via DragOverlay, and a
-  // gold line between rows is the one truth about where the block lands.
-  // Single-row drags keep the make-room feel the app has always had.
+  // contract, chosen after the lift felt unpredictable with gapped selections):
+  // the rows hold still — no lift, no make-room — a stacked chip rides the
+  // cursor via DragOverlay, and a gold line between rows is the one truth about
+  // where the block lands. Single-row drags keep the make-room feel the app has
+  // always had.
   const [insertAt, setInsertAt] = useState<{ id: number; after: boolean } | null>(null);
   const insertRef = useRef<typeof insertAt>(null);
   const updateInsert = useCallback((v: { id: number; after: boolean } | null): void => {
@@ -85,12 +85,12 @@ export function useQueueDrag(d: {
   }, []);
   // The line is computed from LIVE geometry, never from dnd-kit's cached
   // collision rects: row bands are measured once at drag start in
-  // scroll-content coordinates (the rows are planted, so they stay true for
-  // the whole drag), the overlay's centre is re-read on every move AND every
-  // scroll (auto-scroll moves the list under a stationary pointer), and the
-  // drop re-derives the line at the instant of release — so the landing IS
-  // the line, by construction (the first cut trusted over.rect and landed
-  // wrong after scrolls and over members; user, 2026-08-27).
+  // scroll-content coordinates (the rows are planted, so they stay true for the
+  // whole drag), the overlay's centre is re-read on every move AND every scroll
+  // (auto-scroll moves the list under a stationary pointer), and the drop
+  // re-derives the line at the instant of release — so the landing IS the line,
+  // by construction (the first cut trusted over.rect and landed wrong after
+  // scrolls and over members).
   const dragGeom = useRef<{
     bands: Array<{ id: number; x: number; y: number; w: number; h: number }>;
     scrollerTop: number;
@@ -101,9 +101,9 @@ export function useQueueDrag(d: {
     pointerSeen: boolean;
   } | null>(null);
   // The POINTER drives the line, not the drag chip: the chip is a 320px card
-  // anchored at the grab point, so its centre can sit far from the cursor
-  // (in the card grid it pushed the line a half-card right — user,
-  // 2026-08-28). Start position + dnd-kit's delta = the live pointer.
+  // anchored at the grab point, so its centre can sit far from the cursor (in
+  // the card grid it pushed the line a half-card right). Start position +
+  // dnd-kit's delta = the live pointer.
   const dragStartPt = useRef<{ x: number; y: number } | null>(null);
   // nearest NON-member band to the pointer, in scroll-content coordinates;
   // the edge follows reading order (beyond a band's row decides vertically;
@@ -143,13 +143,13 @@ export function useQueueDrag(d: {
     const ae = event.activatorEvent;
     dragStartPt.current = ae instanceof MouseEvent ? { x: ae.clientX, y: ae.clientY } : null;
     const id = event.active.id as number;
-    // THE FLUENT GESTURE (live-reproduced, user 2026-08-28): the last ⌘-click
-    // often flows straight into the drag, and selection lands on mouse-UP —
-    // which the drag swallows — so at drag start the pressed row is not yet
-    // selected. A held chord on an unselected row therefore means "this one
-    // too", never "drop everything": the row is ADOPTED into the selection
-    // and the batch drags. A plain body-press on an unselected row keeps the
-    // Finder rule (drop the selection, drag that row alone).
+    // THE FLUENT GESTURE (live-reproduced): the last ⌘-click often flows
+    // straight into the drag, and selection lands on mouse-UP — which the drag
+    // swallows — so at drag start the pressed row is not yet selected. A held
+    // chord on an unselected row therefore means "this one too", never "drop
+    // everything": the row is ADOPTED into the selection and the batch drags. A
+    // plain body-press on an unselected row keeps the Finder rule (drop the
+    // selection, drag that row alone).
     const chord = ae instanceof MouseEvent && (ae.metaKey || ae.ctrlKey || ae.shiftKey);
     const adopt = chord && selected.size > 0 && !selected.has(id);
     if ((selected.has(id) && selected.size > 1) || adopt) {
@@ -200,8 +200,8 @@ export function useQueueDrag(d: {
   // batch drag runs — see the effect below): dnd-kit's delta compensates for
   // container scroll, so start+delta drifts from the cursor by the
   // auto-scrolled distance and pinned the line to the list top after an
-  // auto-scroll up (user, 2026-08-28). onDragMove remains only as the
-  // keyboard-sensor fallback, where the moving overlay IS the position.
+  // auto-scroll up. onDragMove remains only as the keyboard-sensor fallback,
+  // where the moving overlay IS the position.
   const onDragMove = (event: DragMoveEvent): void => {
     if (!dragBatch) return;
     const g = dragGeom.current;
@@ -264,7 +264,7 @@ export function useQueueDrag(d: {
    *  to live neighbor identity. The old whole-queue diff emitted up to N
    *  moves (22 for a 3-track move-to-bottom of 25) and long command runs
    *  scrambled on the real streamer; the mock swallowed them, which is why
-   *  the suite stayed green (user, 2026-08-28). */
+   *  the suite stayed green. */
   const applyBlockMove = (blockIds: number[], at: number, undoLabel: string): boolean => {
     const byId = new Map(allItems.map((it) => [it.id as number, it]));
     const order = allItems.map((it) => it.id as number);
@@ -289,11 +289,11 @@ export function useQueueDrag(d: {
       work.splice(to, 0, id);
       if (from !== to) moves.push({ id, from, to });
     }
-    // SEQUENCED, never parallel: each move's positions assume the one before
-    // it has already applied, and the renderer's unawaited commands become
+    // SEQUENCED, never parallel: each move's positions assume the one before it
+    // has already applied, and the renderer's unawaited commands become
     // concurrent HTTP posts in main — the device can apply them out of order
-    // and split the block (live-observed on a gapped drop into the block's
-    // own span; user, 2026-08-28)
+    // and split the block (live-observed on a gapped drop into the block's own
+    // span)
     void (async () => {
       for (const m of moves)
         await tt.command({ type: "queueMove", id: m.id, from: m.from, to: m.to });
@@ -368,7 +368,7 @@ export function useQueueDrag(d: {
   };
 
   /** One track from one place in `list` to another: shown at once, ONE change to the streamer,
-   *  and its undo. A drop's, and Option with the arrows (0.14.0, his K8): one home. */
+   *  and its undo. A drop's, and Option with the arrows (0.14.0): one home. */
   const moveOne = (list: QueueListItem[], oldIndex: number, newIndex: number): void => {
     const moved = list[oldIndex];
     if (!moved || moved.id == null || oldIndex === newIndex) return;
@@ -420,12 +420,11 @@ export function useQueueDrag(d: {
     useStore.getState().setNavDropTarget(null);
     useStore.getState().setNavDragActive(false);
     updateInsert(null);
-    // An Esc-cancelled drag ends with the button still held, and the
-    // eventual RELEASE lands as a row click — which plays a track, or
-    // exits selection mode via the bare-click rule (user: Esc then
-    // release deselected). The abort's release is exactly the next
-    // pointerup, whenever it comes: swallow the click that follows
-    // it, and only that one.
+    // An Esc-cancelled drag ends with the button still held, and the eventual
+    // RELEASE lands as a row click — which plays a track, or exits selection
+    // mode via the bare-click rule (an Esc then a release deselected). The
+    // abort's release is exactly the next pointerup, whenever it comes: swallow
+    // the click that follows it, and only that one.
     const swallow = (ce: MouseEvent): void => {
       ce.stopPropagation();
       ce.preventDefault();

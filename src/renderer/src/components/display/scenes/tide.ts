@@ -21,7 +21,7 @@ import {
  * loudness to come approaches from the right as a faint contour (now is the
  * middle of the screen). The current line rides the surface, glyph by glyph,
  * and sinks as its time runs out; the next line waits under the water and
- * rises to meet it. At night (after the Sea, at the user's word): stars that
+ * rises to meet it. At night (after the Sea): stars that
  * thin toward the horizon, a moon low and a little right whose halo flares
  * on a drop, a glade of broken shimmer down the water that a hat sets
  * glinting, the crests lit by a snare, the far water dissolving into the sky.
@@ -87,7 +87,7 @@ export class Tide implements Scene {
     this.phase += f.dt * (0.55 + 0.9 * slowBass) * speed;
     const baseY = h * 0.66 - h * 0.06 * f.slowLoud;
     // a kick heaves the swell with a rise time: set directly, the whole waterline jumped on
-    // every kick (the Sea popped the same way, the user's word)
+    // every kick (the Sea popped the same way)
     this.surgeAim = easeTowards(this.surgeAim, 0, f.dt, 0.3);
     this.surge = easeTowards(this.surge, this.surgeAim, f.dt, 0.14);
     const amp = h * (0.01 + 0.055 * (0.5 * bass + 0.5 * slowBass) + 0.012 * this.surge);
@@ -110,7 +110,7 @@ export class Tide implements Scene {
     // NIGHT. Stars on the faceplate only, thinning toward the horizon; a moon low and a little
     // right (the future's side) with a soft edge and a halo that flares on a drop; on paper the
     // moon is a plain gold sun
-    // THE MOON is the Sea's (the user: "take the moon from sea and use it in tide too"). The Sea
+    // THE MOON is the Sea's. The Sea
     // sees it through a 50° lens: a disc of angular radius 0.03..0.036 rad with an exponential
     // halo exp(−7·angle) that flares on a drop (0.35 + 0.65·halo, × 0.45 on the faceplate and
     // 0.2 on paper), ADDED over the sky. The same lens here: a focal length of h / (2·tan 25°)

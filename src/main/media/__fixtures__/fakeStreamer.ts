@@ -20,7 +20,7 @@
  * lists every artist's folder, so a test that walks keeps it small. holdUpnp (MOCK_UPNP_DELAY_MS)
  * keeps the streamer's server listing unanswered until releaseUpnp(), rather than for a time.
  * assetIds (MOCK_SECOND_BLANK, with the mock's /__test/media2/remint) gives every id a generation
- * that remint() moves with the counter held, as Asset re-minted his library (0.13.0-rc.6), and an
+ * that remint() moves with the counter held, as Asset re-minted a library (0.13.0-rc.6), and an
  * id of another generation answers as Asset answers one it no longer has: HTTP 200 and a blank,
  * a container "-1" with an empty title, or an empty listing.
  */

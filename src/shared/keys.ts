@@ -1,5 +1,5 @@
-// THE KEYS TWO STRINGS ARE COMPARED BY (0.15.0, the hygiene pass; the 0.11 re-score found 81
-// name keys hand-rolled in 42 files, none normalizing Unicode). The lint rule name-key refuses a
+// THE KEYS TWO STRINGS ARE COMPARED BY (0.15.0, the hygiene pass: 81 name keys were hand-rolled
+// in 42 files, none normalizing Unicode). The lint rule name-key refuses a
 // hand-rolled trim().toLowerCase() anywhere else.
 
 /**

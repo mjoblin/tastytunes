@@ -72,7 +72,7 @@ export function FilterInput({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
-          // ESCAPE RELEASES FOCUS, NEVER CLEARS (user, 2026-08-23). A filter is
+          // ESCAPE RELEASES FOCUS, NEVER CLEARS. A filter is
           // persistent state — remembered per screen and per folder — and the
           // most reflexive key on the keyboard must not destroy it; it used to
           // clear first and release on a second press, which cost the filter
@@ -93,7 +93,7 @@ export function FilterInput({
         onBlur={() => document.documentElement.classList.remove("filter-focused")}
         placeholder="Filter"
         spellCheck={false}
-        // 80px of text (0.12.0, his call: people filter by a word or two, not long strings; the
+        // 80px of text (0.12.0: people filter by a word or two, not long strings; the
         // count's slot beside it is sized separately), so a toolbar fits more before it wraps
         className="w-20 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint"
       />

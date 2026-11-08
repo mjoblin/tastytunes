@@ -102,9 +102,9 @@ export const CONFLUENCE_KEY: SceneKey = {
 };
 
 export const CONFLUENCE_SETTINGS: SceneSettingDef[] = [
-  // 0.4 (the user's call 2026-09-12; 1 before): the tile and the wall both read calmer
-  // the slider is squared before it reaches the ink (2026-09-14, the user: his 0.2 on the
-  // linear scale "should represent 0.5"): 0.8 × v², so the midpoint drives the ink as the old
+  // 0.4 (1 before): the tile and the wall both read calmer
+  // the slider is squared before it reaches the ink (0.2 on the linear scale belongs at the
+  // midpoint): 0.8 × v², so the midpoint drives the ink as the old
   // 0.2 did and the low end, where the useful settings are, spreads out; a new key so a saved
   // value from the linear scale is not read as nearly still
   { key: "vigorLevel", label: "Vigor", kind: "slider", min: 0.1, max: 1, step: 0.1, default: 0.5 },
@@ -188,7 +188,7 @@ export class Confluence implements ThreeScene {
 
   /** The current line as a texture whose alpha is the letters: one size for every line, wrapped
    *  to two rows when it is long, shrinking only when two rows still will not fit (a long line
-   *  used to shrink to a single row, so lines differed wildly in size: the user's word). */
+   *  used to shrink to a single row, so lines differed wildly in size). */
   private renderText(text: string, font: string): { texture: THREE.Texture } {
     const c = this.textCanvas;
     const g = c.getContext("2d");
@@ -359,8 +359,8 @@ export class Confluence implements ThreeScene {
         const { texture } = this.renderText(line, f.font);
         // the box shows the WHOLE text canvas at the canvas's own proportions, so every line
         // is the same size and shape whatever its length (it used to be sized from the line's
-        // width with its height divided by it: a short line grew and stretched tall, the user's
-        // word), and narrower than before so the letters read as words, not a wall
+        // width with its height divided by it: a short line grew and stretched tall),
+        // and narrower than before so the letters read as words, not a wall
         const boxW = 0.72;
         const boxH = boxW * (this.textCanvas.height / this.textCanvas.width) * aspect;
         this.wordsBox = { w: boxW, h: boxH };

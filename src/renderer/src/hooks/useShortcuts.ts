@@ -143,8 +143,8 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
       // while it works. dnd-kit marks its activators with aria-roledescription
       // ('sortable' from useSortable, 'draggable' from bare useDraggable).
       //
-      // MATCHES, NOT CLOSEST (user report 2026-07-27: "up/down scrolls after I
-      // click a preset"). Rows put the attributes on the grip button, so the
+      // MATCHES, NOT CLOSEST (up and down scrolled after a click on a
+      // preset). Rows put the attributes on the grip button, so the
       // activator IS the focused element and either test works — but preset and
       // queue CARDS spread them on the tile root, which makes every button
       // inside the card "within a sortable". Clicking a card leaves focus on

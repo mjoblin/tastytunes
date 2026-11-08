@@ -411,7 +411,7 @@ export class Panel implements Scene {
       const segH = digitH / segsN;
       for (let b = 0; b < 6; b++) {
         // under reduced motion the bars follow the music's slow average, drifting where they
-        // would bounce, as the other scenes soften themselves (user, 2026-10-06)
+        // would bounce, as the other scenes soften themselves
         const level = f.real ? (f.reduced ? f.slowBands[b] : f.bands[b]) : 0;
         this.bars[b] = easeTowards(this.bars[b], level, f.dt, level > this.bars[b] ? 0.04 : 0.22);
         this.peaks[b] =

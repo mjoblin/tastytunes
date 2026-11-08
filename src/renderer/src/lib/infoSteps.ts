@@ -3,9 +3,9 @@ import type { MediaRef } from "@/lib/mediaRef";
 import { useStore } from "@/store";
 
 /**
- * TRACK INFO STEPS THROUGH ITS LIST (0.12.0, a user's email of 2026-10-17: arrows "like
- * iTunes/Apple Music", so a reader can look through an album's tracks without closing and
- * reopening). A surface that opens Info on one row of a list hands the whole list over: an
+ * TRACK INFO STEPS THROUGH ITS LIST (0.12.0): arrows, as in iTunes and Apple Music, so
+ * a reader can look through an album's tracks without closing and
+ * reopening. A surface that opens Info on one row of a list hands the whole list over: an
  * album's tracks, the Tracks view as filtered and sorted, the queue, a playlist, search results,
  * History, Favorites. Each entry builds its target when asked (the Library holds the nodes; a
  * list of refs looks each up, lib/mediaInfo), and a step shows the next target only once it has
@@ -157,8 +157,8 @@ export function refSiblings<T>(
 }
 
 /**
- * THE INFO WINDOW'S OWN BACK AND FORWARD (0.12.0, his ask: "i'm getting a bit lost as a user
- * and don't know how to get back"). Opening a track from its album's Tracks, or an album from a
+ * THE INFO WINDOW'S OWN BACK AND FORWARD (0.12.0), so a reader several pages in
+ * always has a way back. Opening a track from its album's Tracks, or an album from a
  * track's album name, is a new page; a step through a list (‹ ›) replaces the page shown, so
  * back from track 7 is the album, not tracks 6, 5 and 4. The window shows "‹ <the page behind>"
  * at its top-left, and the app's back and forward keys (⌘← ⌘→, ⌘[ ⌘], the mouse's side

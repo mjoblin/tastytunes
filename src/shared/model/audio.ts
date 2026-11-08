@@ -193,7 +193,7 @@ export const FEATURES_VERSION = 13; // 13: beat and drop times stored as gaps (a
 
 /** A stored analysis's music features when they are the current version's, else null: an older
  *  version's tempo may sit an octave off (the 0.9.0 octave check), so none of its facts is said
- *  until the track is measured again (0.12.0, his library held 47 such). */
+ *  until the track is measured again (0.12.0). */
 export function currentFeatures<F extends { version: number }>(f: F | null | undefined): F | null {
   return f != null && f.version === FEATURES_VERSION ? f : null;
 }

@@ -35,13 +35,13 @@ interface SliderProps {
 }
 
 /**
- * A SLIDER OVER A SAVED SETTING (0.13.0-rc.4, his eye on View options: "when i drag a slider and
- * release, the slider pops back to previous value before returning to just-set value"). A save
- * round-trips through main before the store has the new value, and the sliders showed the saved
- * value again the moment the drag ended; the value they were let go at now holds until the saved
- * one arrives (or a moment passes, should main settle on another). `onLive`, where a view can
- * follow the drag, hears each value as it moves, and the saved value the drag began from when
- * the drag is abandoned; onCommit hears that start too, for an undo.
+ * A SLIDER OVER A SAVED SETTING (0.13.0-rc.4, View options: on release a slider popped back to
+ * its previous value before returning to the value just set). A save round-trips through main
+ * before the store has the new value, and the sliders showed the saved value again the moment the
+ * drag ended; the value they were let go at now holds until the saved one arrives (or a moment
+ * passes, should main settle on another). `onLive`, where a view can follow the drag, hears each
+ * value as it moves, and the saved value the drag began from when the drag is abandoned; onCommit
+ * hears that start too, for an undo.
  */
 export function useSliderDraft(
   value: number,
@@ -119,7 +119,7 @@ export function Slider({
     const x = Math.min(Math.max(rect.left + ratio * rect.width, 34), window.innerWidth - 34);
     // Anchor from the track's CENTER, not its top: the plain and waveform
     // tracks differ in height, and a top-anchored bubble floated higher above
-    // the tall one, reading as detached (user, 2026-08-30). Center minus 18
+    // the tall one, reading as detached. Center minus 18
     // reproduces the plain track's exact gap on both.
     setBubble({ left: x, top: rect.top + rect.height / 2 - 18 });
   }, []);

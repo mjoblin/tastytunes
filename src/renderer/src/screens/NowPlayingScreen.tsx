@@ -91,7 +91,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   const meta = deriveNowPlaying(playState, nowPlaying);
   // THE TILE'S SCENE (2026-09-12): the hero's art box shows a display-mode
   // scene, chosen from display mode's own picker off a chip on the tile, and
-  // remembered apart from the fullscreen view's choice (the user: "separate").
+  // remembered apart from the fullscreen view's choice.
   // Sleeve is the art and the default, so the screen looks as it always did
   // until asked. A scene only runs while the playing track has an analysis to
   // drive it (a scene fed nothing drifts on sines, which reads as fake beside
@@ -101,7 +101,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   const [scenesOpen, setScenesOpen] = useState(false);
   // the picker opens at once and fades out at the house beat (useFadePresence, the
   // modals' and the panels' 140 ms), taking no clicks while it is leaving; a fade IN hid
-  // its heavy mount behind zero opacity and read as a delay (the user, 2026-09-13)
+  // its heavy mount behind zero opacity and read as a delay
   const pickerFade = useFadePresence(scenesOpen, { enter: false });
   // a station too since 0.10.0: Hi-Fi and Turntable draw for any source
   const chipOn = meta.title != null;
@@ -112,7 +112,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   // THE GATE HOLDS ACROSS A TRACK CHANGE: on a skip the playing track's identity is resolved
   // again and the analysis hook passes through absent, then loading, before the new record
   // arrives; a gate that read those literally dropped the tile to the art for that moment
-  // on every skip (the user, 2026-09-12: "flashes the album art"). A record turns the scene
+  // on every skip. A record turns the scene
   // on at once; absence turns it off only once it has stayed absent for a beat, longer than
   // the hand-off, so the pass-through never shows and the canvas is never torn down for it
   const [sceneReady, setSceneReady] = useState(false);
@@ -129,8 +129,8 @@ export function NowPlayingScreen(): React.JSX.Element {
   const { live: tileLive, idle: tileIdle } = useSceneLive(tileStage != null, tileNeeds);
   // a deck scene needs only that something is loaded; the rest hold across a skip (above)
   const sceneOn = tileStage != null && (tileNeeds === "any" ? tileLive : sceneReady);
-  // THE WORDS ARE THE TILE'S OWN CALL (the user, 2026-09-12: a switch in the picker "feels a
-  // bit hidden... lyrics are important"): a toggle on the tile, bottom left, the mirror of
+  // THE WORDS ARE THE TILE'S OWN CALL (lyrics matter too much for a switch hidden
+  // in the picker): a toggle on the tile, bottom left, the mirror of
   // the header's lyric-line toggle. A scene that is its words (Type, Terminal) draws them
   // regardless and the toggle is disabled there
   const tileDef = tileStage ? sceneDef(tileStage) : null;
@@ -140,7 +140,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   const tileWords = wordsForced || nowPlayingSceneWords;
   // Escape closes the picker, as does a press anywhere but the picker or its
   // chip: the app's chrome included, which a catcher inside this screen
-  // could not reach (the user hit it on the nav and the controls)
+  // could not reach (the nav and the controls)
   useEffect(() => {
     if (!scenesOpen) return;
     const offKey = onScreenKey((e) => {
@@ -242,7 +242,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   // Only surface "buffering" once it has persisted a beat — brief buffers on a
   // seek or track change shouldn't flash a label. Other states show at once.
   //
-  // 800ms, not 2s (user call 2026-07-24): long enough to swallow seek and
+  // 800ms, not 2s: long enough to swallow seek and
   // track-change blips, short enough that a genuinely slow radio start gets
   // named while you're still wondering. The playback bar's `busy` LED stays
   // INSTANT on purpose — the two do different jobs. The LED says "something is
@@ -263,7 +263,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   // list, so the button simply isn't offered for one.
   const playlistBtn = useRef<HTMLButtonElement | null>(null);
   const [playlistAt, setPlaylistAt] = useState<{ x: number; y: number } | null>(null);
-  // THE ART'S ⋯ (0.12.0-rc.3, his ask: the Queue offered Open in Library and Go to album for the
+  // THE ART'S ⋯ (0.12.0-rc.3: the Queue offered Open in Library and Go to album for the
   // playing track, Now Playing only through its name links): the Queue's own track menu for the
   // playing entry, from a ⋯ on the art that shows under the cursor or from a right-click there.
   const [artMenu, setArtMenu] = useState<{ x: number; y: number } | null>(null);
@@ -282,7 +282,7 @@ export function NowPlayingScreen(): React.JSX.Element {
     // button, so the empty band never eats the drawer ✕ beneath it. Window
     // dragging is unaffected: app-region is a native hit-test, not CSS.
     <header className="drag-region relative z-20 pointer-events-none flex items-center justify-end gap-6 px-8 pt-8 pb-4 min-h-[83px]">
-      {/* THREE GROUPS, told apart by gaps (two groups user call 2026-07-24;
+      {/* THREE GROUPS, told apart by gaps (two groups at first;
           the third named 2026-08-30 when the Info button folded into the About
           drawer's Stream tab). The strip's buttons do three different jobs:
           the first pair WRITES to stored collections, the middle pair opens a
@@ -399,7 +399,7 @@ export function NowPlayingScreen(): React.JSX.Element {
         <div className="h-full flex flex-col">
           {header}
           {/* the marker fills the pane as Nothing playing's column does, or the face sits at
-              the top with no height to center in (user, 2026-10-06) */}
+              the top with no height to center in */}
           <div data-source-blind={sourceId} className="flex-1 flex flex-col">
             <EmptyState
               icon={sourceId === "AIRPLAY" ? Airplay : Disc3}
@@ -517,9 +517,9 @@ export function NowPlayingScreen(): React.JSX.Element {
         <div className={cx("flex gap-8 items-start min-w-0", mirrored && "flex-row-reverse")}>
           <div className="shrink-0">
             {/* three width tiers by default — compact windows get genuinely small art
-              (260) instead of the old two-step 340/400 (user pass) — or the dragged size */}
-            {/* Art swaps straight over on a track change — no crossfade here (user
-              call 2026-07-24: the text settling and the art dissolving at the
+              (260) instead of the old two-step 340/400 — or the dragged size */}
+            {/* Art swaps straight over on a track change — no crossfade here (the
+              text settling and the art dissolving at the
               same time read as mushy). Display mode keeps its crossfade. The
               swap is off the DECODED url, so the tile goes cover-to-cover
               rather than emptying while a slow remote fetch finishes. */}
@@ -615,7 +615,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                   data-now-playing-art-menu
                   className={cx(
                     // bottom right, as a card's ⋯ is, at the top chips' 8px inset and in their
-                    // glass; the resize grip keeps the corner beyond it, compact (his call)
+                    // glass; the resize grip keeps the corner beyond it, compact
                     "tip-top tip-end absolute bottom-2 right-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
                     artMenu
                       ? "text-ink opacity-100"
@@ -693,7 +693,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                       ref={entryRef}
                       // the same quiet grammar as the artist line, scaled to 14px: a hairline
                       // gold underline at low alpha, a half step up in tone (the ink lift and
-                      // an ink underline read too dramatic here — user, 2026-09-02)
+                      // an ink underline read too dramatic here)
                       className="hover:text-ink/80 hover:underline decoration-1 decoration-gold/40 underline-offset-[4px]"
                     >
                       {shownTrack.album}
@@ -754,10 +754,10 @@ export function NowPlayingScreen(): React.JSX.Element {
                 <LyricLine />
               </div>
             )}
-            {/* A NOTE ABOUT THE APP, NOT A LINE OF THE TRACK (his design C, 2026-11-01): the
+            {/* A NOTE ABOUT THE APP, NOT A LINE OF THE TRACK: the
               column's own label, level with the art's bottom edge (the column stretches to the
               art and the note sinks to its foot), and at least twice the column's rhythm under
-              the track's lines when they run longer (his call, 2026-10-06). Named as the app
+              the track's lines when they run longer. Named as the app
               names it everywhere, full-screen display mode; the cross shows on hover and on
               keyboard focus. */}
             {showDisplayHint && (

@@ -38,7 +38,7 @@ export interface MediaIndexStatus {
   /** While building: the app started this build on its own to keep an index it already
    *  had honest (the server's counter moved, the TTL passed, the schema changed, a stale id
    *  was revalidated before an answer was trusted). The doors show it as any build; the
-   *  indexing toast never announces it (user, 2026-09-15: the streamer's USB ids rotate
+   *  indexing toast never announces it (the streamer's USB ids rotate
    *  across every standby, and each revalidation toasted "streamer indexed · 0 tracks"). */
   quiet?: boolean;
   /** The server's counter moved since this index was built and the app will not walk
@@ -47,12 +47,12 @@ export interface MediaIndexStatus {
   /** Something someone asked for (a playlist, a favorite, Open in Library, Info, an
    *  agent's play) has waited over a second while this index is moved and checked, or
    *  walked, after the server's ids moved: the streamer's USB server after a standby or a
-   *  replug (the user's Evo, 2026-10-06: about 20 s while a cold drive's folders are
+   *  replug (an Evo, 2026-10-06: about 20 s while a cold drive's folders are
    *  listed). The working toast says so. */
   waiting?: boolean;
   /** The server answers UPnP Search itself, so the Library's search box reaches it with
    *  no index; a Browse-only server (the streamer's USB stick) has no search until its
-   *  index is built. The Search screen's unindexed line says which (user, 2026-09-17). */
+   *  index is built. The Search screen's unindexed line says which. */
   searchable?: boolean;
   strategy: "search" | "browse" | null;
   tracks: number;
@@ -108,7 +108,7 @@ export interface MediaNode {
    * PROVISIONAL, a parse's guess for the pool rule discs-from-file-names (main/media/reconcile)
    * and never kept: the disc a track's file name gives ("2-11 Close Your Eyes.flac", the second
    * number its track number), read only when the server sent no disc (MinimServer sends none,
-   * 0.12.0-rc.3, a user's box sets). The rule promotes it to discNumber only when every track
+   * 0.12.0-rc.3). The rule promotes it to discNumber only when every track
    * of the album agrees, and drops it either way.
    */
   fileDisc?: number;
@@ -204,8 +204,8 @@ export function isHiRes(f: {
   );
 }
 
-/** The separator between facts on one line: EN spaces around the dot, so the items breathe (user,
- *  2026-09-01; app-wide for facts and status lines 2026-10-07) — plain double spaces would
+/** The separator between facts on one line: EN spaces around the dot, so the items breathe
+ *  (app-wide for facts and status lines since 2026-10-07); plain double spaces would
  *  collapse in HTML. Shared so the main process's menu reads the same. Not for formatLabel below:
  *  albumFormatChips splits its " · " back into chips. */
 export const FACT_SEP = "\u2002·\u2002";
@@ -241,10 +241,9 @@ export function albumFormat(tracks: ReadonlyArray<Pick<MediaNode, "format">>): {
   const known = labels.filter(Boolean).length;
   // THE PREDOMINANT FORMAT HEADLINES when at least half the tracks share it,
   // and every other track says what IT is; with no predominant format the
-  // headline is "mixed formats" and every track says. The user's ruling
-  // (2026-08-16, after a stricter odd-one-out cut hid information they
-  // wanted): the point of the row notes is to SEE the exceptions, however
-  // many there are.
+  // headline is "mixed formats" and every track says. A stricter odd-one-out
+  // cut once hid information worth having: the point of the row notes is to
+  // SEE the exceptions, however many there are.
   if (counts.size > 1 && n * 2 < known)
     return { label: "mixed formats", notes: labels.map((l) => l ?? null) };
   return { label: top, notes: labels.map((l) => (l && l !== top ? l : null)) };
@@ -364,7 +363,7 @@ export interface ArtistGroup {
   name: string;
   /** The server's own picture for the artist when it is a real one: not one of the indexed
    *  albums' or tracks' covers (an Asset library, 2026-10-11: 370 of 371 artists carried one of
-   *  their own album covers; 0.12.0-rc.3, a user's MinimServer: some track's embedded cover). */
+   *  their own album covers; 0.12.0-rc.3, a MinimServer library: some track's embedded cover). */
   own: string | null;
   /** The first of their albums with a picture, else the first of their tracks with one. */
   cover: string | null;
@@ -480,7 +479,7 @@ export function discTrackCount(
 /** The same count from an album's own listing (a browsed album, which has no index pools).
  *  Null, so no "of", when the album has no disc numbers and its track numbers repeat: the
  *  numbers count within discs the server never named, and the whole album's count would say
- *  "track 11 of 143" of a box set's eleventh track (0.12.0-rc.3, a user's MinimServer). */
+ *  "track 11 of 143" of a box set's eleventh track (0.12.0-rc.3, MinimServer). */
 export function discCountIn(
   track: Pick<MediaNode, "discNumber">,
   albumTracks: ReadonlyArray<Pick<MediaNode, "discNumber" | "trackNumber">>,
@@ -844,8 +843,8 @@ export interface StreamInfo {
  * content. "act": for its id (Open in Library), which must answer on the server now. Only
  * an act confirms a Browse-built index against the device, and confirming can rebuild it:
  * the streamer's USB ids are all new after a standby, and a rebuild the user never asked
- * for was the "building…" a CXN V2 owner saw on the first track after the streamer woke
- * (user report, 2026-09-25). Required at every call, so a new caller has to choose.
+ * for was the "building…" shown on the first track after the streamer woke (a CXN V2).
+ * Required at every call, so a new caller has to choose.
  */
 export type LookupPurpose = "show" | "act";
 
@@ -963,7 +962,7 @@ export type MediaQueueAction = "REPLACE" | "APPEND" | "PLAY_NEXT" | "PLAY_NOW" |
 /**
  * A container verb over this many tracks asks first, from every surface (the
  * guard lives in main's queueAdd). Filed after Play from here on a search
- * scope queued 2,528 tracks on the user's Evo (2026-09-04): a box set
+ * scope queued 2,528 tracks on an Evo (2026-09-04): a box set
  * queues without a prompt, a library-sized container never does.
  */
 export const LARGE_QUEUE_TRACKS = 200;

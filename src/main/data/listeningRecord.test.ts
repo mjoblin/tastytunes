@@ -22,7 +22,7 @@ const play = (queueId: number, title: string): ZonePlayState =>
 const recall = (id: number, name: string): void =>
   listeningRecord.openContext({ kind: "preset", id, name, streamer: EVO });
 
-describe("a recall that loaded nothing claims nothing (his preset 24, 0.13.0-rc.6)", () => {
+describe("a recall that loaded nothing claims nothing (0.13.0-rc.6)", () => {
   it("leaves the next track of the queue already playing to the preset that loaded it", () => {
     // preset 30 loads its album, and its first track plays
     recall(30, "Carving The Stone");

@@ -39,13 +39,13 @@ export function playingQueueEntry(
 }
 
 /**
- * THE POINTER CAN LIE (live, the user's Evo, 2026-09-02). A queue edit that
+ * THE POINTER CAN LIE (live, on an Evo, 2026-09-02). A queue edit that
  * lands after the decoder has pre-opened the next file makes the streamer
  * PLAY the prefetched file — audio and tag readout both the old next — while
  * its queue pointer (play_id / queue_id / queue_index) advances to whatever
  * now sits in the next slot. For one track the device's own report describes
  * two songs, and an app that mirrors it shows Now Playing (the readout) and
- * the Queue's playing row (the pointer) disagreeing — the 2026-08-28 report.
+ * the Queue's playing row (the pointer) disagreeing.
  *
  * The readout is the audible truth, so the playing row should follow CONTENT
  * when the pointer's entry does not match it. STRICTLY: title equal and

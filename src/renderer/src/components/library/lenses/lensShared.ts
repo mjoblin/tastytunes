@@ -114,7 +114,7 @@ export function decadeOptionsOf(
     .sort((a, b) => b.value.localeCompare(a.value));
 }
 
-/** Distinct recorded DR values, highest first — "show me all my DR13s".
+/** Distinct recorded DR values, highest first, so every album at one DR is one pick.
  *  Offered from the first known value (the picker's min of 1). */
 export function drOptionsOf(
   drs: ReadonlyArray<number | null>,
@@ -158,7 +158,7 @@ export function tempoOptionsOf(
 }
 
 /** The Format facet's tags for one track: its codec, plus the two DERIVED
- *  qualities (user, 2026-09-02: "what's still lossy" in one click) — from the
+ *  qualities (what's still lossy, in one click) — from the
  *  app's one home for each predicate (LOSSLESS_CODECS, isHiRes). */
 export const LOSSLESS_TAG = "__lossless";
 export const HIRES_TAG = "__hires";
@@ -206,14 +206,14 @@ export const RECORD_SORTS = new Set<string>(["lastPlayed", "plays", "wholeListen
 export const PLAY_THESE_MAX = 50;
 
 /** What an album's copy chip means, as its tip says it (the lens index's copyBadge: the library,
- *  then which copy it is, shown only when there is another copy; 0.13.0-rc.4, a user had to work
- *  out what "FLAC · 24/96" on one album was telling him). */
+ *  then which copy it is, shown only when there is another copy; 0.13.0-rc.4: what "FLAC · 24/96"
+ *  on one album was saying took working out). */
 export const COPY_BADGE_TIP = "There's another copy of this album";
 
 /**
- * WHICH COPY an album is among its copies on one server, for its chip (0.13.0-rc.4, his pick on
- * "Card details": the chip says where the copies DIFFER, never what they share; two copies of one
- * album on a drive both said the folder name they share, and pushed the artist off the line).
+ * WHICH COPY an album is among its copies on one server, for its chip (0.13.0-rc.4: the chip says
+ * where the copies DIFFER, never what they share; two copies of one album on a drive both said
+ * the folder name they share, and pushed the artist off the line).
  * The first fact no other copy has: its format (left to the card's format line when the card
  * shows one), its folder's name when that is not the album's title, then the part of its folder
  * path the others don't share ("Music", "Rock › The Band"); else "Copy 2", its place among all
@@ -260,8 +260,8 @@ function folderPlaces(copies: readonly MediaNode[]): (n: MediaNode) => string | 
 }
 
 /**
- * THE ARTIST PAGE'S ALBUM ORDER (0.13.0-rc.4, a user's question: the page lists an artist's albums
- * newest first, and with the year cut off on each card he could not tell what the order was).
+ * THE ARTIST PAGE'S ALBUM ORDER (0.13.0-rc.4: the page lists an artist's albums newest first,
+ * and with the year cut off on each card the order could not be told).
  * By year, newest first, ties by title (the lens index's own order); or by title. Reversed turns
  * the whole list, as the lenses' sorts do.
  */
@@ -284,8 +284,8 @@ export function orderArtistAlbums(
 export type FilterScope = "title" | "artist" | "album";
 
 /**
- * THE TRACKS FILTER'S FIELDS (0.13.0-rc.4, his picks on the decision page "Filter Scope": "search
- * in" inside the filter box, remembered for the session as the pickers are). A track's title,
+ * THE TRACKS FILTER'S FIELDS (0.13.0-rc.4: "search in" inside the filter box, remembered for the
+ * session as the pickers are). A track's title,
  * artist, album and year, or the one field the scope names. The filter (matchesFilter over these)
  * and its menu's counts (filterScopeCounts) read this one rule.
  */

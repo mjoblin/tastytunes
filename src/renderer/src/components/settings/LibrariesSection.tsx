@@ -95,13 +95,13 @@ export function LibrariesSection({ settings, save }: SectionProps): React.JSX.El
 
 /**
  * A SERVER'S OWN RECENTLY ADDED LIST (0.13.0 round 9; shared/recentlyAdded), as a setting in the
- * screen's own idiom (his look, 2026-10-25: the first cut's status line and text links read as
- * status, "a little small/noodly", and it was not clear it could be changed): the label, a
- * sentence saying what it is for, and the app's dropdown (PickerPill as a choice, his ask: the
- * native select read out of place) of the server's folders (the top level and under
- * Music, Audio or Media Library: listRecentCandidates), the one found by its name first, then the
- * rest, then None. A folder chosen from a folder's ⋯ in the Library deeper down is offered too.
- * For a server the index searches, or one with a list chosen; never the streamer's USB drive.
+ * screen's own idiom (the first cut's status line and text links read as status, small and fussy,
+ * and it was not clear it could be changed): the label, a sentence saying what it is for, and the
+ * app's dropdown (PickerPill as a choice: the native select read out of place) of the server's
+ * folders (the top level and under Music, Audio or Media Library: listRecentCandidates), the one
+ * found by its name first, then the rest, then None. A folder chosen from a folder's ⋯ in the
+ * Library deeper down is offered too. For a server the index searches, or one with a list chosen;
+ * never the streamer's USB drive.
  */
 function RecentListRow({
   st,
@@ -199,7 +199,7 @@ function RecentListRow({
  * The album-art thumbnail cache's size and its Clear (main/lookups/artThumbs):
  * a row in the card like the others, its Clear the kit's cache button (the
  * Cached lookups row and History's record row wear the same one; a bare text
- * link read too weak — user, 2026-09-14).
+ * link read too weak).
  */
 function ArtThumbsRow(): React.JSX.Element {
   const [stats, setStats] = useState<{ entries: number; bytes: number } | null>(null);
@@ -207,7 +207,7 @@ function ArtThumbsRow(): React.JSX.Element {
     void tt.artThumbsStats().then(setStats);
   }, []);
   const empty = stats != null && stats.entries === 0;
-  // the record's confirm on a cache too (user, 2026-09-14): a USB drive's art takes a while to come back
+  // the record's confirm on a cache too: a USB drive's art takes a while to come back
   const confirmClear = useConfirmPopover();
   return (
     <SettingRow

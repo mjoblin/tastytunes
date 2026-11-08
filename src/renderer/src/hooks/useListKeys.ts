@@ -3,7 +3,7 @@ import { KEYBOARD_NAV_ATTR } from "@/lib/inputModality";
 import { scrollToVisible } from "@/lib/scroll";
 
 /**
- * A LIST FROM THE KEYBOARD (0.14.0, his K1 to K9 on the design page "TastyTunes 0.14.0 Design").
+ * A LIST FROM THE KEYBOARD (0.14.0).
  *
  * K1 one Tab stop per list: the list itself is the stop, its rows and their buttons leave the
  * Tab order (ListKeysContext tells a row's controls they are inside one). K2 a list that has

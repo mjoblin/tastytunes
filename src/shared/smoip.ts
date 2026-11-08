@@ -310,7 +310,7 @@ export const isCbusMode = (z: Pick<ZoneState, "cbus"> | null | undefined): boole
  * Pre-amp mode: the streamer holds an absolute volume it can set. Requires
  * pre_amp_mode AND pre_amp_state === "on" — matching punytunes
  * (`isPreAmpModeEnabled`); a mode-enabled-but-not-"on" pre-amp can't take an
- * absolute level. (Live-confirmed safe on the user's Evo 150: pre_amp_mode
+ * absolute level. (Live-confirmed safe on an Evo 150: pre_amp_mode
  * true, pre_amp_state "on".)
  */
 export const isPreAmpMode = (

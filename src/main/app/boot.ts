@@ -17,7 +17,7 @@ protocol.registerSchemesAsPrivileged([
 // spawned us (a script, a test harness) dies, our stdout/stderr writes
 // eventually hit EPIPE once the kernel buffer fills — hours later — and an
 // unhandled stream error becomes Electron's uncaught-exception dialog on
-// the user's desktop (live, 2026-08-29). Swallow stream errors; logging is
+// the desktop (seen live, 2026-08-29). Swallow stream errors; logging is
 // best-effort by nature.
 for (const stream of [process.stdout, process.stderr]) stream?.on?.("error", () => {});
 

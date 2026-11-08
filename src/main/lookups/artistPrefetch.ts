@@ -7,15 +7,14 @@ import { artistCacheHasRoom, fetchArtistInfo, knowsArtist } from "./artistInfo";
 import { nameKey } from "@shared/keys";
 
 /**
- * PHOTOS FETCHED AHEAD (0.13.0; a user's report, 2026-10-24: a photo loads only on an artist page's first
- * visit). Round 7 fetched the 50 most-played; round 8 (his next email, 2026-10-25: "the fetch will
- * only tax the system the first time you link to your library") every artist in the libraries,
- * the most-played first (the listening record's library plays), then the rest by how much of the
+ * PHOTOS FETCHED AHEAD (0.13.0: a photo loaded only on an artist page's first visit). Round 7
+ * fetched the 50 most-played; round 8 every artist in the libraries, the most-played first (the
+ * listening record's library plays), then the rest by how much of the
  * library is theirs. One at a time, an artist page's own lookup but on the MusicBrainz gate's
  * speculative lane, behind anything a person is waiting on, with a pause between artists: a
  * first pass over 500 artists takes about 40 minutes, once. Only with the artist lookups on,
  * checked before every artist; an artist already asked about is skipped (a settled answer, a
- * photo or none, is never asked again: decisions/0013); and the pass stops short of the cache's
+ * photo or none, is never asked again); and the pass stops short of the cache's
  * cap, so a very large library never pushes out its own photos. A pass runs a while after launch
  * and again a minute after the indexes change, so an artist added later is fetched too. Nothing
  * on screen changes: a row keeps the picture it drew for the session, and the photo is there the

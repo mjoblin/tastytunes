@@ -6,15 +6,15 @@ import { HeaderChip } from "@/components/chrome/Chrome";
 import { EmptyState } from "@/components/chrome/EmptyState";
 
 /**
- * ONE SURFACE'S FAILURE STAYS IN THAT SURFACE (0.12.0-rc.2, the 0.11 re-score's crash
- * resilience). A render error used to unmount the whole window to a blank page. Each surface
- * now sits in a boundary of its own: a screen, the navigation, the playback bar, display mode,
- * each overlay, and each window's root (the last resort). A failed surface says so where it
- * was, with Try again (a fresh render of the same surface) and Reload (the window), the error
- * goes to the diagnostics log, and everything around it keeps working. `resetKey` re-arms the
- * boundary when what it shows changes (the main window's screen, an overlay's target), so
- * leaving a broken screen and coming back tries it again. A renderer process that dies outright
- * is main's to bring back (app/crashReload).
+ * ONE SURFACE'S FAILURE STAYS IN THAT SURFACE (0.12.0-rc.2, crash resilience). A render error
+ * used to unmount the whole window to a blank page. Each surface now sits in a boundary of its
+ * own: a screen, the navigation, the playback bar, display mode, each overlay, and each window's
+ * root (the last resort). A failed surface says so where it was, with Try again (a fresh render
+ * of the same surface) and Reload (the window), the error goes to the diagnostics log, and
+ * everything around it keeps working. `resetKey` re-arms the boundary when what it shows changes
+ * (the main window's screen, an overlay's target), so leaving a broken screen and coming back
+ * tries it again. A renderer process that dies outright is main's to bring back
+ * (app/crashReload).
  *
  *   screen  the main window's screen area: the empty-state face, both buttons
  *   panel   a small window's root (the mini player, the menu bar panel): the compact face

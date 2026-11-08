@@ -225,7 +225,7 @@ export function RadioScreen(): React.JSX.Element {
 
   const shown =
     results ?? (cat === FAV_CAT ? favStations.map(favAsStation) : cat != null ? catStations : top);
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the stations one Tab stop, Enter plays one as its
+  // FROM THE KEYBOARD (0.14.0): the stations one Tab stop, Enter plays one as its
   // click does, "." its More menu (its heart, and Save to preset on the playing one)
   const keys = useListKeys({
     count: shown?.length ?? 0,

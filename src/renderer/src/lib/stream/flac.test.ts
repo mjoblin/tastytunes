@@ -85,7 +85,7 @@ describe("a stream that isn't a FLAC file", () => {
   });
 });
 
-// A DAMAGED FILE (0.15.0, the 0.14 re-score: one missing frame made the splitter hold the rest of
+// A DAMAGED FILE (0.15.0: one missing frame made the splitter hold the rest of
 // the file and hand the decoder a single frame of it)
 describe("a damaged FLAC file", () => {
   const bytes = FILES["44.1 kHz stereo, 4096 a frame"]();

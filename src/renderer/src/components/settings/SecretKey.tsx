@@ -7,14 +7,14 @@ import { HeaderChip } from "@/components/chrome/Chrome";
 import { cx } from "@/lib/format";
 
 /**
- * A KEY OR TOKEN THE APP KEEPS (0.13.0 rounds 10 and 11, the secrets store; his look at the first
- * cut, 2026-10-25: "entering a token feels awkward and not elegant ... the user needs to know more
- * clearly what the flow is after entering a token (success, failure, etc) vs. that "Get" button
- * which is confusing"). The Settings row says only whether one is saved and how it ends, with Add,
- * Change and Remove (asked first); adding opens a small dialog that walks it: where one is got,
- * where it is pasted, then Check and save, the service asked before it is kept and its answer said
- * in the dialog (works, refused with the field still there to fix, or unreachable and saved). One
- * flow for the fanart.tv key and the ListenBrainz token. The value is never shown or filled back.
+ * A KEY OR TOKEN THE APP KEEPS (0.13.0 rounds 10 and 11, the secrets store; entering a token in
+ * the first cut felt awkward, with no clear flow after it was entered, no success or failure said,
+ * and a confusing Get button). The Settings row says only whether one is saved and how it ends,
+ * with Add, Change and Remove (asked first); adding opens a small dialog that walks it: where one
+ * is got, where it is pasted, then Check and save, the service asked before it is kept and its
+ * answer said in the dialog (works, refused with the field still there to fix, or unreachable and
+ * saved). One flow for the fanart.tv key and the ListenBrainz token. The value is never shown or
+ * filled back.
  */
 export interface SecretKeySpec {
   /** The secret's name, on the row for the suite (data-secret). */

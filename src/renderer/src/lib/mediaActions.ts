@@ -18,8 +18,8 @@ async function resolveRef(ref: MediaRef): Promise<{ serverUdn: string; objectId:
 
 /**
  * Open a ref's place in the Library: an album lands on itself, a track lands
- * on its ALBUM with the track scrolled to and flashed (2026-08-23, user ask —
- * every list that holds a ref can now lead back to where it came from:
+ * on its ALBUM with the track scrolled to and flashed (every list
+ * that holds a ref can now lead back to where it came from:
  * favorites, queue, playlists, recents, the Info modal). Content-resolved
  * through the library index (mediaNodeInfo), hints first; the album is the
  * resolved track's parent container, or the index's album by title when a
@@ -49,7 +49,7 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
   };
   // an act: the Library navigates to the id, so it must answer on the server now. A track asks
   // by its id and length first, which the lookup already knew how to use: by title alone, of two
-  // tracks with one title on one album the first always won (a user's twins, 0.12.0-rc.3); by
+  // tracks with one title on one album the first always won (twin tracks, 0.12.0-rc.3); by
   // content alone, as before, when that finds nothing (an id rotted, a length the server rounds)
   const exact =
     ref.kind === "track"
@@ -84,8 +84,8 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
   // The ALBUM comes from the index's albums pool, never from the track's
   // parentId: a search-built index carries the SEARCH SCOPE as every track's
   // parent — on Asset that is the library-wide "Title" view, 4,551 children —
-  // and landing there showed the whole library under the album's name (user,
-  // 2026-08-23). The parent is only the fallback for a server whose index has
+  // and landing there showed the whole library under the album's name. The
+  // parent is only the fallback for a server whose index has
   // no album entity for this track (folder-only libraries).
   const album = await tt
     .mediaNodeInfo(

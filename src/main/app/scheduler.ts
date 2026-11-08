@@ -7,7 +7,7 @@
 // CATCH-UP ON RESUME (2026-07-26). Node timers stall while the machine sleeps,
 // so a schedule whose minute passed during sleep used to be skipped in silence.
 // It isn't any more — but the app still never fires late on its own, it ASKS.
-// Three rules, all deliberate, all decided by the user:
+// Three rules, all deliberate:
 //
 //   · 10-MINUTE WINDOW. Catch-up is only ever reached when something ELSE woke
 //     the machine shortly after a due time, and that is the only case worth
@@ -40,8 +40,8 @@ const RECONNECT_GRACE_MS = 20_000;
 /**
  * Instances already acted on, keyed by schedule id. In-memory ON PURPOSE: a
  * resume doesn't restart the process, so this survives exactly as long as it
- * needs to and no persistence is required. (A restart is a different failure —
- * see the "schedules die with the app" thread in the ROADMAP.)
+ * needs to and no persistence is required. (A restart is a different failure:
+ * schedules die with the app.)
  */
 const lastFired = new Map<string, string>();
 

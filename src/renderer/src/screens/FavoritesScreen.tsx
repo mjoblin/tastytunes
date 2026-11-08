@@ -73,7 +73,7 @@ const FAV_KINDS: readonly FavKind[] = ["all", "station", "album", "track"];
 const NO_POOLS: MediaIndexPools[] = [];
 
 export function FavoritesScreen(): React.JSX.Element {
-  // each album card's format line, as the Albums view's cards have it (0.14.0, his D6 pick)
+  // each album card's format line, as the Albums view's cards have it (0.14.0)
   const formatLine = useStore((s) => s.settings.albumCardFormat);
   const cardPools = useIndexPools(formatLine);
   const cardIndex = useLensIndex(cardPools ?? NO_POOLS);
@@ -138,7 +138,7 @@ export function FavoritesScreen(): React.JSX.Element {
   // null = NOT YET KNOWN — favorites stay bright on a guess, never dimmed
   // (the old []-initial state flashed "server is offline" on every visit
   // while the streamer answered /system/upnp, and a single transient fetch
-  // failure stuck the false "offline" for the whole visit — user report).
+  // failure stuck the false "offline" for the whole visit).
   // A failed fetch retries twice before offline is ever declared.
   const copyChip = useCopyChips(displayed);
 
@@ -437,7 +437,7 @@ export function FavoritesScreen(): React.JSX.Element {
           {shownStations.length > 0 && (
             <>
               <div className="microlabel mt-2 mb-2 px-1">Stations</div>
-              {/* FROM THE KEYBOARD (0.14.0, his K1 to K6): each kind one Tab stop, Enter plays or
+              {/* FROM THE KEYBOARD (0.14.0): each kind one Tab stop, Enter plays or
                   opens as a click does, "." a favorite's More menu */}
               <KeyedList
                 label="Stations"
@@ -771,7 +771,7 @@ function StationFavRow({
 /** Small portal menu (the ItemMenu idiom, but favorites-shaped items). */
 
 /**
- * WHICH COPY a heart is on (0.13.0, his call: each copy its own): when two hearts are on two
+ * WHICH COPY a heart is on (0.13.0: each copy its own): when two hearts are on two
  * copies of one album or track, each says which it is, as the Library's cards do. An album wears
  * its card's chip (the lens index's copyBadge: its library, else its format, else its folder); a
  * track its library when the two are in two, else its format. The library is read only when two

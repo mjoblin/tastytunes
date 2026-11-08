@@ -193,7 +193,7 @@ export interface SceneRecord {
 export type SceneSettings = Record<string, SceneSettingValue>;
 /** Where a setting applies: everywhere by default, or the fullscreen view only (`full`),
  *  when the tile draws none of what it governs (the words, a sound, a bloom) and so the
- *  tile's picker leaves the control out (the user, 2026-09-12). */
+ *  tile's picker leaves the control out. */
 type SceneSettingScope = { full?: boolean };
 export type SceneSettingDef = SceneSettingScope &
   (

@@ -2,12 +2,11 @@ import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
 /**
- * WHERE A PICTURE MAY BE FETCHED FROM (0.10.0, the whole-app review; one home since the 0.11
- * re-score). A URL on a private or loopback address is fetched only when it is the streamer's
- * or a media server's the app knows; an address on the internet (a station's logo, a cover
- * archive, a Wikipedia photo) is fetched. Every fetch of a picture, the data URLs the renderer
- * asks for and the thumbnails behind the tt-art scheme alike, asks here (lookups/artFetch).
- * Pure but for the DNS lookup, which a test can replace.
+ * WHERE A PICTURE MAY BE FETCHED FROM (0.10.0). A URL on a private or loopback address is
+ * fetched only when it is the streamer's or a media server's the app knows; an address on the
+ * internet (a station's logo, a cover archive, a Wikipedia photo) is fetched. Every fetch of a
+ * picture, the data URLs the renderer asks for and the thumbnails behind the tt-art scheme
+ * alike, asks here (lookups/artFetch). Pure but for the DNS lookup, which a test can replace.
  */
 
 const PRIVATE_V4 = [
@@ -35,7 +34,7 @@ function privateV4(ip: string): boolean {
 /** An IPv6 address as its eight 16-bit groups, "::" expanded and a dotted IPv4 tail read; null
  *  when it is not one. Reading the groups, never the spelling, is the point: the URL parser
  *  writes [::ffff:127.0.0.1] as ::ffff:7f00:1, which a prefix test on the text let through as
- *  a public address (the 0.11 re-score, 2026-10-13). */
+ *  a public address. */
 export function v6Groups(ip: string): number[] | null {
   let s = ip.toLowerCase();
   const zone = s.indexOf("%");

@@ -105,7 +105,7 @@ export function registerMediaIpc(): void {
 }
 
 /**
- * ONCE MORE UNDER THE CURRENT IDS (0.13.0-rc.6, his preset 24): a Library play or a preset save
+ * ONCE MORE UNDER THE CURRENT IDS (0.13.0-rc.6): a Library play or a preset save
  * whose id its server answered as gone (a re-minted library, upnpBrowser's ObjectGoneError) goes
  * again with the same album's and track's current ids, found by a rebuild of that server's index
  * (mediaIndex.currentIdFor); with none found the refusal stands, and the renderer says so.

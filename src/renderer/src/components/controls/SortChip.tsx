@@ -45,7 +45,7 @@ export function SortChip<T extends string>({
           <div
             className={cx(
               // 224 px: the longest labels ("Duration (longest first)") and the hint each fit one
-              // line (at 192 the hint left "it" alone on a second, his eye on 0.13.0-rc.4)
+              // line (at 192 the hint left "it" alone on a second, 0.13.0-rc.4)
               "absolute right-0 top-full mt-1.5 z-30 w-56",
               POPOVER_CARD,
               "p-1.5 space-y-0.5",

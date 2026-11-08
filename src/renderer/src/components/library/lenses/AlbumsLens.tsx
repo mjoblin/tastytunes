@@ -76,9 +76,9 @@ let albumsMem: {
   scroll: number;
 } = { genre: null, decade: null, dr: null, format: null, played: null, filter: "", scroll: 0 };
 
-/** The queue write's cap, shared by Play these and the album selection bar (user
- *  call, 2026-09-01 / 2026-09-02): queue writes are one call per track with no
- *  progress affordance, so no gesture may hand the queue fifty albums. */
+/** The queue write's cap, shared by Play these and the album selection bar: queue
+ *  writes are one call per track with no progress affordance, so no gesture may
+ *  hand the queue fifty albums. */
 
 /** Past this many tiles the grid windows its rows, cards (useCardGrid's threshold) and lines. */
 const WINDOW_TILES_ABOVE = WINDOW_CARDS_ABOVE;
@@ -269,8 +269,8 @@ export function AlbumsLens({
   // since 2026-09-13) over the tiles shown, keyed by nodeKey
   const tileKeys = useMemo(() => tiles.map((t) => nodeKey(t.node)), [tiles]);
 
-  // THE GRID SCROLLS ITS OWN COLUMN under a toolbar that stays put (user, 2026-10-11: "the
-  // filters/etc at the top are not pinned like they are for tracks"), the Tracks lens's frame:
+  // THE GRID SCROLLS ITS OWN COLUMN under a toolbar that stays put (the filters at the top
+  // were not pinned as the Tracks lens's are), the Tracks lens's frame:
   // the toolbar on the bare ground, the scroller's top edge the cut, no band of its own (a
   // sticky bar needs a background, and a band over the ambient wash read as a seam, the
   // History screens' lesson). The scroller spans the page's padding, so the cards' hover glow
@@ -302,7 +302,7 @@ export function AlbumsLens({
     setSelected: setSelA,
     rowClick: tileClick,
   } = useRowSelection({ keys: tileKeys });
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): one Tab stop, the arrows through the rows or the
+  // FROM THE KEYBOARD (0.14.0): one Tab stop, the arrows through the rows or the
   // cards, Enter opens the album, "." its More menu; a windowed list renders the current one
   const keys = useListKeys({
     count: tiles.length,
@@ -432,13 +432,13 @@ export function AlbumsLens({
       <div className="flex items-start gap-3 pb-3 shrink-0">
         <div className="flex-1 min-w-0">
           {/* one row: filter, partition, then the two facet PICKERS.
-              Genre joined Decade as a PickerPill (user, 2026-08-31): real
+              Genre joined Decade as a PickerPill: real
               tag data made the chip rail read as overwhelm — dozens of
               genres spending rows — and the bounded picker already owned
               the same job for decades. The rail pattern retired with it. */}
           <div className={`flex flex-wrap items-center ${GAP_BETWEEN}`}>
-            {/* FILTER FIRST, on the LEFT — the lens sub-row rule (user
-                call 2026-08-16, matching the Artists lens): text filter,
+            {/* FILTER FIRST, on the LEFT — the lens sub-row rule
+                (matching the Artists lens): text filter,
                 then the partition, then the facets; the sort chip sits
                 alone on the right. This filter used to sit right, beside
                 the sort chip — the one text filter in the app next to a
@@ -477,8 +477,8 @@ export function AlbumsLens({
                 value={mem.genre}
                 onChange={(genre) => setMem({ genre })}
               />
-              {/* the DR facet appears with the first analyzed album (user,
-                2026-09-01: "show me all my DR13") */}
+              {/* the DR facet appears with the first analyzed album, so
+                every album at one DR is a click away */}
               <PickerPill
                 id="format"
                 neutral="Format"

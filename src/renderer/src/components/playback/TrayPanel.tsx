@@ -185,8 +185,8 @@ export function TrayPanel(): React.JSX.Element {
 
   const meta = deriveNowPlaying(playState, nowPlaying);
   // the three lines keep the app's order everywhere: title, then artist (the
-  // song, on radio), then album. The user tried the song on top for radio and
-  // preferred the station there (2026-09-10): the station is what the panel is
+  // song, on radio), then album. The song on top was tried for radio, and the
+  // station read better there: the station is what the panel is
   // tuned to, and a song that did not need two lines left a gap. The song line
   // is the one that wraps.
   const lines = { title: meta.title, second: meta.subtitle, third: meta.album };
@@ -285,9 +285,8 @@ export function TrayPanel(): React.JSX.Element {
             move when the state changes. The faces used to carry their own
             min-height mirroring the header, but the live header grew with its
             content (a wrapped radio song), so switching streamers lifted the
-            tabs row a few pixels while the connect attempt showed (user,
-            2026-09-10). One number here, not a height per face; S8 and S75
-            measure it. */}
+            tabs row a few pixels while the connect attempt showed. One
+            number here, not a height per face. */}
         <div data-tray-top className="relative shrink-0 h-[138px] flex flex-col">
           {offline ? (
             <TrayOffline phase={connection.phase} host={deviceName} />
@@ -319,12 +318,12 @@ export function TrayPanel(): React.JSX.Element {
                     {/* min-heights keep the lines occupying space through the brief
                   metadata gap on a track change, so nothing shifts. Every line
                   shows its start, scrolls once when it changes, and carries its
-                  full text as a tip when it overflows (0.8.0, a user whose
-                  station's artist and song "very often" did not fit); on radio
+                  full text as a tip when it overflows (0.8.0: a station's artist
+                  and song often did not fit); on radio
                   the song line may wrap to two, an ellipsis and the tip past that. */}
                     {/* The title sizes to its TEXT (no flex-1) and shrinks only when
                   it overflows, so the heart follows the title rather than the
-                  column's far edge (user, 2026-09-10: flex-1 had parked it there). */}
+                  column's far edge (flex-1 had parked it there). */}
                     <div className="flex items-center gap-1.5 min-h-[17px]">
                       <ScrollOnce
                         text={active ? (lines.title ?? " ") : "Nothing playing"}
@@ -586,7 +585,7 @@ export function TrayPanel(): React.JSX.Element {
                 13px they collapse into something that looks like a ✕. */}
             {density === "detailed" ? <Rows4 size={13} /> : <Rows2 size={13} />}
           </ViewChip>
-          {/* THE STREAMER (0.8.0, a two-streamer household's ask): the bar's
+          {/* THE STREAMER (0.8.0, for a two-streamer household): the bar's
               switcher at panel scale, the same glyph and the same list, shown
               only when there is more than one streamer to choose from. Here in
               the tabs row with the other square controls: switching is a
@@ -616,9 +615,8 @@ export function TrayPanel(): React.JSX.Element {
             // scrollbar-gutter STABLE: the 4px tray scrollbar is the panel's
             // right gutter by design, but without the reservation only tabs
             // tall enough to scroll paid it — a short tab's rows sat 4px
-            // wider and the right-aligned column jumped as you switched tabs
-            // (user, 2026-08-04). Same idiom as the main window's list
-            // screens; S8 asserts one row right-edge across tabs.
+            // wider and the right-aligned column jumped as you switched tabs.
+            // Same idiom as the main window's list screens.
             "relative flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] pl-3 pr-2 pt-1.5 pb-2",
             // Rhythm belongs to the FLOATING skin: detailed rows are ringed
             // cards and need air between them. Compressed rows are the flat
@@ -746,7 +744,7 @@ function TrayOffline({ phase, host }: { phase: string; host: string | null }): R
     <div
       data-tray-offline={busy ? "connecting" : "disconnected"}
       // Fills the panel's one fixed top box (data-tray-top), so it cannot
-      // disagree with the header it replaces. S8 and S75 measure it.
+      // disagree with the header it replaces.
       className="relative flex-1 min-h-0 flex items-center gap-3.5 px-4"
     >
       <div
@@ -800,7 +798,7 @@ function TrayStandby({
       // moves when it wakes or sleeps. A panel that resizes its own body on a
       // state change makes the list under it jump, which is the thing you
       // notice and can't unnotice. Content is centred in the space rather than
-      // padded to fill it, which keeps the lines tight. S8 measures it.
+      // padded to fill it, which keeps the lines tight.
       className="relative flex-1 min-h-0 flex items-center gap-3.5 px-4"
     >
       <button

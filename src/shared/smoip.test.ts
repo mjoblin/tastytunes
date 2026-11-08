@@ -19,7 +19,7 @@ describe("cdToc: a disc's table of contents", () => {
 describe("cdReleaseId", () => {
   it("reads the release from a Cover Art Archive address and from no other picture", () => {
     expect(cdReleaseId(ART)).toBe("d53751bc-0595-4a60-8425-d9a19478fb55");
-    expect(cdReleaseId("http://192.168.50.45/art/7.jpg")).toBeNull();
+    expect(cdReleaseId("http://192.168.1.45/art/7.jpg")).toBeNull();
   });
 });
 

@@ -181,8 +181,7 @@ const num = (v: unknown, fallback: number): number =>
 
 /** THE MAP'S WIDTH IS THE PICTURE. The 38° field is the wall's, at 16:9, where the whole
  *  range fits across; a squarer canvas (the Now Playing tile) keeps that horizontal field
- *  and opens the vertical one to match, rather than cropping the ends of the range (the
- *  user, 2026-09-12: "contour currently doesn't fit in the square tile"). */
+ *  and opens the vertical one to match, rather than cropping the ends of the range. */
 const FOV_WIDE = 38;
 const WIDE_ASPECT = 16 / 9;
 const HALF_WIDTH_TAN = Math.tan(((FOV_WIDE / 2) * Math.PI) / 180) * WIDE_ASPECT;
@@ -337,7 +336,7 @@ export class Survey implements ThreeScene {
     if (!tex) return;
     const seconds = this.seconds(f, tex);
     ctx.textBaseline = "alphabetic";
-    // (the minute marks along the near edge are gone: the user found them meaningless here)
+    // (the minute marks along the near edge are gone: they meant nothing here)
 
     // the lines as FLAGS along the front edge: each planted at its time on a post, the one
     // being heard gold and larger, the past fading behind the now-line (no future flags); a
@@ -350,8 +349,8 @@ export class Survey implements ThreeScene {
       ctx.textBaseline = "alphabetic";
       const near = lines
         .map((ln, i) => ({ ln, i }))
-        // the lines already sung and the one being heard; the future's flags are gone (the user:
-        // "their behavior is still too confusing in this screen")
+        // the lines already sung and the one being heard; the future's flags are gone (their
+        // behavior was too confusing here)
         .filter(
           ({ ln, i }) =>
             ln.text && ln.t - f.position > -40 && (ln.t <= f.position + 0.05 || i === index),
@@ -370,8 +369,8 @@ export class Survey implements ThreeScene {
         // the flag is laid out ONCE at its full size, the size it reaches when heard: wrapped
         // there it never reflows as it grows, and its footprint for the collision test is its
         // final one, so a neighbour that would meet it is held back from the start instead of
-        // popping in and out while it grows (the user: the future lyrics "move and jerk around
-        // a lot when the current lyric zooms in"). A long line wraps to two, never an ellipsis
+        // popping in and out while it grows (the future lines jerked around as the current one
+        // zoomed in). A long line wraps to two, never an ellipsis
         const full = fitText(ctx, ln.text, {
           maxWidth: w * 0.26,
           maxPx: body,
@@ -390,7 +389,6 @@ export class Survey implements ThreeScene {
         const width = (full.width * footPx) / full.px;
         // a flag planted near the song's end would print past the frame: its text is pinned
         // so its full-size right edge stays inside the margin, the post still at its time
-        // (the user: "the lyrics near the end of the song can go off screen")
         const left = Math.min(top.x + 5, w - 28 - full.width);
         if (
           g < 0.5 &&
@@ -405,7 +403,7 @@ export class Survey implements ThreeScene {
         drawn.push({ x: left, right: left + width + 6, y: top.y });
         // the line being heard keeps its approach alpha under the gold: judged as past the
         // instant it began, it dropped to 0.14 and climbed back with the gold (the same dip
-        // the user saw in Terrain)
+        // Terrain had)
         const ahead = d >= 0 || i === index;
         const dist = ahead ? clamp(1 - Math.max(0, d) / 90) : clamp(1 + d / 40);
         const alpha = (ahead ? 0.2 + 0.35 * dist : 0.14 * dist) * (1 - g) + g;

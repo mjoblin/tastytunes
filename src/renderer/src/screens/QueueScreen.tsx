@@ -169,12 +169,12 @@ let discView: "disc" | "media" = "disc";
  * The Queue screen: the streamer's Media Library queue, or, while the CD is the source, the
  * disc's tracks (0.10.0), with the parked queue a click away in either direction.
  *
- * ONE SWITCH IN ONE PLACE (user, 2026-09-26: two buttons in two places were "jarring" to click
+ * ONE SWITCH IN ONE PLACE (two buttons in two places were jarring to click
  * between): both views put the same segmented control in the header as its second row,
  * left-aligned with the title, the Device screen's tabs' place. The headers are one height, so
  * neither the switch nor the list below moves between the views, and the Media Library
  * header's toolbar, already full at the default window width, gives up nothing. The header
- * owns the rhythm (user, 2026-09-26: the switch sat too far under the title as a row after
+ * owns the rhythm (the switch sat too far under the title as a row after
  * the header, its padding stacked on the title's): a small gap between the rows, the header's
  * own bottom padding under the switch. With no CD the header is its one row, as it always was.
  * An empty Media Library queue leaves nothing to switch to: its option is dimmed and the disc
@@ -424,8 +424,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
   });
   const leanRange: [number, number] = [leanWin.first, leanWin.last];
 
-  // FROM THE KEYBOARD (0.14.0, his K1 to K9): the Queue one Tab stop; up and down through the
-  // rows (all four in the cards; album by album in the Albums view, his settled call); Enter
+  // FROM THE KEYBOARD (0.14.0): the Queue one Tab stop; up and down through the
+  // rows (all four in the cards; album by album in the Albums view); Enter
   // jumps to a track as its click does, "." its More menu, Delete removes it (or the selection)
   // with Undo, and Option with up or down moves it, dropped on Option's release as ONE change
   const groups = useMemo(() => (albums ? albumRuns(items) : []), [albums, items]);
@@ -531,7 +531,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
   });
   useEffect(() => followCurrent(), [playId, followQueue, cards, presetGap, filter]);
 
-  // THE LANDING ANIMATES (user, 2026-08-27 — an instant re-order after the
+  // THE LANDING ANIMATES (an instant re-order after the
   // line model read as a teleport): a FLIP pass flies every displaced row
   // from its old rect to its new one. WAAPI (el.animate), not style
   // mutation, so the streamer's re-announce mid-flight can't snap a row out
@@ -704,8 +704,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
               {clearConfirm.popover}
             </div>
             <div className={`flex items-center ${GAP_WITHIN}`}>
-              {/* Rows, Cards or Albums, and the card grid's size, gap and Fill rows (0.14.0, his
-                  D5 pick on "View Options": the menu wherever a Rows or Cards button was) */}
+              {/* Rows, Cards or Albums, and the card grid's size, gap and Fill rows (0.14.0,
+                  in "View Options": the menu wherever a Rows or Cards button was) */}
               <ViewOptions kind="queue" />
               <HeaderChip
                 data-tip="Scroll to the current track"
@@ -958,7 +958,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
               batch and single drags hand off to a cursor-anchored ghost —
               the overlay's grab offset would park the chip ON TOP of the
               target row, and the glow must stay visible (the two-state
-              model, ruled with the user 2026-08-30). */}
+              model). */}
             <DragOverlay dropAnimation={null} modifiers={[chipToCursor]}>
               {(() => {
                 if (!dragBatch || navHover != null) return null;
@@ -1002,8 +1002,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
 }
 
 /**
- * The album-grouped queue view (2026-08-24, a repeated forum ask: "cover
- * once, tracks beneath, remove the album by its cover"). Groups are
+ * The album-grouped queue view (2026-08-24): the cover once, its tracks
+ * beneath, the album removed by its cover. Groups are
  * CONTIGUOUS runs of one album — queue order stays authoritative, so the
  * same album queued twice shows twice. Albumless entries render as plain
  * ungrouped rows. A reading-and-pruning view: drag reorder stays with the
@@ -1329,7 +1329,7 @@ async function restoreQueueOrder(prev: number[]): Promise<void> {
  * dnd-kit places an overlay at the dragged node's rect plus the delta, so
  * grabbing a row's far side parked the 320px chip far from the pointer —
  * and the rail ghost uses the same +14/+10, so crossing onto the rail never
- * makes the chip jump (user, 2026-08-30).
+ * makes the chip jump.
  */
 const chipToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform }) => {
   if (draggingNodeRect == null || !(activatorEvent instanceof MouseEvent)) return transform;
@@ -1350,7 +1350,7 @@ const chipToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform })
 /** Rows an undo just put back: the queue id each landed under → the slot it
  *  was restored to. A restore is an append at the tail plus a move into
  *  place — TWO announces — and washing on "row just appeared" lit the tail
- *  off-screen instead of the landing (user, 2026-08-28: three tracks came
+ *  off-screen instead of the landing (three tracks came
  *  back, one brief wash). The wash instead fires when the queue shows the id
  *  AT its restored position, from whichever side wins the announce-vs-IPC
  *  race; entries expire quietly (a filtered view may never render the row). */
@@ -1434,7 +1434,7 @@ interface QueueItemProps {
   /** A queue drag is live: rows take no pointer events, so hover fills,
    *  card grows and hover-revealed buttons stay dark under a passing drag
    *  — mid-drag the line and the drop targets are the only affordances
-   *  (the nav rail's rule, applied at home; user, 2026-08-30). dnd-kit is
+   *  (the nav rail's rule, applied at home). dnd-kit is
    *  unaffected: its tracking is window-level and rect-based. */
   dragLive?: boolean;
 }
@@ -1524,7 +1524,7 @@ function QueueRow({
         // a contiguous run reads as ONE block: the fill continues and the
         // border is drawn by the data-sel-run span on the run's outer
         // boundary only (overlapping per-row rings doubled up and read
-        // brighter between neighbors — user, 2026-08-27)
+        // brighter between neighbors)
         selected && "bg-veil2",
         selected && !selStart && "rounded-t-none",
         selected && !selEnd && "rounded-b-none",
@@ -1647,7 +1647,7 @@ function QueueCard({
   listItem,
 }: QueueItemProps): React.JSX.Element {
   const leanCard = useLeanQueue();
-  // in the keyed list a card is reached with the arrows and moved with Option (K1, K8): the
+  // in the keyed list a card is reached with the arrows and moved with Option: the
   // sortable's own Tab stop and its buttons' leave the Tab order
   const inList = useInListKeys();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -1740,7 +1740,7 @@ function QueueCard({
 
           {/* selection is a STATUS on the art (the card-chip grammar): the
               ring alone whispered under the artwork and moved selections
-              were kept without anyone noticing (user, 2026-08-28) */}
+              were kept without anyone noticing */}
           {selected && (
             <span
               data-sel-check

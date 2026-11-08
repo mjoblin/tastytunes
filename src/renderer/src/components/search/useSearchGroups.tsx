@@ -1,6 +1,6 @@
 // THE SEARCH SCREEN'S FIVE CATEGORIES, AS DATA (moved out of SearchScreen.tsx as they were, 0.16.0's
-// tidy): the library, presets, playlists, favorites and radio, each with its rows; the scopes the
-// design pass's one Search will work from.
+// tidy): the library, presets, playlists, favorites and radio, each with its rows; the scopes a
+// later unified Search will work from.
 import { useMemo } from "react";
 import { MoreHorizontal, Play } from "lucide-react";
 import type { Favorite, MediaNode, Playlist, RadioStation } from "@shared/model";
@@ -85,17 +85,17 @@ export function useSearchGroups({
   const { tuningUrl, play: playRadio } = useStationTuning(radioPlayingName);
 
   // ---- The five categories, as data. Every group renders from this list, so a
-  // ---- chip, a count, a cap and a sort can't disagree about what a category
-  // ---- is. The ORDER is the NAV RAIL'S (user, 2026-07-25): one spatial habit
-  // ---- for the whole app, so scanning results reuses the muscle memory the
-  // ---- sidebar built. Since the rail became user-reorderable (2026-07-26)
-  // ---- that means the USER'S order, read live below — the rationale transfers
-  // ---- wholesale, and a rail someone deliberately arranged is a stronger
-  // ---- claim on their muscle memory than our default ever was. The literal's
-  // ---- own order is now just a starting point for that sort.
-  // ---- (Radio used to be defended as "last anyway, which suits the group that
-  // ---- arrives late". It isn't a rule: if the user puts Radio first, Radio
-  // ---- goes first, and its own pending state already handles arriving late.)
+  // ---- chip, a count, a cap and a sort can't disagree about what a category is.
+  // ---- The ORDER is the NAV RAIL'S: one spatial habit for the whole app, so
+  // ---- scanning results reuses the muscle memory the sidebar built. Since the
+  // ---- rail became user-reorderable (2026-07-26) that means the USER'S order,
+  // ---- read live below — the rationale transfers wholesale, and a rail someone
+  // ---- deliberately arranged is a stronger claim on their muscle memory than
+  // ---- our default ever was. The literal's own order is now just a starting
+  // ---- point for that sort.
+  // ---- (Radio used to be kept last, as the group that arrives late. It isn't a
+  // ---- rule: if the user puts Radio first, Radio goes first, and its own
+  // ---- pending state already handles arriving late.)
 
   const built: Array<SearchGroup<SearchRow>> = [
     {

@@ -43,7 +43,7 @@ import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
  *
  * THE SLIDER IS THE PLAYHEAD, as on every other surface. It used to be a
  * hover-revealed VOLUME slider in the time cell, which read as a seek bar and
- * wasn't (user call, 2026-08-04) — volume is now the tray panel's arc at mini
+ * wasn't — volume is now the tray panel's arc at mini
  * scale, plus the wheel anywhere on the window and the arrow keys.
  */
 export function MiniPlayer(): React.JSX.Element {
@@ -131,7 +131,7 @@ export function MiniPlayer(): React.JSX.Element {
         {/* Ambient album-art wash behind the strip — same treatment as the main
             window, off the same decoded-art value so it crossfades between
             covers instead of blanking mid-download.
-            GATING (user intent, 2026-07-24): 'off' means OFF EVERYWHERE — turn
+            GATING: 'off' means OFF EVERYWHERE — turn
             ambient art off and the mini has none either, which is the whole
             point of the setting. 'now-playing' DOES show it here: that mode
             scopes the wash to the now-playing surface rather than disabling it,

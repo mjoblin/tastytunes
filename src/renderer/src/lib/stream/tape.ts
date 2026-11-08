@@ -3,7 +3,7 @@
  * a little at a time. A file arrives in pieces (a FLAC frame, a run of WAV samples); each piece is
  * appended here, every measure (a Sink) reads what it can, and what no measure can still ask for
  * is dropped, so memory stays flat whatever the track's length: a 12-minute 24/192 file decoded
- * this way peaks near 270 MB where the whole file took 3.9 GB (ops decoder-probe).
+ * this way peaks near 270 MB where the whole file took 3.9 GB (measured).
  *
  * It holds each channel as it came (Float32, the decoder's own values) and THE MIX the windowed
  * measures read: the channels summed in channel order, at full precision (Float64), the sum each

@@ -19,7 +19,7 @@ import { useInListKeys } from "@/hooks/useListKeys";
  * CSS hover with a 0.45s delay, and a click that opens a menu leaves the
  * pointer parked on the button: the menu's backdrop takes the hover, the menu
  * closes, the hover resumes, and "More actions" appears for an interaction
- * that is over (user, 2026-09-11: "oddly showing when I don't expect it to").
+ * that is over.
  * Quiet is cleared by real movement, measured from the click, not by a
  * pointer-leave, which a backdrop coming and going also fires.
  */
@@ -34,7 +34,7 @@ export function RowAction({
   /** This action's own menu or popover is open: shown, and LIT, as a picker
    *  pill or a header chip is while theirs is open — the pressed look belongs
    *  to the control that owns the menu, not to whichever button the pointer
-   *  happened to be over (user, 2026-09-12). */
+   *  happened to be over. */
   open,
   size = 14,
 }: {
@@ -48,7 +48,7 @@ export function RowAction({
   size?: number;
 }): React.JSX.Element {
   const [quietFrom, setQuietFrom] = useState<{ x: number; y: number } | null>(null);
-  // in a keyed list the row is reached with the arrows and its actions through More (K1, K4)
+  // in a keyed list the row is reached with the arrows and its actions through More
   const inList = useInListKeys();
   return (
     <button

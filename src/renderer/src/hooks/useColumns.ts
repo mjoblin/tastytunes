@@ -6,8 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
  *  A CALLBACK REF, not an effect over a ref: on a first visit every section
  *  mounts empty, before the record has loaded, so an effect that looked for the
  *  grid once found nothing and the count stayed at one — a section then showed
- *  two albums side by side and offered the rest as "more" (user, 2026-09-11:
- *  "why did I have to click that? there was already room to show those"). The
+ *  two albums side by side and offered the rest as "more" with room to spare. The
  *  ref runs whenever the grid comes or goes, so a grid that arrives with the
  *  data is measured the moment it exists. (History's Rediscover shelves, moved here
  *  in 0.13.0 when the Library's Recently added shelf became its second reader.) */

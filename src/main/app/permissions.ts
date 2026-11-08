@@ -1,7 +1,7 @@
 import { session } from "electron";
 
 /**
- * WHAT A PAGE MAY ASK FOR, DENIED BY DEFAULT (0.12.0-rc.2, the 0.11 re-score). Chromium grants a
+ * WHAT A PAGE MAY ASK FOR, DENIED BY DEFAULT (0.12.0-rc.2). Chromium grants a
  * page's permission requests unless the app says otherwise, so the app says: the copy buttons'
  * clipboard writes and display mode's fullscreen, nothing else (no camera, microphone, location,
  * notifications through the page, MIDI, devices). The windows load only the app's own pages, so

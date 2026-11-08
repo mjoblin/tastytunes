@@ -72,8 +72,8 @@ export interface RecentCandidate extends RecentListRef {
 const CANDIDATES_MAX = 60;
 
 /**
- * The folders the reader may choose the list from, in Settings › Libraries (his ask, 2026-10-25:
- * the control should be there, not only in a folder's ⋯): the server's top-level folders and those
+ * The folders the reader may choose the list from, in Settings › Libraries (the control belongs
+ * there, not only in a folder's ⋯): the server's top-level folders and those
  * under a Music, Audio or Media Library, where the lists live, searched in findRecentList's order.
  * Albums and artists are not folders to choose. None for the streamer's USB drive.
  */

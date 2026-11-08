@@ -499,7 +499,7 @@ function ensurePanel(): BrowserWindow {
     // ordered in while the app's own main window is full screen is not
     // overlaid — macOS promotes it to a full-screen tile of its own: the panel
     // came up 1728×1084 in a brand-new Space when the icon was clicked from
-    // display mode (user report, 2026-08-15; measured: isFullScreen true, a
+    // display mode (measured 2026-08-15: isFullScreen true, a
     // new Space id). With Primary cleared it is a plain auxiliary overlay,
     // 380×560, on the Space it was summoned from.
     fullscreenable: false,
@@ -510,7 +510,7 @@ function ensurePanel(): BrowserWindow {
     // window calls activateIgnoringOtherApps BEFORE ordering the window in,
     // and app activation is what makes macOS jump to "a Space with open
     // windows for the application" — i.e. every tray click yanked the user to
-    // whichever desktop the main window lived on (reported 2026-08-15). A
+    // whichever desktop the main window lived on. A
     // panel gives macOS nothing to switch for, and dismissing it leaves the
     // app you were in frontmost, Spotlight-style. The type also carries
     // all-Spaces + over-fullscreen in its collection behaviour, which is what
@@ -611,10 +611,9 @@ function showPanel(): void {
   //
   // A transparent window that is composited before its renderer has painted
   // is FULLY SEE-THROUGH, so on Windows the panel appeared for an instant,
-  // vanished, and then faded in under the OS's own show animation — reported
-  // from real use 2026-08-04. macOS doesn't show it (its show is synchronous
-  // with the first frame), so this stays scoped rather than changing a
-  // behaviour that is already right.
+  // vanished, and then faded in under the OS's own show animation. macOS
+  // doesn't show it (its show is synchronous with the first frame), so this
+  // stays scoped rather than changing a behaviour that is already right.
   //
   // Opacity, not a deferred show(): the window has to be shown to paint, and
   // deferring the show is what the 900ms retry below already has to work

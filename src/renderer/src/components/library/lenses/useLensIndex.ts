@@ -38,7 +38,7 @@ export interface LensIndex {
   albums: MediaNode[];
   tracks: MediaNode[];
   /** The same album (its title and artist) is in more than one library: only then does a card
-   *  say which library it is from (his ask, 2026-10-22: with two libraries every card said so). */
+   *  say which library it is from (with two libraries every card said so). */
   inTwoLibraries(a: Pick<MediaNode, "title" | "albumArtist" | "artist">): boolean;
   /** An album's server and its lowercased title: the albums that share one claim one title. */
   albumKey(a: Pick<MediaNode, "serverUdn" | "title">): string;
@@ -49,7 +49,7 @@ export interface LensIndex {
    *  column (0.13.0, so two copies and two artists' albums of one title keep their own). */
   tracksOf(a: MediaNode): MediaNode[];
   /** The chip an album's card wears to say WHICH copy it is, or undefined: its library when the
-   *  same album is in another one too (his ask, 2026-10-22), and which copy it is when another
+   *  same album is in another one too, and which copy it is when another
    *  copy of it is in the same library (whichCopy: what tells it from the others, else "Copy 2";
    *  0.13.0-rc.4). `formatShown` when the card's format line already says the format. One rule
    *  for the Albums lens, the Artists lens, the artist page and Favorites. */

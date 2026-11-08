@@ -139,11 +139,11 @@ export interface AppSettings {
   /** Preset grid: stretch cards to fill each row (true) or keep them exact-size (false). */
   presetFillRows: boolean;
   /** The Library's album cards carry a format line under their names: the status lamp's glyph,
-   *  the format, and DR once measured (0.13.0-rc.4, his picks on "Card details"; on by default,
+   *  the format, and DR once measured (0.13.0-rc.4; on by default,
    *  for listeners who choose by format). */
   albumCardFormat: boolean;
   /** The Tracks view's cards carry the same line, each track's own format and DR, with a switch
-   *  of its own (0.13.0-rc.4, his note on "View Options"). */
+   *  of its own (0.13.0-rc.4). */
   trackCardFormat: boolean;
   /** Now Playing content placement. */
   nowPlayingAlignH: AlignH;
@@ -190,7 +190,7 @@ export interface AppSettings {
   queueLayout: QueueLayout;
   presetsLayout: ScreenLayout;
   libraryLayout: ScreenLayout;
-  /** The Tracks view's own Rows or Cards (0.13.0-rc.4, his note on "View Options": albums and
+  /** The Tracks view's own Rows or Cards (0.13.0-rc.4: albums and
    *  tracks keep separate display settings, with a button to match the other). An older file
    *  without it takes libraryLayout, the choice the Tracks view followed before (main's load). */
   lensTracksLayout: ScreenLayout;
@@ -198,11 +198,11 @@ export interface AppSettings {
   librarySort: "server" | "title" | "artist" | "year";
   librarySortReversed: boolean;
   /**
-   * VIEW DEFAULTS PERSIST (ruled 2026-08-06): a control that shapes how a
+   * VIEW DEFAULTS PERSIST: a control that shapes how a
    * screen presents — sort, partition, layout, a hide-this-kind toggle — is
    * the user naming their preferred default view, so it lives here. What
    * stays session-only is workspace state: filter text, selections, scroll,
-   * queries. The five below joined under that ruling; anything similar added
+   * queries. The five below joined under that rule; anything similar added
    * later belongs here too.
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
@@ -223,7 +223,7 @@ export interface AppSettings {
    *  A-Z rail, the most played first, or the newest arrival first (an artist's newest album). */
   lensArtistsSort: "name" | "plays" | "added";
   lensArtistsSortReversed: boolean;
-  /** The artist page's album order (0.13.0-rc.4, a user's question: the page's order, newest
+  /** The artist page's album order (0.13.0-rc.4: the page's order, newest
    *  first, was hidden behind the year each card cut off): by year, newest first, or by title. */
   artistPageSort: "year" | "title";
   artistPageSortReversed: boolean;
@@ -297,7 +297,7 @@ export interface AppSettings {
    *  snaps back to. */
   nowPlayingArtShare: number | null;
   /** The picture's size in the Library's album and artist headers, dragged from its corner
-   *  (0.11.0, his ask after the artist page): one size for both, so moving between an artist
+   *  (0.11.0, after the artist page): one size for both, so moving between an artist
    *  and their albums keeps the picture still, and apart from Now Playing's, whose room is the
    *  whole hero (a fit, not a preference). Pixels, clamped at draw time to the header's cap, so
    *  a size dragged on a large monitor comes back there and still fits a small window. Null is
@@ -328,20 +328,20 @@ export interface AppSettings {
   displayDrops: "loose" | "normal" | "strict";
   /** A finish over every display-mode scene: plain, or a cathode glass (scanlines, a slight
    *  curve, phosphor glow, a vignette). Taste, so it is in-mode; never on the picker's tiles.
-   *  Cathode by default (user, 2026-09-07). */
+   *  Cathode by default. */
   displayFinish: "plain" | "cathode";
   /** The Cathode glass: how much the picture bows (deep is about twice a real tube, gentle
    *  about life), and whether it overscans so the picture meets the frame at the edges and
    *  only the corners fall behind the glass. In-mode, beside Finish. */
   displayCathodeCurve: "gentle" | "deep";
   displayCathodeFill: boolean;
-  /** The wall's corners (2026-09-15, user: they can "kill the mood of a fullscreen display"):
+  /** The wall's corners (they can spoil the mood of a fullscreen display):
    *  the track's name at the bottom left and the time at the bottom right, each its own
    *  switch, on by default; a shelf display often wants the clock without the title. In-mode,
    *  beside Finish. The tile has no corners. */
   displayCornerTitle: boolean;
   displayCornerClock: boolean;
-  /** The glass's flicker (2026-09-15, user: an accessibility concern): the cathode finish
+  /** The glass's flicker (an accessibility concern): the cathode finish
    *  breathes a mains hum into the brightness at ten hertz, three percent either way, which
    *  sits in the band photosensitive people are warned about; its own switch, on by default,
    *  off already under the system's reduced-motion setting. In-mode, in the Finish row. */
@@ -376,7 +376,7 @@ export interface AppSettings {
   artistInfo: boolean;
   /** Fill covers the media server doesn't have (MusicBrainz identifies the
    *  album, the Cover Art Archive supplies the image). Its own switch,
-   *  independent of the context panel — the user's call, 2026-08-24. */
+   *  independent of the context panel. */
   albumArtLookup: boolean;
   /**
    * Look stations up in the radio-browser.info directory. OFF means the app
@@ -488,7 +488,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mediaKeys: true,
   volumeLimitPercent: null,
   notifications: true,
-  // ON by default (user call, 2026-08-03, once the panel feature-completed):
+  // ON by default (once the panel feature-completed):
   // the panel is the app's reach-without-a-window face, and a default-off
   // switch buried mid-list meant most installs would never meet it. Existing
   // installs that TOUCHED the toggle keep their stored value; only settings
@@ -592,7 +592,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mediaIndexAuto: true,
   settingsTab: "appearance",
   trayTab: "queue",
-  // COMPRESSED by default (user call, 2026-08-03): the panel's job is a
+  // COMPRESSED by default: the panel's job is a
   // glance's worth of list in a corner of the screen, and the flat rows fit
   // ~11 where the floating ones fit 6. The detailed skin stays one chip away.
   trayRowDensity: "compressed",

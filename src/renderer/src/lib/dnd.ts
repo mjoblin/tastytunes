@@ -29,7 +29,7 @@ export const lockVertical = (t: Transform | null): Transform | null => (t ? { ..
  * so the last row turned into a middle one a frame after arriving: it gained a bottom
  * border whose colour faded in from the default (the white text colour) through the row's
  * transition-colors, a white line flashing under the last playlist track on every visit
- * (user, 2026-10-06), and a hairline under it once settled. Every DndContext passes this.
+ * and a hairline under it once settled. Every DndContext passes this.
  */
 export const DND_ACCESSIBILITY = { container: document.body };
 
@@ -53,7 +53,7 @@ export const ROW_MOTION = [
  * CSS transition. And it stays: a render that hands SortableContext a new array of ids (each of
  * these lists maps its items afresh) stamps `transform 0ms linear` on every item, meant for the
  * frame after a drop, and no later render takes it off. The Queue's and Presets' cards then
- * snapped to their hover size where the Library's grow (his look, 2026-10-30), and the rows'
+ * snapped to their hover size where the Library's grow, and the rows'
  * hover fill snapped too. So the item's own transition (`own`, in place of a transition class)
  * leads and dnd-kit's follows: a property named twice takes its last entry, so `transform`
  * keeps dnd-kit's timing and everything else keeps the item's. A list that can't be dragged

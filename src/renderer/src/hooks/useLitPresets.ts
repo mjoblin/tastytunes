@@ -29,7 +29,7 @@ function urlsMatch(a: string, b: string): boolean {
  *    refreshed, a stream.media.upnp preset will have an is_playing of false,
  *    even if it was playing"), and
  *  - a recall the firmware IGNORES (a preset whose album the server no longer
- *    has) sets the flag and keeps it: his preset 22 read is_playing true while
+ *    has) sets the flag and keeps it: a preset read is_playing true while
  *    another album played (0.15.0-rc.2, 2026-11-08). So the flag lights an album
  *    preset only while what plays has no art or album to compare (mid-recall,
  *    before the words), and a preset main has said came to nothing never lights.
@@ -176,7 +176,7 @@ export function useLitPresets(
       // station is playing: the firmware leaves a recalled station's flag on
       // when another station is streamed by URL (a raw stream carries no
       // radio_id, so the id check above never runs), and the old preset stayed
-      // lit through the whole new station (user, 2026-09-09). A radio preset
+      // lit through the whole new station. A radio preset
       // lights by id or by name, or not at all, once radio metadata is present.
       if (
         p.is_playing === true &&

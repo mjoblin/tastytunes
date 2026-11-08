@@ -1,12 +1,12 @@
 import { albumFormat, formatLabel, type MediaFormat, type MediaNode } from "@shared/model";
 import { fileQuality, type SignalQuality } from "@/lib/format";
 
-/** formatLabel's dot with THIN spaces (his note on "Card details", 2026-10-26: the gap either side
- *  of the dot in "FLAC · 24/96" read large): the card's line is small text, and a word space each
- *  side of the dot split one fact in two. */
+/** formatLabel's dot with THIN spaces (the gap either side of the dot in "FLAC · 24/96" read
+ *  large): the card's line is small text, and a word space each side of the dot split one fact
+ *  in two. */
 const TIGHT_SEP = " · ";
 
-/** What an album card's format line says (0.13.0-rc.4, his picks on "Card details"). */
+/** What an album card's format line says (0.13.0-rc.4). */
 export interface CardFormat {
   /** The status lamp's quality for the album's format: null when unknown or mixed. */
   quality: SignalQuality | null;

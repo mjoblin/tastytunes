@@ -10,10 +10,10 @@ import { Lru } from "@/lib/lru";
 export type Crumb = { id: string; title: string; node?: MediaNode };
 
 // Returning to the Library RESTORES where the last visit left off
-// (positionMemory below) — the T3 "always the front door" rule was reversed
-// 2026-07-24 (user ask); the reset now lives behind re-invoking Library while
-// already here, or the breadcrumb root. Per-folder scroll and filter memories
-// apply while browsing within a visit.
+// (positionMemory below) — the old "always the front door" rule was reversed;
+// the reset now lives behind re-invoking Library while already here, or the
+// breadcrumb root. Per-folder scroll and filter memories apply while browsing
+// within a visit.
 export const scrollMemory = new Map<string, number>();
 // Per-LEVEL filter memory: each folder keeps its own filter for the session
 // (the store's screenFilters.library always holds the current level's).
@@ -44,8 +44,8 @@ export const SEARCH_CRUMB_ID = "__search-results__";
  *
  * Same idiom as the search and lens crumbs, with one difference worth stating: this crumb
  * leads OFF this screen. Without it, arriving from search left you in a browse
- * tree you never navigated into, and back went to the source list — reported
- * as "⌘← takes me to the top of the library".
+ * tree you never navigated into, and back went to the source list (⌘← led to
+ * the top of the library).
  */
 export const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
 /** Each artist page's scroll spot for the session (an album opened from it and Back). */

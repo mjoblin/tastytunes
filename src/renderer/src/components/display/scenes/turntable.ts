@@ -41,7 +41,7 @@ const GROOVE_OUT = 0.955;
 const GROOVE_IN = 0.37;
 const LABEL = 0.33;
 /** The record's radius against the deck's scale: a size up from the arm and the plinth, so it
- *  fills more of the deck (user, 2026-10-06). */
+ *  fills more of the deck. */
 const RECORD = 1.1;
 /** Where the stylus rests for a station, which has no position. */
 const RADIO_SHARE = 0.18;
@@ -154,7 +154,7 @@ export class Turntable implements Scene {
     // the deck comes to the middle
     const sleeve = wide && this.settings.sleeve !== false;
     // R is the deck's scale; the record is a size larger (RECORD) so it fills more of the
-    // plinth (user, 2026-10-06). Out of the wide frame the whole deck is fitted and centered,
+    // plinth. Out of the wide frame the whole deck is fitted and centered,
     // the arm's counterweight and cue lever on the right included (they ran off a tile's
     // edge): from the platter's left edge to the lever is about 2.69 R, from the
     // counterweight's top to the platter's bottom about 2.29 R
@@ -164,7 +164,7 @@ export class Turntable implements Scene {
     const cy = wide ? h * 0.47 : h * 0.48;
     if (sleeve) {
       // the sleeve the record came out of, a 12" sleeve being a touch larger than its
-      // record (user, 2026-10-06: the art read too small beside it), set beside the plinth
+      // record (the art read too small beside it), set beside the plinth
       // and off the frame's left edge when it must be
       const S = Rr * 2.06;
       this.drawSleeve(ctx, f, cx - R * 1.36 - S / 2, cy, S);
@@ -378,8 +378,8 @@ export class Turntable implements Scene {
     // record's edge
     const restAngle = Math.atan2(1, 0.04);
     const ang = grooveAngle + (restAngle - grooveAngle) * this.armRest;
-    // DRAWN AS MACHINED PARTS, NOT PANELS (user, 2026-10-06: "the turntable arm/etc especially
-    // looks a little too much like flat svg boxes"): every part is shaded as the solid it is,
+    // DRAWN AS MACHINED PARTS, NOT PANELS (drawn flat, the arm and the rest read as SVG
+    // boxes): every part is shaded as the solid it is,
     // lit from the room's lamp at the upper left: the tube a cylinder with its highlight on
     // the lamp's side, the counterweight a knurled drum, the bearing a domed cap on a bevelled
     // base, the headshell a tapered plate carrying a cartridge, with a finger lift. The shadow

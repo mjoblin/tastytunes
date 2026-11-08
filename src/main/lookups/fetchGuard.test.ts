@@ -22,7 +22,7 @@ describe("v6Groups", () => {
 describe("privateAddress", () => {
   it("judges IPv4 by its ranges", () => {
     expect(privateAddress("127.0.0.1")).toBe(true);
-    expect(privateAddress("192.168.50.45")).toBe(true);
+    expect(privateAddress("192.168.1.45")).toBe(true);
     expect(privateAddress("10.1.2.3")).toBe(true);
     expect(privateAddress("169.254.1.1")).toBe(true);
     expect(privateAddress("224.0.0.1")).toBe(true);
@@ -30,7 +30,7 @@ describe("privateAddress", () => {
   });
 
   it("judges an IPv4 address carried in IPv6 as that address, in every spelling", () => {
-    // the 0.11 re-score's bypass: the URL parser writes [::ffff:127.0.0.1] this way
+    // a bypass: the URL parser writes [::ffff:127.0.0.1] this way
     expect(privateAddress("::ffff:7f00:1")).toBe(true);
     expect(privateAddress("::ffff:127.0.0.1")).toBe(true);
     expect(privateAddress("0:0:0:0:0:ffff:c0a8:322d")).toBe(true);
@@ -68,9 +68,9 @@ describe("allowed", () => {
   });
 
   it("lets a trusted host on the local network through, and no other", async () => {
-    const nas = (h: string): boolean => h === "192.168.50.101";
-    expect(await allowed(new URL("http://192.168.50.101:9790/aa/1/cover.jpg"), nas)).toBe(true);
-    expect(await allowed(new URL("http://192.168.50.102/x.jpg"), nas)).toBe(false);
+    const nas = (h: string): boolean => h === "192.168.1.101";
+    expect(await allowed(new URL("http://192.168.1.101:9790/aa/1/cover.jpg"), nas)).toBe(true);
+    expect(await allowed(new URL("http://192.168.1.102/x.jpg"), nas)).toBe(false);
   });
 
   it("refuses other schemes and local names", async () => {
@@ -92,7 +92,7 @@ describe("allowed", () => {
 
 describe("localOnly", () => {
   it("is a private address or a name only the local network has", () => {
-    expect(localOnly("192.168.50.101")).toBe(true);
+    expect(localOnly("192.168.1.101")).toBe(true);
     expect(localOnly("10.0.0.4")).toBe(true);
     expect(localOnly("localhost")).toBe(true);
     expect(localOnly("nas.local")).toBe(true);

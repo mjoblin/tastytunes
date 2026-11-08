@@ -12,10 +12,10 @@ import { nameKey } from "@shared/keys";
 // why). One small JSON beside settings.json, an artist's name (lowercased) to their choice, and
 // a folder of the picture files people chose, each copied in under a name made from its bytes, so
 // moving or deleting the original loses nothing. A choice is never replaced but by another, or
-// cleared (decisions/0013). Every other picture yields to it: main's answer for the rows and cards
+// cleared. Every other picture yields to it: main's answer for the rows and cards
 // (ipc/lookups artistPictures) and every window's map of them (artistChoices) both read resolveChoice.
 //
-// EVERY CHOSEN PICTURE KEPT (0.14.0, his word 2026-10-30: "yes, build it, covers too"): a picture
+// EVERY CHOSEN PICTURE KEPT (0.14.0): a picture
 // chosen from Wikipedia, Commons, fanart.tv or an album's cover is copied into the same folder
 // (lookups/choiceCopies), its file named on the choice as `copy`, and drawn from there, so a
 // source that drops or renames it, or an album that leaves the library, changes nothing; it had

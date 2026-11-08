@@ -8,7 +8,7 @@ import {
 import { fmtTime } from "@/lib/format";
 
 /**
- * TWO REGISTERS, split by KIND OF FACT (user call, 2026-09-01):
+ * TWO REGISTERS, split by KIND OF FACT:
  *  - TECHNICAL FORMAT TOKENS — codec, rate/depth, bitrate, lossless, DR —
  *    are `.badge` CHIPS wherever they appear, live (Now Playing's row) or at
  *    rest (the Library album header, both Info modal headers).
@@ -44,7 +44,7 @@ export function albumFactsLine(
  *  track's that has one), its artist and its year (when every track agrees). An album opened
  *  from another screen lands as a bare node with only its title (LibraryScreen's arrival), and
  *  a server may leave a container's art off; the Library header and the album's Info both read
- *  this, so neither shows less than the other (0.12.0, his Only God Was Above Us: the header
+ *  this, so neither shows less than the other (0.12.0, Only God Was Above Us: the header
  *  had the cover, Info had none). Returns the album itself when the tracks add nothing. */
 export function albumFromTracks(album: MediaNode, tracks: readonly MediaNode[]): MediaNode {
   if (tracks.length === 0) return album;
@@ -67,8 +67,8 @@ export function trackFactsLine(node: Pick<MediaNode, "durationSecs">): string {
 
 /** A track's format tokens as its Info header wears them: the album header's compact spelling,
  *  codec and depth/rate ("FLAC", "16/44.1"), or codec and bitrate for a lossy file ("MP3",
- *  "320 kbps"). The bitrate and the rest are the Format section's rows just below (0.12.0, his
- *  call: six chips beside Open in Library wrapped to two rows). */
+ *  "320 kbps"). The bitrate and the rest are the Format section's rows just below (0.12.0:
+ *  six chips beside Open in Library wrapped to two rows). */
 export function trackFormatChips(f: MediaFormat | undefined | null): string[] {
   const label = formatLabel(f);
   return label ? label.split(" · ").filter(Boolean) : [];

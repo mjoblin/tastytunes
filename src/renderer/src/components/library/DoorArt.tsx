@@ -25,7 +25,7 @@ import { DOOR_WAVES, type DoorWave } from "@/components/library/useDoorArt";
  *   Tracks   four stepped waveforms from stored analyses | strips with each track's title and
  *            length (never a made-up waveform)
  *
- * FLAT (his call, 2026-10-23, the cards read as dated): no blurred backdrop and no fade, the
+ * FLAT (the cards read as dated): no blurred backdrop and no fade, the
  * pictures straight and at full brightness, each with the app's hairline and a ring of the door's
  * own surface where they overlap, in place of tilts, dimming and shadows.
  *

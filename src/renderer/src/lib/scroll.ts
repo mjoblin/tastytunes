@@ -1,6 +1,6 @@
 /**
- * THE ARRIVAL WASH — the one "here is the row you asked for" signal (ruled
- * 2026-09-02, user call): a gold fill at 30% that holds for the first 0.8s
+ * THE ARRIVAL WASH — the one "here is the row you asked for" signal: a gold
+ * fill at 30% that holds for the first 0.8s
  * and fades over the next 1.8s. Born as the Queue's undo-restore wash; now
  * also the landing after Open in Library / a name link / a Favorites jump,
  * the scroll-to-current click feedback, and the nav rail's drop
@@ -102,7 +102,7 @@ export function scrollToVisible(el: HTMLElement | null, pad = 0): void {
   // `pad` is breathing room past the element's border box. Rings and glows
   // are box-shadows OUTSIDE that box, so a flush alignment scrolls the row
   // in and clips its gold ring at the scrollport edge — shipped visibly on
-  // the tray panel's followed queue (user, 2026-08-04). Callers whose rows
+  // the tray panel's followed queue. Callers whose rows
   // wear rings pass the pad; the default keeps everyone else exact.
   if (eRect.top < cRect.top + pad) container.scrollTop += eRect.top - cRect.top - pad;
   else if (eRect.bottom > cRect.bottom - pad)

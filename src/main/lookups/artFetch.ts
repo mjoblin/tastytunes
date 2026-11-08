@@ -4,18 +4,18 @@ import { allowed } from "./fetchGuard";
 import { mediaType } from "@shared/keys";
 
 /**
- * A PICTURE, AND ONLY A PICTURE, FROM WHERE A PICTURE CAN COME (0.10.0, the whole-app
- * review). The renderer asks main for album art as a data URL (the scenes' palette, the
- * deck scenes' covers), and main used to fetch any http(s) URL and hand back whatever
- * came, which let a page that was not the app's read anything on the network through it.
+ * A PICTURE, AND ONLY A PICTURE, FROM WHERE A PICTURE CAN COME (0.10.0). The renderer asks
+ * main for album art as a data URL (the scenes' palette, the deck scenes' covers), and main
+ * used to fetch any http(s) URL and hand back whatever came, which let a page that was not
+ * the app's read anything on the network through it.
  * Now a URL on a private or loopback address is fetched only when it is the streamer's or
  * a media server's the app knows (lookups/fetchGuard); an address on the internet is
  * fetched as before. A redirect is followed by hand so every hop is checked, the answer
  * must be a picture (by its type, or by its first bytes when a server calls it
  * octet-stream), and it is refused past the size limit before it is all read.
- * ONE HOME FOR EVERY PICTURE FETCH (the 0.11 re-score, 2026-10-13): the thumbnails behind
- * the tt-art scheme fetched their origin with a bare fetch, any URL, uncapped, and stored
- * whatever came; they now come through fetchPicture too, with their own limits.
+ * ONE HOME FOR EVERY PICTURE FETCH: the thumbnails behind the tt-art scheme fetched their
+ * origin with a bare fetch, any URL, uncapped, and stored whatever came; they now come
+ * through fetchPicture too, with their own limits.
  */
 
 /** The hosts on the local network a picture may come from: the streamer, and the media

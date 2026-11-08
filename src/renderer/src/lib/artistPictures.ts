@@ -7,9 +7,8 @@ import { Lru } from "@/lib/lru";
 import { nameKey } from "@shared/keys";
 
 /**
- * ARTIST PICTURES for rows and cards (0.11.0, a user's email: "Would it be possible for
- * TastyTunes to scrape artist image and display it instead of the grey square with disc
- * image? (Like Plexamp does)"). A row never looks an artist up (MusicBrainz answers one
+ * ARTIST PICTURES for rows and cards (0.11.0), in place of the grey square with a
+ * disc. A row never looks an artist up (MusicBrainz answers one
  * request a second, and a library has hundreds of artists): every name asked for in one frame
  * goes to main in one artistPictures request, which answers a photo already known (the artist
  * page and About the artist look them up) or a cover from the artist's own albums, behind the
@@ -82,7 +81,7 @@ export const coverOffers = (albums: readonly MediaNode[]): CoverOffer[] =>
     .map((a) => ({ url: a.artUrl as string, album: a.title, serverUdn: a.serverUdn ?? null }));
 
 /**
- * THE CHOSEN PICTURES, one map for the window (0.13.0 rc.3, his pick: "Choose a picture" in the
+ * THE CHOSEN PICTURES, one map for the window (0.13.0 rc.3: "Choose a picture" in the
  * artist's menu everywhere): read whole from main, so a menu built anywhere knows at once whether
  * an artist has one, as a heart knows from the favorites. Read again when a picture is chosen or
  * reset here (refreshArtistPicture), when the artist lookups are switched (a Wikipedia image

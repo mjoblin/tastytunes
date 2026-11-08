@@ -21,16 +21,15 @@ export interface AlbumDrSources {
 }
 
 /**
- * AN ALBUM'S DR FROM ITS TRACKS (user, 2026-10-12, after an album page showed no DR for an
- * album nine-tenths measured by play: "i thought we already did that? we should if we're not
- * already"). The album value used to be written by the album sweep alone, so tracks measured
+ * AN ALBUM'S DR FROM ITS TRACKS (an album page showed no DR for an album nine-tenths measured by
+ * play). The album value used to be written by the album sweep alone, so tracks measured
  * one at a time as they played (or by the Tracks lens's Analyze audio) never added up to an
  * album. Every album in the ready indexes whose every track is measured gets the sweep's own
  * number: albumDr14 of the track DRs (the reference's mean of every track, a DR0 interlude
  * included), and the loudness integrated across their histograms when every track carries
  * one. An album already recorded at its track count is left as it is; one recorded at another
  * count (tracks added or removed) is recorded again. Same-keyed albums in one library (twin
- * editions, the Evo drive's two folders of one album) are left to an explicit sweep: the
+ * editions, a drive's two folders of one album) are left to an explicit sweep: the
  * album key cannot tell them apart. An album with no artist is left too (its tracks cannot be
  * told from a same-titled album's). With `onlyTrackKey`, only the album holding that track.
  */

@@ -403,7 +403,7 @@ export const ONE_HOME = [
   },
   {
     id: "scroll-into-view",
-    was: "none (docs/renderer.md banned it in prose; HistoryTimeline's month rail still called it, found 2026-10-13)",
+    was: "none (a prose rule banned it; HistoryTimeline's month rail still called it, found 2026-10-13)",
     selector: "CallExpression[callee.property.name='scrollIntoView']",
     files: [`^${R}`],
     message:
@@ -425,7 +425,7 @@ export const ONE_HOME = [
   },
   {
     id: "hover-reveal-keyboard",
-    was: "none (0.13.0 round 4, the accessibility second layer: the 0.11 re-score found two dozen controls hidden from the keyboard)",
+    was: "none (0.13.0 round 4, the accessibility second layer: two dozen controls were hidden from the keyboard)",
     // a class string that reveals on a group's hover (or hides on it) with no keyboard twin (one
     // with focus-visible: is focus-reveal's to report)
     selector: String.raw`:matches(Literal[value=/group-hover(\/[a-z]+)?:opacity-(0|100)(?![\w-])/]:not([value=/((group|focus)-kbd|focus-visible):opacity-/]), TemplateElement[value.raw=/group-hover(\/[a-z]+)?:opacity-(0|100)(?![\w-])/]:not([value.raw=/((group|focus)-kbd|focus-visible):opacity-/]))`,
@@ -439,7 +439,7 @@ export const ONE_HOME = [
   },
   {
     id: "menu-anchor",
-    was: "none (0.13.0: his try of round 4, a Queue row's ⋯ pressed from the keyboard opened its menu in the window's top-left corner)",
+    was: "none (0.13.0, after round 4: a Queue row's ⋯ pressed from the keyboard opened its menu in the window's top-left corner)",
     // a point read straight off the pointer, { x: e.clientX, y: e.clientY }: a menu's comes from
     // menuAt, which places a key press's under its control (it has no pointer: 0, 0). A hover
     // (RowAction) and the drags follow the pointer itself, and keep it.
@@ -518,7 +518,7 @@ export const ONE_HOME = [
   },
   {
     id: "name-key",
-    was: "none (0.15.0, the hygiene pass: the 0.11 re-score found 81 name keys hand-rolled in 42 files, none normalizing Unicode)",
+    was: "none (0.15.0, the hygiene pass: 81 name keys were hand-rolled in 42 files, none normalizing Unicode)",
     // a string trimmed and lowercased in one chain, either order (optional links included)
     selector:
       "CallExpression[callee.property.name='toLowerCase'][callee.object.callee.property.name='trim'], CallExpression[callee.property.name='trim'][callee.object.callee.property.name='toLowerCase']",

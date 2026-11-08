@@ -34,8 +34,8 @@ import { narrowToStreamer } from "@/lib/historyStreamers";
  * wears text tokens, bars are thin and directly labeled, every cell has a tip.
  */
 
-/** THE PERIOD IS A CALENDAR INSTANCE (2026-09-15, the user: people expect "the previous
- *  full instance of whatever period they asked for"): a unit — a week from Monday, a month
+/** THE PERIOD IS A CALENDAR INSTANCE (people expect the previous full instance of
+ *  whatever period they ask for): a unit — a week from Monday, a month
  *  from the first, a year from January — and how many instances back from the one holding
  *  now. Zero is the current instance so far; one is the last full week or month; the arrows
  *  beside the toggle step. All time has no instances. The rolling windows this replaced (the
@@ -202,8 +202,8 @@ export function HistoryStats({
   );
   // THE PICTURE (0.9.0): the period shown, drawn to a canvas and saved as a PNG — lib/statsCard,
   // the same ListeningStats the tiles read and the same trailing year the calendar draws, so
-  // the card and the screen agree; built as "Your year" (the calendar year) and widened at
-  // the user's call to whatever the toggle shows (2026-09-15)
+  // the card and the screen agree; built as "Your year" (the calendar year) and widened
+  // to whatever the toggle shows
   const showToast = useStore((s) => s.showToast);
   const [cardBusy, setCardBusy] = useState(false);
   const saveCard = async (): Promise<void> => {
@@ -335,8 +335,8 @@ export function HistoryStats({
             <>
               <section data-stats-top>
                 <div className="microlabel mb-3 px-1">Most played</div>
-                {/* stacked, full width: three columns cropped every second title
-                    (user, 2026-09-05); a name is the point of a top list */}
+                {/* stacked, full width: three columns cropped every second title;
+                    a name is the point of a top list */}
                 <div className="space-y-6">
                   <TopList title="Albums" kind="album" rows={stats.topAlbums} />
                   <TopList title="Artists" kind="artist" rows={stats.topArtists} />
@@ -400,7 +400,7 @@ export function HistoryStats({
                     ].filter((r) => r.seconds > 0)}
                   />
                   {/* the files are the Library's: the other sources don't say what they play
-                      (a user read 4 lossy minutes beside an hour of Spotify as an error) */}
+                      (4 lossy minutes beside an hour of Spotify read as an error) */}
                   <div className="mt-3 px-1 text-[12px] text-faint/70 space-y-1">
                     <div>{FILES_SCOPE}</div>
                     {stats.quality.hires > 0 && (
@@ -530,7 +530,7 @@ const refOf = (kind: "album" | "track", r: TopEntry): MediaRef => ({
   bits: null,
 });
 
-/** The rows are LINKS into the Library (user, 2026-09-05): an album lands on
+/** The rows are LINKS into the Library: an album lands on
  *  itself, an artist on the Artists lens, a track on its album with the row
  *  flashed — the app-wide Open in Library, by content. The artist beside an
  *  album or a track is its own link (NameLink, the one link primitive). */

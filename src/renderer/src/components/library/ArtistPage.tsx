@@ -37,17 +37,16 @@ const ALBUM_SORTS: Array<{ value: AppSettings["artistPageSort"]; label: string }
 ];
 
 /**
- * THE ARTIST PAGE (2026-10-11, the user: "we get to an album page from the albums lens. but we
- * can't get to an artist page from the artist lens ... it'd be nice to make that more sensical
- * for the user"; option 2, the app's own page). One page per artist, the same on every server:
- * built from the indexes as the Artists lens is (its artist, its albums newest first, its
- * credited tracks), never from a server's folder, whose contents each server decides. It sits
- * over the Artists lens (the lens's columns are untouched: "i really like that"): the header
- * (ArtistHeader), the artist's albums as the Library's cards or rows, then APPEARS ON, their
- * tracks on other artists' albums, and TRACKS, their loose ones, as the lens's track rows with
- * its selection. No link to the server's own folder for the artist (the user: "it links to
- * what is (to the user) effectively the same page"): on Asset it holds the same albums, on
- * MinimServer its sub-indexes group them again, and browsing the server still reaches it.
+ * THE ARTIST PAGE (the Albums lens reaches an album page, so the Artists lens reaches an artist
+ * page, the app's own). One page per artist, the same on every server: built from the indexes
+ * as the Artists lens is (its artist, its albums newest first, its credited tracks), never from
+ * a server's folder, whose contents each server decides. It sits over the Artists lens (the
+ * lens's columns are untouched): the header (ArtistHeader), the artist's albums as the
+ * Library's cards or rows, then APPEARS ON, their tracks on other artists' albums, and TRACKS,
+ * their loose ones, as the lens's track rows with its selection. No link to the server's own
+ * folder for the artist (to the reader it would be effectively the same page): on Asset it
+ * holds the same albums, on MinimServer its sub-indexes group them again, and browsing the
+ * server still reaches it.
  */
 export function ArtistPage({
   name,
@@ -107,8 +106,8 @@ export function ArtistPage({
       <ArtistHeader name={artist?.name ?? name} serverArt={artist?.ownArt} folders={albums} />
       {albums.length > 0 && (
         <>
-          {/* the albums' heading, and their order at its right (0.13.0-rc.4, a user's question:
-              the order was there, unseen, behind each card's cut-off year) */}
+          {/* the albums' heading, and their order at its right (0.13.0-rc.4: the order was
+              there, unseen, behind each card's cut-off year) */}
           <div className="flex items-end justify-between gap-3 px-1 pt-2" data-artist-albums-head>
             <div className="microlabel pb-0.5">Albums</div>
             <div className={`flex items-center ${GAP_WITHIN}`}>
@@ -125,7 +124,7 @@ export function ArtistPage({
               />
             </div>
           </div>
-          {/* FROM THE KEYBOARD (0.14.0, his K1 to K6): the albums one Tab stop, each run of tracks
+          {/* FROM THE KEYBOARD (0.14.0): the albums one Tab stop, each run of tracks
               another; Enter opens an album or plays a track, as their clicks do */}
           <KeyedList
             label="Albums"

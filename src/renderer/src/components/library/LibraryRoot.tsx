@@ -77,7 +77,7 @@ export function LibraryRoot({
     }
     openLens(key);
   };
-  // FROM THE KEYBOARD (0.15.0, the 0.14 re-score: the front page was outside "every list"): the
+  // FROM THE KEYBOARD (0.15.0: the front page was the one list the keyboard did not reach): the
   // three doors one Tab stop, the arrows across them, Enter a door's click
   const doorKeys = useListKeys({
     count: doorsState === "hidden" ? 0 : doors.length,
@@ -104,9 +104,9 @@ export function LibraryRoot({
       )}
       {/* the lens doors LEAD the root: our views over EVERY built index at once, wide hero
       doors with a picture of each lens from the reader's own library (DoorArt), so they never
-      read as one more source beside the streamer's (his ask, 0.12.0-rc.3). No section label:
+      read as one more source beside the streamer's (0.12.0-rc.3). No section label:
       each caption already says "every library", and unlabeled they read as the page's lead
-      with the sources' labeled sections below (his call, 2026-10-21) */}
+      with the sources' labeled sections below */}
       {doorsState !== "hidden" && (
         <div data-library-doors={doorsState} className="lib-doors">
           <div className="lib-doors-row" {...doorKeys.container} aria-label="Library views">
@@ -127,8 +127,8 @@ export function LibraryRoot({
                 className={cx(
                   // tip-wide anchors the tooltip to the card's LEFT edge and wraps it:
                   // centered, the indexing tip poked past the scrollport's left
-                  // edge and clipped (user, 2026-08-29). Under the cursor the whole door
-                  // grows, words and all, as every card does (his ask, 2026-10-21)
+                  // edge and clipped. Under the cursor the whole door
+                  // grows, words and all, as every card does
                   "lib-door group tip-bottom tip-wide",
                   CARD_TRANSITION,
                   doorsState === "building"
@@ -152,7 +152,7 @@ export function LibraryRoot({
                 {doorsState === "building" ? (
                   // the boot screen's own loading glyph while the first index builds, in the
                   // middle of a door with nothing to show yet. The icon's pulse read as styling,
-                  // not activity (user, 2026-08-29); reduced motion keeps the icon: a frozen
+                  // not activity; reduced motion keeps the icon: a frozen
                   // spinner reads as broken.
                   <div className="lib-door-glyph">
                     <Loader2
@@ -215,7 +215,7 @@ export function LibraryRoot({
           </div>
         </div>
       )}
-      {/* RECENTLY ADDED (0.13.0 round 9, his pick: a shelf under the doors rather than a fourth
+      {/* RECENTLY ADDED (0.13.0 round 9: a shelf under the doors rather than a fourth
       door): the albums known to be recent, its See all the Albums lens in the same order */}
       {doorsState === "ready" && (
         <RecentlyAddedShelf
@@ -286,7 +286,7 @@ export function LibraryRoot({
                         building && "opacity-60",
                         failed && "tip-bottom",
                         // the tip explains the caption, so it sits beside the card level
-                        // with the caption (user, 2026-10-05: the default put it beside the
+                        // with the caption (the default put it beside the
                         // card's middle, far from the cursor; under the card a low card's
                         // tip ran into the playback bar)
                         stale && "tip-low",
@@ -340,7 +340,6 @@ export function LibraryRoot({
                             // the caption's own color, gold only under the cursor: after
                             // a standby the streamer renumbers the drive and this shows
                             // whether or not anything changed, so it offers, never alarms
-                            // (user, 2026-10-05)
                             className="hover:text-gold transition-colors"
                           >
                             Check for changes

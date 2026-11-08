@@ -61,7 +61,7 @@ export function Segmented<T extends string | number | boolean>({
           {opt.label}
           {opt.count !== undefined && (
             // a pill with room for two digits, the count centred in it: a count arriving, or
-            // reaching ten, never widens the tab (his look, 2026-10-30); hidden while it is asked
+            // reaching ten, never widens the tab; hidden while it is asked
             <span
               data-segment-count
               className={cx(

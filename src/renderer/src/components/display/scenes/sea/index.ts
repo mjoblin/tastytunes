@@ -241,7 +241,7 @@ export class Sea implements ThreeScene {
   private surge = 0;
   /** Where the surge is heading: a kick sets it, it decays, and `surge` follows with a rise
    *  time, because a sea takes a moment to heave (set directly, the whole sea's height popped
-   *  on every kick; the user: "the water animation pops quite a lot"). */
+   *  on every kick). */
   private surgeAim = 0;
   private glint = 0;
   private crest = 0;

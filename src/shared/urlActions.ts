@@ -1,8 +1,8 @@
 import type { StreamerCommand } from "./ipc";
 
 /**
- * THE tastytunes:// URL SCHEME (0.12.0, the first round; filed 2026-10-11 from a Reddit ask for
- * a Stream Deck integration). One control surface for anything that can open a URL: a Stream
+ * THE tastytunes:// URL SCHEME (0.12.0, the first round, for a Stream Deck integration). One
+ * control surface for anything that can open a URL: a Stream
  * Deck's Website action, Raycast, Alfred, Keyboard Maestro, Shortcuts, a launcher. This module
  * is the verbs, pure: a URL in, an action or the reason it was refused out. main/app/urlActions
  * runs the action through the app's own command path (deviceManager.command), and
@@ -29,7 +29,7 @@ export type UrlParse =
   { ok: true; action: UrlAction; verb: string } | { ok: false; reason: string };
 
 /** One example of every verb, in the order Settings lists them; the unit test parses each.
- *  THREE SHAPES, EACH ONE MEANING (his call, 2026-10-17, before the scheme shipped): a bare verb
+ *  THREE SHAPES, EACH ONE MEANING (settled before the scheme shipped): a bare verb
  *  acts (play, next), thing/value sets a state (mute/on, volume/30), toggle-thing switches one
  *  (toggle-play, toggle-mute, toggle-power, toggle-mini). A bare mute, power, mini or toggle is
  *  refused with the toggle's name, so a link never leaves a reader guessing which it does. */

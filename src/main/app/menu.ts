@@ -143,7 +143,7 @@ export function installAppMenu(deps: MenuDeps): void {
       // "Full-Screen Now Playing", not the in-app "display mode" name: this
       // sits two rows above the native "Toggle Full Screen" role, and two
       // items that both say full screen/fullscreen-ish need labels that say
-      // WHICH full screen (user, 2026-08-06). The app keeps calling the
+      // WHICH full screen. The app keeps calling the
       // feature display mode; menus describe.
       label: "Full-Screen Now Playing",
       // NO ACCELERATOR, ON ANY PLATFORM. The renderer owns F. This item once
@@ -152,8 +152,8 @@ export function installAppMenu(deps: MenuDeps): void {
       // only (Electron docs; on macOS the Cocoa menu controller sets the key
       // equivalent unconditionally), so a bare F fired this command AND the
       // renderer's handler: display mode toggled on and straight back off,
-      // and the window flashed into full screen and out (user report,
-      // 2026-08-15). A menu key equivalent on macOS is always live — there is
+      // and the window flashed into full screen and out. A menu key
+      // equivalent on macOS is always live — there is
       // no display-only mode — so the hint is not shown here.
       click: () => deps.sendToMain({ id: "displayMode" }),
     },

@@ -19,14 +19,14 @@ import { closeAudioStream, openAudioStream, readAudioStream } from "../media/aud
 import { handle } from "../app/guard";
 
 /**
- * THE LARGEST FILE THE ANALYSIS READS (0.12.0, from a user's email: 24/192 FLACs past about
+ * THE LARGEST FILE THE ANALYSIS READS (0.12.0: 24/192 FLACs past about
  * 5:40 had no waveform). The renderer decodes the whole file at its native rate, so a file costs
  * its own size again as samples (a 6-minute 24/192 track is about 525 MB of them); the cap is a
  * memory bound. It was 256 MiB, with the renderer holding three copies of the file and main two.
  * With those copies gone, 512 MiB (about 11 minutes of 24/192 music, 22 of 24/96) costs about
  * what 256 MiB did, measured 2026-10-17 on 24/192 FLACs: a 507 MB file raised the window's
  * process by 2.2 GB and main's by 0.6 GB, where the old code took 2.0 GB and 0.7 GB for a 249 MB
- * one (journal/0.12.0.md). The streaming decoder (0.14.0) retires the cap.
+ * one. The streaming decoder (0.14.0) retires the cap.
  * TASTYTUNES_ANALYSIS_MAX_BYTES lets a harness set it small.
  */
 const ANALYSIS_MAX_BYTES =
@@ -44,8 +44,8 @@ export function registerAudioIpc(): void {
   // THE EVIDENCE the playback bar keys its taller geometry on (settings.waveformSeen), set once:
   // a track's file opened for measuring, or an analysis served (stored or read back). Since
   // 0.14.0 a waveform draws while its file is measured, so waiting for the stored analysis let
-  // the seek strip grow for the first wave and the bar a moment later, two steps on a first run
-  // (his eye, 2026-11-01); the file opening comes before any wave, so the bar grows once.
+  // the seek strip grow for the first wave and the bar a moment later, two steps on a first run;
+  // the file opening comes before any wave, so the bar grows once.
   const noteWaveformSeen = (): void => {
     if (getSettings().waveformSeen) return;
     broadcastSettings(updateSettings({ waveformSeen: true }));

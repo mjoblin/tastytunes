@@ -35,7 +35,7 @@ let servers = new Map<string, ServerEntry>();
 const nodeCache = new Map<string, MediaNode[]>();
 
 /**
- * NOT ANSWERING IS NOT NOT FOUND (2026-09-16, the user's Evo). A server that
+ * NOT ANSWERING IS NOT NOT FOUND (2026-09-16, an Evo). A server that
  * refuses an object ("no such object", a SOAP 701 fault, a 4xx) is answering:
  * the id is gone and a heal is right. A server that times out, resets the
  * connection or refuses it is NOT answering, and every heal the app used to
@@ -331,18 +331,17 @@ export async function refreshServers(host: string): Promise<MediaServerInfo[]> {
 }
 
 /**
- * THE LISTING IN FLIGHT, SETTLED (0.13.0-rc.5, his rc.4: "the art wash isn't working anymore").
+ * THE LISTING IN FLIGHT, SETTLED (0.13.0-rc.5, after rc.4's art wash stopped working).
  * The streamer is asked for its media servers as the app connects, and the playing cover's first
- * fetch (the wash, the accent) came while the answer was still on its way: a cover on his Mac's
+ * fetch (the wash, the accent) came while the answer was still on its way: a cover on a Mac's
  * server was then an unknown local address, refused, and the wash kept the refusal for the whole
  * track. A picture on a local address not yet known waits here for the listing that may name its
  * server; with none in flight it is answered at once.
  *
- * However long the listing takes (his question: "so it would work even if the server takes (say)
- * 9 or 10s to respond?"): it was waited for 8 s at most, and a listing later than that drew the
- * wash only when the renderer asked again, up to 10 s after it landed. The listing ends on its
- * own (the streamer's answer and each server's two calls time out at 8 s each, the servers one
- * after another), so the cover now comes the moment the listing does.
+ * However long the listing takes (9 or 10 s, say): it was waited for 8 s at most, and a listing
+ * later than that drew the wash only when the renderer asked again, up to 10 s after it landed.
+ * The listing ends on its own (the streamer's answer and each server's two calls time out at 8 s
+ * each, the servers one after another), so the cover now comes the moment the listing does.
  */
 export async function serversListed(): Promise<void> {
   await listing?.run.catch(() => undefined);
@@ -508,7 +507,7 @@ function soapEnvelope(objectId: string, flag: string, start: number, count: numb
 export const MOUNTED = /^(\d+):(.+)$/;
 
 /**
- * THE DEVICE FORGETS ITS FOLDERS IN STANDBY (the user's Evo, probed live after a wake,
+ * THE DEVICE FORGETS ITS FOLDERS IN STANDBY (an Evo, probed live after a wake,
  * 2026-10-06). Its USB server knows an object only once the folder holding it has been
  * listed since the drive was mounted: straight after a wake every id under the new mount
  * answered 702 "No such object", still so 45 s on, a folder could not be listed before the
@@ -601,10 +600,10 @@ async function soapBrowseOnce(
 }
 
 /**
- * A BLANK IS NOT AN OBJECT (0.13.0-rc.6, his preset 24). Asset answers an id it no longer has
+ * A BLANK IS NOT AN OBJECT (0.13.0-rc.6). Asset answers an id it no longer has
  * not with a fault but with HTTP 200 and a placeholder: a container "-1" with an empty title and
  * no picture. Read as the object, it was "present" to the index's probe, and the preset repair
- * saved it to his slot, which the streamer then listed as "[No title]" and still could not play.
+ * saved it to the slot, which the streamer then listed as "[No title]" and still could not play.
  * An answer to one object's metadata that names another object and no title, or names none, is
  * the server saying the id is gone (unit-tested).
  */
@@ -925,7 +924,7 @@ export async function audioResUrl(
     );
     const first = audio[0];
     if (!first) return null;
-    // APPLE LOSSLESS THROUGH THE SERVER'S WAV COPY (0.14.0, his A2): nothing here decodes an MP4's
+    // APPLE LOSSLESS THROUGH THE SERVER'S WAV COPY (0.14.0): nothing here decodes an MP4's
     // Apple Lossless (Chromium has no decoder for it), and AAC in one only whole; a server that
     // also offers the file as WAV (Asset decodes it as it sends) is read that way, in pieces,
     // with every measure. The analysis only: embedded art is read from the file itself.
@@ -996,7 +995,7 @@ async function metadataDidl(entry: ServerEntry, objectId: string): Promise<strin
  * THE LARGE-QUEUE GUARD (2026-09-10). Every surface reaches the streamer
  * through queueAdd, the MCP too, and a container verb queues whatever the
  * container lists: Play from here on a search scope once queued 2,528 tracks
- * on the user's Evo (2026-09-04). A container over LARGE_QUEUE_TRACKS refuses
+ * on an Evo (2026-09-04). A container over LARGE_QUEUE_TRACKS refuses
  * with this unless the caller confirmed; the renderer's tt wrapper asks and
  * calls again, an agent is told to ask the user. The count is the container's
  * direct listing (TotalMatches of a one-item Browse, one extra round trip per

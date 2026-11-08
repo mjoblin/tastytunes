@@ -4,7 +4,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import type { Plugin } from 'vite'
 
-// THE PRODUCTION PAGE'S CSP (0.12.0-rc.2, the 0.11 re-score). index.html carries the dev server's
+// THE PRODUCTION PAGE'S CSP (0.12.0-rc.2). index.html carries the dev server's
 // policy (its React refresh preamble is an inline script, its hot reload a WebSocket); the built
 // page, loaded from a file where no response header can carry one, takes a stricter one: no
 // inline script, no socket, no base or form targets. Each replacement must land, so a change to

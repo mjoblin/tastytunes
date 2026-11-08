@@ -87,12 +87,12 @@ export function LibrarySearchResults({
   containerItem: ContainerItem;
   trackRow: TrackRowOf;
 }): React.JSX.Element | null {
-  // ONE WINDOWED LIST OF EVERY RESULT (2026-10-11, user: "one big (windowed) list seems more
-  // user friendly", after the 500-at-a-time button sat at the end of the first library's group,
-  // mid-list): the results flatten into lines (a library's heading, a kind's label, a row of
-  // cards, a container row, a track row), and only the lines near the viewport are drawn, the
-  // Albums grid's rule. Each line carries its own spacing inside it (padding, a border on every
-  // row, transparent on a section's first), so a kind of line has one height to measure.
+  // ONE WINDOWED LIST OF EVERY RESULT (the 500-at-a-time button sat at the end of the first
+  // library's group, mid-list): the results flatten into lines (a library's heading, a kind's
+  // label, a row of cards, a container row, a track row), and only the lines near the viewport
+  // are drawn, the Albums grid's rule. Each line carries its own spacing inside it (padding, a
+  // border on every row, transparent on a section's first), so a kind of line has one height
+  // to measure.
   const [searchWidth, setSearchWidth] = useState(0);
   const searchRo = useRef<ResizeObserver | null>(null);
   const searchBodyRef = useCallback((el: HTMLDivElement | null) => {
@@ -195,7 +195,7 @@ export function LibrarySearchResults({
     overscan: 6,
     enabled: searchLines.length > 80,
   });
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the search results one Tab stop across their
+  // FROM THE KEYBOARD (0.14.0): the search results one Tab stop across their
   // windowed lines, a kind's cards a grid and its rows a column (components/library/searchKeys);
   // Enter opens a result or plays a track as its click does, "." its More menu
   const { searchSpots, firstOfLine } = useMemo(() => {

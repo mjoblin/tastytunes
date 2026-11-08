@@ -4,7 +4,7 @@ import { app, safeStorage } from "electron";
 import { isRecord } from "@shared/guards";
 import { atomicWriteFileSync } from "./jsonStore";
 
-// THE SECRETS STORE (0.13.0 round 10; his word, 2026-10-25: "secure tokens are important"). The
+// THE SECRETS STORE (0.13.0 round 10). The
 // tokens the app holds, the ListenBrainz token a person pastes in and the MCP server's own, were
 // kept in plain text in settings.json, the file people open and attach to bug reports, and every
 // window received them with each settings push. Here, in their own file, each one encrypted with
@@ -13,7 +13,7 @@ import { atomicWriteFileSync } from "./jsonStore";
 // learns only whether one is saved and its last four characters (secretHint). On a system with no
 // keyring (a Linux without one) the value is kept as it was before, unencrypted, in a file only
 // the user's account can read, and Settings says so. The suite's launches keep it that way too
-// (TASTYTUNES_SECRETS_PLAIN): an unsigned test build touching the Keychain asks his Mac for leave.
+// (TASTYTUNES_SECRETS_PLAIN): an unsigned test build touching the Keychain asks macOS for leave.
 
 export type SecretName = "lbToken" | "mcpToken" | "fanartKey";
 
@@ -25,8 +25,8 @@ interface Stored {
 
 const filePath = (): string => join(app.getPath("userData"), "secrets.json");
 
-// THE KEYCHAIN ONLY WHEN A SECRET IS USED (0.14.0, his call after rc.4's install asked his Mac
-// for the keychain): the file is read as it is, and an entry is decrypted only when its value is
+// THE KEYCHAIN ONLY WHEN A SECRET IS USED (0.14.0, after rc.4's install asked macOS for the
+// keychain): the file is read as it is, and an entry is decrypted only when its value is
 // asked for, so a launch with no secrets, or with secrets nothing has asked for yet, never
 // reaches safeStorage; saving one writes the others back as they were stored.
 //

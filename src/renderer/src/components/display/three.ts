@@ -8,7 +8,7 @@ import type { Rgb, SceneRecord } from "./scenes/types";
 THREE.ColorManagement.enabled = false;
 
 /**
- * THREE.JS for the scenes (user call 2026-09-06, after packscape's Stage3D):
+ * THREE.JS for the scenes (after packscape's Stage3D):
  * the renderer a "three" scene draws through, the disposal discipline
  * (create once, dispose once: geometry, material, texture, target), and the
  * one thing every world scene reads: THE RECORD AS A TEXTURE. The feed's

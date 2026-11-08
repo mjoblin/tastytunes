@@ -24,7 +24,7 @@ import { Lru } from "@/lib/lru";
 const SMALL_PX = 600;
 /** The embedded pictures asked for, by query: each answer is a data URL that can run to a
  *  megabyte, so the recent ones are kept (the big surfaces ask about the tracks around the one
- *  playing) and the rest let go (0.12.0-rc.2, the 0.11 re-score; the map grew for a session). */
+ *  playing) and the rest let go (0.12.0-rc.2; the map grew for a session). */
 const pending = new Lru<string, Promise<EmbeddedArt | null>>(24);
 
 function embedded(query: EmbeddedArtQuery): Promise<EmbeddedArt | null> {

@@ -98,7 +98,7 @@ if (!gotLock) {
           else if (was !== "ON" && aheadHost) mediaIndex.scheduleHealAhead(aheadHost);
         }
         if (trayWantsRefresh(msg.kind)) refreshTrayMenu();
-        // INDEX AT CONNECT (2026-09-02, user call): the media indexes used to
+        // INDEX AT CONNECT: the media indexes used to
         // build only when the Library screen first listed servers, so on a
         // fresh install the Queue's album links and Open in Library could "not
         // find" an album the app had simply never looked for. The same

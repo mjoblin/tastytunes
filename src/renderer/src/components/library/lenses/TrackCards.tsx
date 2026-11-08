@@ -8,11 +8,10 @@ import { keyedEvent } from "@/lib/menuAt";
 import { type LensActions, nodeKey } from "./lensShared";
 import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
 
-// The Tracks lens as cards (0.13.0-rc.4; his picks on the decision page "Tracks as Cards",
-// 2026-10-26: B, track cards following the Library's one Rows or Cards choice, and A, a card's
-// click plays). The cards (TrackCard) sit in the lenses' one grid (useCardGrid), windowed past its
-// threshold as the Albums and Artists lenses' are; the lens keeps its filter, facets, sort,
-// selection and menus, and only the list becomes a grid.
+// The Tracks lens as cards (0.13.0-rc.4: track cards follow the Library's one Rows or Cards
+// choice, and a card's click plays). The cards (TrackCard) sit in the lenses' one grid
+// (useCardGrid), windowed past its threshold as the Albums and Artists lenses' are; the lens
+// keeps its filter, facets, sort, selection and menus, and only the list becomes a grid.
 
 export function TrackCards({
   tracks,
@@ -64,7 +63,7 @@ export function TrackCards({
     rowSelector: "[data-track-cards-row]",
     restoreTop: scrollTop,
   });
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the cards' four arrows; Enter is a card's click
+  // FROM THE KEYBOARD (0.14.0): the cards' four arrows; Enter is a card's click
   // (it plays), "." its More menu
   const keys = useListKeys({
     count: tracks.length,

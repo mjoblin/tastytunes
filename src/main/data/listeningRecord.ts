@@ -136,14 +136,14 @@ function bound(c: ViaContext): void {
 }
 
 /**
- * A RECALL THAT LOADED NOTHING CLAIMS NOTHING (0.13.0-rc.6, his preset 24). The streamer accepts
+ * A RECALL THAT LOADED NOTHING CLAIMS NOTHING (0.13.0-rc.6). The streamer accepts
  * a preset whose album its server no longer has and then does nothing, and the recall's context,
- * never bound, claimed the next play anyway: a track of the queue already playing (preset 30's
- * album, credited to preset 24 in his Resume and his history). A preset recall's context still
- * unbound when a play starts from the queue that was there before it came to nothing: the context
- * it replaced stands again (unit-tested). Past that, main's recall watch decides it (0.15.0: one
- * clock, 8 s after the streamer is awake; main/device/recallWatch) and says so through
- * recallCameToNothing, where this file kept its own 15 s clock.
+ * never bound, claimed the next play anyway: a track of the queue already playing (another
+ * preset's album, credited to the recalled one in Resume and the history). A preset recall's
+ * context still unbound when a play starts from the queue that was there before it came to
+ * nothing: the context it replaced stands again (unit-tested). Past that, main's recall watch
+ * decides it (0.15.0: one clock, 8 s after the streamer is awake; main/device/recallWatch) and
+ * says so through recallCameToNothing, where this file kept its own 15 s clock.
  */
 function cameToNothing(c: ViaContext, kind: OpenPlay["kind"], queueId: number | null): boolean {
   if (c.via.kind !== "preset" || c.queueIds != null || c.station != null) return false;
@@ -615,7 +615,7 @@ export const listeningRecord = {
   },
 
   /**
-   * WHAT A PRESET LAST PLAYED (0.13.0-rc.6, his preset 24: left with no picture, the repair had
+   * WHAT A PRESET LAST PLAYED (0.13.0-rc.6: a preset left with no picture, the repair had
    * nothing to find its album by). The newest play credited to the slot on this streamer whose
    * album is the slot's name as it was then; a play credited wrongly (a recall that loaded
    * nothing, before cameToNothing) names another album and is passed over. Its album, artist and

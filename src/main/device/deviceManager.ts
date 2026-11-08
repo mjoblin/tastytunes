@@ -174,7 +174,7 @@ export class DeviceManager {
     if (!getSettings().lastHost && this.connection.phase === "idle" && this.devices.length > 0) {
       this.connect(this.devices[0].host);
     } else {
-      // The STRANDED courtesy (the multi-streamer eco report, 2026-08-30):
+      // The STRANDED courtesy (a multi-streamer household on eco standby):
       // the current target has been gone past the grace — eco standby powers
       // its network off, so it is not coming back on its own — and the sweep
       // finds exactly ONE streamer that isn't it. Connecting to the only
@@ -207,7 +207,7 @@ export class DeviceManager {
    * Keep sweeping while not connected, so a streamer that powers on later is
    * noticed without anyone clicking anything — the manager owns this (not the
    * connect gate) because the gate only sweeps while mounted and visible,
-   * which is exactly what stranded the multi-streamer household. Idle after a
+   * which is exactly what stranded a multi-streamer household. Idle after a
    * deliberate disconnect still sweeps (the gate lists what it finds) but
    * auto-connects nowhere: both courtesies carry their own guards.
    */
@@ -503,7 +503,7 @@ export class DeviceManager {
   }
 
   /**
-   * RESUME PUTS THE STREAMER BACK AS IT WAS (0.10.0, user ask 2026-10-06; see HeldState). Wake
+   * RESUME PUTS THE STREAMER BACK AS IT WAS (0.10.0; see HeldState). Wake
    * it, come back on the held source if it woke on another (a TV on HDMI pulls it onto ARC),
    * and for a queue track play the same entry and seek to where it was: the Evo keeps the
    * entry through standby but not the position (live-probed 2026-10-06), so the position is
@@ -608,15 +608,15 @@ export class DeviceManager {
       await this.ensureAwake(this.askedBy(cmd));
       // The wake takes seconds, and the connection can drop and reconnect across it (or another
       // streamer be chosen meanwhile): the command waits a moment for this manager's socket to be
-      // open again, else it fails loudly like any other, never into a closed socket (0.12.0-rc.2,
-      // the 0.11 re-score; S127)
+      // open again, else it fails loudly like any other, never into a closed socket
+      // (0.12.0-rc.2; S127)
       if (!(await this.socketBack(socket))) {
         this.log("warn", "command", `dropped ${cmd.type} — socket not open after the wake`);
         throw new Error(`streamer socket not open after the wake (${cmd.type})`);
       }
     }
 
-    // PASSIVE-ONLY firmware policy (explicit user decision): there is NO command
+    // PASSIVE-ONLY firmware policy (deliberate): there is NO command
     // that sends /system/update with an `action` param. TastyTunes only ever
     // SUBSCRIBES to /system/update (read-only, see smoipSocket SUBSCRIBED_PATHS)
     // to SHOW whether an update is available; it never sends action=CHECK

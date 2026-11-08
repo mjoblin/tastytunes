@@ -1,5 +1,5 @@
-// THE BEHAVIOR TAB (moved out of SettingsScreen.tsx as it was, 0.16.0's tidy before the design pass:
-// each tab its own section, as Libraries, History, Updates, Schedules and AI agents already were).
+// THE BEHAVIOR TAB (moved out of SettingsScreen.tsx as it was, 0.16.0's tidy: each tab its own
+// section, as Libraries, History, Updates, Schedules and AI agents already were).
 import { type MotionMode } from "@shared/model";
 import { useStore } from "@/store";
 import { HeaderChip } from "@/components/chrome/Chrome";
@@ -18,8 +18,8 @@ export function BehaviorSection({ settings, save }: SectionProps): React.JSX.Ele
   return (
     <section className="space-y-3">
       <SettingsCard>
-        {/* First in the section (user call, 2026-08-03): the panel is the
-                app's reach-without-a-window face, and this is its switch. */}
+        {/* First in the section: the panel is the app's reach-without-a-window
+                face, and this is its switch. */}
         <Toggle
           label="Menu bar icon"
           hint="Add a TastyTunes icon to the menu bar to control the streamer without opening the full TastyTunes app. (Found in the system tray on Windows and Linux)."

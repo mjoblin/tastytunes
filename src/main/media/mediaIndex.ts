@@ -117,7 +117,7 @@ const VERSION = 15; // v12: nodes from a browse walk carry their folder titlePat
 // v14: an album folder with no artist takes its artist, year and title from the tracks in it
 // (albumsFromTheirTracks: the Evo's USB drive, 2026-10-11)
 // v15: a server that sends no disc numbers has them read from its file names, all or nothing
-// per album (discsFromFileNames: MinimServer, a user's box sets, 0.12.0-rc.3)
+// per album (discsFromFileNames: MinimServer box sets, 0.12.0-rc.3)
 const PAGE = 500;
 const MAX_TRACKS = 50_000;
 const MAX_CONTAINERS = 10_000;
@@ -273,7 +273,7 @@ const buildingNames = new Map<string, string>();
  *  Browse-only first build), or a REFRESH the app started on its own to keep an index it
  *  already had honest — the counter moved, the TTL passed, the schema changed, a stale id
  *  was revalidated. A refresh is marked quiet on its status, so the indexing toast leaves
- *  it alone (user, 2026-09-15). */
+ *  it alone. */
 type BuildWhy = "first" | "asked" | "refresh";
 const buildingWhy = new Map<string, BuildWhy>();
 
@@ -598,15 +598,15 @@ async function buildNow(
  * SystemUpdateID 54 → 58). The Library re-walks its crumb titles on a miss;
  * the content resolvers trusted the index outright, so a stored playlist
  * entry healed to a stale id and was counted as not found, and Open in
- * Library landed on a container that no longer answered (a user's report,
- * 2026-09-14). Before an answer from such an index is trusted: rebuild when
+ * Library landed on a container that no longer answered. Before an answer
+ * from such an index is trusted: rebuild when
  * the counter moved, or when the id in hand no longer answers (a counter
  * that lies), and WAIT for the walk. True when rebuilt, so the caller asks
  * again; false when the index stood.
  *
  * A search-built index too, since 0.13.0-rc.6: its ids were taken to stand, and Asset re-minted
- * every id of his library with its counter unmoved (his preset 24: the index's Manning
- * Fireworks answered as a blank, upnpBrowser's namesNoObject), so the id in hand is asked of
+ * every id of a library with its counter unmoved (an indexed album answered as a blank,
+ * upnpBrowser's namesNoObject), so the id in hand is asked of
  * every index, and a rebuild keeps the index's own strategy.
  */
 export async function revalidate(
@@ -664,7 +664,7 @@ export async function revalidate(
 }
 
 /**
- * THE SAME ALBUM UNDER ITS CURRENT ID (0.13.0-rc.6, his preset 24). A play or a preset save of an
+ * THE SAME ALBUM UNDER ITS CURRENT ID (0.13.0-rc.6). A play or a preset save of an
  * id its server answered as gone (upnpBrowser's ObjectGoneError) asks here: the server's index is
  * rebuilt, unless a rebuild since already replaced the index the id came from, and the same node
  * is found in it (sameNode). Its current id, or null: no index or no such node to start from, a
@@ -755,8 +755,8 @@ function healOnce(
 }
 
 /** How long after a wake the heal ahead of time first looks; it looks again at four and at
- *  twelve times that, a drive still mounting at the first having nothing to heal by (the
- *  user's Evo, 2026-10-06: begun 8 s after the wake, the heal ended about 25 s after it, and
+ *  twelve times that, a drive still mounting at the first having nothing to heal by (an
+ *  Evo, 2026-10-06: begun 8 s after the wake, the heal ended about 25 s after it, and
  *  a play at 10 s waited for it). The harness shortens it. */
 const HEAL_AHEAD_MS = Number(process.env["TASTYTUNES_HEAL_AHEAD_MS"] ?? 3000);
 let aheadTimers: NodeJS.Timeout[] = [];
@@ -783,10 +783,9 @@ function likelyFor(udn: string): string[] {
 }
 
 /**
- * THE HEAL AHEAD OF TIME (0.10.0; user, 2026-10-06: "broadly speaking, to me it's fine for
- * the app to be doing that sort of thing for improved UX"). The streamer's USB ids move
+ * THE HEAL AHEAD OF TIME (0.10.0). The streamer's USB ids move
  * across every standby, and the first act that needs one used to wait for the heal while a
- * cold drive's folders were listed (about 20 s on the user's stick). A few seconds after the
+ * cold drive's folders were listed (about 20 s on a USB stick). A few seconds after the
  * streamer wakes, or after the app connects to one already awake, the heal runs on its own,
  * one request at a time in the device's lane like any other, so the act finds the index
  * already moved. Never a walk: a heal that declines leaves the index as it was and the act
@@ -858,8 +857,7 @@ const HEAL_ALBUMS = 4;
 const HEAL_LIKELY = 3;
 
 /**
- * THE HEAL WITHOUT A WALK (0.10.0, filed 2026-09-25 from a CXN V2 owner's report: "sometimes
- * it still loses the link to the library, and starts building again from scratch"). After a
+ * THE HEAL WITHOUT A WALK (0.10.0). After a
  * standby or a replug the streamer's USB server re-mints every id, and the first act that
  * needs a fresh one (a playlist, Open in Library, an agent's id) walked the whole drive. The
  * ids change by their mount number alone, so the index is moved onto a mount the root now
@@ -884,7 +882,7 @@ async function heal(
   held: string | null,
   opts: HealOpts = {},
 ): Promise<boolean> {
-  // every reason the heal gives up is logged, so a walk that follows says why (the user's
+  // every reason the heal gives up is logged, so a walk that follows says why (an
   // Evo, 2026-10-06: a silent decline looked like the heal had never run)
   const declined = (why: string): false => {
     console.log(`[mediaIndex] ${server.name}: no heal, ${why}`);
@@ -901,7 +899,7 @@ async function heal(
   if (from == null) return declined("the index is empty");
   const top = await browseChildrenOf(host, server.udn, "0");
   if (typeof top === "string") return declined(`the drive's top level did not answer (${top})`);
-  // A DRIVE CAN HOLD MORE THAN ONE PARTITION (the user's Evo, 2026-10-06: a stick with an EFI
+  // A DRIVE CAN HOLD MORE THAN ONE PARTITION (an Evo, 2026-10-06: a stick with an EFI
   // partition beside the music lists both at its top, "34:0" and "35:0", each renumbered on
   // every wake and in either order; taking the first sent the heal to the empty partition
   // half the time). Every mount the top lists is a candidate, the index's own first (a
@@ -935,8 +933,8 @@ async function heal(
     };
     // THE TRACK CHECKS COME FROM INSIDE THE ALBUM CHECKS (2026-10-06, the heal ahead): after a
     // wake every folder costs a second to list, and tracks drawn from anywhere on the drive
-    // put a dozen chains of folders between the heal and its answer (17 cold folders on the
-    // user's stick, about 25 s after the wake). Two tracks from each sampled album need only
+    // put a dozen chains of folders between the heal and its answer (17 cold folders on a
+    // USB stick, about 25 s after the wake). Two tracks from each sampled album need only
     // the album's own folder beyond what the album's check already listed. A drive whose
     // albums hold no tracks of their own (a tag-built view) draws the rest from the whole.
     const albums = spread(candidate.albums, HEAL_ALBUMS);
@@ -1059,8 +1057,8 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
   if (announceNeeded) announce(status());
   // an index held from before Recently added (0.13.0) has never read its server's own list:
   // read it now, a few requests and no walk, so the Library's shelf is there on the first launch
-  // after an upgrade rather than after the next rebuild (his first try, 2026-10-25: no shelf
-  // until he chose New Albums by hand)
+  // after an upgrade rather than after the next rebuild (without this, no shelf showed until
+  // New Albums was chosen by hand)
   for (const server of servers) {
     const held = indexes.get(server.udn);
     if (held && held.recentAt == null && !building.has(server.udn) && !usbServer(server))
@@ -1092,8 +1090,8 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
         const stale =
           (existing.updateId != null && id !== existing.updateId) ||
           Date.now() - existing.builtAt > TTL_MS;
-        // an unmoved counter is no proof the ids stood: Asset re-minted every id of his library
-        // and kept its counter (0.13.0-rc.6, his preset 24), so one indexed album is asked too,
+        // an unmoved counter is no proof the ids stood: Asset re-minted every id of a library
+        // and kept its counter (0.13.0-rc.6), so one indexed album is asked too,
         // one request, and an answer of "gone" rebuilds as a moved counter would
         if (!stale && !(await idsGone(host, server, existing))) return;
         await build(host, server, existing.strategy, "refresh");
@@ -1132,12 +1130,12 @@ export function searchIndex(
       `${n.title} ${n.artist ?? ""} ${n.album ?? ""} ${(n.composers ?? []).join(" ")}`.toLowerCase();
     return tokens.every((t) => hay.includes(t));
   };
-  // EVERY MATCH (2026-10-11, a user: 1,035 results stopped at "first 500", "Is there a way to
-  // go to the next page?"): the scan is local, the lenses already hold the whole index, and the
-  // Library reveals the results 500 at a time, so nothing here needs a cap.
+  // EVERY MATCH (1,035 results once stopped at "first 500"): the scan is local, the lenses
+  // already hold the whole index, and the Library reveals the results 500 at a time, so nothing
+  // here needs a cap.
   const items: MediaNode[] = [];
   // Hierarchy order — artists make albums, albums contain tracks — mirrored
-  // by the result sections and the kind filter (user call, 2026-07-21).
+  // by the result sections and the kind filter.
   for (const pool of [idx.artists, idx.albums, idx.tracks]) {
     for (const n of pool) if (matches(n)) items.push(n);
   }

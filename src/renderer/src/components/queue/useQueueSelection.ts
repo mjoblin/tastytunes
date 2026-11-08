@@ -8,15 +8,15 @@ import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite } from "@/lib/mediaRef";
 import { onScreenKey } from "@/lib/keyboardOwner";
 
-// The Queue's SELECTION, lifted out of QueueScreen (2026-09-13, the second lift
-// of the screen's hygiene round): the multi-select over the visible rows —
-// the Finder chords, the bare-click rule, the pruning as the queue changes,
-// ⌘A, Escape and the blank-click clearing are the one row grammar in
-// useRowSelection (folded onto it the same evening, over the queue ids) —
-// plus what is the Queue's own: the album header's chord, Delete as Remove
-// with its one undo, the batch heart, and the bar's block moves. The screen
-// keeps the rows and the bar and takes the state back under the old names;
-// the block move belongs to the drag hook and reaches the selection late-bound.
+// The Queue's SELECTION, lifted out of QueueScreen (2026-09-13, after the drag
+// hook): the multi-select over the visible rows — the Finder chords, the
+// bare-click rule, the pruning as the queue changes, ⌘A, Escape and the
+// blank-click clearing are the one row grammar in useRowSelection (folded onto
+// it the same evening, over the queue ids) — plus what is the Queue's own: the
+// album header's chord, Delete as Remove with its one undo, the batch heart, and
+// the bar's block moves. The screen keeps the rows and the bar and takes the
+// state back under the old names; the block move belongs to the drag hook and
+// reaches the selection late-bound.
 
 /** What the selection reads that the screen declares after it (the drag hook's block move). */
 export interface SelectionLate {
@@ -100,9 +100,8 @@ export function useQueueSelection(d: {
     setSelected(new Set());
     // ONE closure, two entry points (the toast button and Cmd-Z consume the
     // same stack entry, so they can never double-restore). Sequential,
-    // ascending positions — parallel restores raced each other's inserts
-    // and resolves; each restore arms the FLIP so neighbors part with
-    // motion (user, 2026-08-28).
+    // ascending positions — parallel restores raced each other's inserts and
+    // resolves; each restore arms the FLIP so neighbors part with motion.
     const undoId = useStore.getState().pushUndo(`Remove ${chosen.length} Tracks`, async () => {
       for (const s of saved) {
         snapQueueRows();
@@ -177,10 +176,10 @@ export function useQueueSelection(d: {
     )
       return;
     // the landing must be SEEN: follow the block to its end of the list, or
-    // "Move to bottom" reads as nothing happening (user, 2026-08-28). An
-    // INSTANT jump — a smooth scroll dies with the reorder's re-render —
-    // and the FLIP supplies the motion: the rows fly in from off-screen
-    // (under reduced motion both are skipped and it is a clean jump).
+    // "Move to bottom" reads as nothing happening. An INSTANT jump — a smooth
+    // scroll dies with the reorder's re-render — and the FLIP supplies the
+    // motion: the rows fly in from off-screen (under reduced motion both are
+    // skipped and it is a clean jump).
     const sc = scrollElRef.current;
     if (sc) sc.scrollTo({ top: where === "top" ? 0 : sc.scrollHeight });
   };

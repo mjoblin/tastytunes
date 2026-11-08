@@ -31,16 +31,16 @@ export type PickerHost = "display" | "tile";
 const settingsFor = (def: SceneDef, host: PickerHost): SceneSettingDef[] =>
   (def.settings ?? []).filter((s) => host === "display" || !s.full);
 /** The section left open last, kept for the session, so the panel reopens where it was left;
- *  All scenes open on the first opening (user, 2026-09-14). */
+ *  All scenes open on the first opening. */
 let lastSection: Section | null = "display";
 
 /**
  * The scene picker: a strip of live tiles, each running its scene small on
  * the playing track, so a scene is chosen by looking rather than by name.
  * Under the tiles one line, the chosen scene's name and blurb with three
- * chips, and under that ONE SECTION AT A TIME or none (the user, 2026-09-12:
- * the reading, the scene's settings and the display-wide settings all at
- * once was "a lot to show"): Reading is the scene's key (what you see, what
+ * chips, and under that ONE SECTION AT A TIME or none (the reading, the
+ * scene's settings and the display-wide settings all at once were too much
+ * to show): Reading is the scene's key (what you see, what
  * it means), Scene its own settings (Shuffle's, under Shuffle), Display the
  * finish, drops and sync every scene shares. Closed by default, since picking
  * and leaving is the common case, so the panel is tiles and a line. Lives in
@@ -62,7 +62,7 @@ export function ScenePicker({
   art: string | null;
   host?: PickerHost;
   /** The host's presence classes (useFadePresence): the picker fades in and out at the
-   *  modals' and panels' beat rather than popping (the user, 2026-09-13). */
+   *  modals' and panels' beat rather than popping. */
   className?: string;
   onPick(id: DisplayScene): void;
 }): React.JSX.Element {
@@ -72,14 +72,14 @@ export function ScenePicker({
   // HONEST TILES (2026-09-15): with nothing real to draw — a station, a cast, a track still
   // being analyzed — the abstract tiles stand still as their icons on the plain well, dimmed,
   // and a notice in the top row's gap between Sleeve and Shuffle says what the scenes need and
-  // what is playing instead (the user: a line in the footer was "too hidden"); the thumbnails
+  // what is playing instead (a line in the footer was too easy to miss); the thumbnails
   // used to drift on the feed's sines whatever played, promising a scene the wall could not keep
   const { live, idle } = useSceneLive(true);
   // the deck scenes (Hi-Fi, Turntable) draw whatever is loaded, so their tiles run
   // when the rest stand still
   const { live: anyLive } = useSceneLive(true, "any");
   // under reduced motion the tiles stand still as their icons: motion only once a scene
-  // is picked (user, 2026-10-06)
+  // is picked
   const reduced = useReducedMotion();
   const notice = !live && idle ? sceneIdleNotice(idle) : null;
   const [section, setSection] = useState<Section | null>(lastSection);
@@ -92,18 +92,17 @@ export function ScenePicker({
     <div
       data-display-scenes
       onClick={(e) => e.stopPropagation()}
-      // the panel is as wide as five tiles and no wider (three rows of them, the user's word
-      // 2026-09-12; seven to a row before), whatever the chosen scene's reading and settings
-      // need: sized to its content, it widened for a wordy scene and the tile grid's
-      // fractional columns spread with it (the user: "the width of all the screen thumbnails
-      // changes"). The reading wraps inside; the settings row wraps inside. It is FLUID
-      // against its host (2026-09-12, the Now Playing tile's picker in a small window): capped
-      // to the host's box, not the viewport, so it never runs under the nav; the tiles wrap to
-      // as many columns as fit, never resizing; and it scrolls inside itself when a section
-      // runs past the host's bottom. The scrollbar's gutter is always reserved, so the width
-      // the tiles lay out in does not depend on whether the panel happens to scroll (with
-      // classic scrollbars that dependence left the grid a row taller after a resize, the
-      // user's report); the panel is a little wider than the tiles to pay for it. Its face
+      // the panel is as wide as five tiles and no wider (three rows of them; seven to a row
+      // before), whatever the chosen scene's reading and settings need: sized to its content,
+      // it widened for a wordy scene and the tile grid's fractional columns spread with it,
+      // so every thumbnail changed width. The reading wraps inside; the settings row wraps
+      // inside. It is FLUID against its host (2026-09-12, the Now Playing tile's picker in a
+      // small window): capped to the host's box, not the viewport, so it never runs under the
+      // nav; the tiles wrap to as many columns as fit, never resizing; and it scrolls inside
+      // itself when a section runs past the host's bottom. The scrollbar's gutter is always
+      // reserved, so the width the tiles lay out in does not depend on whether the panel
+      // happens to scroll (with classic scrollbars that dependence left the grid a row taller
+      // after a resize); the panel is a little wider than the tiles to pay for it. Its face
       // is the app's glass over content, the playback bar's density (80 over a blur): the
       // stage or the art shows through it frosted, and the live tiles stay legible on it
       className={cx(
@@ -111,10 +110,10 @@ export function ScenePicker({
         className,
       )}
     >
-      {/* THE TWO CHOICES THAT ARE NOT SCENES HEAD THE GRID (user, 2026-09-14): Sleeve, the
+      {/* THE TWO CHOICES THAT ARE NOT SCENES HEAD THE GRID: Sleeve, the
           default people expect, at the top left, and Shuffle at the top right, the row's middle
           left empty; the scenes alphabetical in rows of five beneath (four was tried and put
-          back at his word). The grid is capped at five 146px tracks, fewer as its host narrows;
+          back). The grid is capped at five 146px tracks, fewer as its host narrows;
           Shuffle takes the last column whatever the count. In a panel narrower than its full
           width (only ever the Now Playing tile's, in a small window) the tiles are
           three-quarter size, so the smallest window shows a grid rather than a column. Tab
@@ -136,7 +135,7 @@ export function ScenePicker({
         ].map((s) => {
           const active = current === s.id;
           const Icon = s.icon;
-          // the shuffle tile is its icon alone on the plain well (user, 2026-09-14: it had
+          // the shuffle tile is its icon alone on the plain well (it had
           // shown whatever the shuffle was showing, a second copy of another tile, which
           // distracted); the sleeve's tile is the art
           const tileScene: DisplayScene = s.id;
@@ -209,7 +208,7 @@ export function ScenePicker({
           <span className="text-dim">{chosenDef.blurb}</span>
         </div>
         <div className="flex items-center gap-1.5">
-          {/* named by what they cover, not where they live (the user, 2026-09-12: "Scene" beside
+          {/* named by what they cover, not where they live ("Scene" beside
               a row of scenes and "Display" in the tile, where Display is the other view, both
               read wrong); the icons scan, the words settle it */}
           {(
@@ -234,8 +233,7 @@ export function ScenePicker({
           ))}
         </div>
       </div>
-      {/* A SECTION IS AS TALL AS THE CHOSEN SCENE'S SLICE (user, 2026-09-14: "have the bottom
-          part of the modal grow vertically to match the content"): every scene's reading (or
+      {/* A SECTION IS AS TALL AS THE CHOSEN SCENE'S SLICE: every scene's reading (or
           controls) sits in the same grid cell, the chosen one shown and the rest display-none,
           so the panel's bottom edge follows the content as scenes are chosen. It had been as
           tall as the tallest scene's slice so the edge never moved, which left most scenes
@@ -243,7 +241,7 @@ export function ScenePicker({
           no click and no Tab */}
       {section && (
         <div data-display-section={section} className="mt-2 border-t border-edge px-1.5 pt-2">
-          {/* THE ALL SCENES ROWS ARE THE FLOOR (user, 2026-09-14): they are always laid out in
+          {/* THE ALL SCENES ROWS ARE THE FLOOR: they are always laid out in
               the cell, unseen under Reading and This scene, so the section is never shorter
               than them and the panel's edge does not jump up on a one-line reading */}
           <div className="grid">
@@ -362,7 +360,7 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
   const cornerTitle = useStore((s) => s.settings.displayCornerTitle ?? true);
   const cornerClock = useStore((s) => s.settings.displayCornerClock ?? true);
   // the slider is answered locally: a save is an IPC round trip to disk, and a controlled value
-  // that waits for it drags behind the thumb (the user: "very sluggish")
+  // that waits for it drags behind the thumb
   const [sync, setSync] = useState(value);
   useEffect(() => setSync(value), [value]);
   const syncTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -387,7 +385,7 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
             onChange={(v) => void saveSettings({ displayFinish: v })}
           />
           {/* the glass's controls are always in the row, dimmed when Plain: a control that appears
-              rearranges everything beside it (the user: "everything pops around") */}
+              rearranges everything beside it */}
           <span className={cx(!cathode && "opacity-40")}>Curve</span>
           <Segmented
             value={curve}
@@ -486,11 +484,11 @@ function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
 }
 
 /** One of the All scenes rows, in the Settings idiom: the plain noun, the control, and a faint
- *  sentence saying what it does, in view rather than in a tooltip (the user, 2026-09-12: the
- *  words alone "don't read as clear enough"). The sentence sits UNDER the control (user,
- *  2026-09-14: beside it, the controls' differing widths left the sentences starting at
- *  different places with a run of whitespace before each; under, every row reads the same
- *  way, label, control, then what it does). The label is centred on the control's row. */
+ *  sentence saying what it does, in view rather than in a tooltip (the words alone did not
+ *  read clearly enough). The sentence sits UNDER the control (beside it, the controls'
+ *  differing widths left the sentences starting at different places with a run of whitespace
+ *  before each; under, every row reads the same way, label, control, then what it does). The
+ *  label is centred on the control's row. */
 function SettingLine({
   label,
   hint,
@@ -521,7 +519,7 @@ function SceneReading({ def, shuffle }: { def: SceneDef; shuffle: boolean }): Re
               ? `Now showing the ${def.label.toLowerCase()}`
               : `Reading the ${def.label.toLowerCase()}`}
           </div>
-          {/* one entry a row (user, 2026-09-14: entries had shared a row when they fit, and
+          {/* one entry a row (entries had shared a row when they fit, and
               the short ones ran together); an entry wraps within its own words in a narrow
               panel rather than run off the edge. What never breaks is the name from its dot */}
           <div className="flex flex-col gap-y-1">

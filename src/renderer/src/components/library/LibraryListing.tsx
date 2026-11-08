@@ -48,7 +48,7 @@ interface GridLayout {
   presetGap: number;
 }
 
-// FROM THE KEYBOARD (0.14.0, his K1 to K6): each grid or column of rows one Tab stop, Enter
+// FROM THE KEYBOARD (0.14.0): each grid or column of rows one Tab stop, Enter
 // opens a folder or an album as its click does, "." its More menu
 export function ContainerGrid({
   list,
@@ -103,8 +103,7 @@ export function ContainerGrid({
   );
 }
 
-// AN ARTIST PAGE NAMES WHAT IT HOLDS (2026-10-11, user: "do we want to add an 'Albums' title
-// above the albums? i'm a little unclear exactly what this is supposed to be showing"): the
+// AN ARTIST PAGE NAMES WHAT IT HOLDS (without a heading, what the page showed was unclear): the
 // server's own folder for the artist holds what that server decides (Asset: the albums;
 // MinimServer: its sub-indexes, "2 albums", "Date", "Genre"), so the contents are labelled by
 // kind as search results are, never one fixed title that is wrong on some server

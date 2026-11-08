@@ -90,15 +90,13 @@ export function useSearchResults(
   const [radio, setRadio] = useState<RadioStation[] | null>(() =>
     searchMemory.results?.query === searchMemory.query ? searchMemory.results.radio : null,
   );
-  // The query this mount was SEEDED for: its library and radio effects skip
-  // the fetch while q is still that query (the rows are already the answer;
-  // the radio lookup is a network call and showed as a fresh search on every
-  // return — user, 2026-08-23). A different query lifts the skip INSIDE the
-  // effects, never in a cleanup: StrictMode's simulated unmount runs every
-  // cleanup and re-runs every effect, and a cleanup that nulled this ref made
-  // every history return refetch under `npm run dev` (user, 2026-08-23 —
-  // "it still takes a second to load more tracks in") while the built app
-  // was fine.
+  // The query this mount was SEEDED for: its library and radio effects skip the
+  // fetch while q is still that query (the rows are already the answer; the
+  // radio lookup is a network call and showed as a fresh search on every
+  // return). A different query lifts the skip INSIDE the effects, never in a
+  // cleanup: StrictMode's simulated unmount runs every cleanup and re-runs
+  // every effect, and a cleanup that nulled this ref made every history return
+  // refetch under `npm run dev` while the built app was fine.
   const seededQuery = useRef<string | null>(
     searchMemory.results?.query === searchMemory.query && searchMemory.query
       ? searchMemory.query

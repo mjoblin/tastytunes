@@ -812,7 +812,7 @@ function assembleSections(
   };
 }
 
-/** A DROP, as a listener means it (the user's words, 2026-09-07): THREE OR MORE SECONDS OF
+/** A DROP, as a listener means it: THREE OR MORE SECONDS OF
  *  NOTABLE REDUCTION (chill: the beat gone or the level well down) OR ONE OR MORE SECONDS OF
  *  DEFINITE REDUCTION (a breath: near silence) OR A BRIEF TOTAL CUT after a second and a
  *  half of reduced beat, each followed by a SUDDEN return, with the music present before
@@ -943,8 +943,8 @@ export function findDrops(strip: Strip, onsets: Onsets, beats: Beats | null): Dr
     // breath and the cut are then read from the gasp's last frame as well as from the return,
     // and the better reading stands, so no drop reads less than it did. Forests, 1:21: six
     // tenths of near silence, half a second with the level up and the bass gone, the slam at
-    // 1:21.7; read from the slam alone the breath was nil and the drop cleared Loose only
-    // (the user, 2026-09-12, paused in the middle of it: "we didn't detect it"). The riser's
+    // 1:21.7; read from the slam alone the breath was nil and the drop cleared Loose only.
+    // The riser's
     // bass may sit 15 dB under the drop's rather than the chill rule's 21: a sweep has some
     // low content. Without the gasp behind it a level-up stretch is the tail of an ordinary
     // lull and is left alone (a first cut read past any such stretch and re-binned every

@@ -15,7 +15,7 @@ export type LyricsStatus = "loading" | "ready" | "none" | "unreachable";
 
 /** A lookup that never reached LRCLIB is asked again after these waits, in seconds, while the
  *  track stays, and reads as loading meanwhile; the first failure said "No lyrics found" until the
- *  line was toggled off and on (his look, 2026-10-30). Main keeps no failure, so each is a real
+ *  line was toggled off and on. Main keeps no failure, so each is a real
  *  ask. */
 const RETRY_SECS = [5, 15, 45];
 

@@ -84,8 +84,7 @@ const TRACK_SORTS: Array<{
  *  above this many, with the reason in its tip: the verb replaces the queue,
  *  so the honest ceiling is a queue you would actually listen through, and
  *  queue writes are one call per track with no progress affordance, so
- *  fifty stays a few seconds where two hundred was a silent quarter minute
- *  (user call, 2026-09-01). */
+ *  fifty stays a few seconds where two hundred was a silent quarter minute. */
 // Sort + direction persist (view defaults); this is the session workspace —
 // the filter, the facets and the scroll come back as they were left.
 let tracksMem: {
@@ -118,10 +117,10 @@ let tracksMem: {
 };
 
 /**
- * THE TRACKS LENS (2026-09-01, user: "it feels like an obvious gap"): every
- * track across the ready indexes as one flat data list — the surface that
- * answers what Albums cannot ("my most dynamic tracks", "everything over ten
- * minutes"). Assembled from the lens parts the other two already use: the
+ * THE TRACKS LENS (2026-09-01): every track across the ready indexes as one
+ * flat data list — the surface that answers what Albums cannot (the most
+ * dynamic tracks, everything over ten minutes). Assembled from the lens parts
+ * the other two already use: the
  * filter-first sub-row with the Decade and Genre pickers, the sort chip,
  * TrackRow with a reserved DR cell, the Artists lens's selection and
  * drag-to-rail grammar, the shared track menu. Art leads each row (lazy,
@@ -129,7 +128,7 @@ let tracksMem: {
  * album and the artist, as search results already do. The list is WINDOWED
  * — no cap to explain. DR comes from one bulk cache-only read, refreshed
  * when a sweep lands.
- * AS CARDS (0.13.0-rc.4, his picks on "Tracks as Cards"): with the Library's one Rows or Cards
+ * AS CARDS (0.13.0-rc.4): with the Library's one Rows or Cards
  * choice on Cards, the list is a grid of track cards (TrackCards), and the lens's switch beside
  * the sort flips that one choice, as the Albums and Artists lenses' do. A card says the artist and
  * the album under the title, or, sorted by a figure a row shows in a cell of its own (the length,
@@ -146,7 +145,7 @@ export function TracksLens({
   pools: MediaIndexPools[];
   actions: LensActions;
   /** The Tracks view's own Rows or Cards (lensTracksLayout, 0.13.0-rc.4: kept apart from the
-   *  albums', his note on "View Options"). */
+   *  albums'). */
   cards: boolean;
   cardSize: number;
   cardGap: number;
@@ -204,7 +203,7 @@ export function TracksLens({
   );
 
   // the listening record changes with every play: the list is filtered and sorted again on it
-  // only while a sort or the Played facet reads it (0.12.0-rc.2, the 0.11 re-score)
+  // only while a sort or the Played facet reads it (0.12.0-rc.2)
   const record = RECORD_SORTS.has(sort) || mem.played ? play : null;
   const { shown, scopeCounts } = useMemo(() => {
     let list = all;
@@ -294,7 +293,7 @@ export function TracksLens({
     return [t.artist, figure ?? t.album].filter(Boolean).join(FACT_SEP);
   };
 
-  // WINDOWED LIST (2026-09-01, user: the cap read as a wall): render only
+  // WINDOWED LIST (2026-09-01: the cap read as a wall): render only
   // the rows near the viewport, so every sort over thousands of tracks stays
   // flat and nothing needs explaining. Rows are constant-height; the first
   // rendered one is measured, so the math never assumes a pixel. Selection,
@@ -314,7 +313,7 @@ export function TracksLens({
   });
   const start = win.first;
   const end = total === 0 ? 0 : win.last + 1;
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the rows' up and down; Enter is a row's click (it
+  // FROM THE KEYBOARD (0.14.0): the rows' up and down; Enter is a row's click (it
   // plays), "." its More menu; the window renders the current row first
   const keys = useListKeys({
     count: cards ? 0 : total,
@@ -334,8 +333,8 @@ export function TracksLens({
     mem.filter || mem.genre || mem.decade || mem.dr || mem.tempo || mem.format || mem.played,
   );
   const overCap = shown.length > PLAY_THESE_MAX;
-  // CONSTANT GEOMETRY for the split button (user call, 2026-09-01: popping
-  // on and off read as distraction; a standing slot invites the gesture):
+  // CONSTANT GEOMETRY for the split button (popping on and off read as
+  // distraction; a standing slot invites the gesture):
   // always present, its STATE says what's missing — an invitation until the
   // list is narrowed, the cap's reason when too many, live gold when ready.
   const theseState: "invite" | "over" | "empty" | "live" = !narrowed
@@ -478,7 +477,7 @@ export function TracksLens({
           </div>
         </div>
         <div className={`flex items-center ${GAP_WITHIN} shrink-0`}>
-          {/* PLAY THESE BESIDE THE SORT (0.12.0, his call: with the Tempo facet the row wrapped and
+          {/* PLAY THESE BESIDE THE SORT (0.12.0: with the Tempo facet the row wrapped and
               left the verb alone on a line): the facets wrap among themselves, the verb stays */}
           {/* the narrowed list as the queue, in one gesture — the album
               Play button's semantics (replaces the queue) for what's shown */}
@@ -486,8 +485,7 @@ export function TracksLens({
             // a SPLIT button: the one-click primary, and a chevron opening
             // the rest of what a shown list can become — the selection
             // bar's verbs applied to what's shown, plus the two the bar
-            // lacks (user call, 2026-09-01: "the shown list behaves like a
-            // selection")
+            // lacks (the shown list behaves like a selection)
             <div
               // at the row's right end, its tip opens leftward
               className="flex items-center tip-bottom tip-end"

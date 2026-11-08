@@ -21,10 +21,10 @@ export const discFacts = (disc: Pick<Disc, "rows" | "secs">): string =>
 
 /**
  * The Queue screen while the CD is the source (0.10.0, GitHub issue #1): the disc's tracks,
- * READ-ONLY FOR NOW (user, 2026-09-26). The streamer takes next, previous and seek on a disc and
- * never a track by number, so a row is not a button: no play, no drag, no remove, no
- * selection. The Media Library queue is parked, not gone, and the header's switch is the way
- * to it (a sentence saying so under the list went, user 2026-09-26: the switch says it).
+ * READ-ONLY FOR NOW. The streamer takes next, previous and seek on a disc and never a track by
+ * number, so a row is not a button: no play, no drag, no remove, no selection. The Media
+ * Library queue is parked, not gone, and the header's switch is the way to it (a sentence
+ * saying so under the list went: the switch says it).
  */
 export function DiscQueue({
   disc,
@@ -44,8 +44,8 @@ export function DiscQueue({
     if (followQueue) scrollToVisible(currentRow.current, 8);
   }, [disc.head, followQueue]);
 
-  // a note only when a row can read "Track 4" (user, 2026-09-26): names from MusicBrainz need
-  // no credit line, and a lookup on its way lasts a second or two
+  // a note only when a row can read "Track 4": names from MusicBrainz need no credit line, and
+  // a lookup on its way lasts a second or two
   const namesNote =
     disc.names === "musicbrainz" || disc.looking
       ? null

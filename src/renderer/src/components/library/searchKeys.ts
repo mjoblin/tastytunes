@@ -1,5 +1,5 @@
 /**
- * THE LIBRARY'S SEARCH RESULTS FROM THE KEYBOARD (0.14.0, his K1 to K6): one list across the
+ * THE LIBRARY'S SEARCH RESULTS FROM THE KEYBOARD (0.14.0): one list across the
  * windowed lines of results (LibraryScreen's searchLines), where a kind's results are a grid of
  * cards (a line of cards each) or rows, one under another. In a grid all four arrows move, up and
  * down to the card in the same column (or the last of a shorter line); in rows up and down only,

@@ -10,7 +10,7 @@ const BURST_MS = 2500;
 
 /**
  * One success toast when a media index goes building → ready WHILE THE
- * LIBRARY SCREEN IS NOT SHOWING (user ask, 2026-09-01): "<server> indexed ·
+ * LIBRARY SCREEN IS NOT SHOWING: "<server> indexed ·
  * 4,590 tracks", or "2 libraries indexed" for a burst, with the house View
  * jump to the Library. Never while the Library shows — the root doors
  * already announce it in place (their count line fades from "Indexing…" to
@@ -26,7 +26,7 @@ const BURST_MS = 2500;
  * user asked for. A build the app started on its own to keep an index it
  * already had honest arrives marked `quiet` (the streamer's counter moved,
  * the TTL passed, the schema changed, a stale id was revalidated before an
- * answer was trusted) and says nothing when it lands (user, 2026-09-15: the
+ * answer was trusted) and says nothing when it lands (the
  * Evo's USB ids rotate across every standby, so every playlist play and
  * Open in Library after a sleep toasted "streamer indexed · 0 tracks").
  */

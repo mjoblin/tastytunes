@@ -35,8 +35,8 @@ export interface ScreenDef {
 }
 
 /**
- * ORDER IS BY THE USER'S MENTAL MODEL, not by how the data is stored (user
- * call 2026-07-25). Since 2026-07-26 this is the DEFAULT rather than the last
+ * ORDER IS BY THE USER'S MENTAL MODEL, not by how the data is stored.
+ * Since 2026-07-26 this is the DEFAULT rather than the last
  * word: the rail is user-reorderable (settings.navOrder, resolved through
  * sanitizeNavOrder below), and this array is what an untouched install shows
  * and what "Reset order" returns to. Everything below still describes why the
@@ -80,13 +80,13 @@ export const NAV_SCREENS: ScreenDef[] = [
   // V as in faVorites (F belongs to display mode, H was left free for future
   // transport use) — must stay clear of J/L/K/space/M/F like every screen key
   { id: "favorites", label: "Favorites", icon: Heart, key: "V" },
-  // R as in Radio (user call 2026-09-09, 0.8.0): it was T as in Tuner while R
+  // R as in Radio (0.8.0): it was T as in Tuner while R
   // belonged to Recently Played; with History on H, R is Radio's and T is free
   { id: "radio", label: "Radio", icon: RadioTower, key: "R" },
   // History (0.8.0): the device log AND the listening record; the id stays
-  // recently-played so saved nav orders survive the rename. H as in History
-  // (user call 2026-09-06). R, Recently Played's old key, was a hidden alias
-  // for three days and now opens Radio
+  // recently-played so saved nav orders survive the rename. H as in History.
+  // R, Recently Played's old key, was a hidden alias for three days and now
+  // opens Radio
   { id: "recently-played", label: "History", icon: History, key: "H" },
   // Sources USED to be its own row (key 'C'); it's a section of the Device
   // screen now — both are "system, not music", and Sources is one rarely-used

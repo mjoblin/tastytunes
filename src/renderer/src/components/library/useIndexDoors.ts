@@ -26,7 +26,7 @@ export function useIndexDoors(): {
   );
   const crossAvailable = readyIndexes.length >= 2;
   // The button used to POP IN when the second index finished building —
-  // confusing (real-user report). While builds that will unlock cross
+  // confusing. While builds that will unlock cross
   // search are still running, show it disabled with a building tip instead.
   // aria-disabled (not the HTML attr) keeps the hover tip alive — the
   // cross-search server filter's precedent.
@@ -43,7 +43,7 @@ export function useIndexDoors(): {
   // UI it's ever had.
   const lensAvailable = readyIndexes.length >= 1;
   // The doors used to POP IN when the first index finished building — the
-  // same complaint the cross-search button drew (see above), and every
+  // same confusion the cross-search button caused (see above), and every
   // schema bump replays it for everyone. So the block is on screen from the
   // moment anything is BUILDING (or has FAILED — a silent "not indexed" told
   // nobody anything): building doors are dimmed with a pulsing icon and say

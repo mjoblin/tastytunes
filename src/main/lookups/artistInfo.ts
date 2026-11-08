@@ -108,7 +108,7 @@ export function knowsArtist(artist: string): boolean {
 }
 
 // THE ARTICLE'S OTHER IMAGES (0.13.0 round 7, the picture chooser): the images in the artist's
-// Wikipedia article (its media list, no key needed: decisions/0001), as Wikimedia thumbnails, the
+// Wikipedia article (its media list, no key needed), as Wikimedia thumbnails, the
 // lead picture first. Cached per article, settled answers only, like the summary.
 const mediaCache = new DiskCache<string[]>("artistMedia", 1000);
 /** Artists whose details were refreshed: their article's images are asked again, once. */
