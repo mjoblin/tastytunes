@@ -35,8 +35,8 @@ no Xcode project yet; no UI work yet.**
 
 ## Binding constraints for the UI phase
 
-Read the **touch-feel doctrine in ROADMAP.md R5** before writing any UI
-code — native physics, branded skin; feel bugs are release blockers.
+The UI follows one touch-feel rule: native physics, branded skin; feel bugs
+are release blockers.
 `capacitor.config.ts` already encodes the non-negotiables that live at the
 shell layer (background color matched to the app, no white flash).
 

@@ -2,7 +2,7 @@
 // installed yet — swap to `import type { CapacitorConfig } from '@capacitor/cli'`
 // when the port phase adds the Capacitor deps.
 //
-// Doctrine notes encoded here (ROADMAP R5 touch-feel):
+// Touch-feel notes encoded here:
 // - backgroundColor matches the app's dark bg so launch/rotation never
 //   flashes white (classic webby tell #1). Pair with a launch storyboard of
 //   the same color at `cap add ios` time.
