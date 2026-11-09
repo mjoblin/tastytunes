@@ -321,7 +321,7 @@ export function RadioScreen(): React.JSX.Element {
           caption="TastyTunes isn't contacting the radio directory. Your favorited stations still play. Turn the directory back on in Settings › Connections to search for new ones."
         >
           <button
-            onClick={() => jumpToSettingsTab("behavior")}
+            onClick={() => jumpToSettingsTab("connections")}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-all"
           >
             Open Settings
