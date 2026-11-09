@@ -127,7 +127,7 @@ export function AppearanceSection({ settings, save }: SectionProps): React.JSX.E
 
         <Toggle
           label="Accent follows album art"
-          hint="Tint controls and glows with the playing album's dominant color. The tastytunes gold (the logo and the playing markers) never changes."
+          hint="Tint controls and glows with the playing album's dominant color. The tastytunes gold (the logo, the playback controls and the playing markers) never changes."
           checked={settings.accentFollowsArt}
           onChange={(accentFollowsArt) => void save({ accentFollowsArt })}
         />

@@ -14,7 +14,6 @@ import { tt } from "@/api";
 import { CloseButton } from "@/components/controls/CloseButton";
 import { useStore } from "@/store";
 import { usePlayhead } from "@/hooks/usePlayhead";
-import { useArtAccent } from "@/hooks/useArtAccent";
 import { useMotionPreference } from "@/hooks/useMotionPreference";
 import { useTheme } from "@/hooks/useTheme";
 import { useShortcuts } from "@/hooks/useShortcuts";
@@ -62,7 +61,7 @@ export function MiniPlayer(): React.JSX.Element {
   const vol = useVolumeSlider();
   // transport keys only — this window has no screens, palette or overlays
   useShortcuts({ transportOnly: true });
-  const theme = useTheme(settings.theme);
+  useTheme(settings.theme);
   useDisplayFont(settings.displayFont);
 
   // Shared with the bar and the tray panel — playing/busy arrive already
@@ -73,7 +72,6 @@ export function MiniPlayer(): React.JSX.Element {
   const { shownPosition, slider } = useSeekScrub(position, duration, t.seek);
   const { connected, active } = t;
   const meta = deriveNowPlaying(playState, nowPlaying);
-  useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme);
   // Wash and tile both render the last DECODED cover (see useDecodedArt).
   const { art: miniArt } = useDecodedArt(meta.artUrl);
   useMotionPreference(settings.motion);
@@ -126,7 +124,8 @@ export function MiniPlayer(): React.JSX.Element {
   );
 
   return (
-    <div className="h-screen w-screen drag-region" onWheel={onWheel}>
+    // the mini player belongs to the music, as the playback bar does: everything in it is gold
+    <div className="h-screen w-screen drag-region music-gold" onWheel={onWheel}>
       <div className="relative h-full w-full rounded-2xl bg-panel ring-1 ring-edge2 overflow-hidden flex shadow-[0_12px_40px_rgb(0_0_0_/_0.5)]">
         {/* Ambient album-art wash behind the strip — same treatment as the main
             window, off the same decoded-art value so it crossfades between

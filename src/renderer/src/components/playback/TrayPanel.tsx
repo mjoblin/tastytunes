@@ -23,7 +23,6 @@ import type { ScreenLayout } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { usePlayhead } from "@/hooks/usePlayhead";
-import { useArtAccent } from "@/hooks/useArtAccent";
 import { useMotionPreference } from "@/hooks/useMotionPreference";
 import { useTheme } from "@/hooks/useTheme";
 import { useDisplayFont } from "@/hooks/useDisplayFont";
@@ -108,7 +107,7 @@ export function TrayPanel(): React.JSX.Element {
   // where taking focus took your shortcuts away: space, the arrows and the
   // volume keys all went dead while it was open.
   useShortcuts({ transportOnly: true });
-  const theme = useTheme(settings.theme);
+  useTheme(settings.theme);
   useDisplayFont(settings.displayFont);
   useMotionPreference(settings.motion);
 
@@ -190,7 +189,6 @@ export function TrayPanel(): React.JSX.Element {
   // tuned to, and a song that did not need two lines left a gap. The song line
   // is the one that wraps.
   const lines = { title: meta.title, second: meta.subtitle, third: meta.album };
-  useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme);
   const { art } = useDecodedArt(meta.artUrl);
 
   const muted = zoneState?.mute === true;
@@ -247,7 +245,8 @@ export function TrayPanel(): React.JSX.Element {
   const formatText = active ? meta.badges.slice(0, 3).join(" · ") : "";
 
   return (
-    <div className="h-screen w-screen p-1">
+    // the panel belongs to the music, as the playback bar does: everything in it is gold
+    <div className="h-screen w-screen p-1 music-gold">
       <div
         data-tray-holding={holding || undefined}
         className={cx(
@@ -259,8 +258,8 @@ export function TrayPanel(): React.JSX.Element {
           "relative h-full w-full rounded-2xl bg-panel flex flex-col shadow-[0_18px_50px_rgb(0_0_0_/_0.55)] ring-1 transition-[box-shadow,--tw-ring-color]",
           // THE CUE. While a run this panel started is in flight, blur no
           // longer dismisses — and a surface that refuses to close without
-          // saying why reads as stuck, not protective. An accent edge is the
-          // quietest thing that says "held on purpose"; the tab's own row
+          // saying why reads as stuck, not protective. A gold edge (the accent, in
+          // this gold panel) is the quietest thing that says "held on purpose"; the tab's own row
           // carries the count and the cancel.
           holding ? "ring-accent/60" : "ring-edge2",
         )}

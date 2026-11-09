@@ -10,7 +10,7 @@ export function systemTheme(): Theme {
  * Resolve the stored theme preference ('system' follows the OS, live) into the
  * concrete theme: stamps :root.light and returns the resolved value for
  * consumers that need it (useArtAccent clamps its accent per theme).
- * Mounted by both windows (App and MiniPlayer).
+ * Mounted by every window (App, MiniPlayer, TrayPanel).
  */
 export function useTheme(pref: ThemePreference): Theme {
   const [resolved, setResolved] = useState<Theme>(() => (pref === "system" ? systemTheme() : pref));
