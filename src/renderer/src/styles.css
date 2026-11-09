@@ -221,7 +221,7 @@
   --color-faint: #60594a;
   /* gold and the accent AS TEXT, a step deeper than the fills, rings and icons keep (gold text measured
      2.6:1); deeper still on their own wash (an active nav item); and a button's fill under
-     paper-colored text (3.3:1 on the light gold). Amber follows the album art, so its deeper
+     paper-colored text (3.3:1 on the light gold). The accent follows the album art, so its deeper
      forms are mixes, matching #7b5009 and #8a5a0a on the default gold. */
   --color-goldink: #7b5009;
   --color-goldink-wash: #654309;
