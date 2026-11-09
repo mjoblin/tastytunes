@@ -31,10 +31,12 @@
   }
 }
 
-/* Runtime-tintable accent: useArtAccent() overrides this per album.
-   --gold-rgb is the STATIC state/brand gold (per theme, never art-tinted). */
+/* Two colors, two meanings (0.16.0): GOLD is TastyTunes and what's playing (the wordmark, the
+   playing markers, the hi-res lamp; static per theme, never art-tinted); the ACCENT is what you
+   click or select, a dusty teal by default, retinted per album by useArtAccent() when "Accent
+   follows album art" is on. */
 :root {
-  --accent-rgb: 240 168 72;
+  --accent-rgb: 132 172 162;
   --gold-rgb: 240 168 72;
   /* optical-size correction for the chosen display face (useDisplayFont
      overrides per face); 1 = Fraunces, the default. Applied via the
@@ -192,7 +194,7 @@
 :root.light {
   /* Gold and the accent both need the darker light-tuning: a bright dark-theme color all but
      vanishes on paper. useArtAccent applies the same clamp when tinting per-album. */
-  --accent-rgb: 178 118 16;
+  --accent-rgb: 90 132 122;
   --gold-rgb: 178 118 16;
   /* Selection washes need more pigment on paper than on the dark faceplate,
      where a faint tint over near-black already reads as a lit chip. */
