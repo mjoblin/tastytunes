@@ -249,7 +249,7 @@ export function DisplayMode(): React.JSX.Element {
         title="Scene (Tab steps through them)"
         className={cx(
           "absolute top-4 right-40 z-20 p-2 rounded-full hover:bg-veil2 transition-opacity",
-          scenesOpen || stage ? "text-gold" : "text-dim hover:text-ink",
+          scenesOpen || stage ? "text-accent" : "text-dim hover:text-ink",
           cursorIdle && !scenesOpen ? "opacity-0" : "opacity-100",
         )}
       >
@@ -271,7 +271,7 @@ export function DisplayMode(): React.JSX.Element {
           title={settings.displayWaveform ? "Hide waveform" : "Show waveform"}
           className={cx(
             "absolute top-4 right-28 z-20 p-2 rounded-full hover:bg-veil2 transition-opacity",
-            settings.displayWaveform ? "text-gold" : "text-dim hover:text-ink",
+            settings.displayWaveform ? "text-accent" : "text-dim hover:text-ink",
             cursorIdle ? "opacity-0" : "opacity-100",
           )}
         >
@@ -284,7 +284,7 @@ export function DisplayMode(): React.JSX.Element {
           title={settings.displayLyrics ? "Hide lyrics" : "Show lyrics"}
           className={cx(
             "absolute top-4 right-16 z-20 p-2 rounded-full hover:bg-veil2 transition-opacity",
-            settings.displayLyrics ? "text-gold" : "text-dim hover:text-ink",
+            settings.displayLyrics ? "text-accent" : "text-dim hover:text-ink",
             cursorIdle ? "opacity-0" : "opacity-100",
           )}
         >

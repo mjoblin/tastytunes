@@ -275,7 +275,7 @@ function ToastHost(): React.JSX.Element | null {
           onClick={dismissToast}
           style={
             {
-              "--toast-accent": toast.kind === "error" ? "var(--alert-rgb)" : "var(--gold-rgb)",
+              "--toast-accent": toast.kind === "error" ? "var(--alert-rgb)" : "var(--accent-rgb)",
             } as React.CSSProperties
           }
           className={cx(
@@ -289,15 +289,15 @@ function ToastHost(): React.JSX.Element | null {
             "bg-panel/70 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]",
             toast.kind === "error"
               ? "ring-alert/45"
-              : "ring-gold/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--gold-rgb)_/_0.10)]",
+              : "ring-accent/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--accent-rgb)_/_0.10)]",
           )}
         >
           {toast.kind === "error" ? (
             <CircleAlert size={14} className="text-alert shrink-0" />
           ) : toast.kind === "working" ? (
-            <Loader2 size={14} className="text-gold shrink-0 motion-safe:animate-spin" />
+            <Loader2 size={14} className="text-accent shrink-0 motion-safe:animate-spin" />
           ) : (
-            <CircleCheck size={14} className="text-gold shrink-0" />
+            <CircleCheck size={14} className="text-accent shrink-0" />
           )}
           <span className="flex-1 min-w-0">{toast.text}</span>
           {toast.action && (
@@ -316,7 +316,7 @@ function ToastHost(): React.JSX.Element | null {
                 "ml-2 shrink-0 text-[12px] px-3 py-1.5 rounded-md ring-1 font-medium transition-all",
                 toast.kind === "error"
                   ? "ring-alert/40 text-alert hover:bg-alert/10 hover:ring-alert/60"
-                  : "ring-gold/35 text-gold hover:bg-golddim hover:ring-gold/55",
+                  : "ring-accent/35 text-accent hover:bg-accentdim hover:ring-accent/55",
               )}
             >
               {toast.action.label}
@@ -576,7 +576,7 @@ function ConnectGate(): React.JSX.Element {
                 data-tip="The whole app against a built-in streamer with sample libraries."
                 className="tip-bottom flex items-center gap-1.5 text-[13px] px-4 py-2 motion-safe:active:scale-95"
               >
-                <Sparkles size={14} className="text-gold/80" />
+                <Sparkles size={14} className="text-accent/80" />
                 Try the demo
               </HeaderChip>
             )}
@@ -617,7 +617,7 @@ function ConnectGate(): React.JSX.Element {
               onClick={() => void tt.demoStart()}
               className="mt-4 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
             >
-              <Sparkles size={14} className="text-gold/70" />
+              <Sparkles size={14} className="text-accent/70" />
               Try the built-in demo, no streamer needed →
             </button>
           )}

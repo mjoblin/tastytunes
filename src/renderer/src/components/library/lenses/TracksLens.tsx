@@ -336,7 +336,7 @@ export function TracksLens({
   // CONSTANT GEOMETRY for the split button (popping on and off read as
   // distraction; a standing slot invites the gesture):
   // always present, its STATE says what's missing — an invitation until the
-  // list is narrowed, the cap's reason when too many, live gold when ready.
+  // list is narrowed, the cap's reason when too many, live accent when ready.
   const theseState: "invite" | "over" | "empty" | "live" = !narrowed
     ? "invite"
     : shown.length === 0

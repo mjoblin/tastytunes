@@ -1170,7 +1170,10 @@ img {
   :is(.text-gold, .text-gold\/50, .text-gold\/70, .text-gold\/80, .text-gold\/90):not(svg) {
   color: var(--color-goldink);
 }
-:root.light :is(.text-accent, .text-accent\/70, .text-accent\/90):not(svg) {
+:root.light
+  :is(.text-accent, .text-accent\/50, .text-accent\/70, .text-accent\/80, .text-accent\/90):not(
+    svg
+  ) {
   color: var(--color-accentink);
 }
 :root.light .bg-golddim.text-gold:not(svg) {

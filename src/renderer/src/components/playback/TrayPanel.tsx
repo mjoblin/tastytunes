@@ -259,10 +259,10 @@ export function TrayPanel(): React.JSX.Element {
           "relative h-full w-full rounded-2xl bg-panel flex flex-col shadow-[0_18px_50px_rgb(0_0_0_/_0.55)] ring-1 transition-[box-shadow,--tw-ring-color]",
           // THE CUE. While a run this panel started is in flight, blur no
           // longer dismisses — and a surface that refuses to close without
-          // saying why reads as stuck, not protective. A gold edge is the
+          // saying why reads as stuck, not protective. An accent edge is the
           // quietest thing that says "held on purpose"; the tab's own row
           // carries the count and the cancel.
-          holding ? "ring-gold/60" : "ring-edge2",
+          holding ? "ring-accent/60" : "ring-edge2",
         )}
       >
         <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
@@ -342,7 +342,7 @@ export function TrayPanel(): React.JSX.Element {
                           onClick={heart.toggle}
                           className={cx(
                             "tip-bottom shrink-0 p-0.5 rounded transition-colors",
-                            heart.active ? "text-gold" : "text-faint hover:text-ink",
+                            heart.active ? "text-accent" : "text-faint hover:text-ink",
                           )}
                         >
                           <Heart size={12} fill={heart.active ? "currentColor" : "none"} />

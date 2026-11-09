@@ -157,7 +157,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
             {netRequests.map((r) => (
               <div key={r.id} className="flex gap-2 py-[1px] items-baseline">
                 <span className="text-faint shrink-0">{time(r.at)}</span>
-                <span className="text-gold/80 shrink-0 w-24 truncate">{r.service}</span>
+                <span className="text-accent/80 shrink-0 w-24 truncate">{r.service}</span>
                 <span className="text-faint shrink-0">{r.method}</span>
                 <span className="text-dim truncate flex-1 min-w-0">
                   {r.url.replace(/^https?:\/\//, "")}

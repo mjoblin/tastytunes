@@ -264,7 +264,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                       className={cx(
                         "group/chip flex items-center rounded-full ring-1 transition-all",
                         active
-                          ? "ring-gold/50 bg-golddim text-gold"
+                          ? "ring-accent/50 bg-accentdim text-accent"
                           : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
                       )}
                     >
@@ -479,7 +479,7 @@ function ToneSwitch({
       onClick={() => onChange(!checked)}
       className={cx(
         "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-        checked ? "bg-gold" : "bg-veil2 ring-1 ring-edge",
+        checked ? "bg-accent" : "bg-veil2 ring-1 ring-edge",
       )}
     >
       <span
@@ -583,11 +583,11 @@ function BandSlider({
           />
           <div
             className={cx(
-              "absolute left-1/2 -translate-x-1/2 translate-y-1/2 h-3.5 w-3.5 rounded-full bg-gold",
+              "absolute left-1/2 -translate-x-1/2 translate-y-1/2 h-3.5 w-3.5 rounded-full bg-accent",
               "transition-shadow",
               dragging
-                ? "shadow-[0_0_10px_rgb(var(--gold-rgb)_/_0.8)]"
-                : "group-hover:shadow-[0_0_8px_rgb(var(--gold-rgb)_/_0.7)]",
+                ? "shadow-[0_0_10px_rgb(var(--accent-rgb)_/_0.8)]"
+                : "group-hover:shadow-[0_0_8px_rgb(var(--accent-rgb)_/_0.7)]",
             )}
             style={{ bottom: `${ratio * 100}%` }}
           />
@@ -596,7 +596,7 @@ function BandSlider({
       <span
         className={cx(
           "font-mono text-[10px] leading-none",
-          shown !== 0 ? "text-gold" : "text-faint",
+          shown !== 0 ? "text-accent" : "text-faint",
         )}
         data-eq-gain={label}
       >
@@ -699,7 +699,7 @@ function CenteredSlider({
           style={{ left: `${centerRatio * 100}%` }}
         />
         <div
-          className="absolute inset-y-0 rounded-full bg-gold"
+          className="absolute inset-y-0 rounded-full bg-accent"
           style={{
             left: `${Math.min(ratio, centerRatio) * 100}%`,
             right: `${(1 - Math.max(ratio, centerRatio)) * 100}%`,
@@ -707,8 +707,8 @@ function CenteredSlider({
         />
         <div
           className={cx(
-            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-gold",
-            "shadow-[0_0_8px_rgb(var(--gold-rgb)_/_0.7)] transition-opacity",
+            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-accent",
+            "shadow-[0_0_8px_rgb(var(--accent-rgb)_/_0.7)] transition-opacity",
             dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           )}
           style={{ left: `${ratio * 100}%` }}

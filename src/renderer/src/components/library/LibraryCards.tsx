@@ -25,7 +25,7 @@ import { CARD_HELD, CARD_HOVER, CARD_TRANSITION } from "@/lib/cardHover";
 
 /**
  * Art-corner heart (top-right — the preset-card speaker-chip idiom):
- * hover-revealed control normally, but a set heart stays visible in gold —
+ * hover-revealed control normally, but a set heart stays visible in the accent —
  * presence + color IS the indicator. A DIRECT child of the (scaling) card,
  * not of the art tile: it still zooms with the hover animation, but its
  * tooltip escapes the art's overflow-hidden clip (tip grows inward via
@@ -59,7 +59,7 @@ function HeartChip({
         "tip-bottom tip-end absolute top-3.5 right-3.5 z-10 transition-all motion-safe:active:scale-90 cursor-pointer",
         cardChip(),
         favorited
-          ? "text-gold opacity-100"
+          ? "text-accent opacity-100"
           : cx(
               "text-dim hover:text-ink",
               held ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
@@ -509,7 +509,7 @@ function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Elemen
   );
 }
 
-/** Row-cluster heart: hover-revealed control, permanently gold when set. */
+/** Row-cluster heart: hover-revealed control, permanently the accent when set. */
 
 export function ContainerRow({
   node,

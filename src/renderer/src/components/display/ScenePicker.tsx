@@ -158,7 +158,7 @@ export function ScenePicker({
               <div
                 className={cx(
                   "relative h-[76px] w-[134px] @max-[740px]:h-[62px] @max-[740px]:w-[110px] overflow-hidden rounded-lg bg-bg ring-1",
-                  active ? "ring-gold" : "ring-edge",
+                  active ? "ring-accent" : "ring-edge",
                 )}
               >
                 {s.id === "shuffle" ? (
@@ -187,7 +187,7 @@ export function ScenePicker({
               <span
                 className={cx(
                   "flex items-center gap-1 text-[11.5px]",
-                  active ? "text-gold" : "text-dim group-hover:text-ink",
+                  active ? "text-accent" : "text-dim group-hover:text-ink",
                 )}
               >
                 <Icon size={11} />
@@ -617,7 +617,7 @@ function ShuffleRow(): React.JSX.Element {
                 onClick={() => toggle(sc.id as Shuffleable)}
                 className={cx(
                   "tip-top flex h-7 w-7 items-center justify-center rounded-md transition-colors",
-                  included ? "text-gold hover:bg-veil" : "text-faint opacity-50 hover:opacity-80",
+                  included ? "text-accent hover:bg-veil" : "text-faint opacity-50 hover:opacity-80",
                 )}
               >
                 <In size={13} />

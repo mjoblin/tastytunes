@@ -49,7 +49,7 @@ export const sortSearch = (list: MediaNode[], sort: SearchSort, reversed: boolea
 // Find-recall memory: the session's last search — scope, query, controls,
 // and a results snapshot for scopes that would cost a live round-trip to
 // re-run (index-backed scopes re-execute instead: free and always fresh).
-// ⌘F and the gold search buttons restore it with the query text selected,
+// ⌘F and the accent search buttons restore it with the query text selected,
 // browser-find style. Session-only, like the memories above — never a
 // setting. The nav's "Library" front door is unaffected.
 let searchMemory: {

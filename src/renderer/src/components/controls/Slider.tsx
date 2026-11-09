@@ -289,14 +289,14 @@ export function Slider({
           track(shown)
         ) : (
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-gold"
+            className="absolute inset-y-0 left-0 rounded-full bg-accent"
             style={{ width: `${shown * 100}%` }}
           />
         )}
         <div
           className={cx(
-            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-gold",
-            "shadow-[0_0_8px_rgb(var(--gold-rgb)_/_0.7)] transition-opacity",
+            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-accent",
+            "shadow-[0_0_8px_rgb(var(--accent-rgb)_/_0.7)] transition-opacity",
             dragValue !== null || thumb === "always"
               ? "opacity-100"
               : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",

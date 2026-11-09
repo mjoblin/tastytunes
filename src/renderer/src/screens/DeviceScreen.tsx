@@ -360,7 +360,7 @@ export function DeviceScreen(): React.JSX.Element {
                   onClick={() => void tt.demoStart()}
                   className="mt-9 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
                 >
-                  <Sparkles size={14} className="text-gold/70" />
+                  <Sparkles size={14} className="text-accent/70" />
                   Try the built-in demo, no streamer needed →
                 </button>
               )}
@@ -430,20 +430,20 @@ export function DeviceScreen(): React.JSX.Element {
                   control — the streamer reports its own self-check and updating
                   is done in the Cambridge Audio app or the web admin. */}
                 {firmwareUpdate?.updating ? (
-                  <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
-                    <Loader2 size={14} className="spin text-gold shrink-0 mt-px" />
+                  <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-accent/40 bg-accentdim px-3 py-2.5">
+                    <Loader2 size={14} className="spin text-accent shrink-0 mt-px" />
                     <div className="min-w-0">
-                      <div className="text-[12.5px] text-gold">Updating firmware…</div>
+                      <div className="text-[12.5px] text-accent">Updating firmware…</div>
                       <div className="text-[11px] text-faint mt-0.5">
                         The streamer is installing an update. Leave it powered on until it finishes.
                       </div>
                     </div>
                   </div>
                 ) : firmwareUpdate?.updateAvailable ? (
-                  <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
-                    <ArrowUpCircle size={14} className="text-gold shrink-0 mt-px" />
+                  <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-accent/40 bg-accentdim px-3 py-2.5">
+                    <ArrowUpCircle size={14} className="text-accent shrink-0 mt-px" />
                     <div className="min-w-0">
-                      <div className="text-[12.5px] text-gold">Firmware update available</div>
+                      <div className="text-[12.5px] text-accent">Firmware update available</div>
                       <div className="text-[11px] text-faint mt-0.5">
                         Install it in the Cambridge Audio app or the streamer&rsquo;s web admin.
                         TastyTunes never updates firmware itself.
@@ -451,7 +451,7 @@ export function DeviceScreen(): React.JSX.Element {
                     </div>
                   </div>
                 ) : firmwareUpdate ? (
-                  // Calm positive confirmation (not gold — this is the normal state),
+                  // Calm positive confirmation (not the accent — this is the normal state),
                   // so the user gets the same "you're up to date" reassurance the
                   // streamer's own web page gives.
                   <div className="flex items-center gap-2 text-[12px] text-dim">

@@ -215,7 +215,7 @@ export function AlbumHeader(
               className={cx(
                 "tip-bottom p-2 rounded-full ring-1 ring-edge bg-panel/70 transition-all motion-safe:active:scale-90",
                 nodeFavorited(albumNode)
-                  ? "text-gold hover:text-ink"
+                  ? "text-accent hover:text-ink"
                   : "text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
               )}
             >
@@ -316,7 +316,7 @@ export function AlbumCompactVerbs(
         onClick={() => heartNode(albumNode)}
         className={cx(
           "tip-bottom grid h-6 w-6 place-items-center rounded-full transition-all motion-safe:active:scale-90",
-          hearted ? "text-gold hover:text-ink" : "text-dim hover:bg-veil hover:text-ink",
+          hearted ? "text-accent hover:text-ink" : "text-dim hover:bg-veil hover:text-ink",
         )}
       >
         <Heart size={14} fill={hearted ? "currentColor" : "none"} />

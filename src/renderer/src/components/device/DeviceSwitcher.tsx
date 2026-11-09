@@ -75,7 +75,7 @@ export function StreamerList({ onPick }: { onPick(): void }): React.JSX.Element 
           title="Find devices"
           onClick={() => void tt.discover()}
           disabled={discovering}
-          className="p-1 text-faint hover:text-gold transition-colors disabled:opacity-50"
+          className="p-1 text-faint hover:text-accent transition-colors disabled:opacity-50"
         >
           {discovering ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
         </button>
@@ -143,7 +143,7 @@ export function DeviceSwitcher(): React.JSX.Element | null {
         onClick={() => setOpen((o) => !o)}
         className={cx(
           "tip-top p-2 rounded-md transition-colors",
-          open ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
+          open ? "text-accent bg-accentdim" : "text-dim hover:text-ink hover:bg-veil",
         )}
       >
         <MonitorSpeaker size={16} strokeWidth={1.8} />

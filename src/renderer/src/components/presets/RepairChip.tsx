@@ -210,7 +210,7 @@ export function RepairChip({
                     </span>
                   )}
                   <ConfirmActions
-                    tone="gold"
+                    tone="accent"
                     busy={saving}
                     verb={saving ? "Repairing…" : `Save to slot ${preset.id}`}
                     onCancel={() => setOpen(false)}

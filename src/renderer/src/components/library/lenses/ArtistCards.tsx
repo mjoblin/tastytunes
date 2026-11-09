@@ -64,7 +64,7 @@ export function AzRail({
         <button
           key={l}
           onClick={() => onJump(l)}
-          className="px-1 text-[9.5px] leading-[13px] font-mono text-faint hover:text-gold transition-colors"
+          className="px-1 text-[9.5px] leading-[13px] font-mono text-faint hover:text-accent transition-colors"
         >
           {l}
         </button>

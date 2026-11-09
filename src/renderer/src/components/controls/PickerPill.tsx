@@ -22,11 +22,11 @@ import { cx, fmtCount } from "@/lib/format";
  * facet values): the width grows to a new widest, never shrinks.
  * A SETTING'S CHOICE TOO (`choice`, 0.13.0: Settings › Libraries' Recently added list in the app's
  * own dropdown rather than a native select): always one value, so no clearing row and a pick never
- * toggles off, no counts, the chip in its resting look (gold says a filter is on), the list under
+ * toggles off, no counts, the chip in its resting look (the accent says a filter is on), the list under
  * the chip's right edge.
  * INSIDE A FILTER BOX (`inline`, 0.13.0-rc.4: the Tracks lens's "search in" sits in the filter
  * box, where a toolbar already full has no room for a chip): the same label held at its widest,
- * the same list and counts, drawn as the box's own text, gold when a value is chosen; the clearing
+ * the same list and counts, drawn as the box's own text, the accent when a value is chosen; the clearing
  * row may carry its count too (`clearCount`).
  */
 // 112 (from comparison shots): at 160 one long genre ("Contemporary Hip Hop")
@@ -105,7 +105,7 @@ export function PickerPill({
     </span>
   );
   const chevron = (
-    <ChevronDown size={12} className={active && !choice ? "text-gold/70" : "text-faint"} />
+    <ChevronDown size={12} className={active && !choice ? "text-accent/70" : "text-faint"} />
   );
   return (
     // inside a filter box a click is the picker's, never the box's focus-the-text
@@ -119,7 +119,7 @@ export function PickerPill({
           onClick={() => setOpen((o) => !o)}
           className={cx(
             "no-drag flex items-center gap-0.5 text-[12px] transition-colors",
-            active ? "text-gold" : open ? "text-ink" : "text-dim hover:text-ink",
+            active ? "text-accent" : open ? "text-ink" : "text-dim hover:text-ink",
             truncated && "tip-bottom",
           )}
         >
@@ -160,7 +160,9 @@ export function PickerPill({
                 }}
                 className={cx(
                   "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
-                  value === null ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
+                  value === null
+                    ? "text-accent bg-accentdim"
+                    : "text-dim hover:text-ink hover:bg-veil",
                 )}
               >
                 <span className="min-w-0 flex-1 truncate">{clearLabel}</span>
@@ -182,7 +184,7 @@ export function PickerPill({
                 className={cx(
                   "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
                   value === o.value
-                    ? "text-gold bg-golddim"
+                    ? "text-accent bg-accentdim"
                     : "text-dim hover:text-ink hover:bg-veil",
                 )}
               >

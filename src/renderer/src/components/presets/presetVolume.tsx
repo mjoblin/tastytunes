@@ -16,9 +16,9 @@ export interface PresetVolumeProps {
 
 /**
  * Feature 10's popover, shared by rows and cards: the app's anchored popover (PopoverCard), so it
- * opens where it was asked for, under the gold speaker or where the ⋯ menu stood, and is clamped
+ * opens where it was asked for, under the speaker or where the ⋯ menu stood, and is clamped
  * on screen (it opened right-aligned and upward before 0.12.0, landing over the next card). Saving
- * is EXPLICIT: the slider only stages a draft and the gold Set button commits, so clicking away
+ * is EXPLICIT: the slider only stages a draft and the Set button commits, so clicking away
  * always means "never mind".
  */
 export function usePresetVolumePopover(
@@ -26,7 +26,7 @@ export function usePresetVolumePopover(
   onVolume: (level: number | null) => void,
 ): {
   open: boolean;
-  /** Opens under an element (the gold speaker). */
+  /** Opens under an element (the speaker). */
   openFrom(e: { currentTarget: Element; stopPropagation(): void }): void;
   /** Opens at a point (where the ⋯ menu that offered "Preset volume…" stood). */
   openAt(at: { x: number; y: number }): void;
@@ -66,7 +66,7 @@ export function usePresetVolumePopover(
       >
         <span className="flex items-center justify-between mb-2">
           <span className="microlabel text-dim">preset volume</span>
-          <span className="font-mono text-[11px] text-gold tabular-nums">{level}%</span>
+          <span className="font-mono text-[11px] text-accent tabular-nums">{level}%</span>
         </span>
         <Slider
           value={level / 100}
@@ -83,7 +83,7 @@ export function usePresetVolumePopover(
         {/* the app's action row (Confirm): Cancel and Set right-aligned; Clear, which removes
             the preset's volume rather than setting one, apart on the left */}
         <ConfirmActions
-          tone="gold"
+          tone="accent"
           verb={`Set ${level}%`}
           onCancel={() => setAt(null)}
           onConfirm={() => {

@@ -34,10 +34,10 @@ function MissedRow({ dueAt }: { dueAt: number }): React.JSX.Element {
   return (
     <div
       data-missed-schedule
-      className="flex items-center gap-3 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2"
+      className="flex items-center gap-3 rounded-lg ring-1 ring-accent/40 bg-accentdim px-3 py-2"
     >
-      <AlarmClock size={14} strokeWidth={1.9} className="shrink-0 text-gold" />
-      <span className="flex-1 min-w-0 text-[12.5px] text-gold">
+      <AlarmClock size={14} strokeWidth={1.9} className="shrink-0 text-accent" />
+      <span className="flex-1 min-w-0 text-[12.5px] text-accent">
         Missed {time} while your computer was asleep.
       </span>
       <PrimaryButton
@@ -50,7 +50,7 @@ function MissedRow({ dueAt }: { dueAt: number }): React.JSX.Element {
         onClick={() => void tt.scheduleDismissMissed()}
         data-tip="Dismiss"
         aria-label="Dismiss the missed schedule"
-        className="tip-top tip-end shrink-0 flex items-center justify-center h-7 w-7 rounded-md text-gold/70 hover:text-gold hover:bg-gold/10 motion-safe:active:scale-90 transition-all"
+        className="tip-top tip-end shrink-0 flex items-center justify-center h-7 w-7 rounded-md text-accent/70 hover:text-accent hover:bg-accent/10 motion-safe:active:scale-90 transition-all"
       >
         <X size={14} strokeWidth={2} />
       </button>

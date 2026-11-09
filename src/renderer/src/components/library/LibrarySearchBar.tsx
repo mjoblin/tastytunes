@@ -8,7 +8,7 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 import { historyKeyOnArrival } from "@/lib/historyKeys";
 
 // The Library's SEARCH BAR and its result controls, lifted out of
-// LibraryScreen's render (2026-09-13, the fifth lift's third part): the gold
+// LibraryScreen's render (2026-09-13, the fifth lift's third part): the accent
 // bar that replaces the breadcrumbs in search mode, with the input, the count,
 // the clear and the way back to browsing, and under it the kind filter, the
 // server slice and the sort. Everything it shows is the search hook's own
@@ -91,13 +91,13 @@ export function LibrarySearchBar(
   } = p;
   return (
     <>
-      {/* search mode: an unmistakable gold bar replaces the breadcrumbs */}
+      {/* search mode: an unmistakable accent bar replaces the breadcrumbs */}
       {searchMode && (
         <div
           data-library-search-bar
-          className="no-drag mx-8 mb-3 flex items-center gap-3 px-4 py-2 rounded-xl ring-1 ring-gold/40 bg-golddim"
+          className="no-drag mx-8 mb-3 flex items-center gap-3 px-4 py-2 rounded-xl ring-1 ring-accent/40 bg-accentdim"
         >
-          <Search size={15} className="text-gold shrink-0" />
+          <Search size={15} className="text-accent shrink-0" />
           <input
             ref={searchInputRef}
             data-filter-input
@@ -127,19 +127,19 @@ export function LibrarySearchBar(
                 : `Search all of ${serverName ?? "this library"}…`
             }
             spellCheck={false}
-            className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px] text-ink placeholder:text-gold/50"
+            className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px] text-ink placeholder:text-accent/50"
           />
           {searching ? (
-            <span className="shrink-0 text-[12px] text-gold/80 motion-safe:animate-pulse">
+            <span className="shrink-0 text-[12px] text-accent/80 motion-safe:animate-pulse">
               searching…
             </span>
           ) : crossMode && crossState ? (
-            <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
+            <span className="shrink-0 font-mono text-[11px] text-accent/80 tabular-nums">
               {crossTotal} result{crossTotal === 1 ? "" : "s"}
               {crossTotal > crossItemCount && `${FACT_SEP}first ${crossItemCount}`}
             </span>
           ) : searchState ? (
-            <span className="shrink-0 font-mono text-[11px] text-gold/80 tabular-nums">
+            <span className="shrink-0 font-mono text-[11px] text-accent/80 tabular-nums">
               {searchState.total} result{searchState.total === 1 ? "" : "s"}
               {searchState.total > searchState.items.length &&
                 `${FACT_SEP}first ${searchState.items.length}`}

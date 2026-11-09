@@ -9,7 +9,7 @@ type Props = Pick<ReturnType<typeof useDragExtent>, "dragging" | "snapped" | "ha
 };
 
 /**
- * The drawers' edge resize grip: invisible until hovered (or dragging), gold
+ * The drawers' edge resize grip: invisible until hovered (or dragging), the accent
  * while sitting on the default detent so the snap is felt AND seen.
  */
 export function PanelResizeHandle({
@@ -38,7 +38,7 @@ export function PanelResizeHandle({
           "absolute rounded-full transition-opacity",
           vertical ? "inset-y-0 left-[2px] w-[3px]" : "inset-x-0 top-[2px] h-[3px]",
           dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-          dragging && snapped ? "bg-gold/70" : "bg-edge2",
+          dragging && snapped ? "bg-accent/70" : "bg-edge2",
         )}
       />
     </div>

@@ -391,7 +391,7 @@ export function ArtistPictureDialog({
                     type="button"
                     data-artist-picture-fanart-link
                     onClick={() => void tt.openExternal("https://fanart.tv/")}
-                    className="text-dim underline decoration-gold/50 underline-offset-2 hover:text-ink"
+                    className="text-dim underline decoration-accent/50 underline-offset-2 hover:text-ink"
                   >
                     fanart.tv
                   </button>{" "}
@@ -446,7 +446,7 @@ export function ArtistPictureDialog({
         </div>
         <ConfirmActions
           modal
-          tone="gold"
+          tone="accent"
           verb="Use this picture"
           busy={!pick || saving}
           onCancel={onClose}
@@ -622,7 +622,7 @@ function Tiles({
               className={cx(
                 "relative block overflow-hidden rounded-lg bg-veil focus-kbd:outline-none",
                 on
-                  ? "ring-2 ring-gold"
+                  ? "ring-2 ring-accent"
                   : "ring-1 ring-edge hover:ring-edge2 focus-kbd:ring-2 focus-kbd:ring-edge2",
               )}
               style={{ width: TILE_PX, height: TILE_PX }}
@@ -720,7 +720,7 @@ function LargeView({
               type="button"
               data-artist-picture-page
               onClick={() => void tt.openExternal(tile.page ?? "")}
-              className="text-dim underline decoration-gold/50 underline-offset-2 hover:text-ink"
+              className="text-dim underline decoration-accent/50 underline-offset-2 hover:text-ink"
             >
               {/commons\.wikimedia\.org/.test(tile.page)
                 ? "Open on Wikimedia Commons"
@@ -736,7 +736,7 @@ function LargeView({
           data-artist-picture-use
           disabled={saving}
           onClick={() => onUse(tile)}
-          className="px-2.5 py-1 rounded-lg text-[12px] bg-gold text-bg font-medium hover:brightness-110 disabled:opacity-50"
+          className="px-2.5 py-1 rounded-lg text-[12px] bg-accent text-bg font-medium hover:brightness-110 disabled:opacity-50"
         >
           Use this picture
         </button>

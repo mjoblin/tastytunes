@@ -13,7 +13,7 @@ import { cx } from "@/lib/format";
  * THE ACTION ROW of every popover that commits something (0.12.0: the preset volume
  * and the repair popovers had a lone button and no Cancel, unlike Delete): Cancel and the verb,
  * right-aligned, Cancel focused so Enter and Escape are both safe. The verb is red when it
- * destroys (alert, the default) and gold when it doesn't; `start` holds a different action on
+ * destroys (alert, the default) and the accent when it doesn't; `start` holds a different action on
  * the left (the preset volume's Clear); `busy` holds the verb while it runs.
  */
 export function ConfirmActions({
@@ -29,7 +29,7 @@ export function ConfirmActions({
   onCancel(): void;
   onConfirm(): void;
   modal?: boolean;
-  tone?: "alert" | "gold";
+  tone?: "alert" | "accent";
   start?: React.ReactNode;
   busy?: boolean;
 }): React.JSX.Element {
@@ -52,7 +52,7 @@ export function ConfirmActions({
         disabled={busy}
         className={cx(
           "px-2.5 py-1 rounded-lg text-[12px] hover:brightness-110 disabled:opacity-50",
-          tone === "gold" ? "bg-gold text-bg font-medium" : "bg-alert text-white",
+          tone === "accent" ? "bg-accent text-bg font-medium" : "bg-alert text-white",
           !modal && "motion-safe:active:scale-95 transition-all",
         )}
       >

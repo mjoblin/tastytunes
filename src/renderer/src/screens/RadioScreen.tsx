@@ -62,7 +62,7 @@ const RADIO_CATEGORIES: Array<{ label: string; tags: string[] }> = [
   { label: "90s", tags: ["90s"] },
 ];
 
-/** The gold favorites chip's sentinel "category" — local, never fetched. */
+/** The favorites chip's sentinel "category" — local, never fetched. */
 const FAV_CAT = "__favorites__";
 
 /** A favorited station rendered through the normal station-row machinery. */
@@ -291,8 +291,8 @@ export function RadioScreen(): React.JSX.Element {
             className={cx(
               "no-drag rounded-full h-8 px-3 text-[12px] ring-1 transition-all motion-safe:active:scale-95 flex items-center gap-1.5",
               cat === FAV_CAT
-                ? "ring-gold/50 bg-golddim text-gold"
-                : "ring-gold/30 bg-panel/70 text-gold/80 hover:text-gold hover:ring-gold/50 hover:bg-golddim/40",
+                ? "ring-accent/50 bg-accentdim text-accent"
+                : "ring-accent/30 bg-panel/70 text-accent/80 hover:text-accent hover:ring-accent/50 hover:bg-accentdim/40",
             )}
           >
             <Heart size={11} fill="currentColor" /> Favorites

@@ -150,7 +150,7 @@ export function LibraryScreen(): React.JSX.Element {
   const [nodes, setNodes] = useState<MediaNode[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   // Whole-library search MODE (searchable servers): an explicit state with
-  // its own gold bar and input — visually distinct from folder filtering. Its
+  // its own accent bar and input — visually distinct from folder filtering. Its
   // state, its memories, the ways in and out, the searches and the ⌘F ask live
   // in components/library/useLibrarySearch (lifted 2026-09-13, the first lift
   // of this screen's hygiene round); the screen takes the state back under
@@ -232,7 +232,7 @@ export function LibraryScreen(): React.JSX.Element {
   const folderIndex = useLensIndex(folderPools ?? NO_POOLS);
   const folderDetails = useCardDetails(folderPools ? folderIndex : null);
 
-  // Action feedback: the app-wide toast for failures, a gold pulse for wins.
+  // Action feedback: the app-wide toast for failures, an accent pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
   const showToast = useStore((s) => s.showToast);
   const playStats = usePlayStats();
@@ -967,7 +967,7 @@ export function LibraryScreen(): React.JSX.Element {
               className={cx(
                 "no-drag tip-bottom tip-end flex items-center gap-2 px-3.5 h-8 rounded-lg text-[12.5px] font-medium transition-all",
                 crossAvailable
-                  ? "bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95"
+                  ? "bg-accent text-bg shadow-[0_0_14px_rgb(var(--accent-rgb)_/_0.3)] hover:brightness-110 motion-safe:active:scale-95"
                   : "bg-veil2 text-faint cursor-default",
               )}
             >
@@ -1024,7 +1024,7 @@ export function LibraryScreen(): React.JSX.Element {
         </div>
       </header>
 
-      {/* search mode's gold bar and the result controls (components/library/LibrarySearchBar,
+      {/* search mode's accent bar and the result controls (components/library/LibrarySearchBar,
           lifted 2026-09-13, the fifth lift's third part); leaving search is a navigation,
           so the spot being left is recorded here */}
       <LibrarySearchBar

@@ -15,7 +15,7 @@ export interface SegmentedOption<T> {
 }
 
 /**
- * A pill segmented toggle: the active option is filled gold, the rest are
+ * A pill segmented toggle: the active option is filled with the accent, the rest are
  * translucent (bg-panel/70) so the backdrop shows through — matching the
  * queue/preset follow buttons. Generic over the option value type.
  */
@@ -53,7 +53,7 @@ export function Segmented<T extends string | number | boolean>({
             opt.disabled
               ? "text-faint opacity-50 cursor-default"
               : value === opt.value
-                ? "bg-golddim text-gold"
+                ? "bg-accentdim text-accent"
                 : "text-dim hover:text-ink",
           )}
         >
@@ -67,7 +67,7 @@ export function Segmented<T extends string | number | boolean>({
               className={cx(
                 "grid h-4 min-w-[1.375rem] place-items-center rounded-full px-1 text-[10.5px] leading-none tabular-nums",
                 opt.count == null && "invisible",
-                value === opt.value ? "bg-gold/15 text-gold" : "bg-veil text-faint",
+                value === opt.value ? "bg-accent/15 text-accent" : "bg-veil text-faint",
               )}
             >
               {opt.count ?? ""}

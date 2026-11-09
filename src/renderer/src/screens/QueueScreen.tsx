@@ -557,7 +557,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
         // neighbors FLIP out of the way. No wash here: this branch also
         // fires for a restore's transient tail append, which is exactly
         // where the wash must NOT go (it lit the off-screen tail, not the
-        // landing) — washArrivals owns the gold.
+        // landing) — washArrivals owns the wash.
         el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
         return;
       }
@@ -1420,7 +1420,7 @@ interface QueueItemProps {
    *  grid has gaps, so its rings never overlap). */
   selStart?: boolean;
   selEnd?: boolean;
-  /** The gold insertion line — where the block will land on release. */
+  /** The accent insertion line — where the block will land on release. */
   insertLine?: "before" | "after";
   /** This row's ⋯ menu is open — hold the hover treatment (the Library's
    *  menuNodeId rule; losing it read as the row deselecting itself). */
@@ -1560,7 +1560,7 @@ function QueueRow({
           aria-hidden
           data-insert-line
           className={cx(
-            "absolute inset-x-1 z-20 h-[2px] rounded-full bg-gold shadow-[0_0_6px_rgb(var(--gold-rgb)_/_0.6)]",
+            "absolute inset-x-1 z-20 h-[2px] rounded-full bg-accent shadow-[0_0_6px_rgb(var(--accent-rgb)_/_0.6)]",
             insertLine === "before" ? "-top-px" : "-bottom-px",
           )}
         />
@@ -1701,7 +1701,7 @@ function QueueCard({
           aria-hidden
           data-insert-line
           className={cx(
-            "absolute inset-y-2 z-20 w-[2px] rounded-full bg-gold shadow-[0_0_6px_rgb(var(--gold-rgb)_/_0.6)]",
+            "absolute inset-y-2 z-20 w-[2px] rounded-full bg-accent shadow-[0_0_6px_rgb(var(--accent-rgb)_/_0.6)]",
             insertLine === "before" ? "-left-[3px]" : "-right-[3px]",
           )}
         />
@@ -1744,7 +1744,7 @@ function QueueCard({
           {selected && (
             <span
               data-sel-check
-              className="absolute top-1.5 right-1.5 z-10 h-6 w-6 rounded-full bg-gold text-bg flex items-center justify-center shadow-lg"
+              className="absolute top-1.5 right-1.5 z-10 h-6 w-6 rounded-full bg-accent text-bg flex items-center justify-center shadow-lg"
             >
               <Check size={13} strokeWidth={3} />
             </span>

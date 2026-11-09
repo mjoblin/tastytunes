@@ -323,7 +323,7 @@ export function NowPlayingScreen(): React.JSX.Element {
               data-np-heart={heartActive ? "on" : "off"}
               className={cx(
                 "no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all",
-                heartActive ? "text-gold hover:text-ink" : "text-faint hover:text-ink",
+                heartActive ? "text-accent hover:text-ink" : "text-faint hover:text-ink",
               )}
             >
               <Heart size={16} fill={heartActive ? "currentColor" : "none"} />
@@ -364,7 +364,7 @@ export function NowPlayingScreen(): React.JSX.Element {
               aria-label="Current lyric line"
               className={cx(
                 "no-drag pointer-events-auto tip-bottom tip-end p-2 rounded-full hover:bg-veil2 motion-safe:active:scale-90 transition-all",
-                lyricsLine ? "text-gold hover:text-ink" : "text-faint hover:text-ink",
+                lyricsLine ? "text-accent hover:text-ink" : "text-faint hover:text-ink",
               )}
             >
               <Captions size={16} />
@@ -579,7 +579,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                   data-now-playing-scene-words
                   className={cx(
                     "tip-bottom tip-start absolute top-2 left-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-                    tileWords ? "text-gold" : "text-dim",
+                    tileWords ? "text-accent" : "text-dim",
                     wordsForced
                       ? "cursor-default disabled:opacity-60"
                       : "hover:text-ink motion-safe:active:scale-90",
@@ -597,7 +597,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                   className={cx(
                     "tip-bottom tip-end absolute top-2 right-2 p-2 rounded-full bg-panel/60 backdrop-blur ring-1 ring-edge transition-all motion-safe:active:scale-90",
                     scenesOpen
-                      ? "text-gold opacity-100"
+                      ? "text-accent opacity-100"
                       : "text-dim hover:text-ink opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
                   )}
                 >
@@ -672,10 +672,10 @@ export function NowPlayingScreen(): React.JSX.Element {
                     <NameLink
                       kind="artist"
                       name={entryArtist}
-                      // display type: a lift to ink and a hairline gold underline set
+                      // display type: a lift to ink and a hairline accent underline set
                       // well below the baseline — the row treatment's underline would
                       // read heavy at this size; nothing at rest
-                      className="hover:text-ink hover:underline decoration-1 decoration-gold/50 underline-offset-[6px]"
+                      className="hover:text-ink hover:underline decoration-1 decoration-accent/50 underline-offset-[6px]"
                     >
                       {shownTrack.subtitle}
                     </NameLink>
@@ -692,9 +692,9 @@ export function NowPlayingScreen(): React.JSX.Element {
                       name={shownTrack.album}
                       ref={entryRef}
                       // the same quiet grammar as the artist line, scaled to 14px: a hairline
-                      // gold underline at low alpha, a half step up in tone (the ink lift and
+                      // accent underline at low alpha, a half step up in tone (the ink lift and
                       // an ink underline read too dramatic here)
-                      className="hover:text-ink/80 hover:underline decoration-1 decoration-gold/40 underline-offset-[4px]"
+                      className="hover:text-ink/80 hover:underline decoration-1 decoration-accent/40 underline-offset-[4px]"
                     >
                       {shownTrack.album}
                     </NameLink>

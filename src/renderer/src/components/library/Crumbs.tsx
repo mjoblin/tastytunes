@@ -12,7 +12,7 @@ export interface CrumbItem {
   onClick?: () => void;
   /** Where you are: ink, not a hover target. */
   current?: boolean;
-  /** The way back to search results: gold with the glyph (the search bar's identity). */
+  /** The way back to search results: the accent with the glyph (the search bar's identity). */
   search?: boolean;
   /** Drawn before the label: the album's cover once its header has scrolled away (the compact
    *  bar, AlbumCrumbArt). */
@@ -91,11 +91,11 @@ export function Crumbs({ items }: { items: CrumbItem[] }): React.JSX.Element {
     if (it.search)
       return (
         // the way back to the results this branch was entered from —
-        // gold, matching the search bar's identity
+        // the accent, matching the search bar's identity
         <button
           data-library-search-crumb
           onClick={it.onClick}
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-gold/90 hover:text-gold hover:bg-golddim transition-colors"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-accent/90 hover:text-accent hover:bg-accentdim transition-colors"
         >
           <Search size={11} />
           {label}

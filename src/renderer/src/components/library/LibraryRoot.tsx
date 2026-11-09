@@ -337,10 +337,10 @@ export function LibraryRoot({
                               e.stopPropagation();
                               void tt.mediaIndexRebuild(s.udn);
                             }}
-                            // the caption's own color, gold only under the cursor: after
+                            // the caption's own color, the accent only under the cursor: after
                             // a standby the streamer renumbers the drive and this shows
                             // whether or not anything changed, so it offers, never alarms
-                            className="hover:text-gold transition-colors"
+                            className="hover:text-accent transition-colors"
                           >
                             Check for changes
                           </button>
@@ -353,7 +353,7 @@ export function LibraryRoot({
                               e.stopPropagation();
                               void tt.mediaIndexRebuild(s.udn);
                             }}
-                            className="text-gold/90 hover:text-gold transition-colors"
+                            className="text-accent/90 hover:text-accent transition-colors"
                           >
                             {s.isStreamer ? "Index this drive" : "Index this server"}
                           </button>

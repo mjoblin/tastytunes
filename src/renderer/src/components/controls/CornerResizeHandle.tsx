@@ -16,7 +16,7 @@ type Props = Pick<ReturnType<typeof useDragExtent>, "dragging" | "snapped" | "ha
  * A box's corner resize grip, the corner counterpart of the drawers' edge handle
  * (PanelResizeHandle): two short diagonal strokes in the corner, seen when the box is
  * hovered or while dragging, in the app's normal text tone (the nav rail's text-dim; the
- * brighter ink read as glare over the art), gold while sitting on the default detent so the
+ * brighter ink read as glare over the art), the accent while sitting on the default detent so the
  * snap is felt AND seen. The box it sits in is a `group`, so the grip shows with the box's
  * other chrome.
  */
@@ -49,7 +49,7 @@ export function CornerResizeHandle({
           left ? "left-0" : "right-0",
           dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           left && "-scale-x-100",
-          dragging && snapped ? "text-gold" : "text-dim",
+          dragging && snapped ? "text-accent" : "text-dim",
         )}
       >
         <path

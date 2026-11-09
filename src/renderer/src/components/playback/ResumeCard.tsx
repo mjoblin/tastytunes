@@ -82,7 +82,7 @@ export function ResumeCard({
         icon={held.kind === "service" ? Cast : held.kind === "input" ? Cable : undefined}
       />
       <div className="min-w-0 flex-1">
-        <div className="microlabel text-gold mb-[3px]">Pick up where you left off</div>
+        <div className="microlabel text-accent mb-[3px]">Pick up where you left off</div>
         <div className="truncate text-[13.5px] text-ink" data-resume-title>
           {title}
           {held.kind === "queue" && held.artist ? (
@@ -103,7 +103,7 @@ export function ResumeCard({
           data-resume-play
           disabled={busy}
           onClick={() => void resume()}
-          className="inline-flex items-center gap-1.5 rounded-full h-8 px-3 text-[12px] bg-gold text-[#0e0d0b] hover:brightness-110 motion-safe:active:scale-95 transition-all disabled:opacity-60"
+          className="inline-flex items-center gap-1.5 rounded-full h-8 px-3 text-[12px] bg-accent text-[#0e0d0b] hover:brightness-110 motion-safe:active:scale-95 transition-all disabled:opacity-60"
         >
           <Play size={13} />
           Resume

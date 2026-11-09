@@ -776,7 +776,7 @@ export function HistoryTimeline({
                       data-win-kind="play"
                       data-win-index={index}
                       data-history-flash={flashed ? "true" : undefined}
-                      className={cx("pb-1", flashed && "rounded-xl ring-2 ring-gold/60")}
+                      className={cx("pb-1", flashed && "rounded-xl ring-2 ring-accent/60")}
                     >
                       <EventRow
                         item={lineItem(index)}

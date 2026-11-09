@@ -62,7 +62,7 @@ export function SecretKeyRow({
       {saved ? (
         <>
           <span className="flex items-center gap-1.5 text-[12.5px] text-dim whitespace-nowrap">
-            <Check size={13} className="text-gold" />
+            <Check size={13} className="text-accent" />
             Saved, ending in <span className="font-mono text-ink">{ends}</span>
           </span>
           <HeaderChip onClick={() => setAdding(true)} className={chip}>
@@ -166,7 +166,7 @@ function SecretKeyDialog({
               <span
                 className={cx(
                   "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full",
-                  stage.verdict === "works" ? "bg-golddim text-gold" : "bg-veil text-dim",
+                  stage.verdict === "works" ? "bg-accentdim text-accent" : "bg-veil text-dim",
                 )}
               >
                 <Check size={15} />
@@ -178,7 +178,7 @@ function SecretKeyDialog({
                 type="button"
                 autoFocus
                 onClick={close}
-                className="px-3 py-1 rounded-lg text-[12.5px] bg-gold text-bg font-medium hover:brightness-110"
+                className="px-3 py-1 rounded-lg text-[12.5px] bg-accent text-bg font-medium hover:brightness-110"
               >
                 Done
               </button>
@@ -244,7 +244,7 @@ function SecretKeyDialog({
             </div>
             <ConfirmActions
               modal
-              tone="gold"
+              tone="accent"
               verb="Check and save"
               busy={!value.trim() || stage.kind === "checking"}
               onCancel={close}

@@ -7,7 +7,7 @@ import { HeaderChip } from "@/components/chrome/Chrome";
 
 /**
  * The sort control chip + popover (lifted from LibraryScreen so the library
- * lenses share it): gold when any non-neutral sort or reverse is active;
+ * lenses share it): the accent when any non-neutral sort or reverse is active;
  * clicking the active sort flips its direction unless it's noReverse.
  */
 export function SortChip<T extends string>({
@@ -69,7 +69,7 @@ export function SortChip<T extends string>({
                   aria-label={active && !s.noReverse ? `${s.label}, click to reverse` : s.label}
                   className={cx(
                     "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
-                    active ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
+                    active ? "text-accent bg-accentdim" : "text-dim hover:text-ink hover:bg-veil",
                   )}
                 >
                   <span className="min-w-0 flex-1 truncate">{s.label}</span>

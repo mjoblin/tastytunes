@@ -75,7 +75,7 @@ export const nodeKey = (n: MediaNode): string => `${n.serverUdn ?? ""}|${n.id}`;
 
 /** One pill that opens a picker popover — for bounded facets (decades) that
  *  shouldn't spend a whole rail row. The chevron marks it as a picker, not a
- *  toggle chip; an active pick renders gold like any active chip. Clicking the
+ *  toggle chip; an active pick renders in the accent like any active chip. Clicking the
  *  active option still toggles it off, but a picker popover reads as
  *  "choose one" — the explicit clear row is the discoverable way back out. */
 // ------------------------------------------------------------------- facets

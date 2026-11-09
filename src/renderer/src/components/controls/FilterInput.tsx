@@ -56,10 +56,10 @@ export function FilterInput({
       onClick={() => inputRef.current?.focus()}
       className={cx(
         "no-drag flex items-center gap-1.5 h-8 pl-2.5 pr-1.5 rounded-lg ring-1 transition-all",
-        value ? "ring-gold/50 bg-golddim" : "ring-edge bg-panel/70 focus-within:ring-edge2",
+        value ? "ring-accent/50 bg-accentdim" : "ring-edge bg-panel/70 focus-within:ring-edge2",
       )}
     >
-      <Search size={13} className={value ? "text-gold" : "text-faint"} />
+      <Search size={13} className={value ? "text-accent" : "text-faint"} />
       {lead && (
         <>
           {lead}

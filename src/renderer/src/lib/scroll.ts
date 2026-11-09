@@ -1,5 +1,5 @@
 /**
- * THE ARRIVAL WASH — the one "here is the row you asked for" signal: a gold
+ * THE ARRIVAL WASH — the one "here is the row you asked for" signal: an accent
  * fill at 30% that holds for the first 0.8s
  * and fades over the next 1.8s. Born as the Queue's undo-restore wash; now
  * also the landing after Open in Library / a name link / a Favorites jump,
@@ -18,9 +18,9 @@ export function flashTarget(el: HTMLElement | null): void {
     return;
   el.animate(
     [
-      { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0 },
-      { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0.3 },
-      { backgroundColor: "rgb(var(--gold-rgb) / 0)", offset: 1 },
+      { backgroundColor: "rgb(var(--accent-rgb) / 0.3)", offset: 0 },
+      { backgroundColor: "rgb(var(--accent-rgb) / 0.3)", offset: 0.3 },
+      { backgroundColor: "rgb(var(--accent-rgb) / 0)", offset: 1 },
     ],
     { duration: 2600, easing: "ease-out" },
   );

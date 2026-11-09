@@ -50,7 +50,7 @@ export function AppearanceSection({ settings, save }: SectionProps): React.JSX.E
                 className={cx(
                   "px-3 py-1.5 rounded-lg ring-1 text-[13px] transition-colors",
                   settings.displayFont === f.id
-                    ? "ring-gold/50 bg-golddim text-gold"
+                    ? "ring-accent/50 bg-accentdim text-accent"
                     : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2",
                 )}
               >

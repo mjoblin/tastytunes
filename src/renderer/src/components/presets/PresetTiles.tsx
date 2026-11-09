@@ -62,7 +62,7 @@ function PresetNameEdit({
       }}
       onBlur={() => finish(true)}
       className={cx(
-        "w-full min-w-0 rounded-md bg-panel ring-1 ring-edge2 px-1.5 py-0.5 outline-none focus:ring-gold/60",
+        "w-full min-w-0 rounded-md bg-panel ring-1 ring-edge2 px-1.5 py-0.5 outline-none focus:ring-accent/60",
         className,
       )}
     />
@@ -352,7 +352,7 @@ export function PresetCard({
           />
         )}
 
-        {/* the gold speaker shows a set volume (presence and color are the status, the tooltip
+        {/* the speaker shows a set volume (presence and color are the status, the tooltip
           carries the percentage, a click adjusts it); setting one is the ⋯ menu's Preset
           volume… (0.12.0: the hover-revealed speaker went with the menu's arrival) */}
         {volume != null && (
@@ -364,7 +364,7 @@ export function PresetCard({
             onPointerDown={(e) => e.stopPropagation()}
             data-preset-volume
             className={cx(
-              "tip-bottom absolute top-2 right-2 z-10 text-gold hover:text-ink transition-all",
+              "tip-bottom absolute top-2 right-2 z-10 text-accent hover:text-ink transition-all",
               cardChip(),
             )}
           >

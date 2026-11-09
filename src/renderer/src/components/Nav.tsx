@@ -142,7 +142,7 @@ export function Nav(): React.JSX.Element {
         // droppability — only a real target lights, via the class below.
         navDragActive && "pointer-events-none",
         // a live drag hovering this row: the drop glow (drag-to-rail)
-        navDropTarget === id && "ring-1 ring-gold/60 bg-golddim text-gold",
+        navDropTarget === id && "ring-1 ring-accent/60 bg-accentdim text-accent",
       )}
     >
       <Icon size={16} strokeWidth={1.8} className="shrink-0" />

@@ -18,7 +18,7 @@ export function navDropTargetAt(x: number, y: number, allowed: Screen[]): Screen
   return null;
 }
 
-/** The gold acknowledgment on a rail row that just received a drop — the
+/** The accent acknowledgment on a rail row that just received a drop — the
  *  arrival wash, reused (one signal for "here is the row you asked for"). */
 export function flashNavTarget(id: Screen): void {
   flashTarget(document.querySelector<HTMLElement>(`[data-nav-screen="${id}"]`));

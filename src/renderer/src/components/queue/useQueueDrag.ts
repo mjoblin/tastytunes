@@ -74,7 +74,7 @@ export function useQueueDrag(d: {
   // THE INSERTION-LINE MODEL for batch drags (the Spotify/Music/Finder
   // contract, chosen after the lift felt unpredictable with gapped selections):
   // the rows hold still — no lift, no make-room — a stacked chip rides the
-  // cursor via DragOverlay, and a gold line between rows is the one truth about
+  // cursor via DragOverlay, and an accent line between rows is the one truth about
   // where the block lands. Single-row drags keep the make-room feel the app has
   // always had.
   const [insertAt, setInsertAt] = useState<{ id: number; after: boolean } | null>(null);

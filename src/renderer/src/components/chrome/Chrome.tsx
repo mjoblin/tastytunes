@@ -47,7 +47,7 @@ export const cardChip = (alert = false): string =>
  * side panels — 22 hand-written copies before this.
  *
  * `active` is the follow-toggle skin (auto-follow queue, follow-current preset,
- * an engaged sort): gold ring, gold fill, gold text. A chip that can't be
+ * an engaged sort): accent ring, accent fill, accent text. A chip that can't be
  * toggled never gets it.
  */
 export function HeaderChip({
@@ -72,7 +72,7 @@ export function HeaderChip({
         shape === "full" ? "rounded-full" : "rounded-lg",
         "ring-1 transition-all",
         active
-          ? "ring-gold/50 bg-golddim text-gold"
+          ? "ring-accent/50 bg-accentdim text-accent"
           : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
         className,
       )}
@@ -100,7 +100,7 @@ export function ScreenTitle({ children }: { children: React.ReactNode }): React.
  * The pill chip: search categories, the library lenses' genre/decade rails,
  * radio categories.
  *
- * Four states, each with real sites — `idle` (unselected), `active` (the gold
+ * Four states, each with real sites — `idle` (unselected), `active` (the accent
  * pick), `open` (a picker pill whose popover is showing) and `disabled` (the
  * search chips' third state: a category that matched nothing still renders,
  * because "we looked here and found nothing" is the answer it exists to give,
@@ -108,7 +108,7 @@ export function ScreenTitle({ children }: { children: React.ReactNode }): React.
  *
  * COUNTS STAY AT THE CALL SITE. The two counted rails render them differently
  * on purpose — search shows pending/unknown glyphs in a tabular span, the
- * lenses show a mono tally that goes gold with the chip — and one `count` prop
+ * lenses show a mono tally that takes the accent with the chip — and one `count` prop
  * could only serve those by growing a discriminator that buys nothing.
  */
 export function Chip({
@@ -134,7 +134,7 @@ export function Chip({
         state === "disabled"
           ? "ring-edge/60 bg-panel/40 text-faint/50 cursor-default"
           : state === "active"
-            ? "ring-gold/50 bg-golddim text-gold"
+            ? "ring-accent/50 bg-accentdim text-accent"
             : state === "open"
               ? "ring-edge2 bg-raised text-ink"
               : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
@@ -148,7 +148,7 @@ export function Chip({
 }
 
 /**
- * The gold call-to-action pill — the one loud button on a screen (search this
+ * The accent call-to-action pill — the one loud button on a screen (search this
  * library, play this playlist, install this update).
  *
  * Owns colour, glow, radius and the press/disabled behaviour; the call site
@@ -172,7 +172,7 @@ export function PrimaryButton({
   return (
     <button
       className={cx(
-        "rounded-lg bg-gold text-bg font-medium shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)]",
+        "rounded-lg bg-accent text-bg font-medium shadow-[0_0_14px_rgb(var(--accent-rgb)_/_0.3)]",
         "hover:brightness-110 disabled:opacity-40 disabled:shadow-none",
         // a disabled primary is INERT, not merely dim: no hover lift, no press
         // squash (Chromium keeps matching :active on a disabled button, so the
