@@ -243,6 +243,19 @@
   --color-veil2: rgb(30 20 5 / 0.12);
 }
 
+/* THE PLAYBACK BAR BELONGS TO THE MUSIC: inside .music-gold the accent is the gold, so a shared
+   control there (a slider's fill, a menu's chosen option, a toggle that is on) wears gold beside
+   the transport rather than the accent. Each form maps to gold's own, the light theme's deeper
+   inks included, and none of it follows the album art. */
+.music-gold {
+  --accent-rgb: var(--gold-rgb);
+  --color-accent: var(--color-gold);
+  --color-accentdim: var(--color-golddim);
+  --color-accentink: var(--color-goldink);
+  --color-accentink-wash: var(--color-goldink-wash);
+  --color-accentbutton: var(--color-goldbutton);
+}
+
 html,
 body,
 #root {

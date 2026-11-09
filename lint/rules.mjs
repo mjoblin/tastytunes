@@ -613,7 +613,8 @@ export const ONE_HOME = [
       "history/HistoryStats\\.tsx$",
       "lib/statsCard\\.ts$",
       "display/palette\\.ts$",
-      // the playback bar's own controls, gold until they are settled on their own
+      // the playback bar, which belongs to the music (styles.css .music-gold), and the mini player
+      // and the tray panel beside it
       "playback/(Transport|PlaybackBar|TrayPanel|VolumeCluster|VolumeDial|MiniPlayer)\\.tsx$",
     ],
     message:
