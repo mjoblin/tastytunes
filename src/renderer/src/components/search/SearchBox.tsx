@@ -23,9 +23,9 @@ export function SearchBox({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            // Just-landed after a pivot (the seeded query arrives selected): ⌘← navigates back
-            // to where the pivot left, while there is somewhere to go (lib/historyKeys)
-            if (historyKeyOnArrival(e, { forward: false, needsBackStack: true })) return;
+            // Just-landed after a pivot (the seeded query arrives selected): ⌘← and ⌘→
+            // navigate while there is somewhere to go (lib/historyKeys)
+            if (historyKeyOnArrival(e)) return;
             if (e.key !== "Escape") return;
             // Escape RELEASES FOCUS and keeps the query (2026-08-23, the
             // app-wide rule — see FilterInput). The box takes focus on

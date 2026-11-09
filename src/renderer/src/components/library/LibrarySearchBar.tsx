@@ -104,9 +104,9 @@ export function LibrarySearchBar(
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
-              // Just-landed state (⌘F recall selects the text): ⌘← and ⌘→ navigate
-              // (lib/historyKeys)
-              if (historyKeyOnArrival(e, { forward: true, needsBackStack: false })) return;
+              // Just-landed state (⌘F recall selects the text): ⌘← and ⌘→ navigate while
+              // there is somewhere to go (lib/historyKeys)
+              if (historyKeyOnArrival(e)) return;
               if (e.key === "Enter") {
                 e.preventDefault();
                 runSearch();

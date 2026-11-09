@@ -1,30 +1,22 @@
 // THE HISTORY KEYS ON A QUERY JUST ARRIVED IN ITS BOX: while the box's whole query is selected (an
-// arrival selects it, ⌘F's recall or a pivot), ⌘← (and ⌘→ where a box offers it) NAVIGATE, the
-// reflex for leaving; once the selection collapses (typing, clicking) the arrows are ordinary
-// text-editing keys again. ⌥ stands in for ⌘ on Windows and Linux. The blurred-box case is
-// useShortcuts'. One home for every search box that has the rule.
+// arrival selects it, ⌘F's recall or a pivot), ⌘← and ⌘→ navigate back and forward, each only when
+// there is somewhere to go, the reflex for leaving; otherwise, and once the selection collapses
+// (typing, clicking), the arrows are ordinary text-editing keys. ⌥ stands in for ⌘ on Windows and
+// Linux. The blurred-box case is useShortcuts'. One rule for every search box (0.16.0: the Search
+// box had taken ⌘← only, the Library's both keys whether or not there was anywhere to go).
 import { useStore } from "@/store";
 
-export interface HistoryKeyRule {
-  /** ⌘→ goes forward too (the Library's box), not only ⌘← back. */
-  forward: boolean;
-  /** ⌘← navigates only with somewhere to go back to (the Search box); otherwise it edits text. */
-  needsBackStack: boolean;
-}
-
-/** Handles the key when it is a history key on an arrived query, and says whether it did. */
-export function historyKeyOnArrival(
-  e: React.KeyboardEvent<HTMLInputElement>,
-  rule: HistoryKeyRule,
-): boolean {
+/** Handles the key when it is a history key on an arrived query with somewhere to go, and says
+ *  whether it did. */
+export function historyKeyOnArrival(e: React.KeyboardEvent<HTMLInputElement>): boolean {
   if (!((e.metaKey || e.altKey) && !e.ctrlKey)) return false;
   const back = e.key === "ArrowLeft";
-  if (!back && !(rule.forward && e.key === "ArrowRight")) return false;
+  if (!back && e.key !== "ArrowRight") return false;
   const el = e.currentTarget;
   if (!(el.selectionStart === 0 && el.selectionEnd === el.value.length && el.value.length > 0))
     return false;
   const s = useStore.getState();
-  if (back && rule.needsBackStack && s.navBackStack.length === 0) return false;
+  if ((back ? s.navBackStack : s.navForwardStack).length === 0) return false;
   e.preventDefault();
   if (back) s.goBack();
   else s.goForward();
