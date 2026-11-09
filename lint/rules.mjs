@@ -581,4 +581,46 @@ export const ONE_HOME = [
       code: "const soap = (inner) => `<s:Envelope><s:Body>${inner}</s:Body></s:Envelope>`;",
     },
   },
+  {
+    id: "gold-roles",
+    was: "none (0.16.0: the accent took a color of its own, and a control written in gold would read as playing)",
+    // a gold color class, or the gold itself, in a string
+    selector: strings(String.raw`/[a-z]-gold|--gold-rgb/`),
+    files: [`^${R}`],
+    allow: [
+      // TastyTunes itself: the wordmarks, the update dot and the version chip
+      "components/Nav\\.tsx$",
+      "App\\.tsx$",
+      "overlays/InfoModal\\.tsx$",
+      "screens/SettingsScreen\\.tsx$",
+      "settings/UpdatesSection\\.tsx$",
+      // what's playing: its rows, tiles and bars, a station tuning in, the connected streamer
+      // and the source in use
+      "screens/(Queue|History|Playlists|Favorites)Screen\\.tsx$",
+      "queue/DiscQueue\\.tsx$",
+      "library/LibraryCards\\.tsx$",
+      "lenses/ArtistsLens\\.tsx$",
+      "media/(MediaRow|StationRow|Eqbars)\\.tsx$",
+      "presets/PresetTiles\\.tsx$",
+      "playback/TrayPanelTabs\\.tsx$",
+      "device/(SourcesPanel|DeviceSwitcher)\\.tsx$",
+      // the words being sung
+      "playback/(LyricLine|DisplayMode)\\.tsx$",
+      "overlays/LyricsPanel\\.tsx$",
+      // drawings: the Library's doors, the waveform, the listening stats, the scenes' palette
+      "library/(DoorArt|LibraryRoot)\\.tsx$",
+      "media/(Waveform\\.tsx|waveformDraw\\.ts)$",
+      "history/HistoryStats\\.tsx$",
+      "lib/statsCard\\.ts$",
+      "display/palette\\.ts$",
+      // the playback bar's own controls, gold until they are settled on their own
+      "playback/(Transport|PlaybackBar|TrayPanel|VolumeCluster|VolumeDial|MiniPlayer)\\.tsx$",
+    ],
+    message:
+      "Gold is TastyTunes and what's playing; what you click, select or are shown arriving takes the accent (styles.css, two colors, two meanings)",
+    bad: {
+      file: `${R}components/controls/Switch.tsx`,
+      code: 'const c = on ? "bg-gold" : "bg-veil2";',
+    },
+  },
 ];
