@@ -367,7 +367,7 @@ export function DisplayMode(): React.JSX.Element {
           fallback={
             <div className="absolute inset-x-0 bottom-0 h-[3px] bg-veil2">
               <div
-                className="h-full bg-amber transition-[width] duration-300 ease-linear"
+                className="h-full bg-accent transition-[width] duration-300 ease-linear"
                 style={{ width: `${Math.min(100, (position / duration) * 100)}%` }}
               />
             </div>

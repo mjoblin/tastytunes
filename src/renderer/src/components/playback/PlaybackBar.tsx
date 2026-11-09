@@ -211,7 +211,7 @@ export function PlaybackBar(): React.JSX.Element {
         {connected && !powered && (
           // Standby note lives beside its remedy (the power lamp), in the
           // space the volume cluster vacates — no layout shift anywhere.
-          <div data-standby-note className="flex items-center gap-1.5 text-[12px] text-amber pr-1">
+          <div data-standby-note className="flex items-center gap-1.5 text-[12px] text-accent pr-1">
             {waking ? (
               <span className="motion-safe:animate-pulse">Waking…</span>
             ) : (

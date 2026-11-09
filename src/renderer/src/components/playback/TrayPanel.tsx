@@ -750,7 +750,7 @@ function TrayOffline({ phase, host }: { phase: string; host: string | null }): R
       <div
         className={cx(
           "h-14 w-14 shrink-0 rounded-full ring-2 flex items-center justify-center",
-          busy ? "ring-amber/40 text-amber motion-safe:animate-pulse" : "ring-edge2 text-faint",
+          busy ? "ring-accent/40 text-accent motion-safe:animate-pulse" : "ring-edge2 text-faint",
         )}
       >
         {busy ? <Loader2 size={22} className="spin" /> : <Unplug size={22} />}
@@ -768,7 +768,7 @@ function TrayOffline({ phase, host }: { phase: string; host: string | null }): R
           {!busy && (
             <button
               onClick={() => void tt.showMain("device")}
-              className="inline-flex items-center gap-1.5 text-[11.5px] px-2.5 py-1 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
+              className="inline-flex items-center gap-1.5 text-[11.5px] px-2.5 py-1 rounded-lg ring-1 ring-accent/40 bg-accentdim text-accent hover:brightness-110 hover:ring-accent/60 motion-safe:active:scale-95 transition-all"
             >
               Connect a streamer
               <ArrowRight size={12} />
@@ -806,10 +806,10 @@ function TrayStandby({
         data-tip="Wake the streamer"
         aria-label="Wake the streamer"
         className={cx(
-          "tip-bottom h-14 w-14 shrink-0 rounded-full ring-2 ring-amber/50 text-amber",
+          "tip-bottom h-14 w-14 shrink-0 rounded-full ring-2 ring-accent/50 text-accent",
           "flex items-center justify-center transition-all",
-          "hover:bg-amberdim hover:shadow-[0_0_28px_rgb(var(--amber-rgb)_/_0.3)]",
-          busy && "motion-safe:animate-pulse bg-amberdim",
+          "hover:bg-accentdim hover:shadow-[0_0_28px_rgb(var(--accent-rgb)_/_0.3)]",
+          busy && "motion-safe:animate-pulse bg-accentdim",
         )}
       >
         <Power size={24} strokeWidth={1.8} />
@@ -818,7 +818,7 @@ function TrayStandby({
         {/* Every line holds its height whether or not it has content, so the
             lamp beside them never moves as the wake progresses. */}
         <div className="font-display no-optical tracking-tight text-[14px] text-dim flex items-center gap-1.5 min-h-[17px]">
-          <Moon size={14} strokeWidth={1.8} className="text-amber/70 shrink-0" />
+          <Moon size={14} strokeWidth={1.8} className="text-accent/70 shrink-0" />
           <span className="truncate">{systemInfo?.name ?? "Streamer"} is asleep</span>
         </div>
         <div className="text-[11.5px] text-faint truncate min-h-[15px]">

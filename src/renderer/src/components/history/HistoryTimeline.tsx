@@ -830,7 +830,7 @@ export function HistoryTimeline({
                       className={cx(
                         "block w-full rounded px-1 py-0.5 text-left text-[11px] transition-colors",
                         current
-                          ? "text-amber bg-amberdim"
+                          ? "text-accent bg-accentdim"
                           : "text-faint hover:text-ink hover:bg-veil",
                       )}
                     >

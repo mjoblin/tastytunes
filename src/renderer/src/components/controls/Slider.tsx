@@ -84,7 +84,7 @@ export function useSliderDraft(
   };
 }
 
-/** A pointer-driven slider styled as a thin faceplate track with an amber fill. */
+/** A pointer-driven slider styled as a thin faceplate track with an accent fill. */
 export function Slider({
   value,
   onCommit,

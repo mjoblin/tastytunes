@@ -182,7 +182,7 @@ export function AddToPlaylistPanel({
               disabled={busy}
               onClick={() => void createWith()}
               className={cx(
-                "mt-1 w-full rounded-lg h-7 text-[12px] bg-amberdim text-amber",
+                "mt-1 w-full rounded-lg h-7 text-[12px] bg-accentdim text-accent",
                 "hover:brightness-110 disabled:opacity-50 transition-all",
               )}
             >

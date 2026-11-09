@@ -98,7 +98,7 @@ export function ShortcutsOverlay(): React.JSX.Element | null {
             <div className="space-y-1.5">
               {group.rows.map(([keys, action]) => (
                 <div key={keys} className="flex items-baseline gap-4">
-                  <span className="font-mono text-[11px] text-amber w-28 shrink-0">{keys}</span>
+                  <span className="font-mono text-[11px] text-accent w-28 shrink-0">{keys}</span>
                   <span className="text-[12.5px] text-dim">{action}</span>
                 </div>
               ))}

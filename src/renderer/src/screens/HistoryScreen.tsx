@@ -343,7 +343,7 @@ export function HistoryScreen(): React.JSX.Element {
               data-history-view={id}
               className={cx(
                 "w-full flex items-center gap-3 rounded-lg h-9 px-3 text-[13.5px] transition-colors",
-                view === id ? "bg-amberdim text-amber" : "text-dim hover:text-ink hover:bg-veil",
+                view === id ? "bg-accentdim text-accent" : "text-dim hover:text-ink hover:bg-veil",
               )}
             >
               <Icon size={15} strokeWidth={1.8} className="shrink-0" />

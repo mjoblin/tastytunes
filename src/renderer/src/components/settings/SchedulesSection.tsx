@@ -198,7 +198,7 @@ export function SchedulesSection({ settings, save }: SectionProps): React.JSX.El
                 className={cx(
                   "w-7 h-7 rounded-full text-[11px] font-mono transition-colors",
                   s.days.includes(day)
-                    ? "bg-amberdim text-amber ring-1 ring-amber/40"
+                    ? "bg-accentdim text-accent ring-1 ring-accent/40"
                     : "text-faint hover:text-dim ring-1 ring-edge",
                 )}
               >

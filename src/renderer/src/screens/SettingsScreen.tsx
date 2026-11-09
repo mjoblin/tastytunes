@@ -115,7 +115,7 @@ export function SettingsScreen(): React.JSX.Element {
               onClick={() => selectTab(id)}
               className={cx(
                 "w-full flex items-center gap-3 rounded-lg h-9 px-3 text-[13.5px] transition-colors",
-                tab === id ? "bg-amberdim text-amber" : "text-dim hover:text-ink hover:bg-veil",
+                tab === id ? "bg-accentdim text-accent" : "text-dim hover:text-ink hover:bg-veil",
               )}
             >
               <Icon size={15} strokeWidth={1.8} className="shrink-0" />

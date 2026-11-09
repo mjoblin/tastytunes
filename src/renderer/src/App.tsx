@@ -440,7 +440,7 @@ function ConnectGate(): React.JSX.Element {
       {maybeEco && (
         <div
           data-eco-hint
-          className="flex items-center gap-2 text-[12.5px] text-amber/90 border border-amber/20 bg-amberdim/40 rounded-full px-4 py-1.5"
+          className="flex items-center gap-2 text-[12.5px] text-accent/90 border border-accent/20 bg-accentdim/40 rounded-full px-4 py-1.5"
         >
           <Moon size={12} strokeWidth={2} />
           The streamer may be in eco standby, which turns its network off. Wake it at the device.
@@ -448,7 +448,7 @@ function ConnectGate(): React.JSX.Element {
       )}
       {busy && !stuck ? (
         <>
-          <Loader2 size={40} className="spin text-amber" />
+          <Loader2 size={40} className="spin text-accent" />
           <div className="font-display text-xl text-dim">
             {connection.phase === "connecting"
               ? `Connecting to ${connection.host}…`
@@ -555,7 +555,7 @@ function ConnectGate(): React.JSX.Element {
               disabled={discovering}
               // Fixed width: the label alternates with the background sweep
               // and the row must not breathe with it.
-              className="min-w-[128px] text-center text-[13px] px-4 py-2 rounded-lg bg-amber text-bg font-medium hover:brightness-110 transition-all disabled:opacity-50"
+              className="min-w-[128px] text-center text-[13px] px-4 py-2 rounded-lg bg-accent text-bg font-medium hover:brightness-110 transition-all disabled:opacity-50"
             >
               {discovering ? "Searching…" : "Find streamers"}
             </button>
@@ -601,7 +601,7 @@ function ConnectGate(): React.JSX.Element {
               <button
                 type="submit"
                 disabled={!ip.trim()}
-                className="rounded-lg bg-amber text-bg font-medium text-[13px] px-4 py-2 disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all"
+                className="rounded-lg bg-accent text-bg font-medium text-[13px] px-4 py-2 disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all"
               >
                 Connect
               </button>
@@ -649,9 +649,9 @@ function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
       <button
         onClick={() => void tt.command({ type: "power", power: "ON" })}
         className={cx(
-          "h-24 w-24 rounded-full ring-2 ring-amber/50 text-amber flex items-center justify-center",
-          "hover:bg-amberdim hover:shadow-[0_0_40px_rgb(var(--amber-rgb)_/_0.35)] transition-all",
-          busy && "motion-safe:animate-pulse bg-amberdim",
+          "h-24 w-24 rounded-full ring-2 ring-accent/50 text-accent flex items-center justify-center",
+          "hover:bg-accentdim hover:shadow-[0_0_40px_rgb(var(--accent-rgb)_/_0.35)] transition-all",
+          busy && "motion-safe:animate-pulse bg-accentdim",
         )}
         title="Power on"
       >
@@ -664,7 +664,7 @@ function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
           standby face reserves all three lines for the same reason. */}
       <div>
         <div className="font-display text-2xl text-dim flex items-center justify-center gap-2.5 min-h-[32px]">
-          <Moon size={20} strokeWidth={1.8} className="text-amber/70" />
+          <Moon size={20} strokeWidth={1.8} className="text-accent/70" />
           {systemInfo?.name ?? "Streamer"} is asleep
         </div>
         <div className="text-[13px] text-faint mt-1.5 min-h-[19px]">

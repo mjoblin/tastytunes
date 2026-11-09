@@ -192,7 +192,7 @@ export function DeviceScreen(): React.JSX.Element {
                       disabled={discovering}
                       // Fixed width: the label alternates with the background
                       // sweep and the row must not breathe with it.
-                      className="flex min-w-[128px] items-center justify-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
+                      className="flex min-w-[128px] items-center justify-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-accent hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
                     >
                       {discovering ? (
                         <Loader2 size={13} className="spin" />
@@ -228,7 +228,7 @@ export function DeviceScreen(): React.JSX.Element {
                       ) : (
                         <button
                           onClick={() => void tt.connect(device.host)}
-                          className="text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
+                          className="text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-accent/40 bg-accentdim text-accent hover:brightness-110 hover:ring-accent/60 motion-safe:active:scale-95 transition-all"
                         >
                           Connect
                         </button>
@@ -303,12 +303,12 @@ export function DeviceScreen(): React.JSX.Element {
                   className={cx(
                     "mt-3 rounded-xl transition-all",
                     needsManual
-                      ? "ring-1 ring-amber/35 bg-amberdim/25 p-3"
+                      ? "ring-1 ring-accent/35 bg-accentdim/25 p-3"
                       : "border-t border-edge pt-3",
                   )}
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    <Router size={14} className={needsManual ? "text-amber" : "text-faint"} />
+                    <Router size={14} className={needsManual ? "text-accent" : "text-faint"} />
                     <span className={cx("text-[12.5px]", needsManual ? "text-ink" : "text-dim")}>
                       Connect by address
                     </span>
@@ -336,7 +336,7 @@ export function DeviceScreen(): React.JSX.Element {
                       className={cx(
                         "flex-1 bg-bg rounded-lg ring-1 outline-none px-3 text-[13px] placeholder:text-faint transition-all",
                         needsManual
-                          ? "ring-amber/40 focus:ring-amber/70 py-2"
+                          ? "ring-accent/40 focus:ring-accent/70 py-2"
                           : "ring-edge focus:ring-edge2 py-1.5",
                       )}
                     />
@@ -344,7 +344,7 @@ export function DeviceScreen(): React.JSX.Element {
                       disabled={!manualHost.trim()}
                       onClick={() => void tt.connect(manualHost.trim())}
                       className={cx(
-                        "rounded-lg bg-amber text-bg font-medium disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all",
+                        "rounded-lg bg-accent text-bg font-medium disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all",
                         needsManual ? "text-[13px] px-4 py-2" : "text-[12.5px] px-3 py-1.5",
                       )}
                     >
@@ -401,7 +401,7 @@ export function DeviceScreen(): React.JSX.Element {
                     // the row has no room for a caption, and the app tips
                     // everything else that needs a "why".
                     data-tip="Renaming and firmware updates live in the streamer's web interface"
-                    className="tip-bottom tip-end shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
+                    className="tip-bottom tip-end shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-accent hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
                   >
                     Open web admin <ExternalLink size={12} />
                   </button>

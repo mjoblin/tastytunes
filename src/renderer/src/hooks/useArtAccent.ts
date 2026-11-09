@@ -3,7 +3,7 @@ import { Lru } from "@/lib/lru";
 import { fetchArtSoon } from "@/lib/fetchArtSoon";
 
 // Plexamp-style per-album accent: sample the dominant color of the current art
-// and retint the app's amber accent by overriding --amber-rgb on :root. Art is
+// and retint the app's accent by overriding --accent-rgb on :root. Art is
 // fetched through the main process (data URL) so the canvas isn't CORS-tainted.
 
 const cache = new Lru<string, string | null>(80); // theme|artUrl -> "r g b" | null
@@ -12,8 +12,8 @@ export function useArtAccent(artUrl: string | null, theme: "dark" | "light" = "d
   useEffect(() => {
     const root = document.documentElement;
     const apply = (rgb: string | null): void => {
-      if (rgb) root.style.setProperty("--amber-rgb", rgb);
-      else root.style.removeProperty("--amber-rgb");
+      if (rgb) root.style.setProperty("--accent-rgb", rgb);
+      else root.style.removeProperty("--accent-rgb");
     };
 
     if (!artUrl) {
@@ -84,7 +84,7 @@ async function dominantColor(dataUrl: string, theme: "dark" | "light"): Promise<
     wb += b * w;
     weight += w;
   }
-  if (weight < 3) return null; // art is essentially monochrome — keep default amber
+  if (weight < 3) return null; // art is essentially monochrome — keep the default accent
 
   const [h, s, l] = rgbToHsl(wr / weight, wg / weight, wb / weight);
   // Light theme needs a darker accent so tinted text stays readable on paper.

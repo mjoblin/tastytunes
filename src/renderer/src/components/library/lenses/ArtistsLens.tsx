@@ -502,15 +502,15 @@ export function ArtistsLens({
                           // (below), so a name has the row's whole width at rest
                           "group relative grid items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
                           playing ? "grid-cols-[44px_1fr_auto]" : "grid-cols-[44px_1fr]",
-                          // SELECTED is "open here" — the Playlists sidebar's amber, so it
+                          // SELECTED is "open here" — the Playlists sidebar's accent, so it
                           // reads apart from gold (= playing); a row that is both keeps
-                          // the playing signals (gold title, eqbars) on the amber fill
+                          // the playing signals (gold title, eqbars) on the accent fill
                           // (a plainer selection did not read as distinct).
                           // PLAYING is the app-wide row treatment — fill, ring and glow
                           // (row-playing), the same as ContainerRow and every track row —
                           // and it rides on top of the selection: a fill and an edge.
                           playing && "row-playing",
-                          selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
+                          selected ? "bg-accentdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                         )}
                       >
                         <ArtistArt name={a.name} src={a.ownArt} cover={a.artUrl} />
@@ -525,7 +525,7 @@ export function ArtistsLens({
                           <div
                             className={cx(
                               "text-[13.5px] truncate",
-                              playing ? "text-gold" : selected ? "text-amber" : "text-ink",
+                              playing ? "text-gold" : selected ? "text-accent" : "text-ink",
                             )}
                           >
                             {a.name}
@@ -603,7 +603,7 @@ export function ArtistsLens({
                 <button
                   data-lens-artist-page
                   onClick={() => onOpenArtistPage(selectedArtist.name)}
-                  className="ml-auto text-[11.5px] text-amber hover:brightness-110 transition-all"
+                  className="ml-auto text-[11.5px] text-accent hover:brightness-110 transition-all"
                 >
                   Artist page →
                 </button>
@@ -646,15 +646,15 @@ export function ArtistsLens({
                         // the row's buttons float (below), as the artist rows' do: a title has
                         // the row's whole width at rest
                         "group relative grid grid-cols-[44px_1fr] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
-                        // SELECTED is "open here" — the Playlists sidebar's amber, so it
+                        // SELECTED is "open here" — the Playlists sidebar's accent, so it
                         // reads apart from gold (= playing); a row that is both keeps
-                        // the playing signals (gold title, eqbars) on the amber fill
+                        // the playing signals (gold title, eqbars) on the accent fill
                         // (a plainer selection did not read as distinct).
                         // PLAYING is the app-wide row treatment — fill, ring and glow
                         // (row-playing), the same as ContainerRow and every track row —
                         // and it rides on top of the selection: a fill and an edge.
                         playing && "row-playing",
-                        selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
+                        selected ? "bg-accentdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                       )}
                     >
                       <MediaArt src={alb.artUrl} kind="album" />
@@ -662,7 +662,7 @@ export function ArtistsLens({
                         <div
                           className={cx(
                             "flex items-center gap-2 text-[13.5px]",
-                            playing ? "text-gold" : selected ? "text-amber" : "text-ink",
+                            playing ? "text-gold" : selected ? "text-accent" : "text-ink",
                           )}
                         >
                           {/* no position cell in this list, so the playing marker

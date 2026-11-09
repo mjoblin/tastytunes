@@ -208,7 +208,7 @@ export function PresetSavePanel({
       <button
         onClick={() => void commit(nextFree)}
         disabled={busy}
-        className="w-full px-3 py-2 rounded-lg bg-amber text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95"
+        className="w-full px-3 py-2 rounded-lg bg-accent text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95"
         data-preset-save-primary
       >
         Save to preset {nextFree}

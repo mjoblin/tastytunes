@@ -445,7 +445,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                   aria-current={selected?.id === p.id ? "true" : undefined}
                   className={cx(
                     "text-left rounded-lg px-3 py-2 transition-colors",
-                    selected?.id === p.id ? "bg-amberdim text-amber" : "hover:bg-veil text-ink",
+                    selected?.id === p.id ? "bg-accentdim text-accent" : "hover:bg-veil text-ink",
                   )}
                 >
                   <div className="flex items-center gap-2.5">

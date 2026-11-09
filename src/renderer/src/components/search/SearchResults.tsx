@@ -123,7 +123,7 @@ export function SearchResults({
                               setScreenFilter(c.owner!.filterKey, q);
                               setScreen(c.owner!.screen);
                             }}
-                            className="text-[11.5px] text-amber hover:brightness-110 transition-all"
+                            className="text-[11.5px] text-accent hover:brightness-110 transition-all"
                           >
                             See all {c.total} in {c.label} →
                           </button>
@@ -137,7 +137,7 @@ export function SearchResults({
                           <button
                             data-search-more={c.id}
                             onClick={() => requestLibrarySearch(q)}
-                            className="text-[11.5px] text-amber hover:brightness-110 transition-all"
+                            className="text-[11.5px] text-accent hover:brightness-110 transition-all"
                           >
                             See all {c.total} in the Library →
                           </button>
@@ -154,7 +154,7 @@ export function SearchResults({
                           onClick={() =>
                             setHidden(new Set(cats.filter((x) => x.id !== c.id).map((x) => x.id)))
                           }
-                          className="text-[11.5px] text-amber hover:brightness-110 transition-all"
+                          className="text-[11.5px] text-accent hover:brightness-110 transition-all"
                         >
                           +{more} more →
                         </button>
@@ -216,7 +216,7 @@ export function SearchResults({
                 </span>
                 <button
                   onClick={() => requestLibrarySearch(q)}
-                  className="shrink-0 text-amber hover:brightness-110 transition-all"
+                  className="shrink-0 text-accent hover:brightness-110 transition-all"
                 >
                   Search the Library →
                 </button>
@@ -234,7 +234,7 @@ export function SearchResults({
                 </span>
                 <button
                   onClick={() => setScreen("library")}
-                  className="shrink-0 text-amber hover:brightness-110 transition-all"
+                  className="shrink-0 text-accent hover:brightness-110 transition-all"
                 >
                   Open the Library →
                 </button>

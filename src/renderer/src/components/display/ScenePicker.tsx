@@ -309,7 +309,7 @@ function SectionQuiet({ children }: { children: React.ReactNode }): React.JSX.El
  *  chain has its own latency, so every scene's hits and words can sit a constant offset from
  *  what is heard; this slides them all, in-mode, remembered. */
 /**
- * The app's Slider over a numeric range (the faceplate track with the amber fill, the same
+ * The app's Slider over a numeric range (the faceplate track with the accent fill, the same
  * one the volume and the playhead use; the native range input looked like a stranger here).
  * Every move is reported, the release marked final, so a caller can answer locally and save
  * on a debounce rather than let a save's round trip drag the thumb.

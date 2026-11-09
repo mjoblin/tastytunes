@@ -651,7 +651,7 @@ export function NowPlayingScreen(): React.JSX.Element {
             <div className={cx("flex items-center gap-3", mirrored && "justify-end")}>
               {sourceName && <span className="badge">{sourceName}</span>}
               {state && state !== "play" && (state !== "buffering" || bufferingSettled) && (
-                <span className={cx("microlabel", state === "pause" ? "text-amber" : "")}>
+                <span className={cx("microlabel", state === "pause" ? "text-accent" : "")}>
                   {state === "pause" ? "paused" : state}
                 </span>
               )}

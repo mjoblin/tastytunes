@@ -317,9 +317,9 @@ export function PresetCard({
             {/* hover overlay — the whole card recalls the preset; the chip is the affordance */}
             <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 group-kbd:opacity-100 transition-opacity flex items-center justify-center">
               <span
-                className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
+                className="h-11 w-11 rounded-full bg-accent text-bg flex items-center justify-center
                          transition-all duration-150 motion-safe:hover:scale-110
-                         hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]"
+                         hover:shadow-[0_0_24px_rgb(var(--accent-rgb)_/_0.6)]"
               >
                 <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
               </span>

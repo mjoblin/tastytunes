@@ -137,7 +137,7 @@ export function Nav(): React.JSX.Element {
       className={cx(
         "w-full flex items-center rounded-lg h-9 text-[13.5px] transition-colors",
         collapsed ? "justify-center px-0" : "gap-3 px-3",
-        screen === id ? "bg-amberdim text-amber" : "text-dim hover:text-ink hover:bg-veil",
+        screen === id ? "bg-accentdim text-accent" : "text-dim hover:text-ink hover:bg-veil",
         // While a rail-capable drag is live, hover must not suggest
         // droppability — only a real target lights, via the class below.
         navDragActive && "pointer-events-none",

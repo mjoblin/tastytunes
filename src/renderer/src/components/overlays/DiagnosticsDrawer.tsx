@@ -110,7 +110,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
             onClick={() => selectTab(id)}
             className={cx(
               "microlabel px-2 py-0.5 rounded transition-colors",
-              tab === id ? "bg-amberdim text-amber" : "text-faint hover:text-ink hover:bg-veil",
+              tab === id ? "bg-accentdim text-accent" : "text-faint hover:text-ink hover:bg-veil",
             )}
           >
             {label}
@@ -124,7 +124,9 @@ export function DiagnosticsDrawer(): React.JSX.Element {
               onClick={() => setFilter(f)}
               className={cx(
                 "font-mono text-[10px] uppercase px-2 py-0.5 rounded transition-colors",
-                filter === f ? "bg-amberdim text-amber" : "text-faint hover:text-ink hover:bg-veil",
+                filter === f
+                  ? "bg-accentdim text-accent"
+                  : "text-faint hover:text-ink hover:bg-veil",
               )}
             >
               {f}
@@ -163,7 +165,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
                 {r.error ? (
                   <span className="text-alert shrink-0">FAIL</span>
                 ) : r.status == null ? (
-                  <span className="text-amber shrink-0 motion-safe:animate-pulse">…</span>
+                  <span className="text-accent shrink-0 motion-safe:animate-pulse">…</span>
                 ) : (
                   <span className={cx("shrink-0", r.status < 400 ? "text-led" : "text-alert")}>
                     {r.status}
@@ -193,7 +195,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
                     row.log.level === "error"
                       ? "text-alert"
                       : row.log.level === "warn"
-                        ? "text-amber"
+                        ? "text-accent"
                         : "text-faint",
                   )}
                 >
@@ -211,14 +213,14 @@ export function DiagnosticsDrawer(): React.JSX.Element {
                 <div className="flex gap-2">
                   <span className="text-faint shrink-0">{time(row.at)}</span>
                   {row.frame.dir === "out" ? (
-                    <ArrowUpRight size={12} className="text-amber shrink-0 mt-[1px]" />
+                    <ArrowUpRight size={12} className="text-accent shrink-0 mt-[1px]" />
                   ) : (
                     <ArrowDownLeft size={12} className="text-led shrink-0 mt-[1px]" />
                   )}
                   <span
                     className={cx(
                       "shrink-0",
-                      row.frame.dir === "out" ? "text-amber" : "text-ink/80",
+                      row.frame.dir === "out" ? "text-accent" : "text-ink/80",
                     )}
                   >
                     {row.frame.frame.path}

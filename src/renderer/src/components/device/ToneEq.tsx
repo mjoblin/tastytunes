@@ -292,7 +292,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                     setSavePos({ x: r.left, y: r.bottom + 6 });
                   }}
                   data-eq-save-preset
-                  className="rounded-full px-3 py-1 text-[12px] ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 transition-all motion-safe:active:scale-95"
+                  className="rounded-full px-3 py-1 text-[12px] ring-1 ring-edge bg-panel/70 text-accent hover:brightness-110 hover:ring-edge2 transition-all motion-safe:active:scale-95"
                 >
                   Save as preset…
                 </button>
@@ -452,7 +452,7 @@ function SaveEqPresetPopover({
       <button
         onClick={() => void onSave(trimmed)}
         disabled={!canSave}
-        className="w-full px-3 py-2 rounded-lg bg-amber text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95 transition-all"
+        className="w-full px-3 py-2 rounded-lg bg-accent text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95 transition-all"
         data-eq-save-commit
       >
         {replaces ? "Replace preset" : "Save preset"}

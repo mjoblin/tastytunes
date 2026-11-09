@@ -164,7 +164,7 @@ export function LibrarySearchBar(
           <button
             data-library-search-exit
             onClick={leaveSearch}
-            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber text-bg text-[12.5px] font-medium motion-safe:active:scale-95 transition-all"
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-bg text-[12.5px] font-medium motion-safe:active:scale-95 transition-all"
           >
             <ArrowLeft size={13} /> Back to browsing
           </button>

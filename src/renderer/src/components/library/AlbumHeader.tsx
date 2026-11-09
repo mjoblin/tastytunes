@@ -203,7 +203,7 @@ export function AlbumHeader(
               // extra — the button's own press state and
               // the playing row lighting up are feedback enough here
               onClick={() => void playContainer(albumNode, null)}
-              className="tip-bottom flex items-center gap-2 px-4 py-2 rounded-full bg-amber text-bg text-[13px] font-medium motion-safe:active:scale-95 transition-all"
+              className="tip-bottom flex items-center gap-2 px-4 py-2 rounded-full bg-accent text-bg text-[13px] font-medium motion-safe:active:scale-95 transition-all"
             >
               <Play size={14} fill="currentColor" /> Play
             </button>
@@ -305,7 +305,7 @@ export function AlbumCompactVerbs(
         data-album-compact-play
         data-tip="Replaces the queue"
         onClick={() => void playContainer(albumNode, null)}
-        className="tip-bottom flex h-6 items-center gap-1.5 rounded-full bg-amber px-2.5 text-[12px] font-medium text-bg transition-all motion-safe:active:scale-95"
+        className="tip-bottom flex h-6 items-center gap-1.5 rounded-full bg-accent px-2.5 text-[12px] font-medium text-bg transition-all motion-safe:active:scale-95"
       >
         <Play size={11} fill="currentColor" /> Play
       </button>

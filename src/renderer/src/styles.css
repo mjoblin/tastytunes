@@ -34,7 +34,7 @@
 /* Runtime-tintable accent: useArtAccent() overrides this per album.
    --gold-rgb is the STATIC state/brand gold (per theme, never art-tinted). */
 :root {
-  --amber-rgb: 240 168 72;
+  --accent-rgb: 240 168 72;
   --gold-rgb: 240 168 72;
   /* optical-size correction for the chosen display face (useDisplayFont
      overrides per face); 1 = Fraunces, the default. Applied via the
@@ -173,14 +173,14 @@
      the playhead readouts on every screen, Device's field labels, Settings'
      hint lines. Still the app's quietest text token. */
   --color-faint: #82786a;
-  --color-amber: rgb(var(--amber-rgb));
-  --color-amberdim: rgb(var(--amber-rgb) / 0.14);
+  --color-accent: rgb(var(--accent-rgb));
+  --color-accentdim: rgb(var(--accent-rgb) / 0.14);
   /* fixed gold for brand + "currently playing" — never tinted by album art */
   --color-gold: rgb(var(--gold-rgb));
   --color-golddim: rgb(var(--gold-rgb) / 0.16);
   --color-goldtile: #362c1b; /* playing tile: lifted and warmed toward gold */
   --color-led: #67dd8b;
-  /* triple form so alert can be used at partial alpha the way gold/amber are */
+  /* triple form so alert can be used at partial alpha the way gold and the accent are */
   --alert-rgb: 224 101 79;
   --color-alert: rgb(var(--alert-rgb));
   /* neutral overlay tints that flip with the theme (hover washes, tracks) */
@@ -190,14 +190,13 @@
 
 /* light theme: warm paper + aluminum faceplate */
 :root.light {
-  /* Both accents need the darker light-tuning: the dark theme's bright amber
-     (240 168 72) all but vanishes on paper. useArtAccent applies the same
-     clamp when tinting per-album. */
-  --amber-rgb: 178 118 16;
+  /* Gold and the accent both need the darker light-tuning: a bright dark-theme color all but
+     vanishes on paper. useArtAccent applies the same clamp when tinting per-album. */
+  --accent-rgb: 178 118 16;
   --gold-rgb: 178 118 16;
   /* Selection washes need more pigment on paper than on the dark faceplate,
      where a faint tint over near-black already reads as a lit chip. */
-  --color-amberdim: rgb(var(--amber-rgb) / 0.18);
+  --color-accentdim: rgb(var(--accent-rgb) / 0.18);
   --color-golddim: rgb(var(--gold-rgb) / 0.2);
   /* Deeper signal colors — the dark theme's bright lamps wash out on paper. */
   --signal-hires: #b27610;
@@ -218,16 +217,16 @@
   --color-ink: #1a140b;
   --color-dim: #4a4338;
   --color-faint: #60594a;
-  /* gold and amber AS TEXT, a step deeper than the fills, rings and icons keep (gold text measured
+  /* gold and the accent AS TEXT, a step deeper than the fills, rings and icons keep (gold text measured
      2.6:1); deeper still on their own wash (an active nav item); and a button's fill under
      paper-colored text (3.3:1 on the light gold). Amber follows the album art, so its deeper
      forms are mixes, matching #7b5009 and #8a5a0a on the default gold. */
   --color-goldink: #7b5009;
   --color-goldink-wash: #654309;
   --color-goldbutton: #8a5a0a;
-  --color-amberink: color-mix(in srgb, rgb(var(--amber-rgb)) 69%, black);
-  --color-amberink-wash: color-mix(in srgb, rgb(var(--amber-rgb)) 57%, black);
-  --color-amberbutton: color-mix(in srgb, rgb(var(--amber-rgb)) 78%, black);
+  --color-accentink: color-mix(in srgb, rgb(var(--accent-rgb)) 69%, black);
+  --color-accentink-wash: color-mix(in srgb, rgb(var(--accent-rgb)) 57%, black);
+  --color-accentbutton: color-mix(in srgb, rgb(var(--accent-rgb)) 78%, black);
   /* the alert and the LED's green AS TEXT (0.15.0: 4.07 and 2.79 to 1 on the
      page, under the 4.5:1 floor), and the alert deeper still on its own wash; the LED's dot and the
      icons keep the bright forms */
@@ -440,8 +439,8 @@ img {
 .led-busy {
   background: transparent;
   box-shadow:
-    inset 0 0 0 2px var(--color-amber),
-    0 0 6px rgb(var(--amber-rgb) / 0.8);
+    inset 0 0 0 2px var(--color-accent),
+    0 0 6px rgb(var(--accent-rgb) / 0.8);
   animation: led-pulse 1.1s ease-in-out infinite;
 }
 .led-off {
@@ -647,13 +646,13 @@ img {
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 0.08),
     0 24px 80px -12px rgb(0 0 0 / 0.85),
-    0 0 120px -30px rgb(var(--amber-rgb) / 0.25);
+    0 0 120px -30px rgb(var(--accent-rgb) / 0.25);
 }
 :root.light .art-glow {
   box-shadow:
     0 0 0 1px rgb(30 20 5 / 0.12),
     0 20px 55px -12px rgb(60 42 8 / 0.38),
-    0 0 90px -30px rgb(var(--amber-rgb) / 0.18);
+    0 0 90px -30px rgb(var(--accent-rgb) / 0.18);
 }
 
 /* Big library grids: offscreen cards skip layout and paint entirely
@@ -1163,20 +1162,20 @@ img {
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: auto;
 }
-/* gold and amber as text take their deeper ink (an icon keeps the bright gold, a graphic at 3:1),
+/* gold and the accent as text take their deeper ink (an icon keeps the bright gold, a graphic at 3:1),
    their faded forms at full strength, and deeper still on their own wash */
 :root.light
   :is(.text-gold, .text-gold\/50, .text-gold\/70, .text-gold\/80, .text-gold\/90):not(svg) {
   color: var(--color-goldink);
 }
-:root.light :is(.text-amber, .text-amber\/70, .text-amber\/90):not(svg) {
-  color: var(--color-amberink);
+:root.light :is(.text-accent, .text-accent\/70, .text-accent\/90):not(svg) {
+  color: var(--color-accentink);
 }
 :root.light .bg-golddim.text-gold:not(svg) {
   color: var(--color-goldink-wash);
 }
-:root.light .bg-amberdim.text-amber:not(svg) {
-  color: var(--color-amberink-wash);
+:root.light .bg-accentdim.text-accent:not(svg) {
+  color: var(--color-accentink-wash);
 }
 /* the alert and the LED's green as text, as gold is (0.15.0) */
 :root.light :is(.text-alert, .hover\:text-alert:hover):not(svg) {
@@ -1191,12 +1190,12 @@ img {
 :root.light .text-led:not(svg) {
   color: var(--color-ledink);
 }
-/* a gold or amber button under paper-colored text takes the deeper fill */
+/* a gold or accent button under paper-colored text takes the deeper fill */
 :root.light .bg-gold.text-bg {
   background-color: var(--color-goldbutton);
 }
-:root.light .bg-amber.text-bg {
-  background-color: var(--color-amberbutton);
+:root.light .bg-accent.text-bg {
+  background-color: var(--color-accentbutton);
 }
 /* a faded form of faint is for a disabled control only: readable text (a menu's hint, a card's
    note, the palette's keys) is at full faint (the deeper fades, /30 to /50, dress disabled
