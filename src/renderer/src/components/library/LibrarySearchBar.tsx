@@ -5,6 +5,7 @@ import { Segmented } from "@/components/controls/Segmented";
 import { SortChip } from "@/components/controls/SortChip";
 import type { useLibrarySearch } from "@/components/library/useLibrarySearch";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { historyKeyOnArrival } from "@/lib/historyKeys";
 
 // The Library's SEARCH BAR and its result controls, lifted out of
 // LibraryScreen's render (2026-09-13, the fifth lift's third part): the gold
@@ -103,27 +104,9 @@ export function LibrarySearchBar(
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={(e) => {
-              // Just-landed state (⌘F recall selects the text): the history
-              // keys NAVIGATE — pressing ⌘← to leave is the reflex this
-              // serves. Once the selection collapses (typing, clicking),
-              // ⌘-arrows are ordinary text-editing keys again.
-              if (
-                (e.metaKey || e.altKey) &&
-                !e.ctrlKey &&
-                (e.key === "ArrowLeft" || e.key === "ArrowRight")
-              ) {
-                const el = e.currentTarget;
-                if (
-                  el.selectionStart === 0 &&
-                  el.selectionEnd === el.value.length &&
-                  el.value.length > 0
-                ) {
-                  e.preventDefault();
-                  if (e.key === "ArrowLeft") useStore.getState().goBack();
-                  else useStore.getState().goForward();
-                  return;
-                }
-              }
+              // Just-landed state (⌘F recall selects the text): ⌘← and ⌘→ navigate
+              // (lib/historyKeys)
+              if (historyKeyOnArrival(e, { forward: true, needsBackStack: false })) return;
               if (e.key === "Enter") {
                 e.preventDefault();
                 runSearch();

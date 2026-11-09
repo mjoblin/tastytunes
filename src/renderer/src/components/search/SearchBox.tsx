@@ -1,7 +1,7 @@
 // THE SEARCH SCREEN'S HEADER AND BOX (moved out of SearchScreen.tsx as it was, 0.16.0's tidy): the
 // title, the box with its ⌘← after a pivot and its Escape, and the clear button.
 import { Search, X } from "lucide-react";
-import { useStore } from "@/store";
+import { historyKeyOnArrival } from "@/lib/historyKeys";
 import { ScreenTitle } from "@/components/chrome/Chrome";
 
 export function SearchBox({
@@ -23,25 +23,9 @@ export function SearchBox({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            // Just-landed after a pivot (the seeded query arrives selected):
-            // ⌘← NAVIGATES back to where the pivot left — the library search
-            // bar's exact rule. Once the selection collapses, ⌘-arrows are
-            // ordinary text-editing keys again; the blurred-box case is
-            // handled globally (useShortcuts).
-            if ((e.metaKey || e.altKey) && !e.ctrlKey && e.key === "ArrowLeft") {
-              const el = e.currentTarget;
-              const s = useStore.getState();
-              if (
-                s.navBackStack.length > 0 &&
-                el.selectionStart === 0 &&
-                el.selectionEnd === el.value.length &&
-                el.value.length > 0
-              ) {
-                e.preventDefault();
-                s.goBack();
-                return;
-              }
-            }
+            // Just-landed after a pivot (the seeded query arrives selected): ⌘← navigates back
+            // to where the pivot left, while there is somewhere to go (lib/historyKeys)
+            if (historyKeyOnArrival(e, { forward: false, needsBackStack: true })) return;
             if (e.key !== "Escape") return;
             // Escape RELEASES FOCUS and keeps the query (2026-08-23, the
             // app-wide rule — see FilterInput). The box takes focus on
