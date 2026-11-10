@@ -74,8 +74,8 @@ describe("artAccent", () => {
     const stone = artAccent(every([112, 104, 100]), "dark");
     expect(stone).not.toBeNull();
     expect(Math.abs(hueOf(stone!) - hueOf([112, 104, 100]))).toBeLessThan(5);
-    expect(satOf(stone!)).toBeGreaterThanOrEqual(SOFT_SATURATION - 0.01);
-    expect(satOf(stone!)).toBeLessThan(0.3);
+    expect(satOf(stone!)).toBeGreaterThanOrEqual(SOFT_SATURATION.dark - 0.01);
+    expect(satOf(stone!)).toBeLessThan(0.4);
   });
 
   it("grows stronger as the cover's color does, with no jump on the way", () => {
@@ -89,7 +89,7 @@ describe("artAccent", () => {
       expect(sats[i]).toBeGreaterThanOrEqual(sats[i - 1] - 0.01);
       expect(sats[i] - sats[i - 1]).toBeLessThan(0.06);
     }
-    expect(sats[0]).toBeLessThan(0.25);
+    expect(sats[0]).toBeLessThan(SOFT_SATURATION.dark + 0.03);
     const full = artAccent(every([128 + 20, 128, 128 - 20]), "dark")!; // chroma 0.157
     expect((2 * 20) / 255).toBeGreaterThan(FULL_CHROMA);
     expect(satOf(full)).toBeGreaterThanOrEqual(0.49);
@@ -97,7 +97,7 @@ describe("artAccent", () => {
 
   it("keeps a pale cream cover's accent soft, not a loud yellow", () => {
     const cream = artAccent(every([196, 193, 179]), "dark")!;
-    expect(satOf(cream)).toBeLessThan(0.4);
+    expect(satOf(cream)).toBeLessThan(0.45);
   });
 
   it("keeps it for a black-and-white cover", () => {
@@ -178,22 +178,21 @@ describe("the light theme's numbers", () => {
     );
   });
 
-  it("set the soft accent as soft as the built teal, in both themes", () => {
-    const dark = css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {")));
-    for (const block of [dark, light]) {
-      const teal = block
-        .match(/--accent-rgb:\s*(\d+) (\d+) (\d+);/)!
-        .slice(1)
-        .map(Number) as Rgb;
-      expect(Math.abs(satOf(teal) - SOFT_SATURATION)).toBeLessThan(0.01);
-    }
-  });
-
-  it("hold the built accent too, the floors it was tuned to", () => {
-    const built = light
-      .match(/--accent-rgb:\s*(\d+) (\d+) (\d+);/)!
+  const named = (block: string, name: string): Rgb =>
+    block
+      .match(new RegExp(`--accent-${name}-rgb:\\s*(\\d+) (\\d+) (\\d+);`))!
       .slice(1)
       .map(Number) as Rgb;
-    expect(holdsOnPaper(built)).toBe(true);
+
+  it("set the soft accent as soft as the default accent, sand, in each theme", () => {
+    const dark = css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {")));
+    expect(Math.abs(satOf(named(dark, "sand")) - SOFT_SATURATION.dark)).toBeLessThan(0.01);
+    expect(Math.abs(satOf(named(light, "sand")) - SOFT_SATURATION.light)).toBeLessThan(0.01);
+  });
+
+  it("hold every accent choice on paper, the floors each was tuned to", () => {
+    for (const name of ["sand", "sage", "teal"]) {
+      expect(holdsOnPaper(named(light, name)), name).toBe(true);
+    }
   });
 });

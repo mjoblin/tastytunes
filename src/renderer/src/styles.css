@@ -33,10 +33,14 @@
 
 /* Two colors, two meanings (0.16.0): GOLD is TastyTunes and what's playing (the wordmark, the
    playing markers, the hi-res lamp; static per theme, never art-tinted); the ACCENT is what you
-   click or select, a dusty teal by default, retinted per album by useArtAccent() when "Accent
-   follows album art" is on. */
+   click or select. Its color is a choice (Settings › Appearance › Accent color): sand by default,
+   sage or the dusty teal by a class on :root (useAccentChoice, the classes below the light
+   theme), or the playing album's, set inline by useArtAccent. Each is named once per theme. */
 :root {
-  --accent-rgb: 132 172 162;
+  --accent-sand-rgb: 188 169 136;
+  --accent-sage-rgb: 154 168 138;
+  --accent-teal-rgb: 132 172 162;
+  --accent-rgb: var(--accent-sand-rgb);
   --gold-rgb: 240 168 72;
   /* optical-size correction for the chosen display face (useDisplayFont
      overrides per face); 1 = Fraunces, the default. Applied via the
@@ -193,8 +197,12 @@
 /* light theme: warm paper + aluminum faceplate */
 :root.light {
   /* Gold and the accent both need the darker light-tuning: a bright dark-theme color all but
-     vanishes on paper. useArtAccent applies the same clamp when tinting per-album. */
-  --accent-rgb: 90 132 122;
+     vanishes on paper. useArtAccent applies the same clamp when tinting per-album. Sand on paper
+     is a stonier sand than the dark theme's, so its text reads apart from gold's brown. */
+  --accent-sand-rgb: 131 121 98;
+  --accent-sage-rgb: 114 128 97;
+  --accent-teal-rgb: 90 132 122;
+  --accent-rgb: var(--accent-sand-rgb);
   --gold-rgb: 178 118 16;
   /* Selection washes need more pigment on paper than on the dark faceplate,
      where a faint tint over near-black already reads as a lit chip. */
@@ -241,6 +249,15 @@
   --color-alert: rgb(var(--alert-rgb));
   --color-veil: rgb(30 20 5 / 0.05);
   --color-veil2: rgb(30 20 5 / 0.12);
+}
+
+/* THE ACCENT'S CHOICES: after the light theme, which they match in weight, so either theme's
+   values follow the class. */
+:root.accent-sage {
+  --accent-rgb: var(--accent-sage-rgb);
+}
+:root.accent-teal {
+  --accent-rgb: var(--accent-teal-rgb);
 }
 
 /* THE PLAYBACK SURFACES BELONG TO THE MUSIC: inside .music-gold (the playback bar, the mini

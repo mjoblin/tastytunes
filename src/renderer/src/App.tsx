@@ -7,6 +7,7 @@ import { useShortcuts } from "@/hooks/useShortcuts";
 import { useIndexingToast } from "@/hooks/useIndexingToast";
 import { useDriveWaitToast } from "@/hooks/useDriveWaitToast";
 import { useWakeHold } from "@/hooks/useWakeHold";
+import { useAccentChoice } from "@/hooks/useAccentChoice";
 import { useArtAccent } from "@/hooks/useArtAccent";
 import { useArtLoadable } from "@/hooks/useArtLoadable";
 import { useMotionPreference } from "@/hooks/useMotionPreference";
@@ -102,7 +103,8 @@ export default function App(): React.JSX.Element {
       : null,
   );
   const { art: ambientArtUrl } = useDecodedArt(ambientBest);
-  useArtAccent(settings.accentFollowsArt ? artActive : null, theme);
+  useAccentChoice(settings.accent);
+  useArtAccent(settings.accent === "art" ? artActive : null, theme);
   useMotionPreference(settings.motion);
   // Queue playback knows the next track's art before it's needed — warm it so
   // the swap is instant on album/playlist runs.

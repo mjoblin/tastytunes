@@ -4,6 +4,7 @@ import { isRecord } from "@shared/guards";
 import { join } from "node:path";
 import { app } from "electron";
 import {
+  ACCENT_IDS,
   DEFAULT_SETTINGS,
   DISPLAY_FONT_IDS,
   DISPLAY_SCENE_IDS,
@@ -52,6 +53,14 @@ export function getSettings(): AppSettings {
     if (!DISPLAY_FONT_IDS.includes(loaded.displayFont)) {
       loaded.displayFont = DEFAULT_SETTINGS.displayFont;
     }
+    // Accent follows album art became one of the accent's choices (0.16.0): a file that had it on
+    // keeps the album's color, one that had it off gets the default, and the retired switch
+    // leaves the file at the next write
+    if (!("accent" in file)) {
+      loaded.accent = file.accentFollowsArt === true ? "art" : DEFAULT_SETTINGS.accent;
+    }
+    delete (loaded as AppSettings & { accentFollowsArt?: unknown }).accentFollowsArt;
+    if (!ACCENT_IDS.includes(loaded.accent)) loaded.accent = DEFAULT_SETTINGS.accent;
     if (!DISPLAY_SCENE_IDS.includes(loaded.displayScene)) {
       loaded.displayScene = DEFAULT_SETTINGS.displayScene;
     }

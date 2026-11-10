@@ -1,7 +1,8 @@
 // THE APPEARANCE TAB (moved out of SettingsScreen.tsx as it was, 0.16.0's tidy before the design pass:
 // each tab its own section, as Libraries, History, Updates, Schedules and AI agents already were).
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Disc3, Monitor, Moon, Sun } from "lucide-react";
 import {
+  type AccentChoice,
   type AlignH,
   type AlignV,
   type AmbientArtMode,
@@ -125,12 +126,21 @@ export function AppearanceSection({ settings, save }: SectionProps): React.JSX.E
           </div>
         </SettingRow>
 
-        <Toggle
-          label="Accent follows album art"
-          hint="Tint controls and glows with the playing album's dominant color. The tastytunes gold (the logo, the playback controls and the playing markers) never changes."
-          checked={settings.accentFollowsArt}
-          onChange={(accentFollowsArt) => void save({ accentFollowsArt })}
-        />
+        <SettingRow
+          label="Accent color"
+          hint="The color of what you click and choose. Album art takes the playing album's color. The tastytunes gold (the logo, the playback controls and the playing markers) never changes."
+        >
+          <Segmented<AccentChoice>
+            value={settings.accent}
+            onChange={(accent) => void save({ accent })}
+            options={[
+              { value: "sand", label: "Sand", icon: <AccentDot name="sand" /> },
+              { value: "sage", label: "Sage", icon: <AccentDot name="sage" /> },
+              { value: "teal", label: "Dusty teal", icon: <AccentDot name="teal" /> },
+              { value: "art", label: "Album art", icon: <Disc3 size={12} /> },
+            ]}
+          />
+        </SettingRow>
 
         <Toggle
           // "Waveforms" undersold it (the terminology pass, 2026-09-17): this is the
@@ -174,5 +184,16 @@ export function AppearanceSection({ settings, save }: SectionProps): React.JSX.E
         onChange={(artFromFiles) => void save({ artFromFiles })}
       />
     </section>
+  );
+}
+
+/** A choice's own color, in the theme's form (styles.css names each once per theme). */
+function AccentDot({ name }: { name: Exclude<AccentChoice, "art"> }): React.JSX.Element {
+  return (
+    <span
+      aria-hidden
+      className="h-2.5 w-2.5 rounded-full ring-1 ring-edge2"
+      style={{ background: `rgb(var(--accent-${name}-rgb))` }}
+    />
   );
 }

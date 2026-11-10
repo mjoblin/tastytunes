@@ -23,6 +23,12 @@ export const DISPLAY_FONT_IDS = [
   "instrument-sans",
 ] as const;
 export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number];
+/** The accent, the color of what you click and choose (0.16.0; gold stays for the brand and what's
+ *  playing): a curated three, sand by default, or the playing album's own color. The array is the
+ *  single source of truth for valid ids (persist.ts coerces unknown values to the default; the
+ *  Appearance row is built from the same ids; styles.css draws each color). */
+export const ACCENT_IDS = ["sand", "sage", "teal", "art"] as const;
+export type AccentChoice = (typeof ACCENT_IDS)[number];
 /** Display mode's SCENE: what fills the screen (0.8.0). Sleeve is the art
  *  face; most of the rest are abstract scenes drawn from the track's feature
  *  strip and its timed lyrics; Hi-Fi and Turntable draw the player itself
@@ -131,7 +137,8 @@ export interface AppSettings {
   /** Backdrop extent: the main content area, or the whole window (nav + bar too). */
   ambientCoverage: AmbientCoverage;
   vignette: boolean;
-  accentFollowsArt: boolean;
+  /** The accent's color, or "art" for the playing album's (a cover with no color shows sand). */
+  accent: AccentChoice;
   /** Preset grid: base card width in px. */
   presetCardSize: number;
   /** Preset grid: gap between cards in px. */
@@ -502,7 +509,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   ambientArt: "all",
   ambientCoverage: "window",
   vignette: true,
-  accentFollowsArt: false,
+  accent: "sand",
   presetCardSize: 160,
   presetGap: 12,
   presetFillRows: true,
