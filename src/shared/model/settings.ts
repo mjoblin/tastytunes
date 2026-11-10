@@ -254,12 +254,11 @@ export interface AppSettings {
   searchSort: "relevance" | "name";
   searchSortReversed: boolean;
   /**
-   * Unified search: hidden result categories, plain ids sanitized on use
-   * (the navHidden pattern). null = never customized — the screen derives
-   * the default from navHidden (a screen hidden from the rail starts hidden
-   * in search); an array is the user's explicit chip choice and wins.
+   * The Search screen's scope (0.16.0, one Search): "everything", or one category's id (library,
+   * presets, favorites, playlists, radio), one at a time; a plain id sanitized on use
+   * (lib/searchGroups sanitizeScope). It replaced the hidden-categories set.
    */
-  searchHidden: string[] | null;
+  searchScope: string;
   /** Remembered sleep-timer action (pause vs standby). The countdown itself is not persisted. */
   sleepAction: SleepAction;
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
@@ -539,7 +538,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   favoritesKind: "all",
   searchSort: "relevance",
   searchSortReversed: false,
-  searchHidden: null,
+  searchScope: "everything",
   sleepAction: "standby",
   recentsGrouped: true,
   historyView: "recent",

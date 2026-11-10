@@ -19,7 +19,7 @@ let cached: AppSettings | null = null;
 const mintToken = (): string => randomBytes(24).toString("base64url");
 
 /** Settings that once were and are no longer: dropped from a file read, so a write leaves them out. */
-const RETIRED = ["accentFollowsArt", "ambientCoverage", "vignette"] as const;
+const RETIRED = ["accentFollowsArt", "ambientCoverage", "vignette", "searchHidden"] as const;
 
 /** The tokens settings.json held before the secrets store (0.13.0): read only to move them. */
 type Legacy = AppSettings & { lbToken?: unknown; mcp: AppSettings["mcp"] & { token?: unknown } };
@@ -62,7 +62,8 @@ export function getSettings(): AppSettings {
       loaded.accent = file.accentFollowsArt === true ? "art" : DEFAULT_SETTINGS.accent;
     }
     // retired settings leave the file at the next write (0.16.0: the album-art switch, now an
-    // accent choice; the ambient art's coverage and vignette, now always the whole window with it)
+    // accent choice; the ambient art's coverage and vignette, now always the whole window with it;
+    // the Search screen's hidden categories, now one scope at a time, Everything first)
     for (const key of RETIRED) delete (loaded as unknown as Record<string, unknown>)[key];
     if (!ACCENT_IDS.includes(loaded.accent)) loaded.accent = DEFAULT_SETTINGS.accent;
     if (!DISPLAY_SCENE_IDS.includes(loaded.displayScene)) {

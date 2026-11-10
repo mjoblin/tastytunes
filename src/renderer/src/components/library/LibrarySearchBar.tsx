@@ -1,6 +1,6 @@
 import { ArrowLeft, Search, X } from "lucide-react";
 import { useStore } from "@/store";
-import { GAP_BETWEEN } from "@/components/chrome/Chrome";
+import { Chip, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { Segmented } from "@/components/controls/Segmented";
 import { SortChip } from "@/components/controls/SortChip";
 import type { useLibrarySearch } from "@/components/library/useLibrarySearch";
@@ -60,6 +60,10 @@ export function LibrarySearchBar(
     atRoot: boolean;
     /** Back to browsing: the screen records the spot being left, then exits. */
     leaveSearch(): void;
+    /** What the search covers (0.16.0, one Search): the Library's own results, or Everything in
+     *  place, the Search screen's. */
+    scope: "library" | "everything";
+    setScope(scope: "library" | "everything"): void;
   },
 ): React.JSX.Element {
   const {
@@ -88,7 +92,17 @@ export function LibrarySearchBar(
     crossItemCount,
     atRoot,
     leaveSearch,
+    scope,
+    setScope,
   } = p;
+  // the Library chip's count, the same the box shows for the Library's results
+  const libraryCount = searching
+    ? "…"
+    : crossMode && crossState
+      ? crossTotal
+      : searchState
+        ? searchState.total
+        : null;
   return (
     <>
       {/* search mode: an unmistakable accent bar replaces the breadcrumbs */}
@@ -129,7 +143,7 @@ export function LibrarySearchBar(
             spellCheck={false}
             className="flex-1 min-w-0 bg-transparent outline-none text-[13.5px] text-ink placeholder:text-accent/50"
           />
-          {searching ? (
+          {scope === "everything" ? null : searching ? (
             <span className="shrink-0 text-[12px] text-accent/80 motion-safe:animate-pulse">
               searching…
             </span>
@@ -174,7 +188,37 @@ export function LibrarySearchBar(
       {/* search result controls: kind filter + sort, the shared header idioms.
           Kind options follow the hierarchy — artists make albums, albums
           contain tracks — and the sections below render in the same order. */}
-      {searchMode && (atRoot ? crossState != null : searchState != null) && (
+      {/* WHAT IT COVERS (0.16.0, one Search): the Library, or Everything in place, the Search
+          screen's results for the same query; nothing beyond the library is asked until chosen,
+          so Everything carries no count until it is */}
+      {searchMode && searchQuery.trim() !== "" && (
+        <div
+          data-library-search-scope
+          className={`no-drag mx-8 mb-3 flex items-center ${GAP_WITHIN}`}
+        >
+          <Chip
+            state={scope === "library" ? "active" : "idle"}
+            data-search-chip="library"
+            aria-pressed={scope === "library"}
+            onClick={() => setScope("library")}
+            className="gap-1.5 motion-safe:active:scale-95"
+          >
+            Library
+            {libraryCount != null && <span className="tabular-nums fade-dark">{libraryCount}</span>}
+          </Chip>
+          <Chip
+            state={scope === "everything" ? "active" : "idle"}
+            data-search-chip="everything"
+            aria-pressed={scope === "everything"}
+            onClick={() => setScope("everything")}
+            className="gap-1.5 motion-safe:active:scale-95"
+          >
+            Everything
+          </Chip>
+        </div>
+      )}
+
+      {searchMode && scope === "library" && (atRoot ? crossState != null : searchState != null) && (
         <div
           data-library-search-controls
           className={`no-drag mx-8 mb-3 flex items-center ${GAP_BETWEEN}`}

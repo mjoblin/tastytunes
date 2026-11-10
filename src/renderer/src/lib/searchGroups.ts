@@ -1,10 +1,10 @@
-import { sanitizeNavHidden, sanitizeNavOrder } from "@/lib/screens";
+import { sanitizeNavOrder } from "@/lib/screens";
 import type { Screen } from "@/store";
 
 // The Search screen's GROUPING as rules with no React in them (2026-09-13,
 // the tail of the hygiene rounds; the screen had carried them between its
-// rows): which categories there are and what each owns, the caps, how the
-// hidden set is seeded from the nav and toggled, the user's nav order applied
+// rows): which categories there are and what each owns, the caps, the scope
+// (Everything or one category, 0.16.0) and what it leaves out, the user's nav order applied
 // live, isolation (one category showing owns the screen), the two sorts that
 // generalize across five heterogeneous groups, and the "more" arithmetic. The
 // screen builds each group's rows (they are JSX with its handlers) and
@@ -62,29 +62,18 @@ export interface SearchGroup<R extends { sortKey: string }> {
   owner?: SearchGroupOwner;
 }
 
-/** The hidden set's seed: the stored set when there is one, else the nav's
- *  own hidden screens — either way only category ids survive. */
-export function seedHidden(
-  stored: readonly string[] | null | undefined,
-  navHidden: readonly string[] | null | undefined,
-): Set<SearchCategoryId> {
-  const ids = new Set<string>(SEARCH_CATEGORY_IDS);
-  const src = stored ?? sanitizeNavHidden(navHidden);
-  return new Set(src.filter((id): id is SearchCategoryId => ids.has(id)));
-}
+/** THE SCOPE (0.16.0, one Search): Everything, or one category at a time. A stored scope is a
+ *  plain id, so anything else reads as Everything. */
+export type SearchScope = "everything" | SearchCategoryId;
+export const sanitizeScope = (v: unknown): SearchScope =>
+  typeof v === "string" && (SEARCH_CATEGORY_IDS as string[]).includes(v)
+    ? (v as SearchCategoryId)
+    : "everything";
 
-/** Toggle one category. Hiding the last visible one would leave a blank
- *  screen saying nothing — that reads as "show everything again". */
-export function toggleHidden(
-  hidden: ReadonlySet<SearchCategoryId>,
-  id: SearchCategoryId,
-  groupCount: number,
-): Set<SearchCategoryId> {
-  const next = new Set(hidden);
-  if (next.has(id)) next.delete(id);
-  else next.add(id);
-  return next.size >= groupCount ? new Set<SearchCategoryId>() : next;
-}
+/** What a scope leaves out: nothing for Everything, every other category for one. The results and
+ *  their layout read this (a category left out is not even asked, radio's network call above all). */
+export const hiddenFor = (scope: SearchScope): Set<SearchCategoryId> =>
+  scope === "everything" ? new Set() : new Set(SEARCH_CATEGORY_IDS.filter((id) => id !== scope));
 
 /** THE USER'S NAV ORDER, applied live as a sorted copy: every count, cap and
  *  row exactly where it was, only the sequence moves; ids the rail doesn't

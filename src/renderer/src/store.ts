@@ -1,3 +1,4 @@
+import type { SearchScope } from "@/lib/searchGroups";
 import { create } from "zustand";
 import { contentPlayId, PLAYING_SETTLE_MS } from "@/lib/playingEntry";
 import type { InfoList, InfoPage } from "@/lib/infoSteps";
@@ -438,11 +439,13 @@ interface TTState {
    * `query` seeds the box (the Library→Search pivot: "Search everywhere for
    * <artist>"); without it the recalled query is merely selected.
    */
-  searchRequest: { id: number; query?: string } | null;
+  searchRequest: { id: number; query?: string; scope?: SearchScope } | null;
   /** A pivot ("Search everywhere for X" from a ⋯ menu) is an ordinary
    *  navigation: the one history records where it left, so ⌘← returns there.
    *  (Until 2026-08-23 a parallel back-pointer recorded by the pivot did this.) */
-  requestSearch: (query?: string) => void;
+  /** `scope` narrows the Search screen for now (a pivot's Everything, a link's one category),
+   *  the remembered scope kept. */
+  requestSearch: (query?: string, scope?: SearchScope) => void;
   clearSearchRequest: () => void;
   /** One-shot ask: open Playlists with this playlist selected (search results
    *  OPEN a playlist rather than playing it — containers open, leaves play). */
@@ -703,11 +706,11 @@ export const useStore = create<TTState>((set, get) => ({
     })),
   clearLibrarySearchTarget: () => set({ librarySearchTarget: null }),
   searchRequest: null,
-  requestSearch: (query) =>
+  requestSearch: (query, scope) =>
     set((s) => ({
       ...navTo(s, "search"),
       screen: "search",
-      searchRequest: { id: ++searchSeq, query },
+      searchRequest: { id: ++searchSeq, query, scope },
     })),
   clearSearchRequest: () => set({ searchRequest: null }),
   playlistsJump: null,

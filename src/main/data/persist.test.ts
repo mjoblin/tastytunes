@@ -49,6 +49,12 @@ describe("the accent read from a stored file", () => {
     expect("vignette" in written).toBe(false);
   });
 
+  it("drops the Search screen's retired hidden categories, its scope starting at Everything", async () => {
+    const { settings } = await load({ searchHidden: ["radio", "presets"] });
+    expect("searchHidden" in settings).toBe(false);
+    expect(settings.searchScope).toBe("everything");
+  });
+
   it("drops the retired switch from the file at the next write", async () => {
     const { persist, path } = await load({ accentFollowsArt: true, theme: "light" });
     persist.updateSettings({});

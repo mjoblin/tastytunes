@@ -1,21 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { Search } from "lucide-react";
 import { useStore } from "@/store";
 import { EmptyState } from "@/components/chrome/EmptyState";
-import {
-  layoutGroups,
-  orderByNav,
-  seedHidden,
-  toggleHidden,
-  type SearchCategoryId,
-} from "@/lib/searchGroups";
-import { nodeKind, searchMemory, type LibKind } from "@/components/search/searchKit";
+import { sanitizeScope, type SearchScope } from "@/lib/searchGroups";
 import { useSearchQuery } from "@/components/search/useSearchQuery";
-import { useSearchResults } from "@/components/search/useSearchResults";
-import { useSearchActions } from "@/components/search/useSearchActions";
-import { useSearchMenus } from "@/components/search/useSearchMenus";
-import { useSearchGroups } from "@/components/search/useSearchGroups";
+import { useUnifiedSearch } from "@/components/search/useUnifiedSearch";
 import { SearchBox } from "@/components/search/SearchBox";
 import { SearchRail } from "@/components/search/SearchRail";
 import { SearchResults } from "@/components/search/SearchResults";
@@ -44,115 +34,47 @@ import { SearchResults } from "@/components/search/SearchResults";
  * all (it's a read-only log), so its results would be the only ones you
  * couldn't act on. Revisit if that screen gains one.
  *
- * ITS PARTS (0.16.0's tidy, before the design pass's one Search with scopes):
- * components/search holds the query and its focus (useSearchQuery), the results
- * (useSearchResults), a click's action (useSearchActions), the ⋯ menus
- * (useSearchMenus), the five categories as data (useSearchGroups), and the box,
- * the category rail and the results list. This screen holds what they share:
- * the hidden categories, the library partition, and the layout of the groups.
+ * ONE SCOPE AT A TIME (0.16.0, one Search): Everything first, or one category,
+ * each chip with its count; the scope is remembered as the hidden categories were.
+ * The Library's own search widens to the same Everything in place.
+ *
+ * ITS PARTS (0.16.0's tidy, then one Search): components/search holds the query
+ * and its focus (useSearchQuery), the results for a query and a scope
+ * (useUnifiedSearch, over useSearchResults, useSearchActions, useSearchMenus and
+ * useSearchGroups), and the box, the scope rail and the results list. This
+ * screen holds the scope and lays them out.
  */
 export function SearchScreen(): React.JSX.Element {
-  const { query, setQuery, inputRef } = useSearchQuery();
-  const navHidden = useStore((s) => s.settings.navHidden);
-  const navOrder = useStore((s) => s.settings.navOrder);
-  const storedHidden = useStore((s) => s.settings.searchHidden);
+  const { query, setQuery, inputRef, narrowTo } = useSearchQuery();
   const saveSettings = useStore((s) => s.saveSettings);
-  const [hidden, setHidden] = useState<Set<SearchCategoryId>>(() =>
-    seedHidden(storedHidden, navHidden),
-  );
-  const [libKind, setLibKind] = useState<LibKind>(searchMemory.libKind);
+  const stored = sanitizeScope(useStore((s) => s.settings.searchScope));
+  // A CHIP CHOSEN IS REMEMBERED; a group's "+N more", or an ask that names a scope (a pivot's
+  // Everything, a link's one category), narrows the view for now and leaves the remembered scope
+  // as it was, as the "+N more" isolate always did
+  const [narrowed, setNarrowed] = useState<SearchScope | null>(null);
   useEffect(() => {
-    searchMemory.libKind = libKind;
-  }, [libKind]);
+    if (narrowTo) setNarrowed(narrowTo.scope);
+  }, [narrowTo]);
+  const scope = narrowed ?? stored;
+  const choose = (next: SearchScope): void => {
+    setNarrowed(null);
+    void saveSettings({ searchScope: next });
+  };
   // the results list keeps its spot across a trip to another screen
   const resultsScroll = useScrollMemory("search");
-  // OFF is absolute — the category isn't offered at all, so there is no chip to
-  // switch back on and no way to reach the directory from here. HIDDEN is the
-  // softer state above it: offered, off by default, one click away.
-  const radioDirectory = useStore((s) => s.settings.radioDirectory);
-
   const q = query.trim();
-
-  const {
-    favResults,
-    playlistResults,
-    presetResults,
-    libResults,
-    libTotal,
-    radio,
-    radioPending,
-    radioFailed,
-  } = useSearchResults(q, hidden, radioDirectory);
-  const { playNode, openFavorite } = useSearchActions();
-
-  // Library sub-filter, offered only when the library IS the screen — the same
-  // All/Artists/Albums/Tracks partition its own results screen uses.
-  const libShown = useMemo(
-    () =>
-      libKind === "all" ? libResults : libResults.filter((n) => `${nodeKind(n)}s` === libKind),
-
-    [libResults, libKind],
-  );
-
-  const { openNodeMenu, openFavMenu, setRowMenu, overlays } = useSearchMenus(
-    libShown,
-    playNode,
-    openFavorite,
-  );
-
-  const built = useSearchGroups({
-    libShown,
-    libTotal,
-    presetResults,
-    playlistResults,
-    favResults,
-    radio,
-    radioPending,
-    hidden,
-    radioDirectory,
-    playNode,
-    openFavorite,
-    openNodeMenu,
-    openFavMenu,
-    setRowMenu,
-  });
-
-  // THE USER'S NAV ORDER, applied live (not seeded once like `hidden` — a
-  // reorder should land on this screen immediately, whereas a hide is a
-  // starting point the chips then own for the session), then what shows and
-  // how much of it — the rules in lib/searchGroups, a sorted copy so every
-  // count, cap and row stays exactly where it was built.
-  const cats = orderByNav(built, navOrder);
-  const { shown: shownCats, isolated, cap, anyResults, anyPending } = layoutGroups(cats, hidden);
-
-  const toggleCat = (id: SearchCategoryId): void => {
-    // hiding the last visible category shows everything again (the rule in lib/searchGroups)
-    const final = toggleHidden(hidden, id, cats.length);
-    setHidden(final);
-    void saveSettings({ searchHidden: [...final] });
-  };
+  const search = useUnifiedSearch(q, scope);
 
   return (
     <div className="h-full flex flex-col">
       <SearchBox query={query} setQuery={setQuery} inputRef={inputRef} />
 
-      {overlays}
+      {search.overlays}
 
-      {/* The category rail: what was searched, how much each holds, and which
-          are showing. Counts are the POINT — a category with 0 still gets a
-          chip, because "we looked and found nothing" is an answer and its
-          absence would read as "we didn't look". */}
-      {q && (
-        <SearchRail
-          isolated={isolated}
-          shownCats={shownCats}
-          libKind={libKind}
-          setLibKind={setLibKind}
-          cats={cats}
-          hidden={hidden}
-          toggleCat={toggleCat}
-        />
-      )}
+      {/* The scope rail: Everything first, then each category, one at a time. Counts are the
+          POINT — a category with 0 still gets a chip, because "we looked and found nothing" is an
+          answer and its absence would read as "we didn't look". */}
+      {q && <SearchRail search={search} scope={scope} setScope={choose} />}
 
       <div ref={resultsScroll} className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
         {!q ? (
@@ -166,18 +88,7 @@ export function SearchScreen(): React.JSX.Element {
             />
           </div>
         ) : (
-          <SearchResults
-            q={q}
-            shownCats={shownCats}
-            cats={cats}
-            cap={cap}
-            isolated={isolated}
-            anyResults={anyResults}
-            anyPending={anyPending}
-            hidden={hidden}
-            setHidden={setHidden}
-            radioFailed={radioFailed}
-          />
+          <SearchResults q={q} search={search} scope={scope} setScope={setNarrowed} />
         )}
       </div>
     </div>

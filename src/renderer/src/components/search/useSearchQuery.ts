@@ -3,12 +3,14 @@
 // and selects it while a history arrival leaves it blurred.
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "@/store";
+import type { SearchScope } from "@/lib/searchGroups";
 import { searchMemory } from "./searchKit";
 
 export function useSearchQuery(): {
   query: string;
   setQuery: (query: string) => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
+  narrowTo: { id: number; scope: SearchScope } | null;
 } {
   const [query, setQuery] = useState(searchMemory.query);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -19,6 +21,8 @@ export function useSearchQuery(): {
 
   // ⌘F / the nav / the palette all land here; the ask carries an id so a
   // request made before this mounted still focuses, and can't re-fire later.
+  /** The last ask that named a scope: the screen narrows to it for now. */
+  const [narrowTo, setNarrowTo] = useState<{ id: number; scope: SearchScope } | null>(null);
   const searchRequest = useStore((s) => s.searchRequest);
   const clearSearchRequest = useStore((s) => s.clearSearchRequest);
   const doneReq = useRef(-1);
@@ -30,9 +34,9 @@ export function useSearchQuery(): {
     const asked = searchRequest != null && doneReq.current !== searchRequest.id;
     if (searchRequest) {
       doneReq.current = searchRequest.id;
-      // A seeded ask (the Library→Search pivot: "Search everywhere for X")
-      // replaces the recalled query. Chips stay as they are — the point of a
-      // pivot is seeing which collections answer, so nothing gets hidden.
+      // A seeded ask (the Library→Search pivot: "Search everything for X")
+      // replaces the recalled query; a pivot asks for Everything, since its
+      // point is seeing which collections answer.
       // The select happens in the [query] effect below, NOT here: selecting in
       // this effect's frame grabs the OLD value, and the seeded value's commit
       // then collapses the caret to the end — which silently killed ⌘←'s
@@ -41,6 +45,9 @@ export function useSearchQuery(): {
         selectPending.current = searchRequest.query;
         setQuery(searchRequest.query);
       }
+      // a scope asked for narrows the screen for now (0.16.0, one Search)
+      if (asked && searchRequest.scope)
+        setNarrowTo({ id: searchRequest.id, scope: searchRequest.scope });
       clearSearchRequest();
     } else if (doneReq.current !== -1) {
       // the re-run after an ask was cleared: the ask's own frame below is
@@ -78,5 +85,5 @@ export function useSearchQuery(): {
     inputRef.current?.select();
   }, [query]);
 
-  return { query, setQuery, inputRef };
+  return { query, setQuery, inputRef, narrowTo };
 }

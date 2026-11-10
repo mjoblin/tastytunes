@@ -88,6 +88,7 @@ import {
   type TrackRowOpts,
 } from "@/components/library/LibraryListing";
 import { LibrarySearchResults } from "@/components/library/LibrarySearchResults";
+import { LibraryEverything } from "@/components/library/LibraryEverything";
 import { QUEUE_FAILED, useLibraryPlay, type PlayLate } from "@/components/library/useLibraryPlay";
 
 const NO_POOLS: MediaIndexPools[] = [];
@@ -197,6 +198,13 @@ export function LibraryScreen(): React.JSX.Element {
     enterSearch,
     runSearch,
   } = search;
+  // WHAT THE SEARCH COVERS (0.16.0, one Search): the Library's own results, or Everything in place,
+  // the Search screen's; leaving search, or a new library search asked for, starts at the Library
+  const [searchScope, setSearchScope] = useState<"library" | "everything">("library");
+  const librarySearchTarget = useStore((s) => s.librarySearchTarget);
+  useEffect(() => {
+    if (!searchMode || librarySearchTarget) setSearchScope("library");
+  }, [searchMode, librarySearchTarget]);
   const [fetchNonce, setFetchNonce] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // Which node the scroller currently shows, once its listing has landed —
@@ -1028,6 +1036,8 @@ export function LibraryScreen(): React.JSX.Element {
           lifted 2026-09-13, the fifth lift's third part); leaving search is a navigation,
           so the spot being left is recorded here */}
       <LibrarySearchBar
+        scope={searchScope}
+        setScope={setSearchScope}
         searchMode={searchMode}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
@@ -1334,12 +1344,18 @@ export function LibraryScreen(): React.JSX.Element {
           />
         )}
 
+        {/* Everything, in place: the Search screen's results for the same query */}
+        {searchMode && searchScope === "everything" && searchQuery.trim() !== "" && (
+          <LibraryEverything q={searchQuery.trim()} toLibrary={() => setSearchScope("library")} />
+        )}
+
         {/* every search result, one windowed list (components/library/LibrarySearchResults): one
             library's search and the search across libraries alike */}
         <LibrarySearchResults
           shown={Boolean(
-            (!atRoot && state === "ready" && searchMode && searchState) ||
-            (crossMode && crossState),
+            searchScope === "library" &&
+            ((!atRoot && state === "ready" && searchMode && searchState) ||
+              (crossMode && crossState)),
           )}
           scrollRef={scrollRef}
           crossMode={crossMode}

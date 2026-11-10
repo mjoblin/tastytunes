@@ -7,32 +7,21 @@ import { useStore } from "@/store";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { KeyedList } from "@/components/controls/KeyedList";
 import { openMenuOn } from "@/lib/menuAt";
-import { moreCount, orderRows, type SearchCategoryId, type SearchGroup } from "@/lib/searchGroups";
-import type { SearchRow } from "./searchKit";
+import { moreCount, orderRows, type SearchScope } from "@/lib/searchGroups";
+import type { UnifiedSearch } from "./useUnifiedSearch";
 
 export function SearchResults({
   q,
-  shownCats,
-  cats,
-  cap,
-  isolated,
-  anyResults,
-  anyPending,
-  hidden,
-  setHidden,
-  radioFailed,
+  search,
+  scope,
+  setScope,
 }: {
   q: string;
-  shownCats: Array<SearchGroup<SearchRow>>;
-  cats: Array<SearchGroup<SearchRow>>;
-  cap: number;
-  isolated: boolean;
-  anyResults: boolean;
-  anyPending: boolean;
-  hidden: Set<SearchCategoryId>;
-  setHidden(hidden: Set<SearchCategoryId>): void;
-  radioFailed: boolean;
+  search: UnifiedSearch;
+  scope: SearchScope;
+  setScope(scope: SearchScope): void;
 }): React.JSX.Element {
+  const { shownCats, cats, cap, isolated, anyResults, anyPending, radioFailed, hidden } = search;
   const sort = useStore((s) => s.settings.searchSort);
   const sortReversed = useStore((s) => s.settings.searchSortReversed);
   const requestLibrarySearch = useStore((s) => s.requestLibrarySearch);
@@ -83,8 +72,8 @@ export function SearchResults({
                 icon={Search}
                 title={`Nothing found for “${q}”`}
                 caption={
-                  hidden.size > 0
-                    ? "Some categories are hidden. Try showing them again."
+                  scope !== "everything"
+                    ? `Only ${cats.find((c) => c.id === scope)?.label ?? "one category"} was searched. Try Everything.`
                     : "Try fewer words."
                 }
               />
@@ -148,12 +137,10 @@ export function SearchResults({
                         )
                       ) : (
                         // Not isolated: showing more of THIS is the obvious
-                        // meaning of the click, and it keeps you on the screen.
+                        // meaning of the click, its scope chosen, and it keeps you on the screen.
                         <button
                           data-search-more={c.id}
-                          onClick={() =>
-                            setHidden(new Set(cats.filter((x) => x.id !== c.id).map((x) => x.id)))
-                          }
+                          onClick={() => setScope(c.id)}
                           className="text-[11.5px] text-accent hover:brightness-110 transition-all"
                         >
                           +{more} more →

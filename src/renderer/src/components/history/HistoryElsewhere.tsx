@@ -299,7 +299,7 @@ export function HistoryElsewhere({
               },
             ]
           : []),
-        { label: "Search the library", run: () => requestSearch(q) },
+        { label: "Search the library", run: () => requestSearch(q, "library") },
         { label: "Look it up", run: () => lookUp(q, "recording") },
         { label: "Copy", run: () => copy(t.artist ? `${t.artist} - ${t.title}` : t.title) },
       ],
@@ -314,7 +314,7 @@ export function HistoryElsewhere({
       ...menuAt(e),
       items: [
         ...(a.inLibrary ? [{ label: "Go to artist", run: () => openArtistInLibrary(a.name) }] : []),
-        { label: "Search the library", run: () => requestSearch(a.name) },
+        { label: "Search the library", run: () => requestSearch(a.name, "library") },
         { label: "Look it up", run: () => lookUp(a.name, "artist") },
         { label: "Copy", run: () => copy(a.name) },
       ],

@@ -54,15 +54,10 @@ export const searchMemory: {
   } | null;
 } = { query: "", libKind: "all", results: null };
 /*
- * Hidden categories and the sort are PERSISTED view defaults (settings
- * searchHidden/searchSort — the 2026-08-06 ruling), unlike the query above.
- * searchHidden null means "never customized": the mount seeds from navHidden —
- * a row you've hidden from the rail is a row you've said you don't use, so
- * search starts without it, as a DEFAULT only (the chip is still there, still
- * counted, one click from coming back; navHidden has never meant "disabled").
- * An explicit CHIP choice persists and wins from then on. The "+N more"
- * isolate is a session gesture, not a preference — it narrows the live view
- * without rewriting the default.
+ * The scope and the sort are PERSISTED view defaults (settings searchScope and
+ * searchSort; the scope replaced the hidden categories in 0.16.0's one Search),
+ * unlike the query above. The scope is Everything or one category at a time, and
+ * a group's "+N more" chooses its category, a choice like any chip's.
  */
 
 // WHAT a library result is — the ONE classifier (lib/media), shared with the
