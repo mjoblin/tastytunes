@@ -196,3 +196,51 @@ describe("the light theme's numbers", () => {
     }
   });
 });
+
+describe("the accent's choices in styles.css", () => {
+  const css = readFileSync(new URL("../styles.css", import.meta.url), "utf8");
+  const light = css.slice(
+    css.indexOf(":root.light {"),
+    css.indexOf("}", css.indexOf(":root.light {")),
+  );
+  const triple = (block: string, name: string): Rgb =>
+    block
+      .match(new RegExp(`${name}:\\s*(\\d+) (\\d+) (\\d+);`))!
+      .slice(1)
+      .map(Number) as Rgb;
+  const share = (name: string): number =>
+    Number(
+      light.match(
+        new RegExp(
+          `${name}:\\s*color-mix\\(in srgb, rgb\\(var\\(--accent-rgb\\)\\) (\\d+)%, black\\)`,
+        ),
+      )![1],
+    ) / 100;
+  const hex = (name: string): Rgb => {
+    const m = light.match(new RegExp(`${name}:\\s*#([0-9a-f]{6})`, "i"))!;
+    return [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)) as Rgb;
+  };
+
+  it("draw Gold from the brand's own gold, and each classed choice from its own color", () => {
+    expect(css).toMatch(/--accent-gold-rgb:\s*var\(--gold-rgb\);/);
+    for (const name of ["gold", "sage", "teal"]) {
+      expect(css, name).toMatch(
+        new RegExp(
+          `:root\\.accent-choice-${name} \\{\\s*--accent-rgb: var\\(--accent-${name}-rgb\\);\\s*\\}`,
+        ),
+      );
+    }
+  });
+
+  it("give Gold on paper the deeper inks of gold's own, within a step", () => {
+    const gold = triple(light, "--gold-rgb");
+    for (const [mixed, own] of [
+      ["--color-accentink", "--color-goldink"],
+      ["--color-accentink-wash", "--color-goldink-wash"],
+      ["--color-accentbutton", "--color-goldbutton"],
+    ]) {
+      const ink = gold.map((v) => v * share(mixed));
+      hex(own).forEach((v, i) => expect(Math.abs(ink[i] - v), mixed).toBeLessThan(3));
+    }
+  });
+});

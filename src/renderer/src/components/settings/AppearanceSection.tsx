@@ -106,7 +106,7 @@ export function AppearanceSection({ settings, save }: SectionProps): React.JSX.E
 
           <SettingRow
             label="Accent color"
-            hint="The color of what you click and choose. Album art takes the playing album's color. The tastytunes gold (the logo, the playback controls and the playing markers) never changes."
+            hint="The color of what you click and choose. Gold matches the tastytunes gold of the logo, the playback controls and the playing markers, which never changes. Album art takes the playing album's color."
           >
             <AccentSwatches value={settings.accent} onChange={(accent) => void save({ accent })} />
           </SettingRow>
@@ -160,10 +160,11 @@ export function AppearanceSection({ settings, save }: SectionProps): React.JSX.E
 }
 
 /** The accent's choices, a swatch each, the chosen one ringed and named beside them: a color is
- *  chosen by looking, and four names would not fit a row (macOS's own accent picker is the model).
+ *  chosen by looking, and five names would not fit a row (macOS's own accent picker is the model).
  *  Album art's swatch is a blend of soft colors, the album's being any of them. */
 const ACCENTS: { id: AccentChoice; label: string }[] = [
   { id: "sand", label: "Sand" },
+  { id: "gold", label: "Gold" },
   { id: "sage", label: "Sage" },
   { id: "teal", label: "Dusty teal" },
   { id: "art", label: "Album art" },

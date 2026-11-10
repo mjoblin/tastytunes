@@ -34,12 +34,14 @@
 /* Two colors, two meanings (0.16.0): GOLD is TastyTunes and what's playing (the wordmark, the
    playing markers, the hi-res lamp; static per theme, never art-tinted); the ACCENT is what you
    click or select. Its color is a choice (Settings › Appearance › Accent color): sand by default,
-   sage or the dusty teal by a class on :root (useAccentChoice, the classes below the light
-   theme), or the playing album's, set inline by useArtAccent. Each is named once per theme. */
+   gold, sage or the dusty teal by a class on :root (useAccentChoice, the classes below the light
+   theme), or the playing album's, set inline by useArtAccent. Each is named once per theme, gold
+   as the brand's own, so choosing it makes the app one color as it was before 0.16.0. */
 :root {
   --accent-sand-rgb: 188 169 136;
   --accent-sage-rgb: 154 168 138;
   --accent-teal-rgb: 132 172 162;
+  --accent-gold-rgb: var(--gold-rgb);
   --accent-rgb: var(--accent-sand-rgb);
   --gold-rgb: 240 168 72;
   /* optical-size correction for the chosen display face (useDisplayFont
@@ -252,11 +254,16 @@
 }
 
 /* THE ACCENT'S CHOICES: after the light theme, which they match in weight, so either theme's
-   values follow the class. */
-:root.accent-sage {
+   values follow the class. Named accent-choice-, since Tailwind owns accent-<color> (accent-gold is
+   its accent-color utility). Gold's deeper inks on paper are the light theme's mixes of it, which
+   match gold's own (#7b5009, #8a5a0a). */
+:root.accent-choice-gold {
+  --accent-rgb: var(--accent-gold-rgb);
+}
+:root.accent-choice-sage {
   --accent-rgb: var(--accent-sage-rgb);
 }
-:root.accent-teal {
+:root.accent-choice-teal {
   --accent-rgb: var(--accent-teal-rgb);
 }
 

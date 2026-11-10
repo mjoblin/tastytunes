@@ -32,6 +32,7 @@ describe("the accent read from a stored file", () => {
 
   it("keeps a stored choice, whatever the old switch said", async () => {
     expect((await load({ accent: "sage" })).settings.accent).toBe("sage");
+    expect((await load({ accent: "gold" })).settings.accent).toBe("gold");
     expect((await load({ accent: "teal", accentFollowsArt: true })).settings.accent).toBe("teal");
   });
 
