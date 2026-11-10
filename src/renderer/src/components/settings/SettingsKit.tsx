@@ -173,18 +173,19 @@ export function Toggle({
   disabled?: boolean;
   onChange(next: boolean): void;
 }): React.JSX.Element {
+  // greyed out, the switch itself is disabled too, so the keyboard can't reach or flip it
   return (
     <label
       className={cx(
         "flex items-center justify-between gap-6",
-        disabled ? "opacity-40 pointer-events-none" : "cursor-pointer",
+        disabled ? "pointer-events-none" : "cursor-pointer",
       )}
     >
-      <div>
+      <div className={cx(disabled && "opacity-40")}>
         <div className="text-[13.5px]">{label}</div>
         <div className="text-[11.5px] text-faint max-w-sm">{hint}</div>
       </div>
-      <Switch checked={checked} onChange={onChange} />
+      <Switch checked={checked} onChange={onChange} disabled={disabled} />
     </label>
   );
 }
