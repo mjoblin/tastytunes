@@ -1,11 +1,19 @@
 /**
  * The accent drawn from album art: a cover with no real color keeps the built accent (a grey's hue
- * is rounding noise), a cover with color gives its hue, and on paper every form of the accent
+ * is rounding noise), a cover with a little color gets a soft accent of its hue that grows with the
+ * color, a colorful cover gives its hue at full strength, and on paper every form of the accent
  * holds its floor whatever the hue.
  */
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { LIGHT, artAccent, contrast, holdsOnPaper } from "./artAccent";
+import {
+  FULL_CHROMA,
+  LIGHT,
+  SOFT_SATURATION,
+  artAccent,
+  contrast,
+  holdsOnPaper,
+} from "./artAccent";
 
 type Rgb = [number, number, number];
 
@@ -33,6 +41,14 @@ const hueOf = ([r, g, b]: Rgb): number => {
   return h * 60;
 };
 
+/** HSL saturation (0–1). */
+const satOf = ([r, g, b]: Rgb): number => {
+  const max = Math.max(r, g, b) / 255;
+  const min = Math.min(r, g, b) / 255;
+  const l = (max + min) / 2;
+  return max === min ? 0 : (max - min) / (l > 0.5 ? 2 - max - min : max + min);
+};
+
 describe("artAccent", () => {
   it("keeps the built accent for a grey cover, in both themes", () => {
     const stone = cover(
@@ -54,8 +70,34 @@ describe("artAccent", () => {
     expect(artAccent(grey, "dark")).toBeNull();
   });
 
-  it("keeps it for a grey with a faint cast, a muted sky or stone", () => {
-    expect(artAccent(every([112, 104, 100]), "dark")).toBeNull();
+  it("gives a grey with a faint cast, a muted sky or stone, a soft accent of its own hue", () => {
+    const stone = artAccent(every([112, 104, 100]), "dark");
+    expect(stone).not.toBeNull();
+    expect(Math.abs(hueOf(stone!) - hueOf([112, 104, 100]))).toBeLessThan(5);
+    expect(satOf(stone!)).toBeGreaterThanOrEqual(SOFT_SATURATION - 0.01);
+    expect(satOf(stone!)).toBeLessThan(0.3);
+  });
+
+  it("grows stronger as the cover's color does, with no jump on the way", () => {
+    const sats: number[] = [];
+    for (let d = 4; d <= 26; d++) {
+      const accent = artAccent(every([128 + d, 128, 128 - d]), "dark");
+      expect(accent, `chroma ${(2 * d) / 255}`).not.toBeNull();
+      sats.push(satOf(accent!));
+    }
+    for (let i = 1; i < sats.length; i++) {
+      expect(sats[i]).toBeGreaterThanOrEqual(sats[i - 1] - 0.01);
+      expect(sats[i] - sats[i - 1]).toBeLessThan(0.06);
+    }
+    expect(sats[0]).toBeLessThan(0.25);
+    const full = artAccent(every([128 + 20, 128, 128 - 20]), "dark")!; // chroma 0.157
+    expect((2 * 20) / 255).toBeGreaterThan(FULL_CHROMA);
+    expect(satOf(full)).toBeGreaterThanOrEqual(0.49);
+  });
+
+  it("keeps a pale cream cover's accent soft, not a loud yellow", () => {
+    const cream = artAccent(every([196, 193, 179]), "dark")!;
+    expect(satOf(cream)).toBeLessThan(0.4);
   });
 
   it("keeps it for a black-and-white cover", () => {
@@ -86,6 +128,15 @@ describe("artAccent", () => {
       expect(
         contrast(accent!.map((c) => c * LIGHT.ink) as Rgb, LIGHT.raised),
       ).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("holds every form's floor on paper for a cover with a little color, at every hue", () => {
+    for (let hue = 0; hue < 360; hue += 15) {
+      const muted = vivid(hue).map((c) => Math.round(128 + (c - 128) * 0.06)) as Rgb;
+      const accent = artAccent(every(muted), "light");
+      expect(accent, `hue ${hue}`).not.toBeNull();
+      expect(holdsOnPaper(accent!), `hue ${hue}`).toBe(true);
     }
   });
 
@@ -125,6 +176,17 @@ describe("the light theme's numbers", () => {
     expect(LIGHT.wash).toBe(
       Number(light.match(/--color-accentdim:\s*rgb\(var\(--accent-rgb\) \/ ([\d.]+)\)/)![1]),
     );
+  });
+
+  it("set the soft accent as soft as the built teal, in both themes", () => {
+    const dark = css.slice(css.indexOf(":root {"), css.indexOf("}", css.indexOf(":root {")));
+    for (const block of [dark, light]) {
+      const teal = block
+        .match(/--accent-rgb:\s*(\d+) (\d+) (\d+);/)!
+        .slice(1)
+        .map(Number) as Rgb;
+      expect(Math.abs(satOf(teal) - SOFT_SATURATION)).toBeLessThan(0.01);
+    }
   });
 
   it("hold the built accent too, the floors it was tuned to", () => {

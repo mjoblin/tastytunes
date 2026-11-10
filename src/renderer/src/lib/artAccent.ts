@@ -1,16 +1,25 @@
 // THE ACCENT FROM THE ALBUM ART (Settings, Accent follows album art): the cover's average color,
 // its vivid pixels counting most, the hue kept and the saturation and lightness held to the theme's
 // range. A cover with no real color in it keeps the built accent: a grey's hue is only rounding
-// noise, and lifting its saturation would turn that noise into a strong, arbitrary color. On paper
-// the accent is also text and a button's fill, so it darkens until each of those forms holds its
-// floor. Pure, so it can be tested; useArtAccent draws the cover and passes its pixels.
+// noise, and lifting its saturation would turn that noise into a strong, arbitrary color. A cover
+// with a little color gets a soft accent of that color, as dusty as the built teal, growing stronger
+// as the cover's color does until a clearly colorful cover's accent is at full strength, so there is
+// no line where a pale cover jumps to a loud color. On paper the accent is also text and a button's
+// fill, so it darkens until each of those forms holds its floor. Pure, so it can be tested;
+// useArtAccent draws the cover and passes its pixels.
 
 type Rgb = [number, number, number];
 
 /** How much real color a cover needs: the summed chroma of its pixels (a 32 × 32 sample), and the
  *  chroma of their average (0–1), under which the average is a grey with a cast. */
 export const MIN_COLOR = 3;
-export const MIN_AVERAGE_CHROMA = 0.06;
+export const MIN_AVERAGE_CHROMA = 0.02;
+
+/** The accent's strength follows the cover's color: at MIN_AVERAGE_CHROMA it is as soft as the
+ *  built teal (its HSL saturation, both themes; the test pins it to styles.css), and by
+ *  FULL_CHROMA, a clearly colorful cover, it is at full strength (50% to 85%). */
+export const SOFT_SATURATION = 0.19;
+export const FULL_CHROMA = 0.12;
 
 /** The light theme's grounds and the accent's darker forms, as styles.css draws them (the test
  *  pins each one to it). The forms are sRGB mixes of the accent toward black, or its wash over a
@@ -54,10 +63,12 @@ export function artAccent(data: ArrayLike<number>, theme: "dark" | "light"): Rgb
   }
   if (color < MIN_COLOR) return null;
   const avg: Rgb = [wr / weight, wg / weight, wb / weight];
-  if ((Math.max(...avg) - Math.min(...avg)) / 255 < MIN_AVERAGE_CHROMA) return null;
+  const chroma = (Math.max(...avg) - Math.min(...avg)) / 255;
+  if (chroma < MIN_AVERAGE_CHROMA) return null;
 
   const [h, s, l] = rgbToHsl(...avg);
-  const sat = Math.min(Math.max(s, 0.5), 0.85);
+  const full = Math.min(Math.max(s, 0.5), 0.85);
+  const sat = SOFT_SATURATION + (full - SOFT_SATURATION) * strength(chroma);
   if (theme === "dark") return round(hslToRgb(h, sat, Math.min(Math.max(l, 0.55), 0.68)));
   // paper: a darker range, then darker still until every form reads
   let light = Math.min(Math.max(l, 0.34), 0.46);
@@ -67,6 +78,15 @@ export function artAccent(data: ArrayLike<number>, theme: "dark" | "light"): Rgb
     rgb = round(hslToRgb(h, sat, light));
   }
   return rgb;
+}
+
+/** How far a cover's color takes its accent from soft to full strength (0–1), eased at both ends. */
+function strength(chroma: number): number {
+  const t = Math.min(
+    Math.max((chroma - MIN_AVERAGE_CHROMA) / (FULL_CHROMA - MIN_AVERAGE_CHROMA), 0),
+    1,
+  );
+  return t * t * (3 - 2 * t);
 }
 
 /** Whether an accent's forms on paper all hold their floors. */
