@@ -624,4 +624,19 @@ export const ONE_HOME = [
       code: 'const c = on ? "bg-gold" : "bg-veil2";',
     },
   },
+  {
+    id: "color-conversions",
+    was: "lib/artAccent and components/display/palette (0.16.0's hygiene: each had its own rgbToHsl and hslToRgb)",
+    // a function by either name, declared or assigned, outside lib/color
+    selector:
+      "FunctionDeclaration[id.name=/^(rgbToHsl|hslToRgb)$/], VariableDeclarator[id.name=/^(rgbToHsl|hslToRgb)$/]",
+    files: [`^${R}`],
+    allow: ["lib/color\\.ts$"],
+    message:
+      "Color conversions have one home, lib/color (rgbToHsl, hslToRgb, roundRgb): import them",
+    bad: {
+      file: `${R}components/display/scenes/tide/colors.ts`,
+      code: "function hslToRgb(h, s, l) { return [h, s, l]; }",
+    },
+  },
 ];

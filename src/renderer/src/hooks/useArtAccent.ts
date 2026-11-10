@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Lru } from "@/lib/lru";
 import { artAccent } from "@/lib/artAccent";
+import { coverPixels } from "@/lib/coverPixels";
 import { fetchArtSoon } from "@/lib/fetchArtSoon";
 
 // Per-album accent: the color of the current art (lib/artAccent) retints the app's
@@ -51,19 +52,10 @@ export function useArtAccent(artUrl: string | null, theme: "dark" | "light" = "d
   }, [artUrl, theme]);
 }
 
-/** The cover drawn at 32 × 32, its accent worked out by artAccent. */
+/** The cover's 32 × 32 pixels (lib/coverPixels), its accent worked out by artAccent. */
 async function dominantColor(dataUrl: string, theme: "dark" | "light"): Promise<string | null> {
-  const img = new Image();
-  img.src = dataUrl;
-  await img.decode();
-
-  const size = 32;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return null;
-  ctx.drawImage(img, 0, 0, size, size);
-  const rgb = artAccent(ctx.getImageData(0, 0, size, size).data, theme);
+  const data = await coverPixels(dataUrl, 32);
+  if (!data) return null;
+  const rgb = artAccent(data, theme);
   return rgb ? rgb.join(" ") : null;
 }
