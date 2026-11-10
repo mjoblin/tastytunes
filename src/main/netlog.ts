@@ -6,6 +6,7 @@ import { webContents } from "electron";
 import { NET_RING_SIZE, type NetRequestEntry } from "@shared/model";
 import { REPO_URL } from "@shared/ipc";
 import { version } from "../../package.json";
+import type { ServiceId } from "@shared/services";
 
 /**
  * The identifying User-Agent every external service sees (MusicBrainz
@@ -49,9 +50,10 @@ export function getNetRequests(): NetRequestEntry[] {
   return entries;
 }
 
-/** fetch, with the request visible in the Requests console. Rethrows as fetch does. */
+/** fetch, with the request visible in the Requests console. Rethrows as fetch does. The service
+ *  is one of shared/services' list, so no request goes out unlisted (0.15.0). */
 export async function loggedFetch(
-  service: string,
+  service: ServiceId,
   url: string | URL,
   init?: RequestInit,
 ): Promise<Response> {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useEffectEvent } from "react";
 import { Captions, Disc3, RadioTower, X, AudioLines, Sparkles } from "lucide-react";
 import type { DisplayScene } from "@shared/model";
 import { useStore } from "@/store";
@@ -97,18 +97,16 @@ export function DisplayMode(): React.JSX.Element {
   };
   // Tab steps through the scenes without the mouse; Shift+Tab steps back
   // (quiet while a modal has the keyboard: Info over Display mode keeps its Tab)
-  useEffect(
-    () =>
-      onScreenKey((e) => {
-        if (e.key !== "Tab") return;
-        e.preventDefault();
-        const ids = SCENES_ORDERED.map((sc) => sc.id);
-        const i = ids.indexOf(settings.displayScene);
-        pickScene(ids[(i + (e.shiftKey ? -1 : 1) + ids.length) % ids.length]);
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [settings.displayScene],
+  const listenForTab = useEffectEvent(() =>
+    onScreenKey((e) => {
+      if (e.key !== "Tab") return;
+      e.preventDefault();
+      const ids = SCENES_ORDERED.map((sc) => sc.id);
+      const i = ids.indexOf(settings.displayScene);
+      pickScene(ids[(i + (e.shiftKey ? -1 : 1) + ids.length) % ids.length]);
+    }),
   );
+  useEffect(() => listenForTab(), [settings.displayScene]);
   // Display mode's 46vmin tile is the biggest art in the app: the file's own
   // picture when the server's is small (lib/bestArt)
   const art = useBestArt(

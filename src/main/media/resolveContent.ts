@@ -8,6 +8,7 @@ import { refreshServers, serverUdnForArt } from "./upnpBrowser";
 import { trackArtists } from "@shared/model";
 import type { MediaNode } from "@shared/model";
 import type { ContentRef } from "@shared/model";
+import { nameKey } from "@shared/keys";
 
 /**
  * Finding a track that is known only by its CONTENT.
@@ -29,8 +30,6 @@ export interface ResolvedContent {
   serverName: string;
   objectId: string;
 }
-
-const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
 
 /** The ref's artist is the FIRMWARE's display string — split it the
  *  servers' way ("; " packing) so identity can intersect per performer. */
@@ -56,10 +55,10 @@ const refArtists = (s: string): string[] =>
  */
 function matches(ref: ContentRef, n: MediaNode): boolean {
   if (n.isContainer) return false;
-  if (lc(n.title) !== lc(ref.title)) return false;
+  if (nameKey(n.title) !== nameKey(ref.title)) return false;
   if (ref.artist != null && n.artist != null) {
-    const wanted = new Set(refArtists(ref.artist).map(lc));
-    const candidates = [...trackArtists(n).map(lc), lc(n.albumArtist)].filter(Boolean);
+    const wanted = new Set(refArtists(ref.artist).map(nameKey));
+    const candidates = [...trackArtists(n).map(nameKey), nameKey(n.albumArtist)].filter(Boolean);
     if (!candidates.some((a) => wanted.has(a))) return false;
   }
   return true;
@@ -71,7 +70,7 @@ function best(ref: ContentRef, items: MediaNode[]): MediaNode | null {
   const hits = items.filter((n) => matches(ref, n));
   if (hits.length === 0) return null;
   if (ref.album == null) return hits[0];
-  return hits.find((n) => n.album != null && lc(n.album) === lc(ref.album)) ?? hits[0];
+  return hits.find((n) => n.album != null && nameKey(n.album) === nameKey(ref.album)) ?? hits[0];
 }
 
 export async function resolveContent(

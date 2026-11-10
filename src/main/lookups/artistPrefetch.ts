@@ -4,6 +4,7 @@ import { listeningRecord } from "../data/listeningRecord";
 import { artistIndex } from "../media/artistIndex";
 import * as mediaIndex from "../media/mediaIndex";
 import { artistCacheHasRoom, fetchArtistInfo, knowsArtist } from "./artistInfo";
+import { nameKey } from "@shared/keys";
 
 /**
  * PHOTOS FETCHED AHEAD (0.13.0; a user's report, 2026-10-24: a photo loads only on an artist page's first
@@ -28,8 +29,6 @@ const GAP_MS = Number(process.env["TASTYTUNES_PREFETCH_GAP_MS"] ?? 2_000);
 /** The wait after the indexes last changed before another pass looks for new artists. */
 const SETTLE_MS = 60_000;
 
-const keyOf = (name: string): string => name.trim().toLowerCase();
-
 /**
  * The order the artists are fetched in: the most-played by library plays first (each as spelled
  * most), then every other artist in the libraries by their albums and tracks there, most first,
@@ -44,20 +43,20 @@ export function prefetchOrder(
     if (e.kind !== "play" || typeof e.artist !== "string") continue;
     const name = e.artist.trim();
     if (!name) continue;
-    const t = played.get(keyOf(name)) ?? { plays: 0, spellings: new Map<string, number>() };
+    const t = played.get(nameKey(name)) ?? { plays: 0, spellings: new Map<string, number>() };
     t.plays++;
     t.spellings.set(name, (t.spellings.get(name) ?? 0) + 1);
-    played.set(keyOf(name), t);
+    played.set(nameKey(name), t);
   }
   const out = [...played.values()]
     .sort((a, b) => b.plays - a.plays)
     .map((t) => [...t.spellings.entries()].sort((a, b) => b[1] - a[1])[0][0]);
-  const seen = new Set(out.map(keyOf));
+  const seen = new Set(out.map(nameKey));
   // the libraries' artists as the Artists lens has them, each spelled as first met
   const spelled = new Map<string, string>();
   const meet = (name: string | null | undefined): void => {
     const n = name?.trim();
-    if (n && !spelled.has(keyOf(n))) spelled.set(keyOf(n), n);
+    if (n && !spelled.has(nameKey(n))) spelled.set(nameKey(n), n);
   };
   for (const p of pools) {
     for (const a of p.artists) meet(a.title);

@@ -45,6 +45,7 @@ import { collectionTools } from "./mcp/collectionTools";
 import { audioTools } from "./mcp/audioTools";
 import { editTools } from "./mcp/editTools";
 import { sceneTools } from "./mcp/sceneTools";
+import { mediaType, nameKey } from "@shared/keys";
 
 function lanAddress(): string | null {
   for (const addrs of Object.values(networkInterfaces())) {
@@ -84,6 +85,8 @@ function tokenMatches(header: string | undefined, token: string): boolean {
 export class McpBridge {
   private http: Server | null = null;
   private active: { bind: McpSettings["bind"]; port: number } | null = null;
+  /** The token's mint, which a request from the network waits for before it is checked. */
+  private tokenReady: Promise<void> = Promise.resolve();
   /** Fired when an MCP tool mutates settings (schedules) — the renderer
    *  learns via a {kind:'settings'} push; index.ts wires this to the window. */
   onSettingsMutated: ((next: AppSettings) => void) | null = null;
@@ -134,7 +137,7 @@ export class McpBridge {
 
   private start(mcp: McpSettings): void {
     // the token is minted the first time the server runs, never for an install that never does
-    ensureMcpToken();
+    this.tokenReady = ensureMcpToken().catch(() => {});
     const host = mcp.bind === "lan" ? "0.0.0.0" : "127.0.0.1";
     const server = createServer((req, res) => void this.route(req, res, mcp.bind));
     server.on("error", (e: NodeJS.ErrnoException) => {
@@ -211,13 +214,14 @@ export class McpBridge {
       return;
     }
 
-    const type = (req.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+    const type = mediaType(req.headers["content-type"]);
     if (type !== "application/json") {
       reject(415, "The body must be application/json.");
       return;
     }
     if (bind === "lan" && !loopbackAddress(req.socket.remoteAddress)) {
-      if (!tokenMatches(req.headers.authorization, getSecret("mcpToken") ?? "")) {
+      await this.tokenReady;
+      if (!tokenMatches(req.headers.authorization, (await getSecret("mcpToken")) ?? "")) {
         reject(401, "This server needs its token: Authorization: Bearer <token>.", {
           "www-authenticate": 'Bearer realm="tastytunes"',
         });
@@ -309,13 +313,14 @@ export class McpBridge {
     const stats = await playStatsFromRecord();
     const run = resumeRun(stats.recent);
     if (!run) return { reason: "No album was left unfinished in the past week." };
-    const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
     const groups = indexPools();
     const albums = groups.flatMap((p) => p.albums);
     const node =
       albums.find(
-        (n) => lc(n.title) === lc(run.album) && (!run.artist || lc(n.artist) === lc(run.artist)),
-      ) ?? albums.find((n) => lc(n.title) === lc(run.album));
+        (n) =>
+          nameKey(n.title) === nameKey(run.album) &&
+          (!run.artist || nameKey(n.artist) === nameKey(run.artist)),
+      ) ?? albums.find((n) => nameKey(n.title) === nameKey(run.album));
     if (!node) return { reason: `"${run.album}" is not in any library index.` };
     const pool = groups.find((p) => p.udn === node.serverUdn);
     const tracks = (pool ? albumTracksOf(node, pool) : []).sort(

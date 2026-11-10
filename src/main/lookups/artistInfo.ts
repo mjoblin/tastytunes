@@ -9,6 +9,7 @@
 import type { ArtistInfo } from "@shared/model";
 import { DiskCache } from "./diskCache";
 import { MB, WIKI, getJson, mbFetch, wikipediaFromRels, type Fetched, type MbRelation } from "./mb";
+import { nameKey } from "@shared/keys";
 
 // a library's worth of artists keeps its photos: every artist in the libraries is looked up
 // ahead since 0.13.0 (artistPrefetch), so the cap is a large library's artists rather than a
@@ -35,7 +36,7 @@ export async function fetchArtistInfo(
   lane: "urgent" | "speculative" = "urgent",
 ): Promise<ArtistInfo | null> {
   const ask = (url: string): Promise<Fetched> => mbFetch(url, lane === "urgent");
-  const key = artist.trim().toLowerCase();
+  const key = nameKey(artist);
   if (!key) return null;
   // Refresh details asks the article's images again too, the next time the chooser opens
   if (force) mediaStale.add(key);
@@ -90,7 +91,7 @@ export async function fetchArtistInfo(
 /** An artist's photo as already known, without asking anyone: the rows and cards read this
  *  (a lookup per row would be minutes of MusicBrainz at its one request a second). */
 export function knownArtistImage(artist: string): string | null {
-  const key = artist.trim().toLowerCase();
+  const key = nameKey(artist);
   if (!key || !cache.has(key)) return null;
   return cache.get(key)?.image ?? null;
 }
@@ -103,7 +104,7 @@ export function artistCacheHasRoom(): boolean {
 
 /** Whether the artist has been asked about and answered (a photo or a settled none). */
 export function knowsArtist(artist: string): boolean {
-  return cache.has(artist.trim().toLowerCase());
+  return cache.has(nameKey(artist));
 }
 
 // THE ARTICLE'S OTHER IMAGES (0.13.0 round 7, the picture chooser): the images in the artist's
@@ -137,7 +138,7 @@ const imagesAsked = new Map<string, Promise<string[]>>();
 
 /** The images an artist's article offers, the lead picture first; empty with no article. */
 export function fetchArtistImages(artist: string): Promise<string[]> {
-  const key = artist.trim().toLowerCase();
+  const key = nameKey(artist);
   const asked = imagesAsked.get(key);
   if (asked) return asked;
   const ask = articleImages(artist).finally(() => imagesAsked.delete(key));
@@ -152,7 +153,7 @@ async function articleImages(artist: string): Promise<string[]> {
     : "";
   const lead = info?.image ?? null;
   if (!title) return lead ? [lead] : [];
-  const stale = mediaStale.delete(artist.trim().toLowerCase());
+  const stale = mediaStale.delete(nameKey(artist));
   let images = !stale && mediaCache.has(title) ? (mediaCache.get(title) ?? []) : null;
   if (images == null) {
     const got = await getJson(

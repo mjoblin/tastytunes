@@ -22,6 +22,7 @@ import {
   streamerKeep,
   defineTool,
 } from "./toolkit";
+import { nameKey } from "@shared/keys";
 
 // The MCP bridge's history tools (the listening record: recents, stats, the unplayed and the
 // resume offer), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and
@@ -364,7 +365,6 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           .describe("Narrow by artist, case-insensitive substring of the recorded artist."),
       },
       handler: async (a) => {
-        const lc = (v: string): string => v.trim().toLowerCase();
         const { events: everyLine } = await listeningRecord.readAll();
         const keep = streamerKeep(a.streamer, dm.snapshot().devices);
         const events = keep ? everyLine.filter(keep) : everyLine;
@@ -372,8 +372,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           .filter(
             (e): e is ListeningPlayEvent =>
               e.kind === "play" &&
-              lc(e.title) === lc(a.title) &&
-              (a.artist == null || (e.artist ?? "").toLowerCase().includes(lc(a.artist))),
+              nameKey(e.title) === nameKey(a.title) &&
+              (a.artist == null || nameKey(e.artist).includes(nameKey(a.artist))),
           )
           .sort((x, y) => x.at - y.at);
         if (plays.length === 0) return ok({ found: false });
@@ -407,7 +407,6 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const artist = a.artist ?? (a.title || a.album ? undefined : (md?.artist ?? undefined));
         const album = a.album ?? (a.title ? undefined : (md?.album ?? undefined));
         const since = stats.since != null ? new Date(stats.since).toISOString() : null;
-        const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
         if (title) {
           const exact = stats.tracks[playKey(title, artist ?? null, album ?? null)];
           const loose = exact
@@ -415,7 +414,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             : Object.entries(stats.tracks)
                 .filter(
                   ([k]) =>
-                    k.startsWith(`${lc(title)}|`) && (!artist || k.includes(`|${lc(artist)}|`)),
+                    k.startsWith(`${nameKey(title)}|`) &&
+                    (!artist || k.includes(`|${nameKey(artist)}|`)),
                 )
                 .map(([, v]) => v);
           if (loose.length === 0)
@@ -448,8 +448,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           const titles = new Set<string>();
           for (const [k, v] of Object.entries(stats.tracks)) {
             const [t, ar, al] = k.split("|");
-            if (al !== lc(album)) continue;
-            if (artist && ar !== lc(artist)) continue;
+            if (al !== nameKey(album)) continue;
+            if (artist && ar !== nameKey(artist)) continue;
             plays += v.plays;
             listens += v.listens;
             seconds += v.seconds;

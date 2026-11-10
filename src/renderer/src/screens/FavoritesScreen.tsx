@@ -56,6 +56,7 @@ import { useCardDetails } from "@/components/library/useCardDetails";
 import { keyedEvent, menuAt } from "@/lib/menuAt";
 import { KeyedList } from "@/components/controls/KeyedList";
 import type { ListItemAttrs } from "@/hooks/useListKeys";
+import { nameKey } from "@shared/keys";
 
 /** Kind visibility — session memory, like the Radio screen's chip state. */
 type FavKind = "all" | "station" | "album" | "track";
@@ -451,8 +452,7 @@ export function FavoritesScreen(): React.JSX.Element {
                 {(item) =>
                   shownStations.map((st, si) => {
                     const active = activeKeys.has(favoriteKey(st));
-                    const playing =
-                      playingStation != null && st.name.trim().toLowerCase() === playingStation;
+                    const playing = playingStation != null && nameKey(st.name) === playingStation;
                     return (
                       <StationFavRow
                         key={st.url}

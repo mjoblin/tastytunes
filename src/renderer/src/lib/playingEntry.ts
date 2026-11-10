@@ -1,6 +1,7 @@
 import type { MediaNode } from "@shared/model";
 import { trackArtists } from "@shared/model";
 import type { QueueList, QueueListItem, QueueListItemMetadata, ZonePlayState } from "@shared/smoip";
+import { nameKey } from "@shared/keys";
 
 /**
  * What the matchers need of a queue entry's metadata — the shape a SAVED item
@@ -86,8 +87,7 @@ export function contentPlayId(
   return { raw, content: matches.length === 1 ? matches[0].id : null };
 }
 
-const sameName = (a: string, b: string): boolean =>
-  a.trim().toLowerCase() === b.trim().toLowerCase();
+const sameName = (a: string, b: string): boolean => nameKey(a) === nameKey(b);
 
 /**
  * A queue entry's `artist` is the DIDL's first upnp:artist — the ALBUM ARTIST

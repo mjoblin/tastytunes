@@ -47,7 +47,7 @@ export function photosOf(body: unknown): string[] {
 
 /** An artist's photos at fanart.tv; empty with no key saved, no MusicBrainz match, or none there. */
 export async function fetchFanartPhotos(artist: string): Promise<string[]> {
-  const key = getSecret("fanartKey");
+  const key = await getSecret("fanartKey");
   if (!key) return [];
   const mbid = mbidOf((await fetchArtistInfo(artist))?.musicbrainzUrl);
   if (!mbid) return [];

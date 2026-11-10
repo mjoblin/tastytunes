@@ -6,6 +6,7 @@ import { PICKED_ART } from "@shared/artUrl";
 import { isRecord } from "@shared/guards";
 import type { ArtistChoice, MediaIndexPools } from "@shared/model";
 import { jsonFileStore } from "./jsonStore";
+import { nameKey } from "@shared/keys";
 
 // ARTISTS' CHOSEN PICTURES (0.13.0 round 7; shared/model ArtistChoice says what a choice is and
 // why). One small JSON beside settings.json, an artist's name (lowercased) to their choice, and
@@ -27,8 +28,6 @@ type Stored = ArtistChoice & {
 };
 /** A choice as kept: when it was made, and its copy. */
 export type StoredChoice = Stored;
-
-const keyOf = (name: string): string => name.trim().toLowerCase();
 
 /** The folder the chosen picture files are copied into. */
 const pickedDir = (): string => join(app.getPath("userData"), "artist-pictures");
@@ -79,18 +78,23 @@ const store = jsonFileStore<Record<string, Stored>>({
     for (const [k, v] of Object.entries(parsed)) {
       if (!isArtistChoice(v)) continue;
       const { at, copy } = v as { at?: unknown; copy?: unknown };
-      out[k] = {
+      const choice: Stored = {
         ...own(v),
         at: typeof at === "number" ? at : 0,
         ...(v.kind !== "file" && typeof copy === "string" && FILE_NAME.test(copy) ? { copy } : {}),
       };
+      // kept by its name's key (0.15.0: a key from before nameKey was trimmed and lowercased
+      // only, so a name written with a combining accent re-keys to its precomposed twin's), the
+      // newer of two that become one
+      const key = nameKey(k);
+      if (!out[key] || out[key].at < choice.at) out[key] = choice;
     }
     return out;
   },
 });
 
 export function choiceOf(name: string): StoredChoice | null {
-  return store.get()[keyOf(name)] ?? null;
+  return store.get()[nameKey(name)] ?? null;
 }
 
 /** Every artist with a choice, by name lowercased. */
@@ -101,7 +105,7 @@ export function choiceKeys(): string[] {
 /** Choose an artist's picture, or clear it (null); the files no choice names go, unless picked
  *  in the last hour (a chooser still open may be about to use one). */
 export function setChoice(name: string, choice: ArtistChoice | null): void {
-  const k = keyOf(name);
+  const k = nameKey(name);
   if (!k) return;
   const next = { ...store.get() };
   if (choice) next[k] = { ...own(choice), at: Date.now() };
@@ -113,7 +117,7 @@ export function setChoice(name: string, choice: ArtistChoice | null): void {
 /** The copy kept for a choice, named on it when the choice is still the one made at `at` (a
  *  choice made again while its copy was fetched keeps waiting for its own); false when not. */
 export function setCopy(name: string, at: number, file: string): boolean {
-  const k = keyOf(name);
+  const k = nameKey(name);
   const c = store.get()[k];
   if (!c || c.kind === "file" || c.at !== at || !pickedPath(file)) return false;
   const next = { ...store.get(), [k]: { ...c, copy: file } };
@@ -182,8 +186,8 @@ function coverNow(
   );
   // still where it was chosen (two editions of one title keep the one chosen)
   if (albums.some((a) => a.artUrl === c.url)) return c.url;
-  const title = c.album.trim().toLowerCase();
-  return albums.find((a) => a.title.trim().toLowerCase() === title && a.artUrl)?.artUrl ?? c.url;
+  const title = nameKey(c.album);
+  return albums.find((a) => nameKey(a.title) === title && a.artUrl)?.artUrl ?? c.url;
 }
 
 /** The longest side a chosen file keeps: the artist page's picture at its largest, on Retina. */

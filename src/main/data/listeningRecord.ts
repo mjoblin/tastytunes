@@ -23,6 +23,7 @@ import {
 } from "@shared/model";
 import { isRadioMetadata, radioTrackTitle, trackTitle, type ZonePlayState } from "@shared/smoip";
 import { getSettings } from "./persist";
+import { nameKey } from "@shared/keys";
 
 /**
  * The listening record: a full local play log as DURABLE USER DATA — the
@@ -134,21 +135,18 @@ function bound(c: ViaContext): void {
   c.previous = null;
 }
 
-/** How long a preset recall may take to load its queue before it is taken to have loaded nothing:
- *  the Presets screen's dead-recall wait (8 s) and a wake's (about 3 s), with room. */
-const PRESET_BIND_MS = 15_000;
-
 /**
  * A RECALL THAT LOADED NOTHING CLAIMS NOTHING (0.13.0-rc.6, his preset 24). The streamer accepts
  * a preset whose album its server no longer has and then does nothing, and the recall's context,
  * never bound, claimed the next play anyway: a track of the queue already playing (preset 30's
  * album, credited to preset 24 in his Resume and his history). A preset recall's context still
- * unbound when a play starts from the queue that was there before it, or past PRESET_BIND_MS,
- * came to nothing: the context it replaced stands again (unit-tested).
+ * unbound when a play starts from the queue that was there before it came to nothing: the context
+ * it replaced stands again (unit-tested). Past that, main's recall watch decides it (0.15.0: one
+ * clock, 8 s after the streamer is awake; main/device/recallWatch) and says so through
+ * recallCameToNothing, where this file kept its own 15 s clock.
  */
 function cameToNothing(c: ViaContext, kind: OpenPlay["kind"], queueId: number | null): boolean {
   if (c.via.kind !== "preset" || c.queueIds != null || c.station != null) return false;
-  if (Date.now() - c.openedAt > PRESET_BIND_MS) return true;
   return kind === "play" && queueId != null && (c.queueBefore?.has(queueId) ?? false);
 }
 
@@ -557,6 +555,19 @@ export const listeningRecord = {
       previous: recall ? context : null,
     };
   },
+  /** Main's recall watch: the preset's recall loaded nothing, so the context it replaced stands
+   *  again (a recall that bound meanwhile, or a newer verb, is left alone). */
+  recallCameToNothing(presetId: number): void {
+    const c = context;
+    if (
+      c &&
+      c.via.kind === "preset" &&
+      c.via.id === presetId &&
+      c.queueIds == null &&
+      c.station == null
+    )
+      context = c.previous;
+  },
   /** The activation's batch is over: the next queue list is what it loaded. */
   releaseContextBinding(): void {
     if (context?.holdBinding) {
@@ -614,8 +625,7 @@ export const listeningRecord = {
     streamer: string | null,
     slot: number,
   ): Promise<{ album: string; artist: string | null; artUrl: string | null } | null> {
-    const same = (a: string, b: string): boolean =>
-      a.trim().toLowerCase() === b.trim().toLowerCase();
+    const same = (a: string, b: string): boolean => nameKey(a) === nameKey(b);
     const { events } = await this.readAll();
     for (let i = events.length - 1; i >= 0; i--) {
       const e = events[i];

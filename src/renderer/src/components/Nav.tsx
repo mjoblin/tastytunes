@@ -18,6 +18,7 @@ import {
 } from "@/lib/screens";
 import { PopoverCard } from "@/components/chrome/Overlay";
 import { menuAt } from "@/lib/menuAt";
+import { useChromeGround } from "@/hooks/useChromeGround";
 
 /**
  * Right-click target: which nav item (a screen or a bottom-cluster tool), and
@@ -39,7 +40,7 @@ export function Nav(): React.JSX.Element {
   // while the CD is the source the Queue screen opens on the disc, so its count is the disc's
   // ("CD 10", user, 2026-09-26), and none until the streamer says how many
   const discCount = useDiscCount();
-  const ambientWindow = useStore((s) => s.ambientWindowActive);
+  const ground = useChromeGround("nav");
   const settings = useStore((s) => s.settings);
   const update = useStore((s) => s.update);
   const [menu, setMenu] = useState<NavMenu | null>(null);
@@ -177,7 +178,7 @@ export function Nav(): React.JSX.Element {
         // the panel tint in light mode only (user call, 2026-10-31): on paper a darker frame sits
         // back from the page, but in dark a lighter one read as raised and the content as sunk
         // in a well, so dark keeps the window's one ground, as it has under the full-window wash
-        !ambientWindow && "light:bg-panel/60",
+        ground,
       )}
     >
       {/* macOS traffic-light inset + wordmark; draggable like a title bar */}

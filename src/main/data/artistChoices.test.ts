@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app } from "electron";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MediaIndexPools, MediaNode } from "@shared/model";
 import {
   choiceOf,
@@ -217,5 +217,25 @@ describe("the copied files", () => {
     expect(left).toContain(kept);
     expect(left).not.toContain(old);
     setChoice("Other", null);
+  });
+});
+
+describe("choices kept before 0.15.0's name key", () => {
+  it("are found by a name written either way, the newer of two that become one", async () => {
+    const img = (n: string): string => `https://thumb.wikimedia.org/${n}.jpg`;
+    writeFileSync(
+      join(app.getPath("userData"), "artist-choices.json"),
+      JSON.stringify({
+        "sigur ro\u0301s": { kind: "image", url: img("older"), at: 1 },
+        "sigur rós": { kind: "image", url: img("newer"), at: 2 },
+        "bjo\u0308rk": { kind: "image", url: img("bjork"), at: 3 },
+      }),
+    );
+    vi.resetModules();
+    const fresh = await import("./artistChoices");
+    expect(fresh.choiceOf("Sigur Rós")).toMatchObject({ url: img("newer") });
+    expect(fresh.choiceOf("Sigur Ro\u0301s")).toMatchObject({ url: img("newer") });
+    expect(fresh.choiceOf("Björk")).toMatchObject({ url: img("bjork") });
+    expect(fresh.choiceOf("Bjo\u0308rk")).toMatchObject({ url: img("bjork") });
   });
 });

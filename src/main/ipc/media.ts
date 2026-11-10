@@ -10,7 +10,6 @@ import {
   browse as mediaBrowse,
   ObjectGoneError,
   presetSave,
-  queueAdd,
   refreshServers,
 } from "../media/upnpBrowser";
 import { handle } from "../app/guard";
@@ -79,12 +78,12 @@ export function registerMediaIpc(): void {
       playFromId?: string,
       confirmLarge?: boolean,
     ) => {
-      // Library plays are wake intents too — queue writes to a standby
-      // streamer would otherwise land on deaf ears (probed 2026-07-23).
+      // awake before the ids are checked too, which can browse the streamer's own drive (the
+      // queue write itself wakes it in any case: DeviceManager.queueAdd)
       await deviceManager.ensureAwake();
       const opts = { confirmLarge: confirmLarge === true };
       return withCurrentIds(serverUdn, objectId, playFromId, (id, from) =>
-        queueAdd(streamerHost(), serverUdn, id, action, from, opts),
+        deviceManager.queueAdd(serverUdn, id, action, from, opts),
       );
     },
   );

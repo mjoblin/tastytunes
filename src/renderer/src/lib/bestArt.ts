@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useEffectEvent } from "react";
 import { playKey, type EmbeddedArt, type EmbeddedArtQuery } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -57,7 +57,7 @@ export function useBestArt(
   const enabled = useStore((s) => s.settings.artFromFiles) && fileLookup;
   const [best, setBest] = useState<string | null>(serverUrl ?? null);
   const queryKey = query ? JSON.stringify(query) : null;
-  useEffect(() => {
+  const findBest = useEffectEvent(() => {
     setBest(serverUrl ?? null);
     if (!query) return;
     let live = true;
@@ -95,7 +95,7 @@ export function useBestArt(
       live = false;
     };
     // queryKey stands for query (a fresh object every render)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverUrl, queryKey, enabled]);
+  });
+  useEffect(() => findBest(), [serverUrl, queryKey, enabled]);
   return best;
 }

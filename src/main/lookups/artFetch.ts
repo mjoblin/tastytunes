@@ -1,6 +1,7 @@
 import { knownServerHost } from "../media/upnpBrowser";
 import { loggedFetch } from "../netlog";
 import { allowed } from "./fetchGuard";
+import { mediaType } from "@shared/keys";
 
 /**
  * A PICTURE, AND ONLY A PICTURE, FROM WHERE A PICTURE CAN COME (0.10.0, the whole-app
@@ -94,7 +95,7 @@ export async function fetchPicture(
       chunks.push(value);
     }
     const bytes = Buffer.concat(chunks);
-    const declared = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+    const declared = mediaType(res.headers.get("content-type"));
     const type = declared.startsWith("image/") ? declared : sniff(bytes);
     if (!type) return null;
     return { bytes, type };

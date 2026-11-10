@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { playStation, type PlayableStation } from "@/lib/radio";
+import { nameKey } from "@shared/keys";
 
 /**
  * How long a "tuning in…" indication survives without the device confirming
@@ -33,7 +34,7 @@ export function useStationTuning(playingName: string | null): {
   const timeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (starting && playingName === starting.name.trim().toLowerCase()) setStarting(null);
+    if (starting && playingName === nameKey(starting.name)) setStarting(null);
   }, [starting, playingName]);
   useEffect(
     () => () => {

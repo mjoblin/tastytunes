@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { ArrowUpRight, MoreHorizontal } from "lucide-react";
 import {
   albumFormat,
@@ -27,7 +27,6 @@ import { Eqbars } from "@/components/media/Eqbars";
 import {
   COPY_BADGE_TIP,
   type LensActions,
-  lc,
   nodeKey,
   orderArtists,
   RECORD_SORTS,
@@ -39,6 +38,7 @@ import {
 } from "./useLensTrackSelection";
 import { useLensIndex } from "./useLensIndex";
 import { ArtistCards, AzRail, artistLine, lensArtistNode } from "./ArtistCards";
+import { nameKey } from "@shared/keys";
 
 // The Artists lens, split out of LibraryLenses.tsx (2026-09-13, the lenses round: three lenses of
 // 600 to 800 lines shared one file); what the lenses share lives in ./lensShared.
@@ -68,7 +68,7 @@ let artistsMem: {
  *  Albums lenses' artist links. Keys match the lens's own: the lowercased,
  *  trimmed name. The lens then REVEALS the row near the top of its column. */
 export function focusArtistsLens(name: string): void {
-  artistsMem = { ...artistsMem, artist: lc(name), album: null, reveal: lc(name) };
+  artistsMem = { ...artistsMem, artist: nameKey(name), album: null, reveal: nameKey(name) };
 }
 
 /** How far from the column's top a revealed artist lands — about a row and
@@ -234,7 +234,7 @@ export function ArtistsLens({
   // clearing "beatles" pops hundreds of rows back in ABOVE the selected one.
   // Skips the mount run (the saved column scroll is restoring then).
   const listSettled = useRef(false);
-  useEffect(() => {
+  const keepSelectionInSight = useEffectEvent(() => {
     if (!listSettled.current) {
       listSettled.current = true;
       return;
@@ -246,8 +246,8 @@ export function ArtistsLens({
     if (at < win.first || at > win.last) {
       if (at >= 0) scrollColTo(at, REVEAL_PAD);
     } else if (selectedRowRef.current) scrollToVisible(selectedRowRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shownArtists]);
+  });
+  useEffect(() => keepSelectionInSight(), [shownArtists]);
   const albumsColRef = useRef<HTMLDivElement | null>(null);
   const tracksColRef = useRef<HTMLDivElement | null>(null);
   // FROM THE KEYBOARD (0.14.0, his K1 to K6): each column one Tab stop, up and down within it,
@@ -310,7 +310,7 @@ export function ArtistsLens({
   // from the column's top, then the ask is consumed — a later visit keeps
   // the remembered scroll like any other. Container-scoped (never
   // scrollIntoView).
-  useEffect(() => {
+  const revealAsked = useEffectEvent(() => {
     const key = artistsMem.reveal;
     if (!key) return;
     const at = shownArtists.findIndex((a) => a.key === key);
@@ -324,8 +324,8 @@ export function ArtistsLens({
     });
     // a reveal is asked once and lands when the list it names has rendered; the window's
     // geometry (scrollColTo) is read at that moment, never a reason to land again
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shownArtists]);
+  });
+  useEffect(() => revealAsked(), [shownArtists]);
   // each letter's first artist, by index (a windowed column may not hold the row); in name
   // order only, the rail's letters meaning nothing in another
   const letterStarts = useMemo(() => {
@@ -351,7 +351,7 @@ export function ArtistsLens({
   };
 
   // Playing-artist highlight is content identity, like everything else.
-  const playingArtistKey = actions.playingArtist ? lc(actions.playingArtist) : null;
+  const playingArtistKey = actions.playingArtist ? nameKey(actions.playingArtist) : null;
 
   const colHeading = (
     label: string,

@@ -1,7 +1,8 @@
 /**
  * TEST-ONLY: a streamer and its own media server for the unit tests of the media layer
  * (upnpBrowser, mediaIndex, mediaInfo). Nothing in the app imports this. A small fork of the
- * harness mock (dev/mock-streamer.mjs, which CI does not have), its response shapes copied:
+ * harness mock (dev/mock-streamer.mjs, which CI does not have), its response shapes the demo's
+ * (servers/demo/upnpShapes, one home for both since 0.15.0):
  * /smoip/system/upnp lists one server on the streamer's own address ("Mock Evo", mock-udn-1),
  * its description names a ContentDirectory, and that answers Browse (150 at a time, as real
  * servers cap it), Search (scoped by class, on the fields the criteria name), the capability
@@ -25,6 +26,17 @@
  */
 import { createServer, type IncomingMessage } from "node:http";
 import type { AddressInfo } from "node:net";
+import {
+  ASSET_BLANK,
+  cd,
+  deviceDescription,
+  didlAlbumTrack,
+  didlContainer,
+  didlLooseTrack,
+  didlWrap,
+  flacRes,
+  soapEnvelope,
+} from "../../servers/demo/upnpShapes";
 
 export interface FakeStreamerOptions {
   searchCaps?: string;
@@ -85,41 +97,16 @@ const SYN_GENRES = [
   "Acid",
 ];
 
-const xmlEsc = (s: string): string =>
-  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-const durFmt = (secs: number): string =>
-  `0:${String(Math.floor(secs / 60)).padStart(2, "0")}:${String(secs % 60).padStart(2, "0")}.000`;
-/** What Asset answers for an id it no longer has (his library, 2026-10-28): HTTP 200 and this. */
-const ASSET_BLANK =
-  '<container id="-1" parentID="-1" restricted="0" searchable="1"><dc:title></dc:title><dc:creator> </dc:creator><upnp:genre>Unknown</upnp:genre><upnp:class>object.container</upnp:class></container>';
-
-const didlWrap = (inner: string): string =>
-  `<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/">${inner}</DIDL-Lite>`;
-const didlArt = (art: string | null): string =>
-  art == null ? "" : `<upnp:albumArtURI>${art}</upnp:albumArtURI>`;
-const didlContainer = (
-  id: string,
-  parent: string,
-  title: string,
-  cls: string,
-  art: string | null,
-  artist?: string,
-  date?: string,
-  genres?: string[],
-): string =>
-  `<container id="${id}" parentID="${parent}" restricted="true"><upnp:class>${cls}</upnp:class><dc:title>${xmlEsc(title)}</dc:title>${didlArt(art)}${artist ? `<upnp:artist>${xmlEsc(artist)}</upnp:artist>` : ""}${date ? `<dc:date>${date}</dc:date>` : ""}${(genres ?? []).map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join("")}</container>`;
-// with an album artist, three upnp:artist elements (AlbumArtist role, the performers, the
-// Composer role) and dc:creator repeating the performers; without, one plain element
-const didlArtists = (t: Track): string =>
-  t.albumArtist
-    ? `<dc:creator>${xmlEsc(t.artist)}</dc:creator><upnp:artist role="AlbumArtist">${xmlEsc(t.albumArtist)}</upnp:artist><upnp:artist>${xmlEsc(t.artist)}</upnp:artist>${t.composer ? `<upnp:artist role="Composer">${xmlEsc(t.composer)}</upnp:artist>` : ""}`
-    : `<upnp:artist>${xmlEsc(t.artist)}</upnp:artist>${t.composer ? `<upnp:artist role="Composer">${xmlEsc(t.composer)}</upnp:artist>` : ""}`;
 const didlTrack = (alb: Album, n: number, parent = alb.id): string => {
   const t = alb.tracks[n - 1];
-  return `<item id="${alb.id}-t${n}" parentID="${parent}" restricted="true"><dc:title>${xmlEsc(t.title)}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class>${didlArtists(t)}<upnp:album>${xmlEsc(t.album)}</upnp:album>${alb.genres.map((g) => `<upnp:genre>${xmlEsc(g)}</upnp:genre>`).join("")}<upnp:originalTrackNumber>${n}</upnp:originalTrackNumber>${didlArt(t.art)}<res duration="${durFmt(t.secs)}" size="${t.secs * 100000}" bitrate="176400" bitsPerSample="16" sampleFrequency="44100" nrAudioChannels="2" protocolInfo="http-get:*:audio/x-flac:DLNA.ORG_PN=FLAC;DLNA.ORG_OP=01">file:///tmp/usm/1/${alb.id}/${n}.flac</res></item>`;
+  return didlAlbumTrack(
+    `${alb.id}-t${n}`,
+    parent,
+    { ...t, trackNo: n },
+    alb.genres,
+    flacRes(t.secs, `file:///tmp/usm/1/${alb.id}/${n}.flac`),
+  );
 };
-const didlLooseTrack = (id: string, parent: string, title: string, artist: string, art: string) =>
-  `<item id="${id}" parentID="${parent}" restricted="true"><dc:title>${xmlEsc(title)}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><upnp:artist>${xmlEsc(artist)}</upnp:artist>${didlArt(art)}<res duration="0:03:00.000" protocolInfo="*:*:*:*">file:///tmp/usm/1/singles/${id}.flac</res></item>`;
 
 const SINGLES: Array<[string, string, string]> = [
   ["sng-1", "Zeta Song", "The Mock Artists"],
@@ -478,25 +465,14 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
     return { parts };
   };
 
-  const soap = (inner: string): string => `<?xml version="1.0"?>
-<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/"><s:Body>${inner}</s:Body></s:Envelope>`;
-  const DESCRIPTION = `<?xml version="1.0"?>
-<root xmlns="urn:schemas-upnp-org:device-1-0">
-  <specVersion><major>1</major><minor>0</minor></specVersion>
-  <device>
-    <deviceType>urn:schemas-upnp-org:device:MediaRenderer:1</deviceType>
-    <friendlyName>Mock Evo</friendlyName>
-    <manufacturer>Cambridge Audio</manufacturer>
-    <UDN>uuid:mock-udn-1</UDN>
-    <serviceList>
-      <service>
-        <serviceType>urn:schemas-upnp-org:service:ContentDirectory:1</serviceType>
-        <serviceId>urn:upnp-org:serviceId:ContentDirectory</serviceId>
-        <controlURL>/upnp/control</controlURL>
-      </service>
-    </serviceList>
-  </device>
-</root>`;
+  const soap = soapEnvelope;
+  const DESCRIPTION = deviceDescription({
+    deviceType: "MediaRenderer",
+    name: "Mock Evo",
+    manufacturer: "Cambridge Audio",
+    udn: "mock-udn-1",
+    base: "/upnp",
+  });
 
   server.on("request", (req, res) => {
     void (async () => {
@@ -538,28 +514,9 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
         return;
       }
       const body = await readBody(req);
-      const cd = 'xmlns:u="urn:schemas-upnp-org:service:ContentDirectory:1"';
-      if (body.includes("GetSystemUpdateID"))
-        return xml(
-          200,
-          soap(
-            `<u:GetSystemUpdateIDResponse ${cd}><Id>${updateId}</Id></u:GetSystemUpdateIDResponse>`,
-          ),
-        );
-      if (body.includes("GetSearchCapabilities"))
-        return xml(
-          200,
-          soap(
-            `<u:GetSearchCapabilitiesResponse ${cd}><SearchCaps>${searchCaps}</SearchCaps></u:GetSearchCapabilitiesResponse>`,
-          ),
-        );
-      if (body.includes("GetSortCapabilities"))
-        return xml(
-          200,
-          soap(
-            `<u:GetSortCapabilitiesResponse ${cd}><SortCaps></SortCaps></u:GetSortCapabilitiesResponse>`,
-          ),
-        );
+      if (body.includes("GetSystemUpdateID")) return xml(200, soap(cd.systemUpdateId(updateId)));
+      if (body.includes("GetSearchCapabilities")) return xml(200, soap(cd.searchCaps(searchCaps)));
+      if (body.includes("GetSortCapabilities")) return xml(200, soap(cd.sortCaps("")));
       const start = Number(/<StartingIndex>(\d+)<\/StartingIndex>/.exec(body)?.[1] ?? 0);
       if (body.includes("<u:Search")) {
         searchCalls++;
@@ -570,9 +527,7 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
           : parts;
         return xml(
           200,
-          soap(
-            `<u:SearchResponse ${cd}><Result>${xmlEsc(generationIds(didlWrap(page.join(""))))}</Result><NumberReturned>${page.length}</NumberReturned><TotalMatches>${parts.length}</TotalMatches><UpdateID>1</UpdateID></u:SearchResponse>`,
-          ),
+          soap(cd.search(generationIds(didlWrap(page.join(""))), page.length, parts.length, 1)),
         );
       }
       let objectId = /<ObjectID>(.*?)<\/ObjectID>/.exec(body)?.[1] ?? "0";
@@ -588,12 +543,7 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
         const g = /^g(\d+)~(.*)$/.exec(objectId);
         if (!g || Number(g[1]) !== generation) {
           const blank = meta ? ASSET_BLANK : "";
-          return xml(
-            200,
-            soap(
-              `<u:BrowseResponse ${cd}><Result>${xmlEsc(didlWrap(blank))}</Result><NumberReturned>${meta ? 1 : 0}</NumberReturned><TotalMatches>${meta ? 1 : 0}</TotalMatches><UpdateID>1</UpdateID></u:BrowseResponse>`,
-            ),
-          );
+          return xml(200, soap(cd.browse(didlWrap(blank), meta ? 1 : 0, meta ? 1 : 0, 1)));
         }
         objectId = g[2];
       }
@@ -603,12 +553,7 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
       const parts = all.slice(start, start + 150);
       const didl = didlWrap(parts.join(""));
       const result = rotating ? usbFolders(mountIds(didl)) : generationIds(didl);
-      return xml(
-        200,
-        soap(
-          `<u:BrowseResponse ${cd}><Result>${xmlEsc(result)}</Result><NumberReturned>${parts.length}</NumberReturned><TotalMatches>${all.length}</TotalMatches><UpdateID>1</UpdateID></u:BrowseResponse>`,
-        ),
-      );
+      return xml(200, soap(cd.browse(result, parts.length, all.length, 1)));
     })();
   });
 

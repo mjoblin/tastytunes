@@ -61,9 +61,8 @@ export class Type implements Scene {
     const highs = (f.bands[4] + f.bands[5]) / 2;
     const bass = f.bands[0];
     this.punchAim = easeTowards(this.punchAim, 0, f.dt, 0.12);
-    if (f.hitsKnown)
-      for (const hit of f.hits)
-        if (hit.type === "kick") this.punchAim = Math.max(this.punchAim, hit.strength);
+    for (const hit of f.hits)
+      if (hit.type === "kick") this.punchAim = Math.max(this.punchAim, hit.strength);
     if (f.drop?.onDrop) this.punchAim = Math.max(this.punchAim, 1.5);
     this.punch = easeTowards(this.punch, this.punchAim, f.dt, 0.06);
 

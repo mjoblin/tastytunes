@@ -39,6 +39,7 @@ import { artistIndex } from "../media/artistIndex";
 import * as mediaIndex from "../media/mediaIndex";
 import { demoHost } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
+import { nameKey } from "@shared/keys";
 
 /** Internet lookups, each behind its own switch: lyrics, ListenBrainz, artist, album, disc and track context, cover art, radio directories, embedded and fetched pictures, and the lookup caches. (Split out of index.ts's registerIpc in the 0.11.0 sweep.) */
 
@@ -67,7 +68,7 @@ export function registerLookupsIpc(): void {
     // the picture chosen for them, else the server's real picture, else the photo, else a cover
     // (a server picture that is an album's cover counts as a cover)
     for (const n of want) {
-      const e = artists.get(n.trim().toLowerCase());
+      const e = artists.get(nameKey(n));
       out[n] =
         chosenPicture(n, pools, photos) ??
         e?.own ??
@@ -148,7 +149,7 @@ export function registerLookupsIpc(): void {
   // the artist page's facts line: the lens's counts, from the ready indexes
   handle(IPC.artistFacts, (_e, name: unknown) => {
     if (typeof name !== "string") return null;
-    const e = artistIndex(mediaIndex.pools()).get(name.trim().toLowerCase());
+    const e = artistIndex(mediaIndex.pools()).get(nameKey(name));
     return e ? { albums: e.albums, tracks: e.tracks } : null;
   });
   // Belt-and-braces gate: the renderer only asks while the setting is on, but
@@ -159,22 +160,22 @@ export function registerLookupsIpc(): void {
   handle(IPC.lbValidate, () => scrobbler.validateToken());
   // THE SECRETS STORE (0.13.0 round 10): a window learns only whether a token is saved and how it
   // ends; the MCP token itself goes to a window only for a Copy the person pressed
-  handle(IPC.secretsStatus, () => ({
-    encrypted: encryptsHere(),
-    lbToken: secretHint("lbToken"),
-    mcpToken: secretHint("mcpToken"),
-    fanartKey: secretHint("fanartKey"),
+  handle(IPC.secretsStatus, async () => ({
+    encrypted: await encryptsHere(),
+    lbToken: await secretHint("lbToken"),
+    mcpToken: await secretHint("mcpToken"),
+    fanartKey: await secretHint("fanartKey"),
   }));
   // a personal fanart.tv key (0.13.0 round 11): checked with fanart.tv before it is kept; a key
   // it refuses is not kept, one it could not be asked about is (checked again in use)
   handle(IPC.setFanartKey, async (_e, key: unknown) => {
     if (key === null) {
-      setSecret("fanartKey", null);
+      await setSecret("fanartKey", null);
       return "removed";
     }
     if (typeof key !== "string" || !key.trim()) return "refused";
     const verdict = await checkFanartKey(key.trim());
-    if (verdict !== "refused") setSecret("fanartKey", key.trim());
+    if (verdict !== "refused") await setSecret("fanartKey", key.trim());
     return verdict;
   });
   handle(IPC.artistFanart, (_e, name: unknown) =>
@@ -185,18 +186,18 @@ export function registerLookupsIpc(): void {
   // a ListenBrainz token checked with ListenBrainz before it is kept, as a fanart.tv key is
   handle(IPC.setLbToken, async (_e, token: unknown) => {
     if (token === null) {
-      setSecret("lbToken", null);
+      await setSecret("lbToken", null);
       return { verdict: "removed", userName: null };
     }
     if (typeof token !== "string" || !token.trim()) return { verdict: "refused", userName: null };
     const got = await scrobbler.validateToken(token.trim());
     if (got && !got.valid) return { verdict: "refused", userName: null };
-    setSecret("lbToken", token.trim());
+    await setSecret("lbToken", token.trim());
     return got
       ? { verdict: "works", userName: got.userName }
       : { verdict: "unreachable", userName: null };
   });
-  handle(IPC.mcpTokenReveal, () => getSecret("mcpToken") ?? "");
+  handle(IPC.mcpTokenReveal, async () => (await getSecret("mcpToken")) ?? "");
   handle(IPC.mcpTokenNew, () => newMcpToken());
   handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
     getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null,

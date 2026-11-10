@@ -55,17 +55,11 @@ export const zOfSeconds = (secondsFromNow: number): number => secondsFromNow * U
 
 /** The heat envelope: a big hit grips at once and lets go over its time constant. */
 export const HEAT_TAU = 1.4;
-/** The Hits setting, on the file's own drum onsets: the strength (0..1 against the track's
+/** The Hits setting, on the drum onsets: the strength (0..1 against the track's
  *  strongest hits) a hit must clear. "most" is the default; "all" takes the soft ones too;
  *  "big" keeps only the accents. */
 export const HIT_FLOORS: Record<string, number> = { big: 0.65, most: 0.4, all: 0.15 };
-/** The same setting when the track has no onset list (radio, an older analysis): the
- *  strip's transient (loudness or bass, whichever jumped more) above its slow average. */
-export const HIT_THRESHOLDS: Record<string, number> = { big: 0.7, most: 0.5, all: 0.32 };
 export const DEFAULT_HITS = "most";
-/** Two hits closer than this are one: 250 ms allows 240 BPM on every beat. (700 ms here
- *  skipped every other kick above 86 BPM, which read as hits that missed.) */
-export const HIT_REFRACTORY_MS = 250;
 /** A kick is a RING OF LIGHT sent down the pipe: born where the wall first shows (the pipe
  *  beside the camera is out of frame, so a ring born at the camera would arrive late), it
  *  rushes toward the light at the end and dims as it goes. Two a second stay two rings. */

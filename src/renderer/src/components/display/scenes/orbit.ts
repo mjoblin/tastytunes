@@ -42,11 +42,10 @@ export class Orbit implements Scene {
 
     // a drum jumps its pair of rings
     for (let g = 0; g < 3; g++) this.punchAim[g] = easeTowards(this.punchAim[g], 0, f.dt, 0.16);
-    if (f.hitsKnown)
-      for (const hit of f.hits) {
-        const g = hit.type === "kick" ? 0 : hit.type === "snare" ? 1 : 2;
-        this.punchAim[g] = Math.max(this.punchAim[g], hit.strength);
-      }
+    for (const hit of f.hits) {
+      const g = hit.type === "kick" ? 0 : hit.type === "snare" ? 1 : 2;
+      this.punchAim[g] = Math.max(this.punchAim[g], hit.strength);
+    }
     // a chord change lifts every ring a little; a drop's release, all the way
     if (f.onChord) for (let g = 0; g < 3; g++) this.punchAim[g] = Math.max(this.punchAim[g], 0.35);
     if (f.drop?.onDrop) this.punchAim.fill(1);

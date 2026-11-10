@@ -3,6 +3,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { deriveNowPlaying } from "@/lib/format";
+import { nameKey } from "@shared/keys";
 
 export interface NowPlayingHeart {
   /** Already a favorite — the filled state. */
@@ -36,14 +37,13 @@ export function useNowPlayingHeart(): NowPlayingHeart {
 
   const stationName = meta.isRadio ? ((md?.station ?? md?.name)?.trim() ?? null) : null;
   const stationFav = stationName
-    ? (favorites.find(
-        (f) => f.kind === "station" && f.name.trim().toLowerCase() === stationName.toLowerCase(),
-      ) ?? null)
+    ? (favorites.find((f) => f.kind === "station" && nameKey(f.name) === nameKey(stationName)) ??
+      null)
     : null;
   const lastMatches =
     stationName != null &&
     lastStation != null &&
-    lastStation.name.trim().toLowerCase() === stationName.toLowerCase();
+    nameKey(lastStation.name) === nameKey(stationName);
 
   const trackFav: Omit<FavoriteMedia, "addedAt"> | null =
     !meta.isRadio && !meta.disc && meta.title && meta.subtitle

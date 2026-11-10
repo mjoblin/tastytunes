@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useEffectEvent } from "react";
 import {
   nameSortKey,
   type MediaNode,
@@ -9,7 +9,7 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { mediaKind } from "@/lib/media";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
-import type { Crumb } from "@/screens/LibraryScreen";
+import type { Crumb } from "@/components/library/libraryPlaces";
 
 // The Library's whole-library SEARCH MODE, lifted out of LibraryScreen
 // (2026-09-13, the first lift of the screen's hygiene round; the lens
@@ -355,7 +355,7 @@ export function useLibrarySearch(d: {
   const indexReady = useStore((s) =>
     s.mediaIndex.some((x) => x.udn === serverUdn && x.state === "ready"),
   );
-  useEffect(() => {
+  const searchServer = useEffectEvent(() => {
     if (!searchMode || !indexReady || !serverUdn) return;
     const query = searchQuery.trim();
     if (query.length === 0) {
@@ -373,12 +373,12 @@ export function useLibrarySearch(d: {
         .catch(() => {});
     }, 100);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, searchMode, indexReady, serverUdn]);
+  });
+  useEffect(() => searchServer(), [searchQuery, searchMode, indexReady, serverUdn]);
 
   // Cross-server as-you-type: always index-backed (that's the whole design),
   // so live results while typing come for free.
-  useEffect(() => {
+  const searchAllServers = useEffectEvent(() => {
     if (!searchMode || !atRoot) return;
     const query = searchQuery.trim();
     if (query.length === 0) {
@@ -396,8 +396,8 @@ export function useLibrarySearch(d: {
         .catch(() => {});
     }, 100);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery, searchMode, atRoot]);
+  });
+  useEffect(() => searchAllServers(), [searchQuery, searchMode, atRoot]);
 
   return {
     searchMode,

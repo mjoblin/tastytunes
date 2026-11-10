@@ -1,3 +1,4 @@
+import { nameKey } from "@shared/keys";
 // SMOIP ("StreamMagic over IP") wire types, ported from PunyTunes' ts-rs-generated
 // definitions (punytunes/src/types/generated/streammagic_payloads/). u64 fields that
 // ts-rs mapped to bigint are plain numbers here — everything arrives via JSON.parse.
@@ -109,7 +110,7 @@ export const radioTrackTitle = (
   const title = md.title ?? null;
   const station = md.station ?? null;
   if (title == null) return null;
-  if (station != null && title.trim().toLowerCase() === station.trim().toLowerCase()) return null;
+  if (station != null && nameKey(title) === nameKey(station)) return null;
   return title;
 };
 

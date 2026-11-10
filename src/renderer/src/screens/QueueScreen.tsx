@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useMemo, useEffectEvent } from "react";
 import { useKnownDrs } from "@/lib/audioAnalysis";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import {
@@ -60,7 +60,7 @@ import { Eqbars } from "@/components/media/Eqbars";
 import { EmptyActions, EmptyState } from "@/components/chrome/EmptyState";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { flashTarget, scrollToWithContext } from "@/lib/scroll";
-import { CARD_MOTION, DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
+import { DND_ACCESSIBILITY, lockVertical, ROW_MOTION, sortableStyle } from "@/lib/dnd";
 import { cx, fmtDuration, fmtTime, matchesFilter, fmtCount } from "@/lib/format";
 import { isFavorited, toggleFavorite } from "@/lib/favorites";
 import { fromQueueItem, refToFavorite, refToPlaylistItem, type MediaRef } from "@/lib/mediaRef";
@@ -98,6 +98,8 @@ import { useQueueSelection, type SelectionLate } from "@/components/queue/useQue
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 import { keyedEvent, menuAt } from "@/lib/menuAt";
+import { CARD_HELD, CARD_HOVER, CARD_MOTION } from "@/lib/cardHover";
+import { ArtActions } from "@/components/library/LibraryCards";
 
 /**
  * Queue → preset: the shared PresetSavePanel in a centered modal. The device
@@ -509,7 +511,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
   // shouldn't replay a glide to a place you already were. The animation is
   // reserved for track changes while you're watching.
   const firstFollow = useRef(true);
-  useEffect(() => {
+  const followCurrent = useEffectEvent(() => {
     // Follow pauses while a filter is active — the current row may be hidden.
     if (followQueue && !filter && currentRef.current) {
       scrollToWithContext(
@@ -526,8 +528,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
     }
     firstFollow.current = false;
     // leanRows/items/leanWin are read for the windowed landing only; the effect stays keyed on the pointer
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playId, followQueue, cards, presetGap, filter]);
+  });
+  useEffect(() => followCurrent(), [playId, followQueue, cards, presetGap, filter]);
 
   // THE LANDING ANIMATES (user, 2026-08-27 — an instant re-order after the
   // line model read as a teleport): a FLIP pass flies every displaced row
@@ -1679,11 +1681,12 @@ function QueueCard({
       className={cx(
         // Hover grow matches PresetCard; scale is layout-free so edge-clipped
         // cards simply clip at the scrollport seam.
-        "group relative text-left rounded-2xl p-2 pb-2.5 hover:z-10 motion-safe:hover:scale-[1.04]",
+        "group relative text-left rounded-2xl p-2 pb-2.5",
+        CARD_HOVER,
         leanCard && LEAN_CARD,
         dragLive && "pointer-events-none",
         isDragging && !staticDrag && "z-10 opacity-90",
-        menuOpen && "z-10 motion-safe:scale-[1.04]",
+        menuOpen && CARD_HELD,
         isCurrent && sourceActive
           ? "bg-goldtile/70 tile-playing"
           : isCurrent
@@ -1729,24 +1732,6 @@ function QueueCard({
             </span>
           </div>
 
-          {/* the one card-chip grammar (ContainerCard's): ⋯ bottom-right on
-              the art, status top-left, one chip (cardChip) — this card used a
-              rounded-full blur chip at TOP-right, the only card that did */}
-          <span
-            aria-label="More actions"
-            onClick={(e) => {
-              e.stopPropagation();
-              onMenu?.(e);
-            }}
-            className={cx(
-              "absolute bottom-1.5 right-1.5 z-10 text-dim hover:text-ink transition-all",
-              cardChip(),
-              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-            )}
-          >
-            <MoreHorizontal size={15} />
-          </span>
-
           {isCurrent && (
             <span className={cx("absolute top-1.5 left-1.5", cardChip())}>
               <Eqbars dim={!sourceActive} />
@@ -1766,6 +1751,24 @@ function QueueCard({
           )}
         </div>
       </button>
+      {/* the one card-chip grammar (ContainerCard's): ⋯ bottom-right on the art, status top-left,
+          one chip (cardChip); a real button beside the card's own since 0.15.0 (ArtActions), where
+          it was a span inside it, a control within a control nothing could name */}
+      <ArtActions>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-label="More actions"
+          onClick={(e) => onMenu?.(e)}
+          className={cx(
+            "pointer-events-auto absolute bottom-1.5 right-1.5 z-10 text-dim hover:text-ink transition-all",
+            cardChip(),
+            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+          )}
+        >
+          <MoreHorizontal size={15} />
+        </button>
+      </ArtActions>
 
       <div className="mt-2 px-1 flex items-start gap-1">
         <div className="flex-1 min-w-0">

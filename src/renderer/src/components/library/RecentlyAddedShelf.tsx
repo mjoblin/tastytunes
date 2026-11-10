@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { MediaNode } from "@shared/model";
 import { recentlyAdded } from "@shared/recentlyAdded";
 import { useStore } from "@/store";
@@ -14,6 +14,8 @@ import { albumMenuItems, type MediaMenuItem } from "@/lib/mediaMenus";
 import { openAlbumNode, playAlbumNode } from "@/lib/mediaActions";
 import { fromNode } from "@/lib/mediaRef";
 import { menuAt } from "@/lib/menuAt";
+import { gridColumnsOf, ListKeysContext, useListKeys } from "@/hooks/useListKeys";
+import { keyedEvent } from "@/lib/menuAt";
 
 /** The shelf's cards against the reader's card size (his calls, 2026-10-25: "a little smaller"
  *  at the decision page, then on his own library 0.8 read "a little small", 0.9 next, then
@@ -47,6 +49,22 @@ export function RecentlyAddedShelf({ seeAll }: { seeAll(): void }): React.JSX.El
     y: number;
     items: MediaMenuItem[];
   } | null>(null);
+  // FROM THE KEYBOARD (0.15.0, the 0.14 re-score): the shelf one Tab stop, the arrows across its
+  // cards, Enter opens an album as its click does, "." its More menu (Play is there)
+  const shown = albums.slice(0, columns);
+  const gridEl = useRef<HTMLDivElement | null>(null);
+  const keys = useListKeys({
+    count: shown.length,
+    columns: () => gridColumnsOf(gridEl.current),
+    onEnter: (i) => {
+      const a = shown[i];
+      if (a) openAlbumNode(a);
+    },
+    onMenu: (i, el) => {
+      const a = shown[i];
+      if (a) openMenu(a, keyedEvent(el));
+    },
+  });
   if (albums.length === 0) return null;
   const openMenu = (album: MediaNode, e: React.MouseEvent): void => {
     e.preventDefault();
@@ -79,26 +97,35 @@ export function RecentlyAddedShelf({ seeAll }: { seeAll(): void }): React.JSX.El
         </Chip>
       </div>
       <div
-        ref={attach}
+        {...keys.container}
+        ref={(node) => {
+          gridEl.current = node;
+          attach(node);
+          keys.container.ref(node);
+        }}
+        aria-label="Recently added"
         className="grid"
         style={{ gap, gridTemplateColumns: `repeat(auto-fill, ${cardSize}px)`, paddingTop: 8 }}
       >
-        {albums.slice(0, columns).map((a) => {
-          const key = `${a.serverUdn}|${a.id}`;
-          return (
-            <ContainerCard
-              key={key}
-              node={a}
-              playing={false}
-              menuOpen={menu?.key === key}
-              details={detailsOf?.(a)}
-              note={a.addedAt ? fmtAdded(a.addedAt) : undefined}
-              onEnter={() => openAlbumNode(a)}
-              onPlay={() => void playAlbumNode(a)}
-              onMenu={(e) => openMenu(a, e)}
-            />
-          );
-        })}
+        <ListKeysContext.Provider value={true}>
+          {shown.map((a, i) => {
+            const key = `${a.serverUdn}|${a.id}`;
+            return (
+              <ContainerCard
+                item={keys.item(i)}
+                key={key}
+                node={a}
+                playing={false}
+                menuOpen={menu?.key === key}
+                details={detailsOf?.(a)}
+                note={a.addedAt ? fmtAdded(a.addedAt) : undefined}
+                onEnter={() => openAlbumNode(a)}
+                onPlay={() => void playAlbumNode(a)}
+                onMenu={(e) => openMenu(a, e)}
+              />
+            );
+          })}
+        </ListKeysContext.Provider>
       </div>
     </section>
   );

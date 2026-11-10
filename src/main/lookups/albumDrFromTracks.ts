@@ -8,6 +8,7 @@ import {
   type MediaIndexPools,
   type MediaNode,
 } from "@shared/model";
+import { nameKey } from "@shared/keys";
 
 /** What the album check reads: the recorded album values and each track's measured DR. */
 export interface AlbumDrSources {
@@ -18,8 +19,6 @@ export interface AlbumDrSources {
   /** A track's loudness histogram, read only for an album found complete. */
   hist(trackKey: string): readonly number[] | null | undefined;
 }
-
-const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
 
 /**
  * AN ALBUM'S DR FROM ITS TRACKS (user, 2026-10-12, after an album page showed no DR for an
@@ -52,14 +51,14 @@ export function albumDrsFromTracks(
     const byTitle = new Map<string, MediaNode[]>();
     for (const t of pool.tracks) {
       if (!t.album) continue;
-      const k = lc(t.album);
+      const k = nameKey(t.album);
       byTitle.set(k, [...(byTitle.get(k) ?? []), t]);
     }
     for (const [key, same] of byKey) {
       if (same.length !== 1 || done.has(key)) continue;
       const album = same[0];
       if (!album.artist) continue;
-      const own = (byTitle.get(lc(album.title)) ?? []).filter((t) =>
+      const own = (byTitle.get(nameKey(album.title)) ?? []).filter((t) =>
         trackInAlbumOf(t, album.artist),
       );
       if (own.length === 0) continue;

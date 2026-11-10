@@ -18,8 +18,9 @@ import { openInfoInList } from "@/lib/infoSteps";
 import { isAlbumClass, isArtistClass } from "@/lib/media";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
-import type { Crumb } from "@/screens/LibraryScreen";
+import type { Crumb } from "@/components/library/libraryPlaces";
 import { menuAt } from "@/lib/menuAt";
+import { nameKey } from "@shared/keys";
 
 // The Library's MENUS, lifted out of LibraryScreen (2026-09-13, the second
 // lift of the screen's hygiene round, after search mode): the open menu and
@@ -71,15 +72,15 @@ export function useLibraryMenus(d: {
   const goToAlbum = async (track: MediaNode): Promise<void> => {
     const udn = nodeUdn(track);
     if (!udn || !track.album) return;
-    const lc = (x: string | null): string => (x ?? "").trim().toLowerCase();
     try {
       const { items } = await tt.mediaSearch(udn, track.album);
       const albums = items.filter(
-        (n) => isAlbumClass(n.upnpClass) && lc(n.title) === lc(track.album),
+        (n) => isAlbumClass(n.upnpClass) && nameKey(n.title) === nameKey(track.album),
       );
       const album =
         albums.find(
-          (n) => track.artist == null || n.artist == null || lc(n.artist) === lc(track.artist),
+          (n) =>
+            track.artist == null || n.artist == null || nameKey(n.artist) === nameKey(track.artist),
         ) ?? albums[0];
       if (!album) {
         showNotice(`Couldn't find "${track.album}" in this library.`);

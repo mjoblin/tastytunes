@@ -18,8 +18,8 @@
  */
 import type { MediaNode, MediaServerProfile } from "@shared/model";
 import { trackInAlbumOf } from "@shared/model";
+import { nameKey } from "@shared/keys";
 
-const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
 const leafOf = (leaf: string): string => leaf.split(".").pop() as string;
 
 export interface Settled {
@@ -80,7 +80,7 @@ export function yearFromTracks(
   const byAlbum = new Map<string, Map<string, number>>();
   for (const t of tracks) {
     if (!t.album || !t.year) continue;
-    const key = lc(t.album);
+    const key = nameKey(t.album);
     const m = byAlbum.get(key) ?? new Map<string, number>();
     m.set(t.year, (m.get(t.year) ?? 0) + 1);
     byAlbum.set(key, m);
@@ -88,7 +88,7 @@ export function yearFromTracks(
   let filled = 0;
   const out = albums.map((a) => {
     if (a.year) return a;
-    const m = byAlbum.get(lc(a.title));
+    const m = byAlbum.get(nameKey(a.title));
     if (!m) return a;
     filled++;
     const [year] = [...m.entries()].sort((x, y) => y[1] - x[1])[0];
@@ -113,7 +113,7 @@ export function discsFromFileNames(tracks: MediaNode[]): { tracks: MediaNode[]; 
   const groups = new Map<string, MediaNode[]>();
   for (const t of tracks) {
     if (!t.album) continue;
-    const key = `${lc(t.album)}|${lc(t.albumArtist ?? t.artist)}`;
+    const key = `${nameKey(t.album)}|${nameKey(t.albumArtist ?? t.artist)}`;
     const g = groups.get(key);
     if (g) g.push(t);
     else groups.set(key, [t]);
@@ -131,14 +131,14 @@ export function discsFromFileNames(tracks: MediaNode[]): { tracks: MediaNode[]; 
   }
   const discCountOf = new Map<string, number>();
   for (const t of promoted) {
-    const key = `${lc(t.album)}|${lc(t.albumArtist ?? t.artist)}`;
+    const key = `${nameKey(t.album)}|${nameKey(t.albumArtist ?? t.artist)}`;
     discCountOf.set(key, Math.max(discCountOf.get(key) ?? 0, t.fileDisc as number));
   }
   const out = tracks.map((t) => {
     if (t.fileDisc == null) return t;
     const { fileDisc, ...rest } = t;
     if (!promoted.has(t)) return rest;
-    const key = `${lc(t.album)}|${lc(t.albumArtist ?? t.artist)}`;
+    const key = `${nameKey(t.album)}|${nameKey(t.albumArtist ?? t.artist)}`;
     return { ...rest, discNumber: fileDisc, discCount: discCountOf.get(key) };
   });
   return { tracks: out, albums };
@@ -167,7 +167,7 @@ export function dedupeAlbums(
 ): { albums: MediaNode[]; collapsed: number } {
   const groups = new Map<string, MediaNode[]>();
   for (const a of albums) {
-    const k = `${lc(a.title)}|${a.year ?? ""}`;
+    const k = `${nameKey(a.title)}|${a.year ?? ""}`;
     groups.set(k, [...(groups.get(k) ?? []), a]);
   }
   const out: MediaNode[] = [];
@@ -177,12 +177,12 @@ export function dedupeAlbums(
       out.push(group[0]);
       continue;
     }
-    const title = lc(group[0].title);
-    const own = tracks.filter((t) => lc(t.album) === title);
+    const title = nameKey(group[0].title);
+    const own = tracks.filter((t) => nameKey(t.album) === title);
     const content = new Set<string>();
     let duplicatedContent = false;
     for (const t of own) {
-      const key = `${lc(t.title)}|${t.durationSecs ?? ""}`;
+      const key = `${nameKey(t.title)}|${t.durationSecs ?? ""}`;
       if (content.has(key)) {
         duplicatedContent = true;
         break;
@@ -216,7 +216,7 @@ export function dedupeAlbums(
       out.push(...group);
       continue;
     }
-    const artistsOfCopies = new Set(group.map((a) => lc(a.artist)).filter(Boolean));
+    const artistsOfCopies = new Set(group.map((a) => nameKey(a.artist)).filter(Boolean));
     // two different artists with a same-titled album whose tracks are each their own: not copies
     if (
       artistsOfCopies.size === 2 &&
@@ -232,7 +232,7 @@ export function dedupeAlbums(
       out.push(...group);
       continue;
     }
-    const albumArtists = new Set(own.map((t) => lc(t.albumArtist)).filter(Boolean));
+    const albumArtists = new Set(own.map((t) => nameKey(t.albumArtist)).filter(Boolean));
     const credit =
       albumArtists.size === 1
         ? (own.find((t) => t.albumArtist)?.albumArtist ?? null)
@@ -292,7 +292,7 @@ export function stripParentArtist(n: MediaNode, parentTitle: string | null): Med
   if (!n.isContainer || !n.artist) return n;
   // the parent's title, or a bare year/decade ("2000", "2000s" — Plex's By
   // Decade branch credits albums to the decade): neither is an artist
-  const isParent = parentTitle != null && lc(n.artist) === lc(parentTitle);
+  const isParent = parentTitle != null && nameKey(n.artist) === nameKey(parentTitle);
   const isDate = /^\d{4}s?$/.test(n.artist.trim());
   if (!isParent && !isDate) return n;
   const { artists: _artists, ...rest } = n;
@@ -333,13 +333,13 @@ export function albumsFromTracks(tracks: MediaNode[]): MediaNode[] {
   const groups = new Map<string, MediaNode[]>();
   for (const t of tracks) {
     if (!t.album) continue;
-    const key = `${t.parentId ?? ""}|${lc(t.album)}`;
+    const key = `${t.parentId ?? ""}|${nameKey(t.album)}`;
     groups.set(key, [...(groups.get(key) ?? []), t]);
   }
   const out: MediaNode[] = [];
   for (const group of groups.values()) {
     const first = group[0];
-    const albumArtists = new Set(group.map((t) => lc(t.albumArtist)).filter(Boolean));
+    const albumArtists = new Set(group.map((t) => nameKey(t.albumArtist)).filter(Boolean));
     const artist = albumArtistOf(group);
     // the container the tracks live in: the most common parentId
     const parents = new Map<string, number>();
@@ -378,14 +378,14 @@ export function albumsFromTracks(tracks: MediaNode[]): MediaNode[] {
  * Artists: the Evo's USB drive sends no AlbumArtist), else Various Artists.
  */
 export function albumArtistOf(group: readonly MediaNode[]): string {
-  const albumArtists = new Set(group.map((t) => lc(t.albumArtist)).filter(Boolean));
+  const albumArtists = new Set(group.map((t) => nameKey(t.albumArtist)).filter(Boolean));
   if (albumArtists.size === 1) {
     const agreed = group.find((t) => t.albumArtist)?.albumArtist;
     if (agreed) return agreed;
   }
   const performers = group.map((t) => t.artists ?? (t.artist ? [t.artist] : []));
-  const sets = performers.map((p) => new Set(p.map(lc)));
-  const spelled = (key: string): string => performers.flat().find((n) => lc(n) === key) ?? key;
+  const sets = performers.map((p) => new Set(p.map(nameKey)));
+  const spelled = (key: string): string => performers.flat().find((n) => nameKey(n) === key) ?? key;
   const shared = [...(sets[0] ?? [])].filter((p) => sets.every((s) => s.has(p)));
   if (shared.length > 0) return spelled(shared[0]);
   const counts = new Map<string, number>();
@@ -419,18 +419,18 @@ export function albumsFromTheirTracks(
     const own = byParent.get(a.id);
     if (!own || own.length === 0) return a;
     filled++;
-    const tags = new Set(own.map((t) => lc(t.album)));
+    const tags = new Set(own.map((t) => nameKey(t.album)));
     const tag = tags.size === 1 ? (own.find((t) => t.album)?.album ?? null) : null;
-    const folder = lc(a.title);
+    const folder = nameKey(a.title);
     const named =
       tag &&
-      lc(tag) !== folder &&
-      folder.endsWith(lc(tag)) &&
-      /[^\p{L}\p{N}]$/u.test(folder.slice(0, folder.length - lc(tag).length));
+      nameKey(tag) !== folder &&
+      folder.endsWith(nameKey(tag)) &&
+      /[^\p{L}\p{N}]$/u.test(folder.slice(0, folder.length - nameKey(tag).length));
     const years = new Map<string, number>();
     for (const t of own) if (t.year) years.set(t.year, (years.get(t.year) ?? 0) + 1);
     const year = a.year ?? [...years.entries()].sort((x, y) => y[1] - x[1])[0]?.[0] ?? null;
-    const albumArtists = new Set(own.map((t) => lc(t.albumArtist)).filter(Boolean));
+    const albumArtists = new Set(own.map((t) => nameKey(t.albumArtist)).filter(Boolean));
     const artist = albumArtistOf(own);
     return {
       ...a,

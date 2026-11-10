@@ -37,7 +37,7 @@ import {
 } from "@shared/model";
 import { audioAnalysisGet, albumDrMap } from "../../lookups/audioAnalysis";
 import { playStatsFromRecord } from "../../data/playStats";
-import { LargeQueueError, queueAdd, refreshServers } from "../../media/upnpBrowser";
+import { LargeQueueError, refreshServers } from "../../media/upnpBrowser";
 import {
   searchServer as librarySearch,
   status as indexStatus,
@@ -56,6 +56,7 @@ import {
   freshObjectId,
   defineTool,
 } from "./toolkit";
+import { nameKey } from "@shared/keys";
 
 // The MCP bridge's library tools (the library: servers, browsing, the lenses' lists, search and
 // the index), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and helpers
@@ -525,7 +526,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const byName = new Map<string, { name: string; albums: number; tracks: number }>();
         const bump = (artist: string | null, field: "albums" | "tracks"): void => {
           if (!artist?.trim()) return;
-          const k = artist.trim().toLowerCase();
+          const k = nameKey(artist);
           const cur = byName.get(k) ?? { name: artist.trim(), albums: 0, tracks: 0 };
           cur[field]++;
           byName.set(k, cur);
@@ -538,7 +539,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             for (const t of p.tracks)
               for (const cname of t.composers ?? []) {
                 bump(cname, "tracks");
-                const k = cname.trim().toLowerCase();
+                const k = nameKey(cname);
                 const set = albumsOf.get(k) ?? new Set<string>();
                 if (t.album) set.add(`${p.udn}|${t.album.toLowerCase()}`);
                 albumsOf.set(k, set);
@@ -1101,8 +1102,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const fresh = await freshObjectId(s.connection.host, a.server_udn, a.object_id);
         if ("error" in fresh) return err(fresh.error);
         try {
-          await ctx.dm.ensureAwake(); // agents get wake-on-intent too
-          await queueAdd(s.connection.host, a.server_udn, fresh.id, QUEUE_MODES[mode], undefined, {
+          await ctx.dm.queueAdd(a.server_udn, fresh.id, QUEUE_MODES[mode], undefined, {
             confirmLarge: a.confirm_large === true,
           });
         } catch (e) {

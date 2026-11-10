@@ -149,9 +149,8 @@ export class Terrain implements Scene {
     // glows from behind the land and the ridges stand against it. Its reach is the loudness
     // (height stays loudness, at the user's word); a kick flashes it and a drop flares it
     this.glowPulse = easeTowards(this.glowPulse, 0, f.dt, 0.15);
-    if (f.hitsKnown)
-      for (const hit of f.hits)
-        if (hit.type === "kick") this.glowPulse = Math.max(this.glowPulse, hit.strength);
+    for (const hit of f.hits)
+      if (hit.type === "kick") this.glowPulse = Math.max(this.glowPulse, hit.strength);
     if (f.drop?.onDrop) this.glowPulse = Math.max(this.glowPulse, 1.4);
     const pulse = Math.min(1, this.glowPulse);
     const farCrest = h * LAYERS[0].base - heightAt(f.position, LAYERS[0].win) * h * LAYERS[0].amp;

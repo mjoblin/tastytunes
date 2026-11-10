@@ -83,6 +83,3 @@ export function whirlpoolFor(onset: number, handed: 1 | -1, unit: () => number):
 export function dyeDissipation(memorySeconds: number): number {
   return 1 / Math.max(3, memorySeconds);
 }
-
-export const WHIRLPOOL_ONSET = 0.62;
-export const PULSE_ONSET = 0.35;

@@ -9,7 +9,8 @@ import {
   isCompilation,
   nameSortKey,
 } from "@shared/model";
-import { decadeOptionsOf, formatTags, genreOptionsOf, lc, nodeKey, whichCopy } from "./lensShared";
+import { decadeOptionsOf, formatTags, genreOptionsOf, nodeKey, whichCopy } from "./lensShared";
+import { nameKey } from "@shared/keys";
 
 /** A lens artist: content identity, every album they own and every track they perform. */
 export interface LensArtist {
@@ -66,11 +67,11 @@ export interface LensIndex {
 }
 
 const albumKey = (a: Pick<MediaNode, "serverUdn" | "title">): string =>
-  `${a.serverUdn ?? ""}|${lc(a.title)}`;
+  `${a.serverUdn ?? ""}|${nameKey(a.title)}`;
 
 /** An album across libraries: its title and artist, whatever server holds it. */
 const sameAlbum = (a: Pick<MediaNode, "title" | "albumArtist" | "artist">): string =>
-  `${lc(a.title)}|${lc(a.albumArtist ?? a.artist)}`;
+  `${nameKey(a.title)}|${nameKey(a.albumArtist ?? a.artist)}`;
 
 function build(pools: MediaIndexPools[]): LensIndex {
   const cache = new Map<string, unknown>();
@@ -86,7 +87,7 @@ function build(pools: MediaIndexPools[]): LensIndex {
       for (const g of pools)
         for (const t of g.tracks) {
           if (!t.album) continue;
-          const k = `${g.udn}|${lc(t.album)}`;
+          const k = `${g.udn}|${nameKey(t.album)}`;
           const list = m.get(k);
           if (list) list.push(t);
           else m.set(k, [t]);
@@ -101,7 +102,7 @@ function build(pools: MediaIndexPools[]): LensIndex {
       for (const g of pools)
         for (const t of g.tracks) {
           if (!t.album || !t.titlePath) continue;
-          const k = `${g.udn}|${lc(t.album)}|${folderKey(t.titlePath)}`;
+          const k = `${g.udn}|${nameKey(t.album)}|${folderKey(t.titlePath)}`;
           const list = m.get(k);
           if (list) list.push(t);
           else m.set(k, [t]);
@@ -163,7 +164,7 @@ function build(pools: MediaIndexPools[]): LensIndex {
       const parts: string[] = [];
       if (a.serverName && index.inTwoLibraries(a)) parts.push(a.serverName);
       const copies = (albumsByKey().get(albumKey(a)) ?? []).filter(
-        (b) => lc(b.artist) === lc(a.artist),
+        (b) => nameKey(b.artist) === nameKey(a.artist),
       );
       if (copies.some((b) => b !== a)) {
         const formatOf = (x: MediaNode): string | null => albumFormat(index.tracksOf(x)).label;

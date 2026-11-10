@@ -17,6 +17,7 @@ import { cx, fmtDuration, fmtRelative } from "@/lib/format";
 import { useLitPresets } from "@/hooks/useLitPresets";
 import { useDisc, type Disc } from "@/hooks/useDisc";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
+import { CARD_HOVER, CARD_TRANSITION } from "@/lib/cardHover";
 
 export type TrayTab = "queue" | "presets" | "playlists" | "recent";
 export type TrayDensity = "detailed" | "compressed";
@@ -370,7 +371,7 @@ export function PresetsTab({
   }
 
   const recall = (id: number) => (): void => {
-    void tt.command({ type: "recallPreset", presetId: id });
+    void tt.command({ type: "recallPreset", presetId: id, alreadyPlaying: lit.has(id) });
   };
 
   if (layout === "rows") {
@@ -434,7 +435,9 @@ export function PresetsTab({
             // the same gold ring and bloom it has on the Presets screen. This
             // was a raise plus a ring change, which is a different gesture and
             // a nearly invisible one over album art.
-            "group relative rounded-lg overflow-hidden text-left transition-all duration-200 ease-out hover:z-10 motion-safe:hover:scale-[1.04]",
+            "group relative rounded-lg overflow-hidden text-left",
+            CARD_TRANSITION,
+            CARD_HOVER,
             isPlaying(p.id) ? "tile-playing" : "ring-1 ring-edge card-hover-glow",
           )}
         >

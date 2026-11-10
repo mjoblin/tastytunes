@@ -5,6 +5,7 @@ import { app, nativeImage } from "electron";
 import { thumbKey } from "@shared/artUrl";
 import { USER_AGENT } from "../netlog";
 import { fetchPicture } from "./artFetch";
+import { mediaType } from "@shared/keys";
 
 /**
  * ALBUM ART THUMBNAILS for servers that cannot be asked for a size (2026-09-14,
@@ -82,7 +83,7 @@ const EXT: Record<string, string> = {
   "image/webp": "webp",
   "image/gif": "gif",
 };
-const extFor = (type: string): string => EXT[type.split(";")[0].trim().toLowerCase()] ?? "bin";
+const extFor = (type: string): string => EXT[mediaType(type)] ?? "bin";
 const idFor = (key: string, tier: ArtTier): string =>
   createHash("sha1").update(`${VERSION}|${tier}|${key}`).digest("hex");
 

@@ -12,6 +12,7 @@ import {
 } from "../data/artistChoices";
 import { artHostTrust } from "./artFetch";
 import { fetchOriginInTurn } from "./artThumbs";
+import { nameKey } from "@shared/keys";
 
 /**
  * A CHOSEN PICTURE'S COPY (0.14.0; his question 2026-10-30, "what happens if that source no
@@ -50,7 +51,7 @@ export function keepChoiceCopy(name: string, ctx: CopyContext): Promise<boolean>
   if (!c) return Promise.resolve(false);
   if (copyKept(c)) return Promise.resolve(true);
   if (c.kind === "image" && !ctx.photos) return Promise.resolve(false);
-  const id = `${name.trim().toLowerCase()}|${c.at}`;
+  const id = `${nameKey(name)}|${c.at}`;
   const pending = making.get(id);
   if (pending) return pending;
   const offered = resolveChoice(name, ctx.pools)?.offered;

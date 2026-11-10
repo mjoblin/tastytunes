@@ -42,11 +42,11 @@ export interface SceneLyric {
   lines: readonly { t: number; text: string }[];
 }
 
-/** One drum onset the clock just crossed, from the file's own onset list (lib/onsets). */
+/** One drum onset the clock just crossed: the file's own (lib/onsets), else the feed's. */
 export interface SceneHit {
   /** Track seconds. */
   at: number;
-  /** 0..1 against the track's strongest hits. */
+  /** 0..1: against the track's strongest hits, or the feed's transient above its slow average. */
   strength: number;
   type: "kick" | "snare" | "hat";
 }
@@ -130,12 +130,11 @@ export interface SceneFrame {
    *  broadband loudness barely moves under a sustained mix. Ten frames a second, so it
    *  is most kicks, not every one. */
   kick: number;
-  /** The drum onsets the clock crossed since the last frame, from the file's own onset
-   *  list: exact to the clock, typed, most frames empty. Empty too when no list is known
-   *  (radio, or an analysis from before onsets); `hitsKnown` says which, so a scene can
-   *  fall back to the strip's transient. */
+  /** The drum onsets the clock crossed since the last frame, typed, most frames empty: the
+   *  file's own onset list where there is one (exact to the clock), else the feed's own, read
+   *  off the live signal (radio, AirPlay, an analysis from before onsets). Every scene draws
+   *  from these the one way. */
   hits: readonly SceneHit[];
-  hitsKnown: boolean;
   /** THE MUSIC FEATURES (lib/features), null or empty when the track has none. */
   beat: SceneBeat | null;
   section: SceneSection | null;

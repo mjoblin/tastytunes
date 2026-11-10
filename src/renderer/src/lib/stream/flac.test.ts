@@ -53,3 +53,87 @@ describe("a FLAC file in frames", () => {
       expect(info.totalFrames - last.sample).toBeLessThanOrEqual(info.maxBlock);
     });
 });
+
+// A FILE BIGGER THAN THE BUFFER (0.15.0, the mutation probe: every file above fits the splitter's
+// first megabyte, so its growth and its compaction past half the buffer ran in no test)
+describe("a FLAC file bigger than the splitter's buffer", () => {
+  const l = drumTrack(120, 16, 44100, { hats: true }).samples;
+  const bytes = synthFlac([l, l.map((v) => v * 0.5)], 44100, 4096);
+  it("still rebuilds its audio exactly, pushed whole or in pieces", () => {
+    expect(bytes.length).toBeGreaterThan(1 << 21);
+    const whole = split(bytes, bytes.length);
+    const audio = Buffer.concat(whole.map((f) => Buffer.from(f.data)));
+    expect(audio.equals(Buffer.from(bytes.subarray(bytes.length - audio.length)))).toBe(true);
+    for (const piece of [4096, 300_000]) {
+      const parts = split(bytes, piece);
+      expect(parts.map((f) => f.sample)).toEqual(whole.map((f) => f.sample));
+      expect(Buffer.concat(parts.map((f) => Buffer.from(f.data))).equals(audio)).toBe(true);
+    }
+  });
+});
+
+describe("a stream that isn't a FLAC file", () => {
+  it("is refused at its first bytes", () => {
+    expect(() =>
+      new FlacFrames().push(Uint8Array.from([0x49, 0x44, 0x33, 4, 0, 0, 0, 0, 0, 0])),
+    ).toThrow(/not a FLAC stream/);
+  });
+  it("is refused when its metadata ends with no STREAMINFO", () => {
+    // fLaC, then one last metadata block of type 4 (a comment), four bytes long
+    const noInfo = Uint8Array.from([0x66, 0x4c, 0x61, 0x43, 0x84, 0, 0, 4, 1, 2, 3, 4, 0xff, 0xf8]);
+    expect(() => new FlacFrames().push(noInfo)).toThrow(/no STREAMINFO/);
+  });
+});
+
+// A DAMAGED FILE (0.15.0, the 0.14 re-score: one missing frame made the splitter hold the rest of
+// the file and hand the decoder a single frame of it)
+describe("a damaged FLAC file", () => {
+  const bytes = FILES["44.1 kHz stereo, 4096 a frame"]();
+  const whole = split(bytes, bytes.length);
+  const meta = bytes.length - whole.reduce((n, f) => n + f.data.length, 0);
+  const at = (k: number): number => meta + whole.slice(0, k).reduce((n, f) => n + f.data.length, 0);
+  const without = (k: number): Uint8Array =>
+    Uint8Array.from([...bytes.subarray(0, at(k)), ...bytes.subarray(at(k + 1))]);
+  const samples = (frames: { sample: number }[]): number[] => frames.map((f) => f.sample);
+
+  it("loses only the frames around a missing one, and keeps every other frame as it was", () => {
+    const got = split(without(10), 4096);
+    const kept = new Set(samples(got));
+    expect(kept.has(whole[9].sample) || kept.has(whole[11].sample)).toBe(true);
+    for (const k of [0, 5, 8, 12, 20, whole.length - 1])
+      expect(kept.has(whole[k].sample)).toBe(true);
+    // every frame handed on is one of the file's own frames, byte for byte
+    const own = new Map(whole.map((f) => [f.sample, Buffer.from(f.data)]));
+    for (const f of got) expect(Buffer.from(f.data).equals(own.get(f.sample)!)).toBe(true);
+  });
+
+  it("skips a frame whose header took a flipped bit", () => {
+    const flipped = Uint8Array.from(bytes);
+    flipped[at(10) + 4] ^= 0x01;
+    const got = split(flipped, 1000);
+    const kept = new Set(samples(got));
+    expect(kept.has(whole[10].sample)).toBe(false);
+    for (const k of [0, 8, 12, whole.length - 1]) expect(kept.has(whole[k].sample)).toBe(true);
+  });
+
+  it("holds about a frame while it reads, damaged or not", () => {
+    const largest = Math.max(...whole.map((f) => f.data.length));
+    for (const file of [bytes, without(10)]) {
+      const f = new FlacFrames();
+      let most = 0;
+      for (let p = 0; p < file.length; p += 4096) {
+        f.push(file.subarray(p, p + 4096));
+        most = Math.max(most, f.held);
+      }
+      expect(most).toBeLessThan(4 * largest + 8192);
+    }
+  });
+
+  it("gives up early on a stream with no frames where frames should be", () => {
+    const junk = Uint8Array.from([
+      ...bytes.subarray(0, at(1)),
+      ...new Uint8Array(400_000).fill(0x5a),
+    ]);
+    expect(() => split(junk, 8192)).toThrow(/damaged/);
+  });
+});

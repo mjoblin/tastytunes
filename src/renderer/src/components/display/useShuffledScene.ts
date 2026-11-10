@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useEffectEvent } from "react";
 import type { DisplayScene } from "@shared/model";
 import { useStore } from "@/store";
 import type { NowPlayingMeta } from "@/lib/format";
@@ -38,7 +38,7 @@ export function useShuffledScene(
   const sinceRef = useRef(0);
   const albumRef = useRef(albumSig);
   const wasShuffleRef = useRef(false);
-  useEffect(() => {
+  const drawShuffled = useEffectEvent(() => {
     if (chosen !== "shuffle") {
       wasShuffleRef.current = false;
       return;
@@ -64,16 +64,17 @@ export function useShuffledScene(
     setShuffled(next);
     // the order and the exclusions ride the refs' values at draw time; only a track or a mode
     // change draws
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackSig, chosen]);
+  });
+  useEffect(() => drawShuffled(), [trackSig, chosen]);
   // a scene left out while it is up gives way at once
-  useEffect(() => {
+  const giveWay = useEffectEvent(() => {
     if (chosen !== "shuffle" || !shuffleExclude.includes(shuffledRef.current)) return;
     const next = pickShuffled(shuffledRef.current, shuffleOrder, shuffleExclude);
     shuffledRef.current = next;
     setShuffled(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shuffleExclude.join(","), chosen]);
+  });
+  const excluded = shuffleExclude.join(",");
+  useEffect(() => giveWay(), [excluded, chosen]);
   // a scene that needs the analysis gives way once it is definite there will be none (the
   // track turned out unreadable, or a station came on without a track change)
   useEffect(() => {

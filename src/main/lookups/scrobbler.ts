@@ -8,7 +8,7 @@ import { version } from "../../../package.json";
 import { isRadioMetadata, trackTitle, type ZonePlayState } from "@shared/smoip";
 import { isListen } from "@shared/model";
 import { getSettings } from "../data/persist";
-import { getSecret } from "../data/secrets";
+import { getSecret, hasSecret } from "../data/secrets";
 import { loggedFetch } from "../netlog";
 
 // TASTYTUNES_LB_URL lets test harnesses point submissions at a local server.
@@ -43,7 +43,7 @@ let timer: NodeJS.Timeout | null = null;
 
 function enabled(): boolean {
   const s = getSettings();
-  return s.lbEnabled && getSecret("lbToken") != null;
+  return s.lbEnabled && hasSecret("lbToken");
 }
 
 function trackMetadata(meta: TrackMeta): Record<string, unknown> {
@@ -61,7 +61,9 @@ function trackMetadata(meta: TrackMeta): Record<string, unknown> {
 }
 
 async function post(body: unknown): Promise<boolean> {
-  const token = getSecret("lbToken") ?? "";
+  const token = (await getSecret("lbToken")) ?? "";
+  // a token this system could not decrypt sends nothing (and reads as unsaved from now on)
+  if (!token) return false;
   try {
     const res = await loggedFetch("listenbrainz", `${BASE}/1/submit-listens`, {
       method: "POST",
@@ -184,7 +186,7 @@ export const scrobbler = {
   async validateToken(
     candidate?: string,
   ): Promise<{ valid: boolean; userName: string | null } | null> {
-    const token = candidate ?? getSecret("lbToken") ?? "";
+    const token = candidate ?? (await getSecret("lbToken")) ?? "";
     if (!token) return { valid: false, userName: null };
     try {
       const res = await loggedFetch("listenbrainz", `${BASE}/1/validate-token`, {

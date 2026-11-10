@@ -6,7 +6,7 @@ import { tt } from "@/api";
 import { deriveNowPlaying, queuePlace } from "@/lib/format";
 import { useLyrics, type SyncedLine } from "@/hooks/useLyrics";
 import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
-import { usePlayingAnalysis, type Analysis } from "@/components/media/Waveform";
+import { usePlayingAnalysis, type Analysis } from "@/components/media/waveformAnalysis";
 import { useScenePalette } from "./palette";
 import { ONSET_TYPES, type Onsets } from "@/lib/onsets";
 import { dropClears, type DropTier, type Features } from "@/lib/features";
@@ -23,6 +23,7 @@ import type {
 import { easeTowards, frameDelta } from "./clock";
 import { clamp, cubic, noise } from "./scenes/lib";
 import { Lru } from "@/lib/lru";
+import { FeedHits } from "./feedHits";
 
 /**
  * THE FEED: the one reader. Each animation frame it turns the store's
@@ -106,6 +107,10 @@ export class SceneFeed {
   private onsets: Onsets | null = null;
   private hitCursor = 0;
   private hitPos: number | null = null;
+  /** The feed's own hits, for a track with no onset list (feedHits.ts). */
+  private feedHits = new FeedHits();
+  /** Whether the last fresh frame was playing (a start holds the feed's own hits). */
+  private wasPlaying = false;
   private hits: SceneHit[] = [];
   /** The music features and the eased readings drawn from them. */
   private features: Features | null = null;
@@ -447,13 +452,18 @@ export class SceneFeed {
     const dt = fresh && this.lastNow ? frameDelta((now - this.lastNow) / 1000) : 0;
     if (fresh) this.lastNow = now;
 
-    // the shown clock follows the reported one at a corrected rate
-    if (
+    // a jump of the clock (a seek, a new track) or a start leaves the slow average behind the
+    // music for about its time constant: the feed's own hits wait that long
+    const jumped =
       this.shownPos == null ||
-      !playing ||
       this.shownKey !== this.trackKey ||
-      Math.abs(position - this.shownPos) > SNAP_SECS
-    ) {
+      Math.abs(position - this.shownPos) > SNAP_SECS;
+    if (fresh) {
+      if (playing && (jumped || !this.wasPlaying)) this.feedHits.hold(now, SLOW_TAU * 1000);
+      this.wasPlaying = playing;
+    }
+    // the shown clock follows the reported one at a corrected rate
+    if (this.shownPos == null || jumped || !playing) {
       this.shownPos = position;
     } else {
       const err = position - this.shownPos;
@@ -507,6 +517,16 @@ export class SceneFeed {
     }
     // the same transient read on the bass band alone: a kick under a sustained mix
     const kick = clamp((target[0] * gate - this.slowBands[0]) * 2.6);
+    // no onset list: the feed's own typed hits, once per timestamp
+    if (fresh && playing && (this.onsets == null || radio)) {
+      const band = (a: number, b: number): number =>
+        clamp(
+          (((target[a] + target[b]) / 2) * gate - (this.slowBands[a] + this.slowBands[b]) / 2) *
+            2.6,
+        );
+      const heard = { kick, snare: band(2, 3), hat: band(4, 5) };
+      this.hits.push(...this.feedHits.read(heard, now, position));
+    }
     const real = this.analysis != null && !radio;
     const music = this.musicAt(position, playing && !radio, fresh, dt);
     // the place in what is playing, the one home's (a disc's from now_playing)
@@ -524,7 +544,6 @@ export class SceneFeed {
       onset,
       kick,
       hits: this.hits,
-      hitsKnown: this.onsets != null && !radio,
       ...music,
       slowBands: this.slowBands,
       slowLoud: this.slow,

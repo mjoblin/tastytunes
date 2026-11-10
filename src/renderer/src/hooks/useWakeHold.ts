@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { ZonePlayState } from "@shared/smoip";
 import { useStore } from "@/store";
+import { nameKey } from "@shared/keys";
 
 /**
  * The WAKE WINDOW, held until the streamer has actually ARRIVED — the one
@@ -86,8 +87,7 @@ import { useStore } from "@/store";
  */
 const BOUND_MS = 8000;
 
-const named = (s: string | null | undefined): string | null =>
-  s && s.trim() ? s.trim().toLowerCase() : null;
+const named = (s: string | null | undefined): string | null => (s && s.trim() ? nameKey(s) : null);
 
 /** The content's identity when the frame says what is loaded: the queue entry, else the
  *  station or the title; null when it says nothing. */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { ChevronRight, Clock, MoreHorizontal, Play } from "lucide-react";
 import {
   groupSessions,
@@ -472,7 +472,7 @@ export function HistoryTimeline({
     },
     { claim: historyJump?.nonce, clear: clearHistoryJump, ready: jumpYearLoaded },
   );
-  useEffect(() => {
+  const landPending = useEffectEvent(() => {
     if (pending == null) return;
     const idx = items.findIndex((it) => it.kind === "play" && it.event.at === pending);
     if (idx < 0) return;
@@ -480,8 +480,8 @@ export function HistoryTimeline({
     setFlash(pending);
     setPending(null);
     // scrollToIndex reads the current window; the effect is keyed on the list
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pending, items]);
+  });
+  useEffect(() => landPending(), [pending, items]);
   useEffect(() => {
     if (flash == null) return;
     const t = setTimeout(() => setFlash(null), FLASH_MS);

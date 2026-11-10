@@ -20,7 +20,7 @@ import { cx, fmtCount } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { useLensIndex } from "@/components/library/lenses/useLensIndex";
-import { lc } from "@/components/library/lenses/lensShared";
+import { nameKey } from "@shared/keys";
 
 /**
  * CHOOSING AN ARTIST'S PICTURE (0.13.0 round 7; a user's report, 2026-10-24: Wikipedia's lead image is
@@ -791,7 +791,7 @@ export function ArtistPictureHost(): React.JSX.Element {
   const index = useLensIndex(pools ?? NO_POOLS);
   const own = chooser?.covers;
   const covers = useMemo(
-    () => own ?? coverOffers(index.artists.find((a) => a.key === lc(name))?.albums ?? []),
+    () => own ?? coverOffers(index.artists.find((a) => a.key === nameKey(name))?.albums ?? []),
     [own, index, name],
   );
   const chosen = useArtistChoice(name) ?? null;

@@ -464,6 +464,11 @@ interface TTState {
   dismissToast: () => void;
   /** In-app recall memory (see Snapshot.lastRecalledPresetId). */
   lastRecalledPresetId: number | null;
+  /** Presets whose last recall came to nothing, as main decided it (main/device/recallWatch, 0.15.0):
+   *  the Presets screen's repair chip. */
+  deadPresets: number[];
+  /** A recall again, or a repair: the chip goes. */
+  clearDeadPreset: (id: number) => void;
   setScreen: (screen: Screen) => void;
   setDiagnosticsOpen: (open: boolean) => void;
   /** The frame ring main answered when this window's drawer opened (diagnosticsWatch). */
@@ -782,6 +787,7 @@ export const useStore = create<TTState>((set, get) => ({
   },
   dismissToast: () => set({ toast: null }),
   lastRecalledPresetId: null,
+  deadPresets: [],
   /**
    * Library is the only screen with a memory to disturb, so it's the only one
    * with a rule here: asking for Library WHILE ALREADY THERE is the front door
@@ -859,6 +865,10 @@ export const useStore = create<TTState>((set, get) => ({
   clearLibraryTarget: () => set({ libraryTarget: null }),
   setLastStation: (lastStation) => set({ lastStation }),
   setAmbientWindowActive: (ambientWindowActive) => set({ ambientWindowActive }),
+  clearDeadPreset: (id) =>
+    set((s) =>
+      s.deadPresets.includes(id) ? { deadPresets: s.deadPresets.filter((x) => x !== id) } : s,
+    ),
   setSettings: (settings) => set({ settings }),
   saveSettings: async (patch) => {
     const settings = await tt.setSettings(patch);
@@ -1040,6 +1050,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { sleep: msg.sleep };
         case "recalledPreset":
           return { lastRecalledPresetId: msg.id };
+        case "presetRecallDead":
+          return s.deadPresets.includes(msg.id) ? {} : { deadPresets: [...s.deadPresets, msg.id] };
         case "recents":
           return { recents: msg.data };
         case "albumDr":

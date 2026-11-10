@@ -1,44 +1,25 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { artKeyOf } from "@/lib/artSrc";
-import type { LibrarySpot } from "@/store";
+import { Heart, Library, ListEnd, ListPlus, ListStart, Play, RotateCw, Search } from "lucide-react";
 import {
-  HardDrive,
-  Heart,
-  Library,
-  ListEnd,
-  ListPlus,
-  ListStart,
-  Play,
-  RotateCw,
-  Search,
-  Usb,
-} from "lucide-react";
-import {
-  presetVolumeKey,
   type AppSettings,
   type MediaIndexPools,
   type MediaNode,
-  type MediaQueueAction,
   type MediaServerInfo,
   orderTracks,
-  discGroups,
   albumFormat,
   albumComposers,
-  performerLine,
   nameSortKey,
   albumVolume,
-  albumOfTrack,
   indexAlbumFor,
-  trackPosition,
 } from "@shared/model";
 import { albumDrKey, artistSummary } from "@shared/model";
 import { setInfoHere } from "@/lib/infoHotkey";
-import { onScreenKey } from "@/lib/keyboardOwner";
 import { useAlbumDr } from "@/lib/audioAnalysis";
 import { FACT_SEP, albumFactsLine, albumFromTracks } from "@/lib/mediaFacts";
 import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
-import { queueWrite, tt } from "@/api";
+import { tt } from "@/api";
 import { useStore } from "@/store";
 import { cx, matchesFilter } from "@/lib/format";
 import { useIndexPools } from "@/hooks/useIndexPools";
@@ -47,18 +28,16 @@ import { useLensIndex } from "@/components/library/lenses/useLensIndex";
 import { useCardDetails } from "@/components/library/useCardDetails";
 import { browseWalk } from "@/components/library/browseWalk";
 import { MOD } from "@/lib/screens";
-import { flashTarget, scrollToCentered } from "@/lib/scroll";
 import { isAlbumClass, isArtistClass, stripFurniture } from "@/lib/media";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
 import { Crumbs } from "@/components/library/Crumbs";
-import { landingRowIndex, type LandingTrack } from "@/components/library/landing";
+import type { LandingTrack } from "@/components/library/landing";
 import { SortChip } from "@/components/controls/SortChip";
 import {
   AlbumsLens,
   ArtistsLens,
   TracksLens,
-  focusArtistsLens,
   type LensActions,
 } from "@/components/library/LibraryLenses";
 import {
@@ -66,14 +45,11 @@ import {
   ARTIST_PAGE_CRUMB_ID,
   LENS_CRUMB_ID,
   LENS_LABEL,
-  lensNavigation,
-  setLensReturn,
   type Lens,
 } from "@/components/library/lensNavigation";
 import { SelectionBar, SelectionVerb } from "@/components/controls/SelectionBar";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { PrimaryButton, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
-import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { useLibraryMenus, type MenusLate } from "@/components/library/useLibraryMenus";
 import { useLibraryFavorites } from "@/components/library/useLibraryFavorites";
 import { LibraryPopovers } from "@/components/library/LibraryPopovers";
@@ -82,12 +58,6 @@ import { EmptyCrate } from "@/components/library/DoorArt";
 import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
-import { useWindowedList } from "@/hooks/useWindowedList";
-import { ListKeysContext, useListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
-import { searchStep, type SearchSpot } from "@/components/library/searchKeys";
-import { KeyedList } from "@/components/controls/KeyedList";
-import { keyedEvent } from "@/lib/menuAt";
-import { Lru } from "@/lib/lru";
 import { AlbumCompactVerbs, AlbumCrumbArt, AlbumHeader } from "@/components/library/AlbumHeader";
 import { ArtistHeader } from "@/components/library/ArtistHeader";
 import { ArtistPage } from "@/components/library/ArtistPage";
@@ -100,70 +70,27 @@ import {
   type SearchLate,
 } from "@/components/library/useLibrarySearch";
 import { menuAt } from "@/lib/menuAt";
+import {
+  SEARCH_CRUMB_ID,
+  UNIFIED_SEARCH_CRUMB_ID,
+  artistPageScroll,
+  filterMemory,
+  nodeKey,
+  scrollMemory,
+  standIns,
+  type Crumb,
+} from "@/components/library/libraryPlaces";
+import { useLibraryNavigation } from "@/components/library/useLibraryNavigation";
+import {
+  LibraryFolders,
+  LibraryTracks,
+  type ContainerItem,
+  type TrackRowOpts,
+} from "@/components/library/LibraryListing";
+import { LibrarySearchResults } from "@/components/library/LibrarySearchResults";
+import { QUEUE_FAILED, useLibraryPlay, type PlayLate } from "@/components/library/useLibraryPlay";
 
-// Crumbs keep the entered node so an album level can render its header
-// (art, artist, year) without re-fetching metadata.
-export type Crumb = { id: string; title: string; node?: MediaNode };
-
-// Returning to the Library RESTORES where the last visit left off
-// (positionMemory below) — the T3 "always the front door" rule was reversed
-// 2026-07-24 (user ask); the reset now lives behind re-invoking Library while
-// already here, or the breadcrumb root. Per-folder scroll and filter memories
-// apply while browsing within a visit.
 const NO_POOLS: MediaIndexPools[] = [];
-const scrollMemory = new Map<string, number>();
-// Per-LEVEL filter memory: each folder keeps its own filter for the session
-// (the store's screenFilters.library always holds the current level's).
-const filterMemory = new Map<string, string>();
-// Where the last visit left off — server, crumb trail, and which lens was open —
-// is the store's libraryLocation (the 0.11.0 sweep; it was a module variable here
-// and a second copy in lib/navSpot for history). The screen UNMOUNTS on every
-// navigation away (App renders only the active screen), so component state can't
-// survive the trip. Restored on arrival from another screen; deliberately NOT
-// consulted when the front door is asked for explicitly (see the reset effect).
-
-const nodeKey = (serverUdn: string | null, path: Crumb[]): string =>
-  `${serverUdn ?? ""}|${path.map((c) => c.id).join("/")}`;
-
-// Synthetic crumb planted when a search RESULT is entered: the trail reads
-// Library › server › “query” › Artist, and the query crumb (or Backspace)
-// restores the search with its results intact. It never reaches the browse
-// layer — titlePaths strip it (a result's true folder path is unknown, so
-// stale-id rewalks can't recover search-entered branches either way).
-const SEARCH_CRUMB_ID = "__search-results__";
-
-// The lens crumbs (LENS_CRUMB_ID, LENS_ARTIST_CRUMB_ID) live with the lens
-// navigation in components/library/lensNavigation.
-/**
- * Planted when a UNIFIED SEARCH result opens here: the trail reads
- * Search › <server> › <album>, and that crumb — or Backspace, or ⌘← — returns
- * to the Search screen with its query intact (the screen remembers it).
- *
- * Same idiom as the search and lens crumbs, with one difference worth stating: this crumb
- * leads OFF this screen. Without it, arriving from search left you in a browse
- * tree you never navigated into, and back went to the source list — reported
- * as "⌘← takes me to the top of the library".
- */
-const UNIFIED_SEARCH_CRUMB_ID = "__from-search__";
-
-/** One wording for a queue write that didn't land, whichever verb sent it. */
-const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
-/** Each artist page's scroll spot for the session (an album opened from it and Back). */
-const artistPageScroll = new Lru<string, number>(200);
-/** The stand-in album nodes an arrival builds (the arrival effect): an album opened from another
- *  screen lands on one, and resolves to the index's own entry once the pools are in. */
-const standIns = new WeakSet<MediaNode>();
-
-/** One line of the windowed search results (see searchLines): every kind has one height. */
-type SearchLine =
-  | {
-      kind: "group0" | "group";
-      key: string;
-      group: { udn: string; serverName: string; total: number };
-    }
-  | { kind: "label0" | "label" | "klabel"; key: string; text: string }
-  | { kind: "cards0" | "cards"; key: string; nodes: MediaNode[] }
-  | { kind: "crow" | "track"; key: string; node: MediaNode; list: MediaNode[]; index: number };
 
 /**
  * Library: browse UPnP media (LAN servers and the streamer's own USB storage)
@@ -173,11 +100,6 @@ type SearchLine =
  */
 /** An artist's page as a node for Info, from the index that knows them best (Info sums an
  *  artist's page from one index, as the Artists lens's row menu does). */
-/** Marks an arrival's stand-in album node (see standIns). */
-function standIn(node: MediaNode): MediaNode {
-  standIns.add(node);
-  return node;
-}
 
 function artistPageNode(name: string, pools: MediaIndexPools[]): MediaNode {
   const best = pools
@@ -214,8 +136,6 @@ export function LibraryScreen(): React.JSX.Element {
   const saveSettings = useStore((s) => s.saveSettings);
   const filter = useStore((s) => s.screenFilters.library);
   const setScreenFilter = useStore((s) => s.setScreenFilter);
-  const setScreen = useStore((s) => s.setScreen);
-  const systemInfo = useStore((s) => s.systemInfo);
   const cards = libraryLayout === "cards";
   const tracksCards = lensTracksLayout === "cards";
 
@@ -242,16 +162,25 @@ export function LibraryScreen(): React.JSX.Element {
     rememberScroll: () => {},
     showNotice: () => {},
   });
+  const search = useLibrarySearch({
+    serverUdn,
+    setServerUdn,
+    path,
+    setPath,
+    servers,
+    filter,
+    setScreenFilter,
+    filterMemory,
+    nodeKey,
+    late: searchLate,
+  });
   const {
     searchMode,
-    setSearchMode,
     searchQuery,
     setSearchQuery,
     searchState,
     setSearchState,
     searching,
-    searchReturn,
-    setSearchReturn,
     searchKind,
     setSearchKind,
     searchSort,
@@ -264,23 +193,10 @@ export function LibraryScreen(): React.JSX.Element {
     crossMode,
     crossServerUdn,
     searchInputRef,
-    restoredSearch,
     exitSearch,
     enterSearch,
-    returnToSearch,
     runSearch,
-  } = useLibrarySearch({
-    serverUdn,
-    setServerUdn,
-    path,
-    setPath,
-    servers,
-    filter,
-    setScreenFilter,
-    filterMemory,
-    nodeKey,
-    late: searchLate,
-  });
+  } = search;
   const [fetchNonce, setFetchNonce] = useState(0);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   // Which node the scroller currently shows, once its listing has landed —
@@ -290,42 +206,6 @@ export function LibraryScreen(): React.JSX.Element {
   const pendingScroll = useRef<number | null>(null);
   /** The track a destination asked to land on (LibraryTarget.track and its id and length). */
   const pendingTrack = useRef<LandingTrack | null>(null);
-  useLayoutEffect(() => {
-    if (pendingScroll.current != null && scrollRef.current) {
-      // a lens at the root holds the page at 0 (it scrolls its own column)
-      scrollRef.current.scrollTop = serverUdn == null && lens != null ? 0 : pendingScroll.current;
-      pendingScroll.current = null;
-    }
-    // only once THIS destination's listing has landed — a fresh mount's first
-    // ready commit is the empty initial listing, and clearing there lost the
-    // track before the album ever rendered
-    if (
-      pendingTrack.current != null &&
-      state === "ready" &&
-      scrollRef.current &&
-      loadedKey.current === nodeKey(serverUdn, path)
-    ) {
-      const rows = [...scrollRef.current.querySelectorAll<HTMLElement>("[data-library-track]")];
-      const at = landingRowIndex(
-        rows.map((r) => ({
-          title: r.dataset.libraryTrack ?? "",
-          id: r.dataset.libraryTrackId ?? null,
-          secs: r.dataset.libraryTrackSecs ? Number(r.dataset.libraryTrackSecs) : null,
-        })),
-        pendingTrack.current,
-      );
-      const row = at >= 0 ? rows[at] : null;
-      pendingTrack.current = null;
-      if (row) {
-        scrollToCentered(row, "auto");
-        flashTarget(row);
-      }
-    }
-    // runs when the LISTING commits (nodes, state); path and serverUdn are
-    // read through loadedKey's guard, and a path change without a new listing
-    // must not fire a restore against the old rows
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, state]);
   const atRoot = serverUdn == null;
 
   // what the indexes offer: the doors' state, cross-server search (useIndexDoors)
@@ -333,19 +213,6 @@ export function LibraryScreen(): React.JSX.Element {
   const [lens, setLens] = useState<Lens | null>(null);
   /** The artist page open over the Artists lens, by name (ArtistPage, 2026-10-11). */
   const [artistPage, setArtistPage] = useState<string | null>(null);
-  // A LENS OPENS AT THE TOP OF THE PAGE: it scrolls its own column with the page held still, so
-  // a root left scrolled would carry the lens up out of view; closing it at the root brings the
-  // doors back to their own spot (a move between levels restores through the listing's effect)
-  useLayoutEffect(() => {
-    const sc = scrollRef.current;
-    if (!sc || serverUdn != null || searchMode) return;
-    sc.scrollTop = artistPage
-      ? (artistPageScroll.get(artistPage.toLowerCase()) ?? 0)
-      : lens != null
-        ? 0
-        : (scrollMemory.get(nodeKey(null, path)) ?? 0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lens, artistPage]);
 
   // (⌘A/Esc keyboard handling lives below the listing memo — its deps need
   // the visible tracks.)
@@ -432,326 +299,47 @@ export function LibraryScreen(): React.JSX.Element {
     };
   }, [serverUdn, path, fetchNonce]);
 
-  const rememberScroll = (): void => {
-    // a lens scrolls its own column; the page under it is not the root's spot
-    if (lens != null) return;
-    const key = nodeKey(serverUdn, path);
-    if (scrollRef.current && loadedKey.current === key)
-      scrollMemory.set(key, scrollRef.current.scrollTop);
-  };
-
-  // Each level keeps its own filter: stash the current one, restore the
-  // destination's (or empty) whenever navigation happens.
-  // HISTORY IS THE STORE'S (one stack across screens and within the Library,
-  // 2026-08-23): every move here records the spot being LEFT via navPush, and
-  // back/forward hand a spot back through navRestore. `restoring` marks a
-  // move that is itself a restore (or an arrival), which must not record.
-  const restoring = useRef(false);
-  const navPush = useStore((s) => s.navPush);
-  /** This screen's spot right now, in history's shape. */
-  const snapshot = (): LibrarySpot => ({
-    udn: serverUdn,
-    path,
-    mode: searchMode,
-    query: searchQuery,
-    searchNow: searchState,
-    crossNow: crossState,
-    lens,
-    artist: artistPage,
-  });
-
-  const moveTo = (udn: string | null, newPath: Crumb[]): void => {
-    if (!restoring.current) navPush({ screen: "library", library: snapshot() });
-    rememberScroll();
-    exitSearch();
-    setLens(null);
-    setArtistPage(null);
-    filterMemory.set(nodeKey(serverUdn, path), filter);
-    setScreenFilter("library", filterMemory.get(nodeKey(udn, newPath)) ?? "");
-    setServerUdn(udn);
-    setPath(newPath);
-  };
-
-  /** Record the spot being left; arrivals and history restores never do. */
-  const pushSpot = (): void => {
-    if (!restoring.current) navPush({ screen: "library", library: snapshot() });
-  };
-  searchLate.current = { pushSpot, moveTo, rememberScroll, showNotice };
-  // The lens navigation and THE ONE LANDING (components/library/lensNavigation).
+  // THE NAVIGATION (components/library/useLibraryNavigation, 0.15.0): every move, the arrivals,
+  // the trail, Backspace and history's restores, and where a listing's scroll comes back to
   const {
+    moveTo,
+    pushSpot,
+    artistPageOf,
+    enter,
+    enterServer,
+    jumpTo,
     openLens,
-    landOn,
     openAlbumFromLens,
-    returnToLens,
     openArtistPage,
     closeArtistPage,
     openAlbumFromArtistPage,
-    returnToArtistPage,
     goToAlbumFromLens,
     goToArtistFromLens,
-  } = lensNavigation({
+  } = useLibraryNavigation({
+    serverUdn,
+    setServerUdn,
+    path,
+    setPath,
+    nodes,
+    state,
+    scrollRef,
+    loadedKey,
+    pendingScroll,
+    pendingTrack,
     lens,
     setLens,
     artistPage,
     setArtistPage,
     atRoot,
-    searchMode,
-    serverUdn,
+    filter,
+    search,
+    searchLate,
+    readyIndexes,
     lensPools,
-    restoring,
-    pendingTrack,
-    pushSpot,
-    moveTo,
-    setPath,
     showNotice,
   });
-
-  // Three ways to arrive, and this effect picks between them.
-  //
-  // A DESTINATION was planted (Favorites → open album): land on that node.
-  // Intermediate crumbs carry sentinel ids — clicking one fails the fresh
-  // browse and the title-path re-walk resolves it, the same recovery stale USB
-  // ids use.
-  // The FRONT DOOR was asked for — "Library" re-invoked while already here, so
-  // the nonce bumped: reset to the source list.
-  // Otherwise you simply CAME BACK from another screen: restore where the last
-  // visit left off. (T3 used to reset here too; see setScreen for why that
-  // reversed.)
-  const libraryResetNonce = useStore((s) => s.libraryResetNonce);
-  const clearLibraryTarget = useStore((s) => s.clearLibraryTarget);
-  /** Nonce this mount has already acted on — null until the first run. */
-  const handledNonce = useRef<number | null>(null);
-  useEffect(() => {
-    // At most ONE action per nonce value per mount. StrictMode double-invokes
-    // mount effects in dev (refs intact), and this effect is no longer
-    // naturally idempotent the way the old always-reset version was: its first
-    // run RESTORES, so a second run falling through to moveTo(null, []) undoes
-    // the restore it just made — the screen restored and instantly reset,
-    // which read as "restore doesn't work" in dev while the built app was
-    // fine. The skip is the idempotence now.
-    if (handledNonce.current === libraryResetNonce) return;
-    // First action of a fresh mount = plain navigation back (a front-door
-    // bump while mounted re-runs this effect with a CHANGED nonce instead).
-    const cameBack = handledNonce.current === null;
-    handledNonce.current = libraryResetNonce;
-    // back/forward landed here with a spot to restore: the one-shot below
-    // does it; an arrival restore on top would browse twice and win wrongly
-    if (cameBack && useStore.getState().navRestore) return;
-    // every move in here is an ARRIVAL, never a navigation to record
-    restoring.current = true;
-    try {
-      const target = useStore.getState().libraryTarget;
-      // Nonce EQUALITY, not consume-and-clear (a StrictMode double-run must
-      // find the target intact — it skips above, but a THIRD mount shouldn't
-      // chase it either). A leftover target with an older nonce is stale — drop
-      // it and reset normally.
-      if (target && target.nonce !== libraryResetNonce) clearLibraryTarget();
-      if (target && target.nonce === libraryResetNonce) {
-        if ("artist" in target) {
-          // a NAME from another screen's row, Now Playing, History or Search: the
-          // artist's page, over the Artists lens
-          landOn({ artist: target.artist });
-          return;
-        }
-        const last = target.titlePath.length - 1;
-        landOn({
-          udn: target.serverUdn,
-          path: target.titlePath.map((title, i) =>
-            i === last
-              ? {
-                  id: target.objectId,
-                  title,
-                  // a stand-in album node so the header renders without a metadata
-                  // re-fetch; the index's own entry replaces it as albumNode once the
-                  // pools are in (its keys are the Albums lens's), and until then the
-                  // tracks fill what it lacks (albumFromTracks)
-                  node: standIn({
-                    id: target.objectId,
-                    parentId: null,
-                    serverUdn: target.serverUdn,
-                    title,
-                    upnpClass: target.upnpClass ?? "object.container.album.musicAlbum",
-                    isContainer: true,
-                    artUrl: null,
-                    artist: null,
-                    album: null,
-                    year: null,
-                    trackNumber: null,
-                    durationSecs: null,
-                  }),
-                }
-              : { id: `__fav-crumb-${i}__`, title },
-          ),
-          track: target.track
-            ? { title: target.track, id: target.trackId ?? null, secs: target.trackSecs ?? null }
-            : null,
-          ...(target.fromSearch ? { lead: { id: UNIFIED_SEARCH_CRUMB_ID, title: "Search" } } : {}),
-        });
-        return;
-      }
-      const mem = useStore.getState().libraryLocation;
-      if (cameBack && mem) {
-        moveTo(mem.udn, mem.path);
-        setLens(mem.lens); // moveTo clears it; the remembered lens wins
-        setArtistPage(mem.lens === "artists" ? (mem.artist ?? null) : null);
-        return;
-      }
-      // THE FRONT DOOR is the top of the root: its remembered spot goes (after moveTo has
-      // recorded the level being left)
-      moveTo(null, []);
-      scrollMemory.delete(nodeKey(null, []));
-    } finally {
-      restoring.current = false;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [libraryResetNonce]);
-
-  // Keep the location current as you browse: history reads it as the spot being
-  // left when a navigation goes elsewhere, and a return visit restores it (the
-  // store's libraryLocation; nothing subscribes to it, so nothing re-renders on it).
-  // DECLARATION ORDER MATTERS: this must stay BELOW the arrival effect. On a
-  // return-mount both run, in order — arrival reads the location and queues the
-  // restore, then this one overwrites it with the mount's initial (empty)
-  // state; the restore's re-render writes the real values back a beat later.
-  // Declared above the arrival effect, the clobber would come first and there
-  // would be nothing left to restore.
-  const setLibraryLocation = useStore((s) => s.setLibraryLocation);
-  useEffect(() => {
-    setLibraryLocation(snapshot());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serverUdn, path, searchMode, searchQuery, searchState, crossState, lens, artistPage]);
-
-  // THE ARTIST PAGE is built from the indexes: an artist has one when an index holds their server
-  // (the lens's artists always; a search's or a folder's artist when theirs is indexed)
-  const artistPageOf = (node: MediaNode): (() => void) | undefined =>
-    node.isContainer &&
-    isArtistClass(node.upnpClass) &&
-    readyIndexes.some((x) => x.udn === (node.serverUdn ?? serverUdn))
-      ? () => openArtistPage(node.title)
-      : undefined;
-
-  const enter = (node: MediaNode): void => {
-    // A SEARCH'S ARTIST opens the artist's page (2026-10-11); an artist from a live search of an
-    // unindexed server keeps its folder, as does an artist met browsing a server's folders
-    const page = searchMode || crossMode ? artistPageOf(node) : undefined;
-    if (page) return page();
-    if (crossMode && crossState) {
-      // Entering a cross-server result SCOPES to its server; the query crumb
-      // leads back to the root cross view with its groups intact.
-      if (!node.serverUdn) return;
-      setSearchReturn({
-        udn: null,
-        query: crossState.query,
-        items: [],
-        total: 0,
-        cross: crossState.groups,
-        prevPath: [],
-      });
-      moveTo(node.serverUdn, [
-        { id: SEARCH_CRUMB_ID, title: `“${crossState.query}”` },
-        { id: node.id, title: node.title, node },
-      ]);
-      return;
-    }
-    if (searchMode && searchState) {
-      // Entering a result: plant the query crumb so the trail offers the
-      // way back, and remember the results for an instant restore.
-      setSearchReturn({ ...searchState, udn: serverUdn, cross: null, prevPath: path });
-      moveTo(serverUdn, [
-        { id: SEARCH_CRUMB_ID, title: `“${searchState.query}”` },
-        { id: node.id, title: node.title, node },
-      ]);
-      return;
-    }
-    moveTo(serverUdn, [...path, { id: node.id, title: node.title, node }]);
-  };
-  const enterServer = (udn: string): void => moveTo(udn, []);
-
   /** Bring the search back exactly as it was left (no refetch). */
   const serverIndex = useStore((st) => st.mediaIndex.find((x) => x.udn === serverUdn));
-
-  // Crumb trail: Library (source list) › source › folders…
-  const jumpTo = (index: number): void => {
-    if (index === 0) {
-      // The root crumb reads "Search" on a from-search trail, and leads back.
-      if (path[0]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen("search");
-      return moveTo(null, []);
-    }
-    const newPath = path.slice(0, index - 1);
-    if (newPath[newPath.length - 1]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen("search");
-    if (newPath[newPath.length - 1]?.id === SEARCH_CRUMB_ID) return returnToSearch();
-    const last = newPath[newPath.length - 1];
-    if (last?.id === ARTIST_PAGE_CRUMB_ID) return returnToArtistPage(last.title);
-    if (last?.id === LENS_ARTIST_CRUMB_ID) {
-      focusArtistsLens(last.title);
-      return returnToLens();
-    }
-    if (last?.id === LENS_CRUMB_ID) return returnToLens();
-    moveTo(serverUdn, newPath);
-  };
-  const goUp = (): void => {
-    if (searchMode)
-      exitSearch(); // search exits first, folder stays
-    else if (path.length > 0) {
-      if (path[path.length - 2]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen("search");
-      if (path.length === 1 && path[0]?.id === UNIFIED_SEARCH_CRUMB_ID) return setScreen("search");
-      if (path[path.length - 2]?.id === SEARCH_CRUMB_ID) return returnToSearch();
-      const parent = path[path.length - 2]?.id;
-      if (parent === ARTIST_PAGE_CRUMB_ID) return returnToArtistPage(path[path.length - 2].title);
-      if (parent === LENS_CRUMB_ID || parent === LENS_ARTIST_CRUMB_ID) return returnToLens();
-      moveTo(serverUdn, path.slice(0, -1));
-    } else if (serverUdn) moveTo(null, []);
-    else if (artistPage)
-      closeArtistPage(); // the page exits to the Artists lens's columns
-    else if (lens) setLens(null); // lens exits to the source list
-  };
-
-  /** Put this screen at a spot history handed back (back/forward landed here). */
-  const restoreSpot = (snap: LibrarySpot): void => {
-    restoring.current = true;
-    try {
-      moveTo(snap.udn, snap.path);
-      if (snap.mode) {
-        // the spot being restored was a search-results view — re-enter it,
-        // without taking focus (only a false → true flip runs the focus effect)
-        if (!searchMode) restoredSearch.current = true;
-        setSearchMode(true);
-        setSearchQuery(snap.query);
-        setSearchState(snap.searchNow);
-        setCrossState(snap.crossNow);
-      }
-      if (snap.lens) {
-        setLensReturn(snap.lens);
-        setLens(snap.lens);
-      }
-      setArtistPage(snap.lens === "artists" ? (snap.artist ?? null) : null);
-    } finally {
-      restoring.current = false;
-    }
-  };
-  const navRestore = useStore((s) => s.navRestore);
-  const clearNavRestore = useStore((s) => s.clearNavRestore);
-  useOneShotAsk(navRestore, (ask) => restoreSpot(ask.spot), {
-    claim: navRestore?.nonce,
-    clear: clearNavRestore,
-  });
-
-  // Backspace goes UP a level (folder semantics; above a source's root it
-  // lands on the source list). ⌘/Alt ←/→ and mouse 4/5 are history, app-wide —
-  // useShortcuts owns them since 2026-08-23.
-  useEffect(
-    () =>
-      onScreenKey((e) => {
-        const target = e.target as HTMLElement | null;
-        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA")) return;
-        if (e.key === "Backspace" && !e.metaKey && !e.ctrlKey && !e.altKey) {
-          e.preventDefault();
-          goUp();
-        }
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [path, serverUdn, filter, searchState, searchReturn, searchMode, searchQuery, crossState, lens],
-  );
 
   // ----------------------------------------------------------------- actions
 
@@ -802,18 +390,19 @@ export function LibraryScreen(): React.JSX.Element {
     openArtistPage,
   });
 
-  const act = async (
-    node: MediaNode,
-    action: MediaQueueAction,
-    el: HTMLElement | null,
-    playFromId?: string,
-  ): Promise<void> => {
-    const udn = nodeUdn(node);
-    if (!udn) return;
-    const outcome = await queueWrite(() => tt.mediaQueueAdd(udn, node.id, action, playFromId));
-    if (outcome === "failed") showNotice(QUEUE_FAILED);
-    else if (outcome === "ok" && el) flashTarget(el);
-  };
+  // THE PLAY VERBS (components/library/useLibraryPlay, 0.15.0): a queue write, Play on a
+  // container, Play album from here, and Save as preset; the album shown, derived below, reaches
+  // them late-bound through playLate
+  const playLate = useRef<PlayLate>({ albumNode: null, albumArtist: null });
+  const { act, playContainer, playAlbumFrom, savePreset } = useLibraryPlay({
+    nodeUdn,
+    path,
+    nodes,
+    lensPools,
+    showNotice,
+    setPresetPicker,
+    late: playLate,
+  });
 
   // which tracks are queued, and a bare click's jump to a queued entry (useQueueMatch)
   const { trackQueued, playTrack } = useQueueMatch((node, el) => void act(node, "PLAY_NOW", el));
@@ -831,91 +420,6 @@ export function LibraryScreen(): React.JSX.Element {
     heartNodes: () => {},
     nodeFavorited: () => false,
   });
-
-  /** "Play" on a container: replace the queue with it and start at its first track. */
-  const playContainer = async (node: MediaNode, el: HTMLElement | null): Promise<void> => {
-    const udn = nodeUdn(node);
-    if (!udn) return;
-    const outcome = await queueWrite(async () => {
-      const children = await tt.mediaBrowse(udn, node.id, [
-        ...path.map((c) => c.title),
-        node.title,
-      ]);
-      const firstTrack = children.find((c) => !c.isContainer);
-      if (firstTrack) await tt.mediaQueueAdd(udn, node.id, "PLAY_FROM_HERE", firstTrack.id);
-      else await tt.mediaQueueAdd(udn, node.id, "REPLACE");
-    });
-    if (outcome === "failed") showNotice(QUEUE_FAILED);
-    else if (outcome === "ok" && el) flashTarget(el);
-  };
-
-  /** "Play album from here" on a track: the album's OWN browse supplies both
-   *  ids, the album view's contract (and the resume card's). A pooled or
-   *  searched track's parentId is the search scope, the whole library on
-   *  Asset, and its id belongs to that path: Play from here on it queued
-   *  2,528 tracks (2026-09-04). A row of the album leaf on screen came from
-   *  that browse and is used as it is. */
-  const playAlbumFrom = async (track: MediaNode): Promise<void> => {
-    const udn = nodeUdn(track);
-    if (!udn) return;
-    const leaf = path[path.length - 1];
-    if (leaf && track.parentId === leaf.id && nodes.some((n) => n.id === track.id)) {
-      await act({ ...track, id: leaf.id }, "PLAY_FROM_HERE", null, track.id);
-      return;
-    }
-    const pools = lensPools ?? (await tt.mediaIndexPools().catch(() => null));
-    const pool = pools?.find((g) => g.udn === udn);
-    const album = pool ? albumOfTrack(track, pool) : null;
-    const kids = album
-      ? await tt.mediaBrowse(udn, album.id, [album.title]).catch(() => null)
-      : null;
-    const title = track.title.trim().toLowerCase();
-    const same = (kids ?? []).filter(
-      (k) => !k.isContainer && k.title.trim().toLowerCase() === title,
-    );
-    // twin titles on one album are real (a reprise): the position tells them apart
-    const start = same.find((k) => trackPosition(k) === trackPosition(track)) ?? same[0];
-    if (!album || !start) {
-      showNotice(`Couldn't find "${track.album ?? "that album"}" in this library.`);
-      return;
-    }
-    await act({ ...album, serverUdn: udn }, "PLAY_FROM_HERE", null, start.id);
-  };
-
-  // Throws on failure so the shared panel stays open; closes the picker itself
-  // on success. A custom name rides along via presetRename (the firmware names
-  // media presets from content otherwise).
-  const savePreset = async (node: MediaNode, slot: number, name: string | null): Promise<void> => {
-    const udn = nodeUdn(node);
-    if (!udn) return;
-    try {
-      await tt.mediaPresetSave(udn, node.id, slot);
-      if (name) await tt.command({ type: "presetRename", slot, name });
-    } catch {
-      showNotice("Couldn't save the preset.");
-      throw new Error("preset save failed");
-    }
-    // Record the artist locally (settings.presetArtists): /presets/list has
-    // no artist field and firmware-derived names are just the album title —
-    // this is what lets the Presets filter match by artist. Read fresh so
-    // back-to-back saves can't clobber each other's keys.
-    const artist = node === albumNode ? (albumArtist ?? node.artist) : node.artist;
-    if (artist) {
-      void saveSettings({
-        presetArtists: {
-          ...useStore.getState().settings.presetArtists,
-          [presetVolumeKey(systemInfo?.udn, slot)]: artist,
-        },
-      });
-    }
-    setPresetPicker(null);
-    // unlike queue-adds there's no in-place flash — the effect lives on Presets
-    showToast({
-      kind: "success",
-      text: `Saved “${name ?? node.title}” to preset ${slot}`,
-      action: { label: "View", screen: "presets" },
-    });
-  };
 
   // -------------------------------------------------------------- derivation
 
@@ -1102,167 +606,6 @@ export function LibraryScreen(): React.JSX.Element {
       })
       .filter((g) => g.albums.length + g.artists.length + g.folders.length + g.tracks.length > 0);
   }, [crossState, crossServerUdn, searchKind, searchSort, searchSortReversed]);
-  // ONE WINDOWED LIST OF EVERY RESULT (2026-10-11, user: "one big (windowed) list seems more
-  // user friendly", after the 500-at-a-time button sat at the end of the first library's group,
-  // mid-list): the results flatten into lines (a library's heading, a kind's label, a row of
-  // cards, a container row, a track row), and only the lines near the viewport are drawn, the
-  // Albums grid's rule. Each line carries its own spacing inside it (padding, a border on every
-  // row, transparent on a section's first), so a kind of line has one height to measure.
-  const [searchWidth, setSearchWidth] = useState(0);
-  const searchRo = useRef<ResizeObserver | null>(null);
-  const searchBodyRef = useCallback((el: HTMLDivElement | null) => {
-    searchRo.current?.disconnect();
-    searchRo.current = null;
-    if (!el) return;
-    setSearchWidth(el.getBoundingClientRect().width);
-    const ro = new ResizeObserver(([e]) => setSearchWidth(e.contentRect.width));
-    ro.observe(el);
-    searchRo.current = ro;
-  }, []);
-  const searchCols = Math.max(
-    1,
-    Math.floor((searchWidth + presetGap) / (presetCardSize + presetGap)),
-  );
-  const searchLines = useMemo((): SearchLine[] => {
-    const lines: SearchLine[] = [];
-    const section = (key: string, text: string, list: MediaNode[], containers: boolean): void => {
-      if (list.length === 0) return;
-      // across libraries a kind's label sits tight under its library's heading
-      const label = crossMode ? "klabel" : lines.length === 0 ? "label0" : "label";
-      lines.push({ kind: label, key: `${key}-l`, text });
-      if (containers && cards) {
-        for (let i = 0; i < list.length; i += searchCols)
-          lines.push({
-            kind: i === 0 ? "cards0" : "cards",
-            key: `${key}-c${i}`,
-            nodes: list.slice(i, i + searchCols),
-          });
-      } else
-        list.forEach((node, index) =>
-          lines.push({
-            kind: containers ? "crow" : "track",
-            key: `${key}-${node.id}`,
-            node,
-            list,
-            index,
-          }),
-        );
-    };
-    const kinds = (key: string, items: MediaNode[], tracksOf: MediaNode[]): void => {
-      section(
-        `${key}a`,
-        "Artists",
-        items.filter((c) => c.isContainer && c.upnpClass.includes("musicArtist")),
-        true,
-      );
-      section(
-        `${key}b`,
-        "Albums",
-        items.filter((c) => c.isContainer && isAlbumClass(c.upnpClass)),
-        true,
-      );
-      section(
-        `${key}f`,
-        "Folders",
-        items.filter(
-          (c) =>
-            c.isContainer && !isAlbumClass(c.upnpClass) && !c.upnpClass.includes("musicArtist"),
-        ),
-        true,
-      );
-      section(`${key}t`, "Tracks", tracksOf, false);
-    };
-    if (crossMode && crossState)
-      crossGroups.forEach((g) => {
-        lines.push({ kind: lines.length === 0 ? "group0" : "group", key: `g-${g.udn}`, group: g });
-        kinds(`g-${g.udn}-`, [...g.artists, ...g.albums, ...g.folders], g.tracks);
-      });
-    else if (searchMode && searchState) kinds("s-", containers, tracks);
-    return lines;
-  }, [
-    crossMode,
-    crossState,
-    crossGroups,
-    searchMode,
-    searchState,
-    containers,
-    tracks,
-    cards,
-    searchCols,
-  ]);
-  const searchKinds = useMemo(() => searchLines.map((l) => l.kind), [searchLines]);
-  const searchWin = useWindowedList({
-    scrollRef,
-    count: searchLines.length,
-    itemSelector: "[data-search-line]",
-    kinds: searchKinds,
-    estimate: {
-      group0: 36,
-      group: 56,
-      label0: 30,
-      label: 42,
-      klabel: 30,
-      cards0: presetCardSize + 60,
-      cards: presetCardSize + 52 + presetGap,
-      crow: 57,
-      track: 57,
-    },
-    overscan: 6,
-    enabled: searchLines.length > 80,
-  });
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the search results one Tab stop across their
-  // windowed lines, a kind's cards a grid and its rows a column (components/library/searchKeys);
-  // Enter opens a result or plays a track as its click does, "." its More menu
-  const { searchSpots, firstOfLine } = useMemo(() => {
-    const spots: Array<SearchSpot & { node: MediaNode; list: MediaNode[] | null }> = [];
-    const first: number[] = [];
-    let section = -1;
-    searchLines.forEach((l, line) => {
-      first.push(spots.length);
-      if ("text" in l) section++;
-      else if ("nodes" in l)
-        l.nodes.forEach((node, col) =>
-          spots.push({ line, col, card: true, section, node, list: null }),
-        );
-      else if ("node" in l)
-        spots.push({
-          line,
-          col: 0,
-          card: false,
-          section,
-          node: l.node,
-          list: l.kind === "track" ? l.list : null,
-        });
-    });
-    return { searchSpots: spots, firstOfLine: first };
-  }, [searchLines]);
-  const searchKeys = useListKeys({
-    count: searchSpots.length,
-    step: (key, at) => searchStep(key, at, searchSpots),
-    onEnter: (i, el) => {
-      const r = searchSpots[i];
-      if (!r) return;
-      if (!r.list) enter(r.node);
-      else if (!trackRowClick(r.node, keyedEvent(el))) playTrack(r.node, el);
-    },
-    onMenu: (i, el) => {
-      const r = searchSpots[i];
-      if (r) openMenu(r.node, keyedEvent(el), r.list ?? undefined);
-    },
-    reveal: (i) => {
-      const r = searchSpots[i];
-      const sc = scrollRef.current;
-      if (r && sc) sc.scrollTop = Math.max(0, searchWin.offsetOf(r.line) - sc.clientHeight / 3);
-    },
-  });
-  const searchKeysRef = searchKeys.container.ref;
-  const searchListRef = useCallback(
-    (el: HTMLDivElement | null) => {
-      searchBodyRef(el);
-      searchKeysRef(el);
-    },
-    [searchBodyRef, searchKeysRef],
-  );
 
   const crossItemCount = crossState
     ? crossState.groups.reduce((acc, g) => acc + g.items.length, 0)
@@ -1315,6 +658,7 @@ export function LibraryScreen(): React.JSX.Element {
   const albumArtist = albumSaid
     ? (albumSaid.artist ?? (allTracks.length > 0 ? "Various artists" : null))
     : null;
+  playLate.current = { albumNode, albumArtist };
   const albumInQueue = allTracks.length > 0 && allTracks.every(trackQueued);
   // Format and size come from the tracks' <res> (Asset describes them; the
   // USB server doesn't, and then the facts simply don't mention them).
@@ -1460,7 +804,7 @@ export function LibraryScreen(): React.JSX.Element {
   /** A server's folders, browsed: a plain folder takes a ⋯ (Use as Recently added, 0.13.0). */
   const folderMenus = serverUdn != null && !searchMode && lens == null;
   /** One container as the listing draws it: a card, or a row in the rows layout. */
-  const containerItem = (node: MediaNode, item?: ListItemAttrs): React.JSX.Element =>
+  const containerItem: ContainerItem = (node, item) =>
     cards ? (
       <ContainerCard
         key={node.id}
@@ -1501,69 +845,6 @@ export function LibraryScreen(): React.JSX.Element {
       />
     );
 
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): each grid or column of rows one Tab stop, Enter
-  // opens a folder or an album as its click does, "." its More menu
-  const containerGrid = (list: MediaNode[], label = "Folders"): React.JSX.Element => (
-    <KeyedList
-      label={label}
-      grid={cards}
-      count={list.length}
-      onEnter={(i) => {
-        const n = list[i];
-        if (n) enter(n);
-      }}
-      onMenu={(i, el) => {
-        const n = list[i];
-        if (n && (isAlbumClass(n.upnpClass) || isArtistClass(n.upnpClass) || folderMenus))
-          openMenu(n, keyedEvent(el));
-      }}
-      className={cx(!cards && "divide-y divide-edge/50 -mx-2")}
-      style={
-        cards
-          ? {
-              display: "grid",
-              gridTemplateColumns: presetFillRows
-                ? `repeat(auto-fill, minmax(${presetCardSize}px, 1fr))`
-                : `repeat(auto-fill, ${presetCardSize}px)`,
-              gap: presetGap,
-              paddingTop: 8,
-            }
-          : undefined
-      }
-    >
-      {(item) => list.map((node, i) => containerItem(node, item(i)))}
-    </KeyedList>
-  );
-
-  // AN ARTIST PAGE NAMES WHAT IT HOLDS (2026-10-11, user: "do we want to add an 'Albums' title
-  // above the albums? i'm a little unclear exactly what this is supposed to be showing"): the
-  // server's own folder for the artist holds what that server decides (Asset: the albums;
-  // MinimServer: its sub-indexes, "2 albums", "Date", "Genre"), so the contents are labelled by
-  // kind as search results are, never one fixed title that is wrong on some server
-  const artistSections = ((): React.JSX.Element | null => {
-    if (!artistNode) return null;
-    const albums = containers.filter((c) => isAlbumClass(c.upnpClass));
-    const other = containers.filter((c) => !isAlbumClass(c.upnpClass));
-    return (
-      <>
-        {albums.length > 0 && (
-          <>
-            <div className="microlabel pb-0.5 px-1 pt-2">Albums</div>
-            {containerGrid(albums, "Albums")}
-          </>
-        )}
-        {other.length > 0 && (
-          <>
-            <div className={cx("microlabel pb-0.5 px-1", albums.length > 0 ? "pt-5" : "pt-2")}>
-              Folders
-            </div>
-            {containerGrid(other)}
-          </>
-        )}
-      </>
-    );
-  })();
-
   if (servers != null && servers.length === 0) {
     return (
       <EmptyState
@@ -1592,16 +873,7 @@ export function LibraryScreen(): React.JSX.Element {
     node: MediaNode,
     siblings: MediaNode[],
     ti: number,
-    opts: {
-      showArt: boolean;
-      note?: string | null;
-      artistLabel?: string | null;
-      links: boolean;
-      /** The list Info steps through when it isn't `siblings` (an album's every disc). */
-      infoList?: MediaNode[];
-      /** In a keyed list: the row's id and index. */
-      item?: ListItemAttrs;
-    },
+    opts: TrackRowOpts,
   ): React.JSX.Element => (
     <TrackRow
       key={node.id}
@@ -1632,77 +904,6 @@ export function LibraryScreen(): React.JSX.Element {
       }
     />
   );
-
-  /** One line of the windowed search results; its spacing lives inside it (see searchLines). */
-  const searchLine = (line: SearchLine, li: number): React.JSX.Element => {
-    const attrs = { "data-search-line": "", "data-win-kind": line.kind };
-    // the line's first result in the keyed list (searchSpots)
-    const at = firstOfLine[li];
-    if ("group" in line) {
-      const src = servers?.find((x) => x.udn === line.group.udn);
-      return (
-        <div
-          key={line.key}
-          {...attrs}
-          data-cross-server-group={line.group.serverName}
-          className={cx("flex items-center gap-2 px-1", line.kind === "group0" ? "pt-2" : "pt-7")}
-        >
-          {src?.isStreamer ? (
-            <Usb size={15} className="text-dim" />
-          ) : (
-            <HardDrive size={15} className="text-dim" />
-          )}
-          <span className="text-[13.5px] font-medium">{line.group.serverName}</span>
-          <span className="font-mono text-[11px] text-faint tabular-nums">
-            {line.group.total} result{line.group.total === 1 ? "" : "s"}
-          </span>
-        </div>
-      );
-    }
-    if ("text" in line)
-      return (
-        <div
-          key={line.key}
-          {...attrs}
-          className={cx("microlabel pb-0.5 px-1", line.kind === "label" ? "pt-5" : "pt-2")}
-        >
-          {line.text}
-        </div>
-      );
-    if ("nodes" in line)
-      return (
-        <div
-          key={line.key}
-          {...attrs}
-          style={{
-            display: "grid",
-            gridTemplateColumns: presetFillRows
-              ? `repeat(${searchCols}, minmax(${presetCardSize}px, 1fr))`
-              : `repeat(${searchCols}, ${presetCardSize}px)`,
-            gap: presetGap,
-            paddingTop: line.kind === "cards0" ? 8 : presetGap,
-          }}
-        >
-          {line.nodes.map((node, col) => containerItem(node, searchKeys.item(at + col)))}
-        </div>
-      );
-    // a row: its divider is its own top border, transparent on a section's first
-    return (
-      <div
-        key={line.key}
-        {...attrs}
-        className={cx("-mx-2 border-t", line.index === 0 ? "border-transparent" : "border-edge/50")}
-      >
-        {line.kind === "crow"
-          ? containerItem(line.node, searchKeys.item(at))
-          : trackRow(line.node, line.list, line.index, {
-              showArt: true,
-              links: true,
-              item: searchKeys.item(at),
-            })}
-      </div>
-    );
-  };
 
   return (
     <div
@@ -1852,7 +1053,7 @@ export function LibraryScreen(): React.JSX.Element {
         crossItemCount={crossItemCount}
         atRoot={atRoot}
         leaveSearch={() => {
-          navPush({ screen: "library", library: snapshot() });
+          pushSpot();
           exitSearch();
         }}
       />
@@ -2118,33 +1319,48 @@ export function LibraryScreen(): React.JSX.Element {
           </div>
         )}
 
-        {!atRoot &&
-          state === "ready" &&
-          containers.length > 0 &&
-          !searchMode &&
-          (artistNode ? artistSections : containerGrid(containers))}
+        {!atRoot && state === "ready" && containers.length > 0 && !searchMode && (
+          <LibraryFolders
+            containers={containers}
+            artistFolder={artistNode != null}
+            cards={cards}
+            presetFillRows={presetFillRows}
+            presetCardSize={presetCardSize}
+            presetGap={presetGap}
+            enter={enter}
+            openMenu={openMenu}
+            folderMenus={folderMenus}
+            containerItem={containerItem}
+          />
+        )}
 
-        {/* every search result, one windowed list (searchLines): one library's search
-            and the search across libraries alike */}
-        {((!atRoot && state === "ready" && searchMode && searchState) ||
-          (crossMode && crossState)) &&
-          searchLines.length > 0 && (
-            <div
-              {...searchKeys.container}
-              ref={searchListRef}
-              aria-label="Search results"
-              data-search-list
-              style={{ overflowAnchor: "none" }}
-            >
-              <ListKeysContext.Provider value={true}>
-                {searchWin.padTop > 0 && <div style={{ height: searchWin.padTop }} />}
-                {searchLines
-                  .slice(searchWin.first, searchWin.last + 1)
-                  .map((l, k) => searchLine(l, searchWin.first + k))}
-                {searchWin.padBottom > 0 && <div style={{ height: searchWin.padBottom }} />}
-              </ListKeysContext.Provider>
-            </div>
+        {/* every search result, one windowed list (components/library/LibrarySearchResults): one
+            library's search and the search across libraries alike */}
+        <LibrarySearchResults
+          shown={Boolean(
+            (!atRoot && state === "ready" && searchMode && searchState) ||
+            (crossMode && crossState),
           )}
+          scrollRef={scrollRef}
+          crossMode={crossMode}
+          crossState={crossState}
+          crossGroups={crossGroups}
+          searchMode={searchMode}
+          searchState={searchState}
+          containers={containers}
+          tracks={tracks}
+          cards={cards}
+          presetCardSize={presetCardSize}
+          presetGap={presetGap}
+          presetFillRows={presetFillRows}
+          servers={servers}
+          enter={enter}
+          trackRowClick={trackRowClick}
+          playTrack={playTrack}
+          openMenu={openMenu}
+          containerItem={containerItem}
+          trackRow={trackRow}
+        />
 
         {/* tracks are ALWAYS rows — the app-wide idiom (Queue, Recently,
             Favorites, album tracklists). The cards ⇄ rows toggle governs
@@ -2195,62 +1411,22 @@ export function LibraryScreen(): React.JSX.Element {
             })()}
           </SelectionBar>
         )}
-        {/* an artist page's tracks are labelled, as its albums and folders are */}
-        {!atRoot && state === "ready" && !searchMode && artistNode && tracks.length > 0 && (
-          <div className={cx("microlabel pb-0.5 px-1", containers.length > 0 ? "pt-5" : "pt-2")}>
-            Tracks
-          </div>
-        )}
         {!atRoot && state === "ready" && !searchMode && tracks.length > 0 ? (
-          <KeyedList
-            label="Tracks"
-            count={tracks.length}
-            // an album opened from the keyboard starts on the playing track
-            initial={() => tracks.findIndex((t) => queueSourceActive && isCurrentTrack(t))}
-            onEnter={(i, el) => {
-              const t = tracks[i];
-              if (t && !trackRowClick(t, keyedEvent(el))) playTrack(t, el);
-            }}
-            onMenu={(i, el) => {
-              const t = tracks[i];
-              if (t) openMenu(t, keyedEvent(el), tracks);
-            }}
-            className={cx(
-              "divide-y divide-edge/50 -mx-2",
-              containers.length > 0 && !searchMode && !artistNode && "mt-4",
-            )}
-          >
-            {(item) => (
-              <>
-                {/* an album leaf that spans discs gets the same quiet "Disc N"
-                dividers as the lens (one group, no divider, otherwise) */}
-                {(albumNode ? discGroups(tracks) : [{ disc: null, tracks }]).map((g, gi) => (
-                  <div key={g.disc ?? `d${gi}`}>
-                    {g.disc != null && (
-                      <div className="microlabel px-2 pt-3 pb-1" data-disc-divider>
-                        Disc {g.disc}
-                      </div>
-                    )}
-                    <div className="divide-y divide-edge/50">
-                      {g.tracks.map((node, ti) =>
-                        trackRow(node, g.tracks, ti, {
-                          item: item(tracks.indexOf(node)),
-                          // Info steps through the whole album, every disc
-                          infoList: tracks,
-                          showArt: !albumNode,
-                          note: albumNoteFor(node),
-                          artistLabel: albumNode
-                            ? performerLine(node, albumArtist ?? albumNode.artist)
-                            : null,
-                          links: searchMode,
-                        }),
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </>
-            )}
-          </KeyedList>
+          <LibraryTracks
+            tracks={tracks}
+            containers={containers}
+            artistNode={artistNode}
+            albumNode={albumNode}
+            albumArtist={albumArtist}
+            searchMode={searchMode}
+            queueSourceActive={queueSourceActive}
+            isCurrentTrack={isCurrentTrack}
+            trackRowClick={trackRowClick}
+            playTrack={playTrack}
+            openMenu={openMenu}
+            albumNoteFor={albumNoteFor}
+            trackRow={trackRow}
+          />
         ) : null}
       </div>
 

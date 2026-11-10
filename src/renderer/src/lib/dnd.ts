@@ -33,10 +33,6 @@ export const lockVertical = (t: Transform | null): Transform | null => (t ? { ..
  */
 export const DND_ACCESSIBILITY = { container: document.body };
 
-/** A card's own transition, as the Library's cards have it (`transition-all duration-200
- *  ease-out`): its hover grow, fill and glow. */
-export const CARD_MOTION = "all 200ms cubic-bezier(0, 0, 0.2, 1)";
-
 /** A row's own transition, Tailwind's `transition-colors`: its hover fill. */
 export const ROW_MOTION = [
   "color",

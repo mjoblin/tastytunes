@@ -59,6 +59,7 @@ import { learnArtMove, moveArt } from "./artMove";
 import { arrivalKey, recentRanks } from "@shared/recentlyAdded";
 import { arrivalsOf, noteArrivals } from "../data/albumArrivals";
 import { readRecentList, type RecentListRead } from "./recentList";
+import { nameKey } from "@shared/keys";
 
 interface StoredIndex {
   udn: string;
@@ -705,14 +706,14 @@ export function sameNode(
   was: MediaNode,
 ): MediaNode | null {
   const one = (list: MediaNode[]): MediaNode | null => (list.length === 1 ? list[0] : null);
-  const loose = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
   if (was.isContainer) {
     const byArt = was.artUrl ? one(idx.albums.filter((a) => a.artUrl === was.artUrl)) : null;
     return (
       byArt ??
       one(
         idx.albums.filter(
-          (a) => loose(a.title) === loose(was.title) && loose(a.artist) === loose(was.artist),
+          (a) =>
+            nameKey(a.title) === nameKey(was.title) && nameKey(a.artist) === nameKey(was.artist),
         ),
       )
     );
@@ -720,8 +721,8 @@ export function sameNode(
   return one(
     idx.tracks.filter(
       (t) =>
-        loose(t.title) === loose(was.title) &&
-        loose(t.album) === loose(was.album) &&
+        nameKey(t.title) === nameKey(was.title) &&
+        nameKey(t.album) === nameKey(was.album) &&
         t.trackNumber === was.trackNumber &&
         (was.artUrl == null || t.artUrl === was.artUrl),
     ),

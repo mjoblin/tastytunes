@@ -7,6 +7,7 @@ import { resolveContent } from "../media/resolveContent";
 import { getSettings } from "../data/persist";
 import { pools as indexPools } from "../media/mediaIndex";
 import { albumTracksOf, type MediaNode } from "@shared/model";
+import { nameKey } from "@shared/keys";
 
 /**
  * Album art from the audio file itself (0.8.0). Some media servers shrink
@@ -199,8 +200,6 @@ async function readEmbedded(url: string): Promise<EmbeddedArt | null> {
   return data ? toDisplay(data) : null;
 }
 
-const lc = (v: string | null | undefined): string => (v ?? "").trim().toLowerCase();
-
 /** The album's tracks in running order, from the index, for a track we know
  *  by server + id — the siblings whose files may carry the cover. */
 function albumSiblings(serverUdn: string, objectId: string): MediaNode[] {
@@ -211,11 +210,11 @@ function albumSiblings(serverUdn: string, objectId: string): MediaNode[] {
   const album =
     pool.albums.find(
       (a) =>
-        lc(a.title) === lc(track.album) &&
+        nameKey(a.title) === nameKey(track.album) &&
         (!track.albumArtist ||
-          lc(a.artist) === lc(track.albumArtist) ||
-          lc(a.artist) === lc(track.artist)),
-    ) ?? pool.albums.find((a) => lc(a.title) === lc(track.album));
+          nameKey(a.artist) === nameKey(track.albumArtist) ||
+          nameKey(a.artist) === nameKey(track.artist)),
+    ) ?? pool.albums.find((a) => nameKey(a.title) === nameKey(track.album));
   return album ? albumTracksOf(album, pool) : [track];
 }
 
@@ -235,7 +234,7 @@ export async function embeddedArtFor(
   const siblings = albumSiblings(target.serverUdn, target.objectId);
   const first = siblings[0];
   const key = first?.album
-    ? `alb|${target.serverUdn}|${lc(first.albumArtist ?? first.artist)}|${lc(first.album)}`
+    ? `alb|${target.serverUdn}|${nameKey(first.albumArtist ?? first.artist)}|${nameKey(first.album)}`
     : `obj|${target.serverUdn}|${target.objectId}`;
   if (cache.has(key)) return cache.get(key) ?? null;
   // the track itself first, then its siblings in running order (a few at most)

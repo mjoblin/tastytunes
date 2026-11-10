@@ -30,7 +30,25 @@ describe("the landing's row", () => {
     expect(landingRowIndex(rows, { title: "Missing", secs: 100 })).toBe(-1);
   });
 
+  it("takes the id's row even at the top, and even when the title has changed since", () => {
+    expect(landingRowIndex(rows, { title: "Opening (Remastered)", id: "i1" })).toBe(0);
+  });
+
+  it("counts a length exactly two seconds off as the same track", () => {
+    expect(landingRowIndex(rows, { title: "Close Your Eyes", secs: 277 })).toBe(3);
+    expect(landingRowIndex(rows, { title: "Close Your Eyes", secs: 278 })).toBe(1);
+  });
+
+  it("with no twin within the slack, takes the first of the title, not the nearest", () => {
+    expect(landingRowIndex(rows, { title: "Close Your Eyes", secs: 100 })).toBe(1);
+  });
+
   it("takes the nearer length when both twins fall within the slack", () => {
+    const first: LandingRow[] = [
+      { title: "Reprise", id: null, secs: 121 },
+      { title: "Reprise", id: null, secs: 120 },
+    ];
+    expect(landingRowIndex(first, { title: "Reprise", secs: 121 })).toBe(0);
     const close: LandingRow[] = [
       { title: "Reprise", id: null, secs: 120 },
       { title: "Reprise", id: null, secs: 121 },

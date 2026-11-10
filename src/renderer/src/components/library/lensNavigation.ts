@@ -1,7 +1,8 @@
 import { albumOfTrack, trackArtists, type MediaIndexPools, type MediaNode } from "@shared/model";
 import { focusArtistsLens } from "@/components/library/LibraryLenses";
-import type { Crumb } from "@/screens/LibraryScreen";
+import type { Crumb } from "@/components/library/libraryPlaces";
 import type { LandingTrack } from "@/components/library/landing";
+import { nameKey } from "@shared/keys";
 
 // The Library's lens navigation, lifted out of LibraryScreen (2026-09-10, the
 // landOn hygiene round): entering and leaving the three lenses, the albums and
@@ -92,12 +93,12 @@ export function lensNavigation(d: {
   const knownArtist = (name: string): string => {
     const pools = d.lensPools ?? [];
     const knows = (n: string): boolean => {
-      const k = n.trim().toLowerCase();
+      const k = nameKey(n);
       return pools.some(
         (p) =>
-          p.artists.some((a) => a.title.trim().toLowerCase() === k) ||
-          p.albums.some((a) => (a.artist ?? "").trim().toLowerCase() === k) ||
-          p.tracks.some((t) => trackArtists(t).some((x) => x.trim().toLowerCase() === k)),
+          p.artists.some((a) => nameKey(a.title) === k) ||
+          p.albums.some((a) => nameKey(a.artist) === k) ||
+          p.tracks.some((t) => trackArtists(t).some((x) => nameKey(x) === k)),
       );
     };
     if (knows(name)) return name;

@@ -108,8 +108,8 @@ export function useLyrics(): {
       750,
     );
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- trackKey covers the query fields
-  }, [trackKey, settled.key]);
+    // trackKey is these four joined, so listing them asks nothing more
+  }, [trackKey, settled.key, artist, duration, meta.album, meta.title]);
 
   const [status, setStatus] = useState<LyricsStatus>("loading");
   const [result, setResult] = useState<LyricsResult | null>(null);

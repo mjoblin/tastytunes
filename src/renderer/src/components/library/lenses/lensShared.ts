@@ -6,6 +6,7 @@ import {
   type MediaNode,
 } from "@shared/model";
 import { compareRecentlyAdded } from "@shared/recentlyAdded";
+import { nameKey } from "@shared/keys";
 
 // The library lenses: OUR views over the union of every ready index —
 // alternative paths to the same leaf views the native flow uses, never a
@@ -70,7 +71,6 @@ export interface LensActions {
   analyzeTracks?(chosen: MediaNode[], label: string): void;
 }
 
-export const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
 export const nodeKey = (n: MediaNode): string => `${n.serverUdn ?? ""}|${n.id}`;
 
 /** One pill that opens a picker popover — for bounded facets (decades) that
@@ -88,7 +88,7 @@ export function genreOptionsOf(
   const counts = new Map<string, { label: string; count: number }>();
   for (const n of nodes) {
     for (const g of n.genre ?? []) {
-      const k = lc(g);
+      const k = nameKey(g);
       const cur = counts.get(k);
       if (cur) cur.count++;
       else counts.set(k, { label: g, count: 1 });
@@ -229,12 +229,12 @@ export function whichCopy(
   const all = copies.includes(a) ? copies : [a, ...copies];
   const folderOf = (n: MediaNode): string | null => {
     const f = n.titlePath?.[n.titlePath.length - 1] ?? null;
-    return f && lc(f) !== lc(n.title) ? f : null;
+    return f && nameKey(f) !== nameKey(n.title) ? f : null;
   };
   const facts = [...(formatShown ? [] : [formatOf]), folderOf, folderPlaces(all)];
   for (const fact of facts) {
     const mine = fact(a);
-    if (mine && all.every((c) => c === a || lc(fact(c)) !== lc(mine))) return mine;
+    if (mine && all.every((c) => c === a || nameKey(fact(c)) !== nameKey(mine))) return mine;
   }
   return `Copy ${all.indexOf(a) + 1}`;
 }
@@ -248,7 +248,7 @@ function folderPlaces(copies: readonly MediaNode[]): (n: MediaNode) => string | 
   let shared = 0;
   while (
     walked.length > 0 &&
-    walked.every((p) => shared < p.length && lc(p[shared]) === lc(walked[0][shared]))
+    walked.every((p) => shared < p.length && nameKey(p[shared]) === nameKey(walked[0][shared]))
   )
     shared++;
   return (n) => {
@@ -308,7 +308,7 @@ export function filterScopeCounts(
   tracks: readonly Pick<MediaNode, "title" | "artist" | "album" | "year">[],
   filter: string,
 ): Record<"all" | FilterScope, number> {
-  const words = filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const words = nameKey(filter).split(/\s+/).filter(Boolean);
   const counts = { all: 0, title: 0, artist: 0, album: 0 };
   const has = (text: string): boolean => words.every((w) => text.includes(w));
   for (const t of tracks) {

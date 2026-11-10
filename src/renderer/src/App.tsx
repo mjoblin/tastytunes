@@ -25,7 +25,7 @@ import { InfoModal } from "@/components/overlays/InfoModal";
 import { MediaInfoModal } from "@/components/overlays/MediaInfoModal";
 import { ArtistPictureHost } from "@/components/library/ArtistPictureDialog";
 import { useArtistChoicesKept } from "@/lib/artistPictures";
-import { useStopSkippedAnalysis } from "@/components/media/Waveform";
+import { useStopSkippedAnalysis } from "@/components/media/waveformAnalysis";
 import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
 import { SurfaceBoundary } from "@/components/chrome/SurfaceBoundary";
 import { DisplayMode } from "@/components/playback/DisplayMode";

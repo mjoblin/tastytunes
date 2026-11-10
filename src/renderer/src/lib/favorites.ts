@@ -15,6 +15,7 @@ import { queueWrite, tt } from "@/api";
 import { useStore } from "@/store";
 import { cachedPools } from "@/hooks/useIndexPools";
 import { isAlbumClass } from "@/lib/media";
+import { nameKey } from "@shared/keys";
 
 // Renderer-side favorites helpers: whether a copy is hearted, toggling, and
 // playing media favorites by content identity (stored objectId fast path →
@@ -96,7 +97,7 @@ export async function toggleFavorite(
 }
 
 const eq = (a: string | null | undefined, b: string | null | undefined): boolean =>
-  (a ?? "").trim().toLowerCase() === (b ?? "").trim().toLowerCase();
+  nameKey(a) === nameKey(b);
 
 /** Does a library node content-match a media favorite (the resolve target)? */
 export function favoriteMatchesNode(fav: FavoriteMedia, n: MediaNode): boolean {

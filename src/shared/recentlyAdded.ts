@@ -9,8 +9,7 @@
 // stamps the albums) and the renderer (the Library's shelf and the Albums lens's sort).
 
 import type { MediaNode } from "./model/media";
-
-const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
+import { nameKey } from "@shared/keys";
 
 /** A server's own recently-added list, by its name: the names the surveyed servers use (and a
  *  few near them), with any brackets or punctuation around them set aside ("[Recently Added]"). */
@@ -27,7 +26,7 @@ const RECENT_LIST_NAMES = new Set([
 
 export function isRecentListTitle(title: string): boolean {
   return RECENT_LIST_NAMES.has(
-    lc(title)
+    nameKey(title)
       .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")
       .replace(/\s+/g, " "),
   );
@@ -36,7 +35,7 @@ export function isRecentListTitle(title: string): boolean {
 /** Containers that may hold the list one level down (Emby, Jellyfin and MiniDLNA keep it under
  *  Music, UMS under its Media Library's Audio). */
 export function mayHoldRecentList(title: string): boolean {
-  return /^(music|audio|media library|my music)$/.test(lc(title));
+  return /^(music|audio|media library|my music)$/.test(nameKey(title));
 }
 
 /** A picture address's path, the part that names the picture (a server's host can change). */
@@ -54,7 +53,7 @@ export function looseAlbumKey(
   title: string | null | undefined,
   artist: string | null | undefined,
 ): string {
-  return `${lc(title)}|${lc(artist)}`;
+  return `${nameKey(title)}|${nameKey(artist)}`;
 }
 
 /**

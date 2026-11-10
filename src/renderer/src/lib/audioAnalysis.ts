@@ -18,7 +18,7 @@ import {
   type KnownStats,
 } from "@shared/model";
 import { albumDr14 } from "@/lib/dr14";
-import { analyzeTrack, storedIsCurrent } from "@/components/media/Waveform";
+import { analyzeTrack, storedIsCurrent } from "@/components/media/waveformAnalysis";
 
 const pending = new Set<string>();
 let queueTail: Promise<unknown> = Promise.resolve();

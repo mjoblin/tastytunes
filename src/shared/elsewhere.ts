@@ -6,6 +6,7 @@ import {
   type ListeningEvent,
   type MediaIndexPools,
 } from "./model";
+import { nameKey } from "@shared/keys";
 
 /**
  * HEARD ELSEWHERE (0.8.0, the History screen's Elsewhere tab): the artists the
@@ -80,8 +81,6 @@ export function splitRadioTitle(
     : { artist: null, song: title.trim() };
 }
 
-const lc = (s: string | null | undefined): string => (s ?? "").trim().toLowerCase();
-
 /** A tally of names, read back most-counted first. */
 class Tally {
   private counts = new Map<string, number>();
@@ -112,12 +111,12 @@ export function heardElsewhere(
   const creditsBy = new Map<string, number>();
   for (const pool of pools ?? []) {
     for (const a of pool.albums) {
-      const k = lc(a.artist);
+      const k = nameKey(a.artist);
       if (k) albumsBy.set(k, (albumsBy.get(k) ?? 0) + 1);
     }
     for (const t of pool.tracks)
       for (const name of trackArtists(t)) {
-        const k = lc(name);
+        const k = nameKey(name);
         if (k) creditsBy.set(k, (creditsBy.get(k) ?? 0) + 1);
       }
   }
@@ -133,7 +132,7 @@ export function heardElsewhere(
     at: number,
     owned: () => boolean,
   ): void => {
-    const key = `${editionless(title)}|${lc(artist)}`;
+    const key = `${editionless(title)}|${nameKey(artist)}`;
     let t = tracks.get(key);
     if (!t) {
       t = {
@@ -183,7 +182,7 @@ export function heardElsewhere(
 
   const byArtist = new Map<string, Array<HeardTrack & { places: Tally }>>();
   for (const t of tracks.values()) {
-    const k = lc(t.artist) || "unknown";
+    const k = nameKey(t.artist) || "unknown";
     const list = byArtist.get(k);
     if (list) list.push(t);
     else byArtist.set(k, [t]);

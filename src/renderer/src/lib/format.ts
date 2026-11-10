@@ -1,5 +1,6 @@
 import { isHiRes, LOSSLESS_CODECS, type MediaFormat } from "@shared/model";
 import { cdToc, isCdPlayback, type ZoneNowPlaying, type ZonePlayState } from "@shared/smoip";
+import { nameKey } from "@shared/keys";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -217,10 +218,8 @@ export function controlSet(nowPlaying: ZoneNowPlaying | null): Set<string> {
  * matches across artist + title.
  */
 export function matchesFilter(filter: string, fields: Array<string | null | undefined>): boolean {
-  const hay = fields.filter(Boolean).join(" ").toLowerCase();
-  return filter
-    .trim()
-    .toLowerCase()
+  const hay = nameKey(fields.filter(Boolean).join(" "));
+  return nameKey(filter)
     .split(/\s+/)
     .every((token) => hay.includes(token));
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { Heart, RadioTower, RotateCw, Search, X } from "lucide-react";
 import type { RadioStation } from "@shared/model";
 import type { Favorite } from "@shared/model";
@@ -19,6 +19,7 @@ import { cx } from "@/lib/format";
 import { Chip, ScreenTitle, GAP_WITHIN } from "@/components/chrome/Chrome";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { Lru } from "@/lib/lru";
+import { nameKey } from "@shared/keys";
 
 /**
  * Internet radio via the radio-browser.info community directory (keyless —
@@ -157,14 +158,14 @@ export function RadioScreen(): React.JSX.Element {
   };
   // Restore path: screen remounts with a chip selected but nothing cached
   // (e.g. its earlier load came back empty) — fetch again.
-  useEffect(() => {
+  const restoreCategory = useEffectEvent(() => {
     if (cat != null && cat !== FAV_CAT && catStations == null) {
       catSeq.current++;
       loadCat(cat);
     }
     // mount-only
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  });
+  useEffect(() => restoreCategory(), []);
   const dropCat = (): void => {
     if (cat == null) return;
     catSeq.current++;
@@ -320,7 +321,7 @@ export function RadioScreen(): React.JSX.Element {
           caption="TastyTunes isn't contacting the radio directory. Your favorited stations still play. Turn the directory back on in Settings › Connections to search for new ones."
         >
           <button
-            onClick={() => jumpToSettingsTab("behavior")}
+            onClick={() => jumpToSettingsTab("connections")}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg ring-1 ring-edge bg-panel/70 text-[12.5px] text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70 transition-all"
           >
             Open Settings
@@ -360,8 +361,7 @@ export function RadioScreen(): React.JSX.Element {
             <div {...keys.container} aria-label={heading} className="space-y-1.5">
               <ListKeysContext.Provider value={true}>
                 {shown.map((st, i) => {
-                  const playing =
-                    playingName != null && st.name.trim().toLowerCase() === playingName;
+                  const playing = playingName != null && nameKey(st.name) === playingName;
                   const favorited = favUrls.has(st.url);
                   const heart = (): void =>
                     void toggleFavorite({

@@ -183,6 +183,8 @@ export type PushMessage =
   | { kind: "trayPanel"; visible: boolean }
   | { kind: "sleep"; sleep: SleepTimer | null }
   | { kind: "recalledPreset"; id: number | null }
+  /** A preset recall came to nothing: main decided (main/device/recallWatch), the repair chip shows. */
+  | { kind: "presetRecallDead"; id: number }
   | { kind: "mcpStatus"; status: McpStatus }
   | { kind: "scheduleMissed"; missed: MissedSchedule | null }
   | { kind: "mediaIndex"; statuses: MediaIndexStatus[] }
@@ -205,7 +207,14 @@ export type StreamerCommand =
   | { type: "setRepeat"; mode: "all" | "off" | "one" }
   | { type: "setShuffle"; mode: "all" | "off" }
   /** skipVolume: a schedule bringing its own volume mutes the preset's override. */
-  | { type: "recallPreset"; presetId: number; skipVolume?: boolean }
+  | {
+      type: "recallPreset";
+      presetId: number;
+      skipVolume?: boolean;
+      /** The caller sees the preset already playing (it is lit), so a recall that changes nothing
+       *  has not come to nothing (main/device/recallWatch). */
+      alreadyPlaying?: boolean;
+    }
   | { type: "power"; power: "ON" | "NETWORK" | "toggle" }
   /** Put the streamer back as it was when it went to sleep (see HeldState). */
   | { type: "resumeHeld" }

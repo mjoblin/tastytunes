@@ -3,6 +3,7 @@
 // per IP and an identifying User-Agent (violators get 100% declined) — every
 // MB call from anywhere in the app goes through the single spacing gate here.
 import { loggedFetch, USER_AGENT } from "../netlog";
+import type { ServiceId } from "@shared/services";
 
 // Env overrides let test harnesses point each hop at a local server.
 export const MB = process.env["TASTYTUNES_MB_URL"] ?? "https://musicbrainz.org";
@@ -17,7 +18,7 @@ export type Fetched =
   | { kind: "missing" }
   | { kind: "error"; status?: number; dropped?: boolean };
 
-export async function getJson(service: string, url: string): Promise<Fetched> {
+export async function getJson(service: ServiceId, url: string): Promise<Fetched> {
   try {
     const res = await loggedFetch(service, url, {
       headers: { "user-agent": USER_AGENT, accept: "application/json" },

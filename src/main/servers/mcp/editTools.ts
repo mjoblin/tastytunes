@@ -3,7 +3,7 @@ import { type Schedule, trackPosition } from "@shared/model";
 import { resumeTarget } from "@shared/model";
 import { getSettings } from "../../data/persist";
 import { randomUUID } from "node:crypto";
-import { browseChildrenOf, presetSave, queueAdd } from "../../media/upnpBrowser";
+import { browseChildrenOf, presetSave } from "../../media/upnpBrowser";
 import { pools as indexPools } from "../../media/mediaIndex";
 import {
   type ToolContext,
@@ -45,6 +45,9 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
     resume_playback: defineTool({
       handler: async () => {
         const s = ctx.connected();
+        // awake before the album is browsed, which can be on the streamer's own drive (the queue
+        // write wakes it in any case: DeviceManager.queueAdd)
+        await ctx.dm.ensureAwake();
         const offer = await ctx.resumeOffer();
         if ("reason" in offer) return err(offer.reason);
         // the album's OWN browse listing supplies the container and track ids —
@@ -64,7 +67,7 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           return err("The album could not be browsed as an album-sized container.");
         const target = resumeTarget(offer.run, tracks);
         if (!target) return err("The run reached the album's end; nothing to resume.");
-        await queueAdd(s.connection.host, udn, fresh.id, "PLAY_FROM_HERE", target.id);
+        await ctx.dm.queueAdd(udn, fresh.id, "PLAY_FROM_HERE", target.id);
         return ok(
           `Resuming "${offer.node.title}" from track ${tracks.indexOf(target) + 1}, "${target.title}".`,
         );

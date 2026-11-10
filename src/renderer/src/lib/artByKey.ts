@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { Lru } from "@/lib/lru";
@@ -20,9 +20,9 @@ const stale = new Set<string>();
 let seenIndex: string | null = null;
 
 export function useArtByKeys(keys: readonly string[]): Record<string, string | null> {
-  // gen counts landed lookups: the result memo and the missing list re-read
-  // the cache on each landing (keys alone never change across a landing)
-  const [gen, bump] = useState(0);
+  // a landed lookup re-renders, and the render reads the cache afresh (keys alone never change
+  // across a landing)
+  const [, bump] = useState(0);
   // re-render when a lookup lands, as long as the component is still mounted
   // (a per-effect stale flag would swallow the landing whenever the list
   // re-rendered mid-flight, and the art would wait for an unrelated render)
@@ -46,13 +46,12 @@ export function useArtByKeys(keys: readonly string[]): Record<string, string | n
     for (const [k] of cache) stale.add(k);
     bump((n) => n + 1);
   }, [indexSig]);
-  const missing = useMemo(
-    () => keys.filter((k) => (!cache.has(k) || stale.has(k)) && !inFlight.has(k)),
-    // gen and indexSig re-read the cache; they are not read directly
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [keys, gen, indexSig],
-  );
-  useEffect(() => {
+  // what to ask for: the keys with no answer, or a stale one, not already asked. The cache is module
+  // state, so this is read each render and the ask runs when the list's content changes (0.15.0:
+  // before, a memo keyed on a landing counter it never read)
+  const missing = keys.filter((k) => (!cache.has(k) || stale.has(k)) && !inFlight.has(k));
+  const missingKey = missing.join("\u0000");
+  const ask = useEffectEvent(() => {
     if (missing.length === 0) return;
     inFlight = new Set([...inFlight, ...missing]);
     void tt
@@ -75,15 +74,16 @@ export function useArtByKeys(keys: readonly string[]): Record<string, string | n
         for (const k of missing) inFlight.delete(k);
         if (mounted.current) bump((n) => n + 1);
       });
-  }, [missing]);
+  });
+  useEffect(() => ask(), [missingKey]);
+  // the pictures found, read from the cache each render and handed out as one object while they
+  // stay the same, so a render between landings changes nothing downstream
+  const found = keys.map((k) => cache.get(k) ?? "").join("\u0000");
   return useMemo(() => {
     const out: Record<string, string | null> = {};
-    for (const k of keys) {
-      const v = cache.get(k);
-      if (v != null) out[k] = v;
-    }
+    found.split("\u0000").forEach((v, i) => {
+      if (v) out[keys[i]] = v;
+    });
     return out;
-    // the cache is module state; gen marks each landing
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keys, gen]);
+  }, [keys, found]);
 }

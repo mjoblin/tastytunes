@@ -64,6 +64,10 @@ import type { ResolvedContent } from "../media/resolveContent";
 import { scrobbler } from "../lookups/scrobbler";
 import { getNetRequests } from "../netlog";
 import { errorMessage } from "@shared/guards";
+import { queueAdd } from "../media/upnpBrowser";
+import { demoHost, stopDemoStreamer } from "../servers/demoStreamer";
+import type { MediaQueueAction } from "@shared/model";
+import { RecallWatch, recallSignature } from "./recallWatch";
 
 interface Cache {
   playState: ZonePlayState | null;
@@ -243,7 +247,23 @@ export class DeviceManager {
     }
   }
 
+  // one clock for a recall that loaded nothing (0.15.0): every recall the app sends is watched
+  // here; the record and the windows hear the answer
+  private readonly recallWatch = new RecallWatch({
+    // what a recall changes in the play state, never the queue list a wake re-reads (recallWatch)
+    signature: () => recallSignature(this.cache.playState),
+    awake: () => this.cache.systemPower == null || this.cache.systemPower.power === "ON",
+    onDead: (id) => {
+      listeningRecord.recallCameToNothing(id);
+      this.push({ kind: "presetRecallDead", id });
+    },
+  });
+
   connect(host: string, opts?: { remember?: boolean; demo?: boolean }): void {
+    this.recallWatch.cancel();
+    // Leaving the demo for a real device shuts the demo server down (0.15.0: here, so no caller
+    // has to remember it; an agent's connect_device left it running)
+    if (demoHost() && host !== demoHost()) stopDemoStreamer();
     // Renderer surfaces label the connection ("built-in demo") off this flag.
     this.demo = opts?.demo === true;
     // A recall remembered from one device means nothing on another.
@@ -302,6 +322,7 @@ export class DeviceManager {
   }
 
   disconnect(): void {
+    this.recallWatch.cancel();
     if (this.sleeper.current) this.setSleep(null);
     this.socket?.close();
     this.socket = null;
@@ -311,6 +332,25 @@ export class DeviceManager {
     // Deliberate — no outage clock, no stranded courtesy.
     this.disconnectedSince = null;
     this.setConnection({ phase: "idle" });
+    stopDemoStreamer();
+  }
+
+  /**
+   * Put a media server's container or track on the streamer's queue (0.15.0: one home for the
+   * wake every caller had to remember, which an agent's resume_playback forgot). A play is a wake
+   * intent: queue writes to a standby streamer land on deaf ears (probed 2026-07-23).
+   */
+  async queueAdd(
+    serverUdn: string,
+    objectId: string,
+    action: MediaQueueAction,
+    playFromId?: string,
+    opts?: { confirmLarge?: boolean },
+  ): Promise<void> {
+    await this.ensureAwake();
+    const conn = this.snapshot().connection;
+    if (conn.phase !== "connected") throw new Error("not connected to a streamer");
+    await queueAdd(conn.host, serverUdn, objectId, action, playFromId, opts);
   }
 
   /** Whether `socket` is still this manager's and open, waiting up to `ms` for a reconnect. */
@@ -601,6 +641,11 @@ export class DeviceManager {
       case "resumeHeld":
         return this.resumeHeld(socket);
       case "recallPreset": {
+        // a recall of what already plays rightly changes nothing: the caller says so when it sees
+        // the preset lit, and the app's own last recall still playing says so too
+        const already =
+          cmd.alreadyPlaying === true ||
+          (this.lastRecalledPresetId === cmd.presetId && this.cache.playState?.state === "play");
         this.setRecalledPreset(cmd.presetId);
         listeningRecord.openContext({
           kind: "preset",
@@ -609,6 +654,7 @@ export class DeviceManager {
           streamer: this.cache.systemInfo?.udn ?? null,
         });
         socket.send("/zone/recall_preset", { preset: cmd.presetId });
+        this.recallWatch.recalled(cmd.presetId, already);
         // Feature 10: the preset's local volume override rides along on every
         // recall through the app — after a beat for the source switch — unless
         // the caller (a schedule with its own volume) opts out.
@@ -717,6 +763,7 @@ export class DeviceManager {
           streamer: this.cache.systemInfo?.udn ?? null,
         });
         this.sleeper.boundaryCheck(this.cache.playState);
+        this.recallWatch.onPlayback();
         scrobbler.onPlayState(this.cache.playState);
         listeningRecord.onPlayState(
           this.cache.playState,
@@ -745,6 +792,7 @@ export class DeviceManager {
         listeningRecord.onQueue(
           (this.cache.queue.items ?? []).map((i) => i.id).filter((id): id is number => id != null),
         );
+        // the queue list is not what the recall watch compares (the app re-reads it on a wake)
         // Mid-batch (playlist activation) the cache stays current but the
         // renderer hears nothing — one authoritative push lands at the end.
         if (this.queueOps.batching) return;
@@ -779,6 +827,7 @@ export class DeviceManager {
         // survive standby, USB queues are dropped; USB remount also lags,
         // hence the second, late refetch).
         if (prev != null && prev !== "ON" && this.cache.systemPower.power === "ON") {
+          this.recallWatch.onAwake();
           for (const delay of [2500, 10000]) {
             setTimeout(() => this.socket?.isOpen() && this.socket.send("/queue/list"), delay);
           }
