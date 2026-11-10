@@ -1,6 +1,6 @@
 // THE APPEARANCE TAB (moved out of SettingsScreen.tsx as it was, 0.16.0's tidy before the design pass:
 // each tab its own section, as Libraries, History, Updates, Schedules and AI agents already were).
-import { Disc3, Monitor, Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Sun } from "lucide-react";
 import {
   type AccentChoice,
   type AlignH,
@@ -130,16 +130,7 @@ export function AppearanceSection({ settings, save }: SectionProps): React.JSX.E
           label="Accent color"
           hint="The color of what you click and choose. Album art takes the playing album's color. The tastytunes gold (the logo, the playback controls and the playing markers) never changes."
         >
-          <Segmented<AccentChoice>
-            value={settings.accent}
-            onChange={(accent) => void save({ accent })}
-            options={[
-              { value: "sand", label: "Sand", icon: <AccentDot name="sand" /> },
-              { value: "sage", label: "Sage", icon: <AccentDot name="sage" /> },
-              { value: "teal", label: "Dusty teal", icon: <AccentDot name="teal" /> },
-              { value: "art", label: "Album art", icon: <Disc3 size={12} /> },
-            ]}
-          />
+          <AccentSwatches value={settings.accent} onChange={(accent) => void save({ accent })} />
         </SettingRow>
 
         <Toggle
@@ -187,13 +178,51 @@ export function AppearanceSection({ settings, save }: SectionProps): React.JSX.E
   );
 }
 
-/** A choice's own color, in the theme's form (styles.css names each once per theme). */
-function AccentDot({ name }: { name: Exclude<AccentChoice, "art"> }): React.JSX.Element {
+/** The accent's choices, a swatch each, the chosen one ringed and named beside them: a color is
+ *  chosen by looking, and four names would not fit a row (macOS's own accent picker is the model).
+ *  Album art's swatch is a blend of soft colors, the album's being any of them. */
+const ACCENTS: { id: AccentChoice; label: string }[] = [
+  { id: "sand", label: "Sand" },
+  { id: "sage", label: "Sage" },
+  { id: "teal", label: "Dusty teal" },
+  { id: "art", label: "Album art" },
+];
+const ART_SWATCH =
+  "conic-gradient(from 200deg, rgb(var(--accent-sand-rgb)), rgb(196 150 150), rgb(160 146 186), rgb(var(--accent-teal-rgb)), rgb(var(--accent-sage-rgb)), rgb(var(--accent-sand-rgb)))";
+
+function AccentSwatches({
+  value,
+  onChange,
+}: {
+  value: AccentChoice;
+  onChange(accent: AccentChoice): void;
+}): React.JSX.Element {
   return (
-    <span
-      aria-hidden
-      className="h-2.5 w-2.5 rounded-full ring-1 ring-edge2"
-      style={{ background: `rgb(var(--accent-${name}-rgb))` }}
-    />
+    <div className="flex items-center gap-3 shrink-0">
+      <span className="text-[13px] text-dim whitespace-nowrap">
+        {ACCENTS.find((a) => a.id === value)?.label}
+      </span>
+      <div role="group" aria-label="Accent color" className="flex items-center gap-2.5">
+        {ACCENTS.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            aria-label={a.label}
+            aria-pressed={value === a.id}
+            data-tip={a.label}
+            onClick={() => onChange(a.id)}
+            className={cx(
+              "tip-top h-6 w-6 shrink-0 rounded-full transition-[box-shadow,transform] motion-safe:hover:scale-110",
+              value === a.id
+                ? "ring-2 ring-ink/70 ring-offset-2 ring-offset-panel"
+                : "ring-1 ring-edge2",
+            )}
+            style={{
+              background: a.id === "art" ? ART_SWATCH : `rgb(var(--accent-${a.id}-rgb))`,
+            }}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
