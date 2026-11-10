@@ -1,8 +1,8 @@
 /**
  * Settings read from an older file: Accent follows album art became one of the accent's choices,
  * so a file that had it on keeps the album's color, one that had it off (or never had it) gets the
- * default, a stored choice is kept, an unknown one heals to the default, and the retired switch
- * leaves the file at the next write.
+ * default, a stored choice is kept, an unknown one heals to the default; and retired settings (that
+ * switch, the ambient art's coverage and vignette) leave the file at the next write.
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -39,12 +39,22 @@ describe("the accent read from a stored file", () => {
     expect((await load({ accent: "plum" })).settings.accent).toBe("sand");
   });
 
+  it("drops the ambient art's retired coverage and vignette, read and written", async () => {
+    const { settings, persist, path } = await load({ ambientCoverage: "main", vignette: false });
+    expect("ambientCoverage" in settings).toBe(false);
+    expect("vignette" in settings).toBe(false);
+    persist.updateSettings({});
+    const written = JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
+    expect("ambientCoverage" in written).toBe(false);
+    expect("vignette" in written).toBe(false);
+  });
+
   it("drops the retired switch from the file at the next write", async () => {
-    const { persist, path } = await load({ accentFollowsArt: true, vignette: false });
+    const { persist, path } = await load({ accentFollowsArt: true, theme: "light" });
     persist.updateSettings({});
     const written = JSON.parse(readFileSync(path, "utf-8")) as Record<string, unknown>;
     expect(written.accent).toBe("art");
-    expect(written.vignette).toBe(false);
+    expect(written.theme).toBe("light");
     expect("accentFollowsArt" in written).toBe(false);
   });
 });

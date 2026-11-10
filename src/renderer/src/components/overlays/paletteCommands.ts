@@ -4,9 +4,7 @@ import {
   AudioLines,
   BadgeInfo,
   Bluetooth,
-  Bot,
   Cable,
-  CircleDot,
   Disc3,
   Globe,
   HardDrive,
@@ -14,7 +12,6 @@ import {
   History,
   Info,
   Keyboard,
-  LayoutGrid,
   Library,
   ListOrdered,
   Maximize2,
@@ -24,6 +21,7 @@ import {
   Palette,
   PictureInPicture2,
   Play,
+  Plug,
   Power,
   Radio,
   RefreshCw,
@@ -733,30 +731,23 @@ export function buildCommands(ctx: CommandContext): Command[] {
     run: () => jumpToSettingsTab("schedules"),
   });
   cmds.push({
-    id: "settings:agents",
-    label: "Open AI agents",
+    id: "settings:integrations",
+    label: "Open Integrations",
     group: "View",
-    icon: Bot,
-    keywords: "settings mcp tools model context protocol",
-    run: () => jumpToSettingsTab("agents"),
-  });
-  // the other six tabs, so a setting is findable by what it governs (the terminology
+    icon: Plug,
+    keywords:
+      "settings ai agents mcp tools model context protocol action links url scheme stream deck shortcuts",
+    run: () => jumpToSettingsTab("integrations"),
+  }); // the other tabs, so a setting is findable by what it governs (the terminology
   // pass, 2026-09-17: "privacy", "tracking" and "lyrics" found nothing here)
   cmds.push({
     id: "settings:appearance",
     label: "Open Appearance",
     group: "View",
     icon: Palette,
-    keywords: "settings theme font ambient art accent audio analysis waveform",
+    keywords:
+      "settings theme font ambient art accent color audio analysis waveform left nav sidebar hide reorder",
     run: () => jumpToSettingsTab("appearance"),
-  });
-  cmds.push({
-    id: "settings:layout",
-    label: "Open Layout",
-    group: "View",
-    icon: LayoutGrid,
-    keywords: "settings cards left nav hide reorder",
-    run: () => jumpToSettingsTab("layout"),
   });
   cmds.push({
     id: "settings:behavior",
@@ -782,14 +773,6 @@ export function buildCommands(ctx: CommandContext): Command[] {
     icon: History,
     keywords: "settings listening record recent list tracking privacy clear",
     run: () => jumpToSettingsTab("history"),
-  });
-  cmds.push({
-    id: "settings:lamps",
-    label: "Open Status lamps",
-    group: "View",
-    icon: CircleDot,
-    keywords: "settings lamps led legend lossless hi-res",
-    run: () => jumpToSettingsTab("lamps"),
   });
   cmds.push({
     id: "update:check",

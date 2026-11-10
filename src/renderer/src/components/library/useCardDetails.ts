@@ -16,8 +16,8 @@ export interface CardDetails extends CardFormat {
 const formatsOf = new WeakMap<LensIndex, Map<string, CardFormat>>();
 
 /**
- * THE FORMAT LINE FOR A SURFACE'S ALBUM CARDS (0.13.0-rc.4, his picks on "Card details": the
- * status lamp's glyph, the format, DR's badge), or null while Settings › Layout turns it off. Each
+ * THE FORMAT LINE FOR A SURFACE'S ALBUM CARDS (0.13.0-rc.4, "Card details": the
+ * status lamp's glyph, the format, DR's badge), or null while View options turns it off. Each
  * album's format comes from its own tracks (the lens index's tracksOf), made once per index, and
  * its DR from the album DR map once Audio analysis has measured it; a set of volumes reads every
  * volume's tracks and shows no single DR.
@@ -51,7 +51,7 @@ const trackFormats = new WeakMap<MediaNode, CardFormat>();
  * A TRACK CARD'S FORMAT LINE (0.13.0-rc.4, his picks on "View Options": the album cards' line on
  * the Tracks view's cards, with a switch of its own): the track's own format, and its DR and
  * loudness as the view measures them (`measured`, the Tracks lens's own reads); null while
- * Settings › Layout turns it off.
+ * View options turns it off.
  */
 export function useTrackCardDetails(
   measured: (t: MediaNode) => { dr: number | null; lufs: number | null },

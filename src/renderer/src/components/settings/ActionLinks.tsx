@@ -2,7 +2,7 @@ import { useState } from "react";
 import { URL_EXAMPLES, URL_SCHEME } from "@shared/urlActions";
 import { CopyRow, useCopied } from "@/components/settings/SettingsKit";
 
-// Settings › Behavior's list of tastytunes:// links (0.12.0, the URL scheme), one to copy for
+// Settings › Integrations' list of tastytunes:// links (0.12.0, the URL scheme), one to copy for
 // every verb, in shared/urlActions' order. A label for every example is required by the type,
 // so a verb added there is a compile error here until it is described.
 

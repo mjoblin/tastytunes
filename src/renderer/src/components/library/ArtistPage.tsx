@@ -69,7 +69,7 @@ export function ArtistPage({
   onOpenAlbum(node: MediaNode, track?: LandingTrack): void;
 }): React.JSX.Element {
   const index = useLensIndex(pools);
-  // each card's format line, while Settings › Layout shows it (useCardDetails)
+  // each card's format line, while View options shows it (useCardDetails)
   const detailsOf = useCardDetails(index);
   const key = nameKey(name);
   const artist = index.artists.find((a) => a.key === key) ?? null;

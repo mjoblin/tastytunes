@@ -124,10 +124,9 @@ export default function App(): React.JSX.Element {
 
   // Full-window ambient: the nav/bar drop their panel tint so the wash is even.
   const setAmbientWindowActive = useStore((s) => s.setAmbientWindowActive);
-  const ambientWindow = ambientVisible && settings.ambientCoverage === "window";
   useEffect(() => {
-    setAmbientWindowActive(ambientWindow);
-  }, [ambientWindow, setAmbientWindowActive]);
+    setAmbientWindowActive(ambientVisible);
+  }, [ambientVisible, setAmbientWindowActive]);
 
   const content = (() => {
     if (screen === "device") return <DeviceScreen />;
@@ -167,18 +166,12 @@ export default function App(): React.JSX.Element {
 
   // Always mounted (with a null src when it shouldn't show) so the wash can
   // fade out on its own instead of vanishing in a frame.
-  const ambient = (
-    <AmbientArt
-      src={ambientVisible ? (ambientArtUrl ?? null) : null}
-      vignette={settings.vignette}
-    />
-  );
-  const coverWindow = settings.ambientCoverage === "window";
+  const ambient = <AmbientArt src={ambientVisible ? (ambientArtUrl ?? null) : null} />;
 
   return (
     <div className="relative h-full">
       {/* full-window ambient art, behind the translucent chrome */}
-      {coverWindow && ambient}
+      {ambient}
 
       <div className="relative h-full flex flex-col">
         <div className="flex-1 flex min-h-0 relative">
@@ -188,7 +181,6 @@ export default function App(): React.JSX.Element {
           </SurfaceBoundary>
           <main className="flex-1 min-w-0 min-h-0 relative">
             {/* main-area-only ambient art, behind the screen content */}
-            {!coverWindow && ambient}
             <div className="relative h-full">
               <SurfaceBoundary surface="this screen" shape="screen" resetKey={screen}>
                 {content}

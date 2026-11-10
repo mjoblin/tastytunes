@@ -26,7 +26,7 @@ export type ViewKind = "albums" | "artists" | "tracks" | "folders" | "queue" | "
 // Library's one choice before tracks had their own, and has no format line; a server's folders
 // share the albums' both (the one Library choice they always followed); the Queue has Rows, Cards
 // or Albums and Presets Rows or Cards, neither a format line (0.14.0). Card size, gap and Fill
-// rows are every card grid's, as in Settings › Layout.
+// rows are every card grid's.
 const layoutOf = (s: AppSettings, kind: ViewKind): QueueLayout =>
   kind === "tracks"
     ? s.lensTracksLayout
@@ -91,12 +91,12 @@ const session: { reopen: ViewKind | null; undos: number[] } = { reopen: null, un
 
 /**
  * VIEW OPTIONS (0.13.0-rc.4: one button with Rows or Cards inside, the sliders icon, every card
- * option in Settings › Layout, on the Library's views first). One button at a view's toolbar
+ * option, on the Library's views first; their only home since 0.16.0's settings diet). One button at a view's toolbar
  * end, beside Sort, in place of the Rows or Cards button it holds: Rows or Cards, the format
  * line's switch where the view has one, card size, gap and Fill rows (the cards follow a slider
  * as it moves), and on the albums' and tracks' menus a button that copies the other's Rows or
  * Cards and Format and DR (albums and tracks may differ, with an easy way to match them). The
- * same settings Settings › Layout holds, so the two always agree. NOTHING IN IT IS A ONE-WAY
+ * card settings are changed here and nowhere else. NOTHING IN IT IS A ONE-WAY
  * DOOR (playing with these settings never leaves the reader in an unwanted or unexpected
  * state): every change goes on the undo stack (Cmd-Z), the menu's own Undo steps back through
  * the changes made since it opened, and Reset to defaults puts everything it holds back, itself
@@ -320,7 +320,7 @@ function MenuRow({
 }
 
 /**
- * A setting's slider in the menu, over Settings › Layout's range. THE CARDS FOLLOW IT AS IT
+ * A setting's slider in the menu, over the setting's range. THE CARDS FOLLOW IT AS IT
  * MOVES: each value goes to the store
  * alone, at most once a frame, and only the release saves it (one save, one undo entry); a drag
  * abandoned with Escape puts back the value it began from (useSliderDraft).

@@ -7,7 +7,6 @@ import { tt } from "@/api";
 import { useStore } from "@/store";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { Segmented } from "@/components/controls/Segmented";
-import { ActionLinks } from "@/components/settings/ActionLinks";
 import {
   NumberField,
   SettingRow,
@@ -53,8 +52,6 @@ export function BehaviorSection({ settings, save }: SectionProps): React.JSX.Ele
           checked={settings.mediaKeys}
           onChange={(mediaKeys) => void save({ mediaKeys })}
         />
-
-        <ActionLinks />
 
         <Toggle
           label="Track-change notifications"

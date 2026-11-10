@@ -3,7 +3,7 @@ import { Loader2, MonitorSpeaker, RefreshCw } from "lucide-react";
 import { tt } from "@/api";
 import type { DiscoveredDevice } from "@shared/model";
 import { useStore } from "@/store";
-import { cx } from "@/lib/format";
+import { LED_TIPS, cx } from "@/lib/format";
 import { PopoverChrome } from "@/hooks/usePopover";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { FACT_SEP } from "@/lib/mediaFacts";
@@ -107,6 +107,7 @@ export function StreamerList({ onPick }: { onPick(): void }): React.JSX.Element 
             >
               <span
                 className={cx("led", isConnected ? "led-on" : isBusy ? "led-busy" : "led-off")}
+                data-tip={LED_TIPS[isConnected ? "on" : isBusy ? "busy" : "off"]}
               />
               <span className="flex-1 min-w-0">
                 <span

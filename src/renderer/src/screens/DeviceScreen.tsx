@@ -15,7 +15,7 @@ import { audioCaps } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
-import { cx } from "@/lib/format";
+import { LED_TIPS, cx } from "@/lib/format";
 import { forgetDevice, lastSeenLabel } from "@/lib/devices";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { Segmented } from "@/components/controls/Segmented";
@@ -154,6 +154,9 @@ export function DeviceScreen(): React.JSX.Element {
                     "led",
                     connection.phase === "connected" ? "led-on" : busyHost ? "led-busy" : "led-off",
                   )}
+                  data-tip={
+                    LED_TIPS[connection.phase === "connected" ? "on" : busyHost ? "busy" : "off"]
+                  }
                 />
                 <span className="text-[13.5px] flex-1">{statusText}</span>
                 {connection.phase !== "idle" && (

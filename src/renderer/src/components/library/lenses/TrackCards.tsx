@@ -36,7 +36,7 @@ export function TrackCards({
   selected: ReadonlySet<string>;
   /** What a card says under the title. */
   subtitleOf(t: MediaNode): string;
-  /** A card's format line, while Settings › Layout shows it (useTrackCardDetails). */
+  /** A card's format line, while View options shows it (useTrackCardDetails). */
   detailsOf?: ((t: MediaNode) => CardDetails) | null;
   cardSize: number;
   cardGap: number;

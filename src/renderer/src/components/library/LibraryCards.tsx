@@ -114,7 +114,7 @@ export function ContainerCard({
    *  lens says what the row says ("12 albums"; 0.13.0 round 12). */
   subtitle?: string;
   /** An album's format line under its names (useCardDetails), absent where the surface has none
-   *  or Settings › Layout turns it off. */
+   *  or View options turns it off. */
   details?: CardDetails;
   onHeart?(): void;
   /** The body click, with its event: a caller with a selection model reads the

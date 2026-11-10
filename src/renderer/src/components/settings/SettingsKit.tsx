@@ -132,26 +132,8 @@ export function NumberField({
   );
 }
 
-export function LegendRow({
-  swatch,
-  label,
-  desc,
-}: {
-  swatch: React.ReactNode;
-  label: string;
-  desc: string;
-}): React.JSX.Element {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="w-4 flex justify-center shrink-0">{swatch}</span>
-      <span className="text-[12.5px] w-32 shrink-0">{label}</span>
-      <span className="text-[11.5px] text-faint">{desc}</span>
-    </div>
-  );
-}
-
 /**
- * Sidebar card (Layout tab): a row per screen in registry order with an eye
+ * Sidebar card (the Appearance tab): a row per screen in registry order with an eye
  * toggle to hide/show it in the left nav — the way to un-hide, mirroring the
  * right-click "Hide from left nav" verb on the nav itself. now-playing is locked
  * (never hideable). Below a divider, the pinned bottom-cluster tools (Commands,

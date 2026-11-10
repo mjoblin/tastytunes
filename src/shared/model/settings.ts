@@ -62,7 +62,6 @@ export type QueueLayout = ScreenLayout | "albums";
 /** Motion effects: follow the OS Reduce Motion setting, or force on/off. */
 export type MotionMode = "system" | "on" | "off";
 export type AmbientArtMode = "off" | "now-playing" | "all";
-export type AmbientCoverage = "main" | "window";
 export type AlignH = "left" | "center" | "right";
 export type AlignV = "top" | "center" | "bottom";
 
@@ -132,11 +131,9 @@ export interface AppSettings {
   resumeDismissedAt: number | null;
   theme: ThemePreference;
   displayFont: DisplayFont;
-  /** Blurred album-art backdrop. */
+  /** Blurred album-art backdrop, over the whole window with its vignette (0.16.0: the coverage
+   *  and vignette choices retired into this one, the whole window and the vignette their defaults). */
   ambientArt: AmbientArtMode;
-  /** Backdrop extent: the main content area, or the whole window (nav + bar too). */
-  ambientCoverage: AmbientCoverage;
-  vignette: boolean;
   /** The accent's color, or "art" for the playing album's (a cover with no color shows sand). */
   accent: AccentChoice;
   /** Preset grid: base card width in px. */
@@ -485,7 +482,7 @@ export interface AppSettings {
   eqPresets: Array<{ name: string; gains: number[] }>;
 }
 
-/** The card grids' size and gap, in px: Settings › Layout's sliders and the View options menu's. */
+/** The card grids' size and gap, in px: the View options menu's sliders. */
 export const CARD_SIZE_RANGE = { min: 120, max: 280 } as const;
 export const CARD_GAP_RANGE = { min: 8, max: 40 } as const;
 
@@ -507,8 +504,6 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   displayFont: "fraunces",
   ambientArt: "all",
-  ambientCoverage: "window",
-  vignette: true,
   accent: "sand",
   presetCardSize: 160,
   presetGap: 12,

@@ -137,10 +137,7 @@ export function MiniPlayer(): React.JSX.Element {
             and the mini is nothing but a now-playing surface. So the one live
             check is !== 'off' — deliberately, not incidentally. (Arrives live
             in this window via the settings broadcast.) */}
-        <AmbientArt
-          src={active && settings.ambientArt !== "off" ? (miniArt ?? null) : null}
-          vignette={settings.vignette}
-        />
+        <AmbientArt src={active && settings.ambientArt !== "off" ? (miniArt ?? null) : null} />
         {/* art */}
         <div className="relative h-full aspect-square shrink-0 bg-raised flex items-center justify-center">
           <ArtImage

@@ -119,7 +119,7 @@ export function AlbumsLens({
 
   // what the lenses derive from the pools, once per snapshot (useLensIndex)
   const index = useLensIndex(pools);
-  // each card's format line, while Settings › Layout shows it (useCardDetails)
+  // each card's format line, while View options shows it (useCardDetails)
   const detailsOf = useCardDetails(index);
   const all = index.albums;
 

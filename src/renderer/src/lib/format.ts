@@ -260,6 +260,14 @@ export const SIGNAL_COLORS: Record<SignalQuality, string> = {
 export const signalGlow = (color: string): string =>
   `0 0 8px color-mix(in srgb, ${color} 70%, transparent)`;
 
+/** The connection lamp's three states, said in its tooltip wherever it shows (the device picker and
+ *  the Device screen; 0.16.0's settings diet moved the legend from a Settings tab to the lamps). */
+export const LED_TIPS = {
+  on: "Connected: a live link to the streamer",
+  busy: "Connecting: establishing or re-establishing the connection",
+  off: "Not connected",
+} as const;
+
 export const SIGNAL_LABELS: Record<SignalQuality, string> = {
   hires: "hi-res lossless",
   lossless: "lossless",

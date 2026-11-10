@@ -265,10 +265,7 @@ export function TrayPanel(): React.JSX.Element {
         )}
       >
         <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-          <AmbientArt
-            src={active && settings.ambientArt !== "off" ? (art ?? null) : null}
-            vignette={settings.vignette}
-          />
+          <AmbientArt src={active && settings.ambientArt !== "off" ? (art ?? null) : null} />
         </div>
 
         {/* STANDBY REPLACES THE HEADER, it doesn't grey it out. A dimmed

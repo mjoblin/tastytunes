@@ -184,7 +184,7 @@ export function TracksLens({
     (t: MediaNode): number | null => statsByKey[audioAnalysisKey(t)]?.lufs ?? null,
     [statsByKey],
   );
-  // each card's format line, while Settings › Layout shows it, its DR the rows' DR
+  // each card's format line, while View options shows it, its DR the rows' DR
   const detailsOf = useTrackCardDetails((t) => ({ dr: drOf(t), lufs: lufsOf(t) }));
   // the tempo as Info says it, above its floor (the measured facts, 0.12.0)
   const tempoOf = useCallback(

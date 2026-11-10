@@ -40,9 +40,9 @@ export function HistorySection({ settings, save }: SectionProps): React.JSX.Elem
       <p className="text-[11.5px] text-faint px-1">
         The record is a local-only, long-term history of your listening. TastyTunes reads it for
         play counts and last-played facts in the Library and for the resume offer on Now Playing,
-        and AI agents can read it (Settings › AI agents). More will build on it: a year-end review
-        is the kind of thing it makes possible. The Recent list, below, is a shorter log with a
-        separate switch.
+        and AI agents can read it (Settings › Integrations). More will build on it: a year-end
+        review is the kind of thing it makes possible. The Recent list, below, is a shorter log with
+        a separate switch.
       </p>
       <SettingsCard>
         <Toggle

@@ -190,7 +190,7 @@ export class McpBridge {
     // test), so a request that carries a browser's Origin is refused unless the page is on
     // this machine; the body must be JSON by its exact type and no larger than a request
     // needs; and while the server is reachable from the network, a request from another
-    // machine must carry the token from Settings › AI agents (one from this machine is
+    // machine must carry the token from Settings › Integrations (one from this machine is
     // held to the checks above, as on the localhost bind).
     const reject = (status: number, message: string, extra: Record<string, string> = {}): void => {
       res.writeHead(status, { "content-type": "application/json", ...extra });

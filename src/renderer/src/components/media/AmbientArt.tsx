@@ -21,13 +21,7 @@ import { useBlurredArt } from "@/hooks/useBlurredArt";
  * A null `src` fades the wash OUT rather than yanking it: art that fails to
  * load, or a disconnect, used to remove it in a single frame.
  */
-export function AmbientArt({
-  src: rawSrc,
-  vignette,
-}: {
-  src: string | null;
-  vignette: boolean;
-}): React.JSX.Element | null {
+export function AmbientArt({ src: rawSrc }: { src: string | null }): React.JSX.Element | null {
   // THE BLUR IS BAKED IN, not applied live — see useBlurredArt for the
   // measurements. What lands here is already a small, pre-blurred bitmap, and
   // the layers below carry no filter at all. Until it's baked there is simply
@@ -68,7 +62,7 @@ export function AmbientArt({
           />
         )}
       </div>
-      {vignette && <div className="ambient-vignette" />}
+      <div className="ambient-vignette" />
     </div>
   );
 }

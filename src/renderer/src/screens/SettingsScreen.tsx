@@ -2,12 +2,10 @@ import { useState } from "react";
 import {
   AlarmClock,
   ArrowUpCircle,
-  Bot,
-  CircleDot,
+  Plug,
   Globe,
   Heart,
   History,
-  LayoutGrid,
   Library,
   Palette,
   SlidersHorizontal,
@@ -19,45 +17,41 @@ import { cx } from "@/lib/format";
 import { PrimaryButton, ScreenTitle } from "@/components/chrome/Chrome";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
 import { AppearanceSection } from "@/components/settings/AppearanceSection";
-import { LayoutSection } from "@/components/settings/LayoutSection";
 import { BehaviorSection } from "@/components/settings/BehaviorSection";
 import { ConnectionsSection } from "@/components/settings/ConnectionsSection";
 import { LibrariesSection } from "@/components/settings/LibrariesSection";
 import { HistorySection } from "@/components/settings/HistorySection";
 import { UpdatesSection } from "@/components/settings/UpdatesSection";
 import { SchedulesSection } from "@/components/settings/SchedulesSection";
-import { McpSection } from "@/components/settings/McpSection";
-import { StatusLampsSection } from "@/components/settings/StatusLampsSection";
+import { IntegrationsSection } from "@/components/settings/IntegrationsSection";
 import { type SectionProps } from "@/components/settings/SettingsKit";
 
 const TABS = [
   { id: "appearance", label: "Appearance", icon: Palette },
-  { id: "layout", label: "Layout", icon: LayoutGrid },
   { id: "behavior", label: "Behavior", icon: SlidersHorizontal },
   { id: "connections", label: "Connections", icon: Globe },
   { id: "libraries", label: "Libraries", icon: Library },
   { id: "history", label: "History", icon: History },
   { id: "updates", label: "Updates", icon: ArrowUpCircle },
   { id: "schedules", label: "Schedules", icon: AlarmClock },
-  { id: "agents", label: "AI agents", icon: Bot },
-  { id: "lamps", label: "Status lamps", icon: CircleDot },
+  { id: "integrations", label: "Integrations", icon: Plug },
 ] as const;
 type SettingsTab = (typeof TABS)[number]["id"];
+/** Tabs kept under an older id (0.16.0's settings diet: AI agents became Integrations). */
+const RENAMED_TABS: Partial<Record<string, SettingsTab>> = { agents: "integrations" };
 
 /** Each tab's section, keyed by the tab: a tab can't exist without its section, nor a section
  *  without its tab (0.16.0's tidy; before, the tab list and a chain of `tab === …` renders had
  *  to agree by hand). */
 const PANELS: Record<SettingsTab, (props: SectionProps) => React.JSX.Element> = {
   appearance: AppearanceSection,
-  layout: LayoutSection,
   behavior: BehaviorSection,
   connections: ConnectionsSection,
   libraries: LibrariesSection,
   history: HistorySection,
   updates: UpdatesSection,
   schedules: SchedulesSection,
-  agents: McpSection,
-  lamps: StatusLampsSection,
+  integrations: IntegrationsSection,
 };
 
 export function SettingsScreen(): React.JSX.Element {
@@ -66,12 +60,12 @@ export function SettingsScreen(): React.JSX.Element {
 
   const save = useStore((s) => s.saveSettings);
 
-  // Last-visited tab persists; switch locally first so the rail feels instant.
-  const [tab, setTab] = useState<SettingsTab>(() =>
-    TABS.some((t) => t.id === settings.settingsTab)
-      ? (settings.settingsTab as SettingsTab)
-      : "appearance",
-  );
+  // Last-visited tab persists; switch locally first so the rail feels instant. A tab saved under its
+  // old id opens under its new one, and a retired tab (Layout, Status lamps) opens Appearance.
+  const [tab, setTab] = useState<SettingsTab>(() => {
+    const id = RENAMED_TABS[settings.settingsTab] ?? settings.settingsTab;
+    return TABS.some((t) => t.id === id) ? (id as SettingsTab) : "appearance";
+  });
   const selectTab = (id: SettingsTab): void => {
     setTab(id);
     void save({ settingsTab: id });

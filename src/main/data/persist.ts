@@ -18,6 +18,9 @@ let cached: AppSettings | null = null;
 /** The MCP server's bearer token (the secrets store's mcpToken): minted here and nowhere else. */
 const mintToken = (): string => randomBytes(24).toString("base64url");
 
+/** Settings that once were and are no longer: dropped from a file read, so a write leaves them out. */
+const RETIRED = ["accentFollowsArt", "ambientCoverage", "vignette"] as const;
+
 /** The tokens settings.json held before the secrets store (0.13.0): read only to move them. */
 type Legacy = AppSettings & { lbToken?: unknown; mcp: AppSettings["mcp"] & { token?: unknown } };
 /** The tokens have moved: from here on a write never carries them back into settings.json. */
@@ -54,12 +57,13 @@ export function getSettings(): AppSettings {
       loaded.displayFont = DEFAULT_SETTINGS.displayFont;
     }
     // Accent follows album art became one of the accent's choices (0.16.0): a file that had it on
-    // keeps the album's color, one that had it off gets the default, and the retired switch
-    // leaves the file at the next write
+    // keeps the album's color, one that had it off gets the default
     if (!("accent" in file)) {
       loaded.accent = file.accentFollowsArt === true ? "art" : DEFAULT_SETTINGS.accent;
     }
-    delete (loaded as AppSettings & { accentFollowsArt?: unknown }).accentFollowsArt;
+    // retired settings leave the file at the next write (0.16.0: the album-art switch, now an
+    // accent choice; the ambient art's coverage and vignette, now always the whole window with it)
+    for (const key of RETIRED) delete (loaded as unknown as Record<string, unknown>)[key];
     if (!ACCENT_IDS.includes(loaded.accent)) loaded.accent = DEFAULT_SETTINGS.accent;
     if (!DISPLAY_SCENE_IDS.includes(loaded.displayScene)) {
       loaded.displayScene = DEFAULT_SETTINGS.displayScene;
