@@ -26,6 +26,7 @@ import {
   trayDeps,
 } from "./app/windows";
 import { getSettings, moveSecrets } from "./data/persist";
+import { LOGIN_ARG, openedAtLogin, startsInTray } from "./app/loginItem";
 import { listeningRecord } from "./data/listeningRecord";
 import { registerIpc } from "./ipc";
 import { artistPrefetchAfterIndex, startArtistPrefetch } from "./lookups/artistPrefetch";
@@ -54,6 +55,8 @@ if (!gotLock) {
     // A tastytunes:// URL on Windows and Linux arrives as a second launch: its verb decides
     // whether a window shows (app/urlActions), so a key press does not pull the app forward.
     if (takeUrlFromArgv(argv)) return;
+    // the login item launching an app already running asks for nothing to be shown
+    if (argv.includes(LOGIN_ARG)) return;
     // A second launch means "show me the app" — recreate the window if the
     // first instance is running window-less (macOS after close).
     const mainWindow = getMainWindow();
@@ -71,9 +74,14 @@ if (!gotLock) {
       serveArtProtocol();
       registerIpc();
       installAppMenu(menuDeps);
-      createWindow();
+      // OPEN AT LOGIN (app/loginItem): with the menu bar icon on, a launch at login starts in
+      // the tray, no window, as closing the window leaves it; the window opens on demand from the
+      // tray or the Dock. An icon that could not appear opens the window after all.
+      const inTray = startsInTray(openedAtLogin(), getSettings().tray);
+      if (!inTray) createWindow();
       syncMediaKeys();
       syncTray(getSettings().tray, trayDeps);
+      if (inTray && !hasTray()) createWindow();
       // THE HEAL AHEAD (0.10.0): the USB index heals on its own a few seconds after the
       // streamer wakes, or after connecting to one already awake (see
       // mediaIndex.healAhead); a standby or a lost connection cancels what was scheduled.

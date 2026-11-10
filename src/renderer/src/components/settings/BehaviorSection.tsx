@@ -1,6 +1,9 @@
 // THE BEHAVIOR TAB (moved out of SettingsScreen.tsx as it was, 0.16.0's tidy: each tab its own
 // section, as Libraries, History, Updates, Schedules and AI agents already were).
+import { useEffect, useState } from "react";
+import type { LoginItemState } from "@shared/ipc";
 import { type MotionMode } from "@shared/model";
+import { tt } from "@/api";
 import { useStore } from "@/store";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { Segmented } from "@/components/controls/Segmented";
@@ -26,6 +29,8 @@ export function BehaviorSection({ settings, save }: SectionProps): React.JSX.Ele
           checked={settings.tray}
           onChange={(tray) => void save({ tray })}
         />
+
+        <OpenAtLogin tray={settings.tray} />
 
         <SettingRow
           label="Animations"
@@ -86,5 +91,48 @@ export function BehaviorSection({ settings, save }: SectionProps): React.JSX.Ele
         </SettingRow>
       </SettingsCard>
     </section>
+  );
+}
+
+/**
+ * OPEN AT LOGIN (main/app/loginItem): the system's own login item, so the switch reads the system
+ * each time the row shows and when the window comes back to the front (it can be turned off in
+ * Task Manager or System Settings meanwhile). Not offered on Linux; shown but off in a development
+ * run, where only the installed app may register. With the menu bar icon on, a launch at login
+ * starts there without a window.
+ */
+function OpenAtLogin({ tray }: { tray: boolean }): React.JSX.Element | null {
+  const [state, setState] = useState<LoginItemState | null>(null);
+  useEffect(() => {
+    let live = true;
+    const read = (): void => {
+      void tt.getLoginItem().then((s) => {
+        if (live) setState(s);
+      });
+    };
+    read();
+    window.addEventListener("focus", read);
+    return () => {
+      live = false;
+      window.removeEventListener("focus", read);
+    };
+  }, []);
+  if (!state || state.available === "no") return null;
+  const hint =
+    state.available === "installed-only"
+      ? "Start TastyTunes when you sign in to your computer. Works in the installed app."
+      : state.needsApproval
+        ? "Allow TastyTunes in System Settings › General › Login Items to finish turning this on."
+        : tray
+          ? "Start TastyTunes when you sign in to your computer. With the menu bar icon on, it starts there without opening a window."
+          : "Start TastyTunes when you sign in to your computer.";
+  return (
+    <Toggle
+      label="Open at login"
+      hint={hint}
+      checked={state.on}
+      disabled={state.available !== "yes"}
+      onChange={(on) => void tt.setLoginItem(on).then(setState)}
+    />
   );
 }

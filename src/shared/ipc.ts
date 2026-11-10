@@ -315,6 +315,15 @@ export interface Snapshot {
 
 // ------------------------------------------------------------------- preload API
 
+/** Open at login, as the system has it (main/app/loginItem): offered here ("yes"), shown but
+ *  working only in the installed app ("installed-only", a development run), or not offered ("no",
+ *  Linux); whether it is on; and whether macOS waits for the user to allow it in System Settings. */
+export interface LoginItemState {
+  available: "yes" | "installed-only" | "no";
+  on: boolean;
+  needsApproval: boolean;
+}
+
 export interface TastyTunesApi {
   getSnapshot(): Promise<Snapshot>;
   /** Cover Art Archive fallback for an album the server has no art for (null when off or unknown). */
@@ -334,6 +343,9 @@ export interface TastyTunesApi {
   reportRenderError(surface: string, message: string): Promise<void>;
   getSettings(): Promise<AppSettings>;
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
+  /** Open at login: the system's own login item (main/app/loginItem), read fresh each time. */
+  getLoginItem(): Promise<LoginItemState>;
+  setLoginItem(on: boolean): Promise<LoginItemState>;
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
   fetchArt(url: string): Promise<{ dataUrl: string } | null>;
   /** The picture embedded in a track's audio file, for surfaces the server's
@@ -621,6 +633,8 @@ export const IPC = {
   reportRenderError: "tt:reportRenderError",
   getSettings: "tt:getSettings",
   setSettings: "tt:setSettings",
+  getLoginItem: "tt:getLoginItem",
+  setLoginItem: "tt:setLoginItem",
   fetchArt: "tt:fetchArt",
   embeddedArt: "tt:embeddedArt",
   fetchLyrics: "tt:fetchLyrics",

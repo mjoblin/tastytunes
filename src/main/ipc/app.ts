@@ -1,6 +1,7 @@
 import { IPC } from "@shared/ipc";
 import { shell } from "electron";
 import { hasLocalNetworkPrivacy } from "../app/localNetwork";
+import { loginItemState, setOpenAtLogin } from "../app/loginItem";
 import { deviceManager, mcpBridge } from "../app/runtime";
 import { checkUpdatesOnDemand, downloadUpdate, installUpdate } from "../app/updater";
 import {
@@ -17,6 +18,9 @@ export function registerAppIpc(): void {
     if (/^https?:/i.test(url)) return shell.openExternal(url);
     return Promise.resolve();
   });
+  // Open at login: the system's login item, read fresh for each showing of the row
+  handle(IPC.getLoginItem, () => Promise.resolve(loginItemState()));
+  handle(IPC.setLoginItem, (_e, on: boolean) => Promise.resolve(setOpenAtLogin(on === true)));
   handle(IPC.localNetworkPrivacy, () =>
     Promise.resolve(hasLocalNetworkPrivacy(process.platform, process.getSystemVersion())),
   );
