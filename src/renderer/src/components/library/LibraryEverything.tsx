@@ -28,7 +28,8 @@ export function LibraryEverything({
     requestSearch(q, scope);
   };
   return (
-    <div data-library-everything className="px-8 pb-10 pt-1">
+    // the Library's scroller already gives the page its side padding
+    <div data-library-everything className="pb-10 pt-1">
       {search.overlays}
       <SearchResults q={q} search={search} scope="everything" setScope={narrow} />
     </div>
