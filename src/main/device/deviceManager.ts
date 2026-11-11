@@ -118,6 +118,8 @@ export class DeviceManager {
   private lastHealthCheckAt = 0;
   private lastSourceId: string | null = null;
   private queuePresetsTimer: NodeJS.Timeout | null = null;
+  /** The host connect() was asked to remember, stamped as lastHost once it connects. */
+  private remembering: string | null = null;
   /** The wire's notes already logged on this connection (wireNote). */
   private wireNoted = new Set<string>();
   /** Connected to the in-process demo device (labels the connection in the UI). */
@@ -280,8 +282,10 @@ export class DeviceManager {
     this.lastSourceId = null;
     this.wireNoted.clear();
     // The demo device passes remember:false — its ephemeral loopback port
-    // must never become the reconnect target of the next launch.
-    if (opts?.remember !== false) updateSettings({ lastHost: host });
+    // must never become the reconnect target of the next launch. Remembered once it CONNECTS
+    // (onConnected below), never on the attempt: a mistyped address would otherwise be what the
+    // next launch tries, in place of the streamer that worked.
+    this.remembering = opts?.remember !== false ? host : null;
     // A new target is a fresh benefit of the doubt.
     this.disconnectedSince = null;
 
@@ -302,6 +306,9 @@ export class DeviceManager {
       onConnected: () => {
         if (isCurrent(socket)) {
           this.disconnectedSince = null;
+          if (this.remembering === host) {
+            this.push({ kind: "settings", settings: updateSettings({ lastHost: host }) });
+          }
           this.setConnection({ phase: "connected", host });
           // Capability probes — refreshed every (re)connect. The /spec
           // endpoints aren't proven over the WS, so they ride HTTP like presets.
@@ -327,6 +334,7 @@ export class DeviceManager {
   }
 
   disconnect(): void {
+    this.remembering = null;
     this.recallWatch.cancel();
     if (this.sleeper.current) this.setSleep(null);
     this.socket?.close();

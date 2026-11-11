@@ -15,6 +15,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { useDisplayFont } from "@/hooks/useDisplayFont";
 import { cx, deriveNowPlaying } from "@/lib/format";
 import { forgetDevice, lastSeenLabel } from "@/lib/devices";
+import { connectTrouble, STILL_TRYING_HINT } from "@/lib/connectTrouble";
+import { IS_WINDOWS } from "@/lib/screens";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { Nav } from "@/components/Nav";
 import { PlaybackBar } from "@/components/playback/PlaybackBar";
@@ -335,7 +337,8 @@ function ConnectGate(): React.JSX.Element {
   const knownDevices = useStore((s) => s.settings.knownDevices);
   const lastHost = useStore((s) => s.settings.lastHost);
   // Never connected to anything = a true first run: the gate doubles as the
-  // welcome screen (connect() stamps lastHost on the first attempt).
+  // welcome screen (lastHost is stamped once a connect succeeds, so a mistyped
+  // first address leaves it the welcome screen, the demo still on offer).
   const firstRun = lastHost == null;
   // If the device we lost had ECO standby configured, the honest hint is
   // that it may have LEFT THE NETWORK on purpose (eco powers the network
@@ -345,6 +348,13 @@ function ConnectGate(): React.JSX.Element {
   const busy =
     connection.phase === "connecting" ||
     (connection.phase === "disconnected" && connection.reconnecting);
+  // What the last failed try said, in plain words, kept across the retries (the phase flips
+  // between connecting and disconnected on each, and only the disconnected one carries a reason)
+  const [trouble, setTrouble] = useState<string | null>(null);
+  useEffect(() => {
+    if (!busy) setTrouble(null);
+    else if (connection.phase === "disconnected") setTrouble(connectTrouble(connection.reason));
+  }, [busy, connection]);
 
   // A failing reconnect gets RECONNECT_GRACE_MS of benefit of the doubt (a
   // blip should read as a blip), then the gate stops being a wall: the
@@ -448,6 +458,14 @@ function ConnectGate(): React.JSX.Element {
               ? `Connecting to ${connection.host}…`
               : `Reconnecting to ${(connection as { host: string }).host}…`}
           </div>
+          {/* a way out before the gate counts it stuck: a mistyped address otherwise waits */}
+          <button
+            onClick={() => void tt.disconnect()}
+            data-gate-cancel
+            className="text-[13px] text-faint hover:text-dim transition-colors"
+          >
+            Cancel
+          </button>
         </>
       ) : (
         <>
@@ -468,9 +486,22 @@ function ConnectGate(): React.JSX.Element {
             </>
           )}
           {busy && stuck && (
-            <div data-still-trying className="flex items-center gap-2 text-[12.5px] text-faint">
-              <Loader2 size={12} className="spin" />
-              Still trying {(connection as { host: string }).host}. It may be off or in eco standby.
+            <div
+              data-still-trying
+              className="flex items-start gap-2 text-[12.5px] text-faint max-w-md text-left leading-relaxed"
+            >
+              <Loader2 size={12} className="spin shrink-0 mt-[4px]" />
+              {/* Stop follows the sentence inline, so it stays beside it however the line wraps */}
+              <span>
+                Still trying {(connection as { host: string }).host}. {trouble ?? STILL_TRYING_HINT}{" "}
+                <button
+                  onClick={() => void tt.disconnect()}
+                  data-gate-stop
+                  className="ml-1 text-dim hover:text-ink underline underline-offset-2 decoration-edge2 hover:decoration-current transition-colors"
+                >
+                  Stop
+                </button>
+              </span>
             </div>
           )}
           {gateRows.length > 0 ? (
@@ -543,6 +574,15 @@ function ConnectGate(): React.JSX.Element {
               Settings › Privacy & Security › Local Network.
             </div>
           )}
+          {stillLooking && IS_WINDOWS && (
+            <div
+              data-windows-firewall
+              className="text-[12.5px] text-faint max-w-sm leading-relaxed"
+            >
+              Windows may be blocking TastyTunes from your local network. Allow it in Windows
+              Security › Firewall & network protection › Allow an app through firewall.
+            </div>
+          )}
           <div className="flex items-center gap-4">
             <button
               onClick={() => void tt.discover()}
@@ -603,7 +643,8 @@ function ConnectGate(): React.JSX.Element {
           )}
           {ipOpen && (
             <div className="text-[11.5px] text-faint max-w-sm leading-snug">
-              Your streamer's display shows its IP under Settings › Network.
+              Your streamer's display shows its IP under Settings › Network. For a streamer without
+              a display, look in your router's list of connected devices.
             </div>
           )}
           {!firstRun && (

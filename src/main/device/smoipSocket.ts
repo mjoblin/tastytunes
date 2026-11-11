@@ -59,6 +59,9 @@ export class SmoipSocket {
   private pongTimer: NodeJS.Timeout | null = null;
   /** When the device last pushed a frame: a socket that spoke seconds ago is alive. */
   private lastFrameAt = 0;
+  /** The error before a close, which is the close's real reason ("connect ECONNREFUSED …"): a
+   *  failed connect closes with only code 1006, which says nothing. */
+  private lastError: string | null = null;
 
   constructor(host: string, events: SmoipSocketEvents) {
     this.host = host;
@@ -81,6 +84,7 @@ export class SmoipSocket {
 
     ws.on("open", () => {
       this.attempt = 0;
+      this.lastError = null;
       this.events.onLog("info", `connected to ${url}`);
       this.events.onConnected();
       for (const path of SUBSCRIBED_PATHS) {
@@ -122,13 +126,15 @@ export class SmoipSocket {
     ws.on("pong", () => this.clearPongTimer());
 
     ws.on("error", (err) => {
+      this.lastError = err.message;
       this.events.onLog("error", `websocket error: ${err.message}`);
     });
 
     ws.on("close", (code, reasonBuf) => {
       this.stopKeepalive();
       this.ws = null;
-      const reason = reasonBuf?.toString() || `closed (code ${code})`;
+      const reason = reasonBuf?.toString() || this.lastError || `closed (code ${code})`;
+      this.lastError = null;
       if (this.closedIntentionally) {
         this.events.onDisconnected("disconnected", false);
         return;

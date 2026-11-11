@@ -218,4 +218,5 @@ export function sanitizeNavHiddenTools(raw: readonly string[] | null | undefined
 
 /** Platform modifier label for shortcut chips ("⌘K" / "Ctrl+K"). */
 export const IS_MAC = /mac/i.test(navigator.platform);
+export const IS_WINDOWS = /win/i.test(navigator.platform);
 export const MOD = IS_MAC ? "⌘" : "Ctrl+";
