@@ -69,6 +69,7 @@ import { demoHost, stopDemoStreamer } from "../servers/demoStreamer";
 import type { MediaQueueAction } from "@shared/model";
 import { RecallWatch, recallSignature } from "./recallWatch";
 import { checkFrame } from "./frameCheck";
+import { appLog } from "../app/appLog";
 
 interface Cache {
   playState: ZonePlayState | null;
@@ -1083,6 +1084,7 @@ export class DeviceManager {
     this.logs.push(entry);
     if (this.logs.length > LOG_RING_SIZE) this.logs.shift();
     this.push({ kind: "log", entry });
+    appLog().write(entry);
     console.log(`[${scope}] ${text}`);
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Pause, Play } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, FileText, Pause, Play } from "lucide-react";
 import { DEFAULT_SETTINGS } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -132,6 +132,16 @@ export function DiagnosticsDrawer(): React.JSX.Element {
               {f}
             </button>
           ))}
+        {/* the log's lines are also kept in a file that outlives a quit (main/app/logFile) */}
+        <button
+          onClick={() => void tt.revealLogFile()}
+          aria-label="Show the log file"
+          data-tip="Show the log file"
+          data-log-file
+          className="tip-bottom tip-end p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90"
+        >
+          <FileText size={13} />
+        </button>
         <button
           onClick={() => setPaused((p) => !p)}
           aria-label={paused ? "Resume auto-scroll" : "Pause auto-scroll"}

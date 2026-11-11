@@ -345,6 +345,8 @@ export interface TastyTunesApi {
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
   /** Open at login: the system's own login item (main/app/loginItem), read fresh each time. */
   getLoginItem(): Promise<LoginItemState>;
+  /** Show the log file (main/app/logFile) in Finder or Explorer. */
+  revealLogFile(): Promise<void>;
   setLoginItem(on: boolean): Promise<LoginItemState>;
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
   fetchArt(url: string): Promise<{ dataUrl: string } | null>;
@@ -634,6 +636,7 @@ export const IPC = {
   getSettings: "tt:getSettings",
   setSettings: "tt:setSettings",
   getLoginItem: "tt:getLoginItem",
+  revealLogFile: "tt:revealLogFile",
   setLoginItem: "tt:setLoginItem",
   fetchArt: "tt:fetchArt",
   embeddedArt: "tt:embeddedArt",

@@ -1,6 +1,7 @@
 import { IPC } from "@shared/ipc";
 import { shell } from "electron";
 import { hasLocalNetworkPrivacy } from "../app/localNetwork";
+import { revealLog } from "../app/appLog";
 import { loginItemState, setOpenAtLogin } from "../app/loginItem";
 import { deviceManager, mcpBridge } from "../app/runtime";
 import { checkUpdatesOnDemand, downloadUpdate, installUpdate } from "../app/updater";
@@ -20,6 +21,12 @@ export function registerAppIpc(): void {
   });
   // Open at login: the system's login item, read fresh for each showing of the row
   handle(IPC.getLoginItem, () => Promise.resolve(loginItemState()));
+  handle(IPC.revealLogFile, () => {
+    // a line first, so the file is there to show even before anything else was logged
+    deviceManager.log("info", "app", "the log file was shown");
+    revealLog();
+    return Promise.resolve();
+  });
   handle(IPC.setLoginItem, (_e, on: boolean) => Promise.resolve(setOpenAtLogin(on === true)));
   handle(IPC.localNetworkPrivacy, () =>
     Promise.resolve(hasLocalNetworkPrivacy(process.platform, process.getSystemVersion())),
