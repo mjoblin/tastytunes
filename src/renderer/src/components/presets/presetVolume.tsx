@@ -75,6 +75,8 @@ export function usePresetVolumePopover(
           onCommit={(v) => setDraft(Math.round(v * 100))}
           ariaLabel="Preset volume"
           thumb="always"
+          // a preset starts at this level, so it carries the volume slider's guard
+          raiseBy={0.05}
         />
         <span className="block text-[11px] text-faint leading-relaxed mt-2.5">
           TastyTunes sets this volume whenever it starts this preset. Recalls from the official app

@@ -7,6 +7,10 @@ import { releaseKeyboard } from "@/lib/inputModality";
 import { useStore, type Screen } from "@/store";
 import { SCREENS, IS_MAC } from "@/lib/screens";
 
+/** A held volume arrow's pace: one step per this many milliseconds, however fast the key repeats. */
+export const VOLUME_REPEAT_MS = 200;
+let lastVolumeRepeat = 0;
+
 // Derived from the shared registry — the screen lookup runs before the
 // transport switch, so a registry key can shadow a transport shortcut (the
 // old hand-written copy had l: 'library', silently eating seek-forward).
@@ -287,13 +291,17 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
           void tt.command({ type: "previousTrack" });
           break;
         case "ArrowUp":
+        case "ArrowDown": {
           e.preventDefault();
-          void tt.command({ type: "volumeStepChange", delta: e.shiftKey ? 5 : 1 });
+          // A HELD ARROW steps at most every VOLUME_REPEAT_MS: the key's repeat (about 30 a
+          // second) would otherwise climb faster than anyone hears it happen
+          const now = Date.now();
+          if (e.repeat && now - lastVolumeRepeat < VOLUME_REPEAT_MS) break;
+          lastVolumeRepeat = now;
+          const by = e.shiftKey ? 5 : 1;
+          void tt.command({ type: "volumeStepChange", delta: e.key === "ArrowUp" ? by : -by });
           break;
-        case "ArrowDown":
-          e.preventDefault();
-          void tt.command({ type: "volumeStepChange", delta: e.shiftKey ? -5 : -1 });
-          break;
+        }
         case "j":
           seekTo(-10);
           break;

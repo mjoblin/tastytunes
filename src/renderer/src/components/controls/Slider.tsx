@@ -32,6 +32,11 @@ interface SliderProps {
   tall?: boolean;
   /** One arrow key's step, 0..1 (Page Up and Page Down take five). */
   step?: number;
+  /** A VOLUME'S GUARD: a press more than this far above the thumb nudges it up by this much and
+   *  starts no drag, and End doesn't send it to the top. A stray click or tap lands anywhere, and a
+   *  jump there could be far too loud before anyone reacts; a drag from the thumb still goes as far
+   *  as it's taken, heard as it moves and stopped by letting go. Down is never guarded. */
+  raiseBy?: number;
 }
 
 /**
@@ -97,6 +102,7 @@ export function Slider({
   track,
   tall,
   step = 0.02,
+  raiseBy,
 }: SliderProps): React.JSX.Element {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragValue, setDragValue] = useState<number | null>(null);
@@ -208,7 +214,7 @@ export function Slider({
         let next: number | null = null;
         if (e.key in by) next = shown + by[e.key];
         else if (e.key === "Home") next = 0;
-        else if (e.key === "End") next = 1;
+        else if (e.key === "End" && raiseBy == null) next = 1;
         if (next == null || disabled) return;
         e.preventDefault();
         e.stopPropagation();
@@ -220,9 +226,14 @@ export function Slider({
         disabled ? "opacity-35 pointer-events-none" : "cursor-pointer",
       )}
       onPointerDown={(e) => {
+        const v = ratioFromEvent(e);
+        if (raiseBy != null && v > shown + raiseBy) {
+          // well above the thumb: a nudge up, no drag (see raiseBy)
+          onCommit(Math.min(1, shown + raiseBy));
+          return;
+        }
         e.currentTarget.setPointerCapture(e.pointerId);
         dragRef.current = true;
-        const v = ratioFromEvent(e);
         setDragValue(v);
         placeBubble(v);
         onScrub?.(v);

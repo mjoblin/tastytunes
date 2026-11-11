@@ -32,6 +32,8 @@ export interface VolumeSliderControl {
   onScrub(v: number): void;
   onCommit(v: number): void;
   onCancel(): void;
+  /** The slider's guard (Slider's raiseBy): 5 levels of its own scale, Shift+Up's step. */
+  raiseBy: number;
 }
 
 /**
@@ -110,6 +112,7 @@ export function useVolumeSlider(): VolumeSliderControl {
     onScrub,
     onCommit,
     onCancel,
+    raiseBy: 5 / (usingPercent ? max : 30),
   };
 }
 
@@ -188,6 +191,7 @@ export function VolumeCluster(): React.JSX.Element | null {
           onScrub={vol.onScrub}
           onCancel={vol.onCancel}
           onCommit={vol.onCommit}
+          raiseBy={vol.raiseBy}
           ariaLabel="Volume"
         />
       </div>
