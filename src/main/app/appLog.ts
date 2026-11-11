@@ -2,6 +2,9 @@ import { release } from "node:os";
 import { join } from "node:path";
 import { app, shell } from "electron";
 import { LogFile } from "./logFile";
+// the version from package.json, as the update check reads it: under a harness that launches
+// Electron on a bare path, app.getVersion() is Electron's own
+import { version as appVersion } from "../../../package.json";
 
 let file: LogFile | null = null;
 
@@ -11,7 +14,7 @@ export function appLog(): LogFile {
   return (file ??= new LogFile(
     join(app.getPath("userData"), "logs"),
     () =>
-      `TastyTunes ${app.getVersion()} on ${process.platform} ${release()} (${process.arch}), ${new Date().toISOString()}`,
+      `TastyTunes ${appVersion} on ${process.platform} ${release()} (${process.arch}), ${new Date().toISOString()}`,
   ));
 }
 
