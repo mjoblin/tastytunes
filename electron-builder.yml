@@ -18,6 +18,19 @@ files:
   # inside the asar is fine (Electron patches fs), so no asarUnpack.
   - resources/**
 npmRebuild: false
+# THE FUSES (0.16.0), flipped in the packaged binary before it is signed. Off: running the app as
+# plain Node (ELECTRON_RUN_AS_NODE) and NODE_OPTIONS from the environment, two ways to run other
+# code under the app's signature; nothing in the app needs either. On: the app loads only from its
+# app.asar, and that archive's integrity is checked against the hash built into the app (Mac and
+# Windows; Linux has no check). The inspect fuse stays as Electron ships it: the install smokes
+# drive the installed app through Playwright, which attaches with --inspect. The ad-hoc signature
+# is reset after the flip so an unsigned local build still opens on Apple silicon.
+electronFuses:
+  runAsNode: false
+  enableNodeOptionsEnvironmentVariable: false
+  onlyLoadAppFromAsar: true
+  enableEmbeddedAsarIntegrityValidation: true
+  resetAdHocDarwinSignature: true
 # VERSIONLESS ARTIFACT NAMES for everything a human downloads (decided
 # 2026-08-04, for the website's download buttons): GitHub's
 # releases/latest/download/<asset> endpoint gives each asset a stable URL
