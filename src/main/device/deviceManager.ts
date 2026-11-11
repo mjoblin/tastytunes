@@ -68,6 +68,7 @@ import { queueAdd } from "../media/upnpBrowser";
 import { demoHost, stopDemoStreamer } from "../servers/demoStreamer";
 import type { MediaQueueAction } from "@shared/model";
 import { RecallWatch, recallSignature } from "./recallWatch";
+import { checkFrame } from "./frameCheck";
 
 interface Cache {
   playState: ZonePlayState | null;
@@ -116,6 +117,8 @@ export class DeviceManager {
   private lastHealthCheckAt = 0;
   private lastSourceId: string | null = null;
   private queuePresetsTimer: NodeJS.Timeout | null = null;
+  /** The wire's notes already logged on this connection (wireNote). */
+  private wireNoted = new Set<string>();
   /** Connected to the in-process demo device (labels the connection in the UI). */
   private demo = false;
   /** See Snapshot.lastRecalledPresetId — in-app recalls only, content-checked by consumers. */
@@ -274,6 +277,7 @@ export class DeviceManager {
     this.cache = emptyCache();
     this.trackNotifier.reset();
     this.lastSourceId = null;
+    this.wireNoted.clear();
     // The demo device passes remember:false — its ephemeral loopback port
     // must never become the reconnect target of the next launch.
     if (opts?.remember !== false) updateSettings({ lastHost: host });
@@ -567,8 +571,8 @@ export class DeviceManager {
   }
 
   /** A rejection main never caught, kept in the log where the diagnostics show it. */
-  logUnhandled(reason: unknown): void {
-    this.log("error", "main", `unhandled rejection: ${errorMessage(reason)}`);
+  logUnhandled(reason: unknown, what = "unhandled rejection"): void {
+    this.log("error", "main", `${what}: ${errorMessage(reason)}`);
   }
 
   async command(cmd: StreamerCommand): Promise<void> {
@@ -751,8 +755,14 @@ export class DeviceManager {
 
   private handleFrame(frame: SmoipFrame): void {
     this.recordFrame("in", frame);
-    const data = frame.params?.data;
-    if (data === undefined) return;
+    const raw = frame.params?.data;
+    if (raw === undefined) return;
+    // the wire's shape is the streamer's: checked for its path before anything reads it
+    const checked = checkFrame(frame.path, raw);
+    if (!checked.ok)
+      return this.wireNote(frame.path, `${checked.reason}, so the frame was dropped`);
+    for (const note of checked.setAside) this.wireNote(frame.path, `${note}, set aside`);
+    const data = checked.data;
 
     switch (frame.path) {
       case "/zone/play_state":
@@ -1059,6 +1069,15 @@ export class DeviceManager {
 
   /** A line in the diagnostics log (the ring the Device screen shows, and the console); public
    *  since the URL scheme, whose verbs report there too (app/urlActions). */
+  /** A frame the wire's check dropped or trimmed: logged once per connection for each distinct note
+   *  (a streamer that always sends a field this way would otherwise fill the log every second). */
+  private wireNote(path: string, note: string): void {
+    const line = `${path}: ${note}`;
+    if (this.wireNoted.has(line)) return;
+    this.wireNoted.add(line);
+    this.log("warn", "wire", line);
+  }
+
   log(level: LogEntry["level"], scope: string, text: string): void {
     const entry: LogEntry = { at: Date.now(), level, scope, text };
     this.logs.push(entry);

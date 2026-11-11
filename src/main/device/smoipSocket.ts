@@ -7,6 +7,7 @@
 
 import WebSocket from "ws";
 import type { SmoipFrame } from "@shared/smoip";
+import { errorMessage } from "@shared/guards";
 
 const SUBSCRIBED_PATHS = [
   "/presets/list",
@@ -100,11 +101,22 @@ export class SmoipSocket {
         this.events.onLog("warn", `unparseable frame: ${raw.toString().slice(0, 200)}`);
         return;
       }
+      // valid JSON can still be null, a number or a list: a frame is an object with a path
+      if (frame === null || typeof frame !== "object" || typeof frame.path !== "string") {
+        this.events.onLog("warn", `a frame without a path: ${raw.toString().slice(0, 200)}`);
+        return;
+      }
       if (frame.path === "/queue/info" && !this.suppressQueueRefetch) {
         // The queue changed — fetch the full list.
         this.send("/queue/list");
       }
-      this.events.onFrame(frame);
+      // a frame that throws in its handler is logged and passed over, never out of the socket's
+      // message event (where it would be uncaught in main)
+      try {
+        this.events.onFrame(frame);
+      } catch (e) {
+        this.events.onLog("error", `${frame.path}: handling it failed (${errorMessage(e)})`);
+      }
     });
 
     ws.on("pong", () => this.clearPongTimer());

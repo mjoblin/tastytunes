@@ -8,6 +8,9 @@ export const deviceManager = new DeviceManager();
 // A promise that rejects with nobody to catch it would otherwise vanish from
 // main; the log keeps it where the diagnostics drawer shows it.
 process.on("unhandledRejection", (reason) => deviceManager.logUnhandled(reason));
+// The last resort for a throw nothing caught: logged where the drawer shows it, the app kept up
+// (Electron's default is a modal error box and a main process in an unknown state either way).
+process.on("uncaughtException", (err) => deviceManager.logUnhandled(err, "uncaught exception"));
 export const mcpBridge = new McpBridge(deviceManager);
 
 /** The connected streamer's host; media-browser calls need one and throw without it. */
