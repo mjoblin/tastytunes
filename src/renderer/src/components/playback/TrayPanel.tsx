@@ -486,8 +486,8 @@ export function TrayPanel(): React.JSX.Element {
                   <SignalLamp tipClass="tip-bottom tip-end" />
                 </div>
                 <div className="flex-1" />
-                {/* THE PLAYBACK BAR'S POWER CONTROL, at panel scale — filled gold
-              with the same glow and hover-grow, rather than a bare icon that
+                {/* THE PLAYBACK BAR'S POWER CONTROL, at panel scale — the same soft
+              gold disc, glow and hover-grow, rather than a bare icon that
               happened to be gold. It is the one control here that commits the
               streamer to a state change, and in the main window it reads that
               way; a second surface that renders it as ordinary chrome
@@ -508,13 +508,13 @@ export function TrayPanel(): React.JSX.Element {
                   className={cx(
                     "tip-top tip-end shrink-0 p-1.5 rounded-full flex items-center justify-center transition-all",
                     powered
-                      ? "bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]"
+                      ? "bg-golddim text-gold shadow-[0_0_12px_rgb(var(--gold-rgb)_/_0.15)] motion-safe:hover:scale-110 hover:bg-gold/25"
                       : connected
-                        ? "bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110"
+                        ? "bg-veil2 text-faint hover:text-gold motion-safe:hover:scale-110"
                         : "bg-veil2 text-faint/40",
                   )}
                 >
-                  <Power size={14} strokeWidth={2.2} />
+                  <Power size={14} strokeWidth={2.2} className="-translate-y-[0.5px]" />
                 </button>
               </div>
             </>
@@ -808,7 +808,8 @@ function TrayStandby({
           busy && "motion-safe:animate-pulse bg-accentdim",
         )}
       >
-        <Power size={24} strokeWidth={1.8} />
+        {/* the glyph's circle sits about a pixel below its box's middle; lifted to sit centered in the ring */}
+        <Power size={24} strokeWidth={1.8} className="-translate-y-px" />
       </button>
       <div className="min-w-0 flex-1">
         {/* Every line holds its height whether or not it has content, so the

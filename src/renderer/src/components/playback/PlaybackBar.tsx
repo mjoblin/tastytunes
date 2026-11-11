@@ -236,13 +236,15 @@ export function PlaybackBar(): React.JSX.Element {
           className={cx(
             "tip-top p-2 rounded-full flex items-center justify-center transition-all",
             powered
-              ? "bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]"
+              ? "bg-golddim text-gold shadow-[0_0_12px_rgb(var(--gold-rgb)_/_0.15)] motion-safe:hover:scale-110 hover:bg-gold/25"
               : connected
-                ? "bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110"
+                ? "bg-veil2 text-faint hover:text-gold motion-safe:hover:scale-110"
                 : "bg-veil2 text-faint/40",
           )}
         >
-          <Power size={16} strokeWidth={2.2} />
+          {/* the power glyph's circle sits about a pixel below its box's middle; lifted half a
+              pixel so it reads centered in the round button */}
+          <Power size={16} strokeWidth={2.2} className="-translate-y-[0.5px]" />
         </button>
       </div>
     </footer>
