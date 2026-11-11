@@ -140,7 +140,12 @@ export class QueueOps {
       batchStarted = true;
       const socket = this.host.socket();
       if (socket) socket.suppressQueueRefetch = true;
+      // A run belongs to the streamer it started on. Switched to another, or disconnected, it
+      // stops there (as a cancel) rather than adding the rest to a streamer no longer chosen; the
+      // socket's host survives a reconnect to the same streamer, so a blip doesn't stop it.
+      const leftBehind = (): boolean => this.host.socket()?.host !== host;
       for (const [index, item] of playlist.items.entries()) {
+        if (!this.cancelled && leftBehind()) this.cancelled = true;
         if (this.cancelled) break;
         const action: MediaQueueAction = replaced ? "APPEND" : "REPLACE";
         let landed = false;
@@ -154,7 +159,11 @@ export class QueueOps {
           }
         }
 
-        if (!landed && !this.cancelled) {
+        // left behind mid-entry: stopped before this entry is counted, so it isn't marked missed
+        if (!landed && !this.cancelled && leftBehind()) this.cancelled = true;
+        if (this.cancelled && !landed) break;
+
+        if (!landed) {
           // INVARIANT 4. This used to walk `searchable` servers only, which
           // meant an entry living on a Browse-only server (USB) could never
           // heal; resolveContent asks the indexes first, so it can.
