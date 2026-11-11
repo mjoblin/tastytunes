@@ -102,7 +102,7 @@ An album's page lists its tracks with their format and dynamic range. An artist'
 
 ### Search everything
 
-Search your libraries, playlists, favorites, presets, and internet radio at once, with the results grouped by type.
+Search your libraries, playlists, favorites, presets, and internet radio at once, then narrow the results to any one of them.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Search results grouped by type">
 
@@ -182,7 +182,7 @@ Themes, fonts, layouts and sort orders, and much more, stored on your machine.
 
 MCP tools that let local AI agents see and control the streamer.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The AI agents settings tab">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The Integrations settings tab">
 
 ## MCP server
 
@@ -201,12 +201,12 @@ sources, library and radio, favorites, tone and EQ, sleep timers, the listening
 record (plays, last played, what was left unfinished), audio analysis, album art,
 the scenes and Display mode, etc. The editing
 ones, like queue and preset changes, are kept separate and off until you
-turn them on. Every tool can be enabled or disabled in Settings › AI agents.
+turn them on. Every tool can be enabled or disabled in Settings › Integrations.
 Agents are held to the same limits as the app: the volume limit, the power
 safeguards and the Connections settings. A call to a disabled tool is
 refused. Bind it to localhost, or to your network to reach the streamer from
 another machine. Bound to your network, it requires the token from Settings ›
-AI agents. The setup for each client (Claude Code, Cursor, VS Code, Gemini CLI,
+Integrations. The setup for each client (Claude Code, Cursor, VS Code, Gemini CLI,
 Codex CLI, Claude Desktop, ChatGPT) is at [tastytunes.app/agents](https://tastytunes.app/agents/).
 
 ### Home Assistant
@@ -221,12 +221,12 @@ rest_command:
     method: post
     content_type: application/json
     headers:
-      Authorization: Bearer <token from Settings › AI agents>
+      Authorization: Bearer <token from Settings › Integrations>
     payload: '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"recall_preset","arguments":{"id":3}}}'
 ```
 
 Any enabled tool works the same way, such as `set_volume`, `set_power`, and
-`pause`. Bind the server to your network in Settings › AI agents, enable the
+`pause`. Bind the server to your network in Settings › Integrations, enable the
 tools the Home Assistant automation needs, copy the token into the
 `Authorization` header, and keep TastyTunes running.
 
@@ -238,7 +238,7 @@ Shortcuts, or a browser bookmark. `tastytunes://preset/3` recalls preset 3,
 `tastytunes://volume/up` turns the volume up a step, and
 `tastytunes://toggle-play` plays or pauses. To keep the focus where it is, open
 links in the background where the launcher allows it, such as `open -g` in
-Terminal. Every link is listed in Settings › Behavior (on Linux, the AppImage
+Terminal. Every link is listed in Settings › Integrations (on Linux, the AppImage
 must be integrated with the desktop for links to work).
 
 ## Every feature
@@ -254,11 +254,10 @@ must be integrated with the desktop for links to work).
 ### Now Playing
 
 - Large artwork over an ambient blurred-art backdrop
-- Optional art-derived accent, with a gold tint following the current album
+- A choice of accent color (sand, gold, sage or dusty teal), or one taken from the current album's art
 - Format badges: codec, sample rate, bit depth, lossless, MQA
 - A signal-quality lamp: gold for hi-res lossless, blue for lossless and gray for lossy, each with its own shape so the states don't rely on color alone
-- The lamp's legend is in Settings › Status lamps
-- The full signal chain in a popover from the lamp
+- A popover from the lamp with the full signal chain and what each color means
 - Internet-radio display, track *x* of *y*, and the current lyric line under the track details
 - Album art can be optionally replaced by a scene visualizer, selected from the scene picker
 - Album art (or scene visualizer) can be resized
@@ -289,6 +288,7 @@ must be integrated with the desktop for links to work).
 - Browse every local UPnP media server and the streamer's own USB storage
 - A local index for fast searching as you type
 - <kbd>⌘F</kbd> searches every library at once, grouped by server
+- A library search can widen to playlists, favorites, presets and radio without leaving the Library
 - Artists, Albums and Tracks views combining every library into one collection, with filters for genre, decade, format (codec, lossless, hi-res), dynamic range, and albums or compilations
 - The Albums view can be shown as cards or rows
 - The Artists view shows your artists, the selected artist's albums, and the selected album's tracks
@@ -414,6 +414,8 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 - On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists and Recent
 - On Windows and Linux, closing the main window keeps TastyTunes running in the tray; Quit is in the icon's menu
 - On Linux there's no panel, just the icon and its menu
+- TastyTunes can open when you sign in to your computer (macOS and Windows), off by default, in Settings › Behavior
+- Opened at sign-in with the icon on, it starts in the menu bar or tray without opening a window
 
 ### Windows & control
 
