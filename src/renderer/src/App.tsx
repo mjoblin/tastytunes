@@ -644,7 +644,8 @@ function ConnectGate(): React.JSX.Element {
           {ipOpen && (
             <div className="text-[11.5px] text-faint max-w-sm leading-snug">
               Your streamer's display shows its IP under Settings › Network. For a streamer without
-              a display, look in your router's list of connected devices.
+              a display, find it in the StreamMagic app's network settings, or in your router's list
+              of connected devices.
             </div>
           )}
           {!firstRun && (

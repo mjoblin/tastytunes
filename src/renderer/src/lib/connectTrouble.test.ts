@@ -4,12 +4,12 @@ import { connectTrouble } from "./connectTrouble";
 describe("connectTrouble", () => {
   it("says what each failure means, never its code", () => {
     for (const [reason, says] of [
-      ["connect ECONNREFUSED 10.0.0.5:80", "turned the connection away"],
+      ["connect ECONNREFUSED 10.0.0.5:80", "refused the connection"],
       ["Unexpected server response: 404", "but not a StreamMagic streamer"],
       ["getaddrinfo ENOTFOUND evo.local", "That name isn't known on your network."],
       ["connect EHOSTUNREACH 10.0.0.5:80", "Nothing answers at that address."],
-      ["Opening handshake has timed out", "Nothing answered at that address in time."],
-      ["connect ETIMEDOUT 10.0.0.5:80", "Nothing answered at that address in time."],
+      ["Opening handshake has timed out", "Nothing answers at that address."],
+      ["connect ETIMEDOUT 10.0.0.5:80", "Nothing answers at that address."],
     ] as const) {
       const text = connectTrouble(reason);
       expect(text).toContain(says);
