@@ -43,6 +43,14 @@ export function installAppMenu(deps: MenuDeps): void {
     click: () => deps.sendToMain({ id: "screen", screen: "settings" }),
   };
 
+  // where each platform's people look for it: the app menu on macOS, Help elsewhere; Settings ›
+  // Updates opens and asks the feed at once
+  const checkUpdatesItem: MenuItemConstructorOptions = {
+    id: "menu-check-updates",
+    label: "Check for Updates…",
+    click: () => deps.sendToMain({ id: "updates", check: true }),
+  };
+
   const appMenu: MenuItemConstructorOptions = {
     label: app.name,
     submenu: [
@@ -51,6 +59,7 @@ export function installAppMenu(deps: MenuDeps): void {
         label: "About TastyTunes",
         click: () => deps.sendToMain({ id: "about" }),
       },
+      checkUpdatesItem,
       { type: "separator" },
       settingsItem,
       { type: "separator" },
@@ -227,6 +236,7 @@ export function installAppMenu(deps: MenuDeps): void {
         label: "AI Agents Setup Guide",
         click: () => void shell.openExternal(AGENTS_GUIDE_URL),
       },
+      ...(isMac ? [] : [{ type: "separator" } as MenuItemConstructorOptions, checkUpdatesItem]),
       { type: "separator" },
       {
         id: "menu-github",

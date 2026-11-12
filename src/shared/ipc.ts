@@ -131,7 +131,9 @@ export type MenuCommand =
   | { id: "toggleNav" }
   | { id: "navBack" }
   | { id: "navForward" }
-  | { id: "screen"; screen: string };
+  | { id: "screen"; screen: string }
+  /** Settings › Updates, from the menus and the tray; check: and ask the feed now. */
+  | { id: "updates"; check?: boolean };
 
 export type PushMessage =
   | { kind: "connection"; state: ConnectionState }

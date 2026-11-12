@@ -272,6 +272,12 @@ export interface AppSettings {
   motion: MotionMode;
   /** Check GitHub releases for a newer version on launch and every few hours. */
   updateCheck: boolean;
+  /** "Not now" on an offered update: the nav's Update button steps back to a dot for that
+   *  version until the date. Internal state, not a preference: there is no row for it. */
+  updateSnooze: { version: string; until: number } | null;
+  /** The version a system notification last announced, so each version is announced once.
+   *  Internal state, not a preference. */
+  updateNotified: string | null;
   /** Lyrics panel on Now Playing — fetches from LRCLIB on demand when opened. */
   /**
    * Waveforms drawn from each track's audio file, read from the local media
@@ -546,6 +552,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   historyTimelineMode: "sessions",
   motion: "system",
   updateCheck: true,
+  updateSnooze: null,
+  updateNotified: null,
   waveforms: true,
   waveformSeekBar: true,
   waveformNowPlaying: false,
