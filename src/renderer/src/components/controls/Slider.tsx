@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "@/lib/format";
+import { raisePace } from "@/lib/volumePace";
 
 interface SliderProps {
   /** 0..1 */
@@ -35,7 +36,9 @@ interface SliderProps {
   /** A VOLUME'S GUARD: a press more than this far above the thumb nudges it up by this much and
    *  starts no drag, and End doesn't send it to the top. A stray click or tap lands anywhere, and a
    *  jump there could be far too loud before anyone reacts; a drag from the thumb still goes as far
-   *  as it's taken, heard as it moves and stopped by letting go. Down is never guarded. */
+   *  as it's taken, heard as it moves and stopped by letting go. The click leaves the slider
+   *  focused, so its keys are guarded too: a key raises by raiseBy at most (Page Up included), and
+   *  a held one is paced as the volume shortcut is (lib/volumePace). Down is never guarded. */
   raiseBy?: number;
 }
 
@@ -105,6 +108,7 @@ export function Slider({
   raiseBy,
 }: SliderProps): React.JSX.Element {
   const trackRef = useRef<HTMLDivElement>(null);
+  const [pace] = useState(raisePace);
   const [dragValue, setDragValue] = useState<number | null>(null);
   // Screen coordinates for the scrub bubble, recomputed per pointer move. Kept
   // as state (not derived at render from the ratio) because the bubble is
@@ -212,12 +216,16 @@ export function Slider({
           PageDown: -step * 5,
         };
         let next: number | null = null;
-        if (e.key in by) next = shown + by[e.key];
+        // a guarded slider raises by raiseBy at most, Page Up's five steps included
+        if (e.key in by)
+          next = shown + (raiseBy != null ? Math.min(by[e.key], raiseBy) : by[e.key]);
         else if (e.key === "Home") next = 0;
         else if (e.key === "End" && raiseBy == null) next = 1;
         if (next == null || disabled) return;
         e.preventDefault();
         e.stopPropagation();
+        // and a held raise is paced as the volume shortcut's is; a lowering never
+        if (raiseBy != null && !pace(e.repeat, next > shown)) return;
         onCommit(Math.max(0, Math.min(1, next)));
       }}
       className={cx(

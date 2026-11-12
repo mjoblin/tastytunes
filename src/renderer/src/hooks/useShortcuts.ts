@@ -6,10 +6,10 @@ import { modalHasKeyboard } from "@/lib/keyboardOwner";
 import { releaseKeyboard } from "@/lib/inputModality";
 import { useStore, type Screen } from "@/store";
 import { SCREENS, IS_MAC } from "@/lib/screens";
+import { raisePace } from "@/lib/volumePace";
 
-/** A held volume arrow's pace: one step per this many milliseconds, however fast the key repeats. */
-export const VOLUME_REPEAT_MS = 200;
-let lastVolumeRepeat = 0;
+/** The volume arrows' pace (lib/volumePace): a held Up is paced, a held Down never. */
+const volumePace = raisePace();
 
 // Derived from the shared registry — the screen lookup runs before the
 // transport switch, so a registry key can shadow a transport shortcut (the
@@ -293,11 +293,9 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         case "ArrowUp":
         case "ArrowDown": {
           e.preventDefault();
-          // A HELD ARROW steps at most every VOLUME_REPEAT_MS: the key's repeat (about 30 a
-          // second) would otherwise climb faster than anyone hears it happen
-          const now = Date.now();
-          if (e.repeat && now - lastVolumeRepeat < VOLUME_REPEAT_MS) break;
-          lastVolumeRepeat = now;
+          // A HELD UP steps at most every VOLUME_REPEAT_MS (lib/volumePace): the key's repeat
+          // (about 30 a second) would otherwise climb faster than anyone hears it happen
+          if (!volumePace(e.repeat, e.key === "ArrowUp")) break;
           const by = e.shiftKey ? 5 : 1;
           void tt.command({ type: "volumeStepChange", delta: e.key === "ArrowUp" ? by : -by });
           break;
