@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, existsSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -54,8 +54,12 @@ describe("LogFile", () => {
   });
 
   it("never throws when the folder can't be written: it stops writing", () => {
-    const log = new LogFile("/dev/null/logs", () => "header");
+    // a file where a folder should be: no system makes a folder inside a file (/dev/null/logs did
+    // on Windows, as C:\dev\null\logs)
+    const blocker = join(mkdtempSync(join(tmpdir(), "log-")), "not-a-folder");
+    writeFileSync(blocker, "");
+    const log = new LogFile(join(blocker, "logs"), () => "header");
     expect(() => log.write(entry("x"))).not.toThrow();
-    expect(existsSync("/dev/null/logs")).toBe(false);
+    expect(existsSync(join(blocker, "logs"))).toBe(false);
   });
 });
