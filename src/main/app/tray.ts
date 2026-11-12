@@ -16,11 +16,13 @@ import type { StreamerCommand } from "@shared/ipc";
 import { getSettings, updateSettings } from "../data/persist";
 import { anchorToTray, workAreaFor, type Rect } from "./windowPlacement";
 import { reloadOnCrash } from "./crashReload";
+import { currentUpdateState } from "./updater";
 import { deviceManager } from "./runtime";
 import trayTemplateIcon from "../../../resources/trayTemplate.png?asset";
 import trayTemplateIcon2x from "../../../resources/trayTemplate@2x.png?asset";
 import trayTileIcon from "../../../resources/tray.png?asset";
 import { FACT_SEP } from "@shared/model";
+import type { UpdateState } from "@shared/model";
 
 /**
  * The system-tray / menu-bar companion. Phase 1: an icon and a native context
@@ -89,7 +91,7 @@ export function trayWantsRefresh(kind: PushMessage["kind"]): boolean {
 
 // --------------------------------------------------------------- menu contents
 
-type TrayAction = "open" | "settings" | "about" | "quit";
+type TrayAction = "open" | "settings" | "updates" | "about" | "quit";
 
 /**
  * A plain description of the menu, built before any Electron object exists.
@@ -151,8 +153,17 @@ function sourcesNode(snap: Snapshot): TrayNode {
  * into a menu is not a thing), and the visual, frequent surfaces — queue,
  * presets, playlists, recents — are the panel's job in a later phase.
  */
-export function buildTrayMenu(snap: Snapshot): TrayNode[] {
+export function buildTrayMenu(snap: Snapshot, update: UpdateState | null = null): TrayNode[] {
   const connected = snap.connection.phase === "connected";
+  // AN UPDATE, WHERE THE MENU BAR'S PEOPLE LOOK (0.16.0): someone who runs TastyTunes from here may
+  // never see the window's Update button, so the menu says it first while one is on offer, and
+  // the item opens Settings › Updates, where the download and the restart are asked for
+  const offered =
+    update != null &&
+    update.version != null &&
+    (update.phase === "available" ||
+      update.phase === "downloading" ||
+      update.phase === "downloaded");
   // Only NETWORK standby is reachable, and that's exactly the case where
   // power !== 'ON' while still connected — so the label can always name the
   // action rather than making someone guess what a toggle would do.
@@ -161,6 +172,12 @@ export function buildTrayMenu(snap: Snapshot): TrayNode[] {
   return [
     { id: "tray-status", label: statusLabel(snap), enabled: false },
     { type: "separator" },
+    ...(offered
+      ? ([
+          { id: "tray-update", label: `Update to ${update.version}…`, action: "updates" },
+          { type: "separator" },
+        ] satisfies TrayNode[])
+      : []),
     { id: "tray-open", label: "Open TastyTunes", action: "open" },
     { type: "separator" },
     sourcesNode(snap),
@@ -201,6 +218,9 @@ function runAction(action: TrayAction, d: TrayDeps): void {
       return;
     case "settings":
       d.sendToMain({ id: "screen", screen: "settings" });
+      return;
+    case "updates":
+      d.sendToMain({ id: "updates" });
       return;
     case "about":
       d.sendToMain({ id: "about" });
@@ -673,7 +693,7 @@ export function hasTray(): boolean {
 /** Rebuild the context menu if what it would say has changed. */
 export function refreshTrayMenu(): void {
   if (!tray || !deps) return;
-  const nodes = buildTrayMenu(deps.snapshot());
+  const nodes = buildTrayMenu(deps.snapshot(), currentUpdateState());
   const signature = JSON.stringify(nodes);
   if (signature === rendered) return;
   rendered = signature;
@@ -795,10 +815,10 @@ function installTestHooks(): void {
   if (process.env["TASTYTUNES_TRAY_TEST"] !== "1" || globalThis.__ttTray) return;
   globalThis.__ttTray = {
     present: () => tray != null,
-    menu: () => (tray && deps ? buildTrayMenu(deps.snapshot()) : null),
+    menu: () => (tray && deps ? buildTrayMenu(deps.snapshot(), currentUpdateState()) : null),
     click(id: string): boolean {
       if (!tray || !deps) return false;
-      const node = findNode(buildTrayMenu(deps.snapshot()), id);
+      const node = findNode(buildTrayMenu(deps.snapshot(), currentUpdateState()), id);
       if (!node || node.enabled === false) return false;
       if (node.command) deps.command(node.command);
       else if (node.action) runAction(node.action, deps);

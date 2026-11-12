@@ -410,6 +410,10 @@ interface TTState {
   settingsJump: string | null;
   jumpToSettingsTab: (tab: string) => void;
   clearSettingsJump: () => void;
+  /** One-shot: Check for Updates… asked the feed, so Settings › Updates checks as it opens
+   *  (UpdatesSection consumes and clears it, showing the check's outcome). */
+  updateCheckAsk: boolean;
+  clearUpdateCheckAsk: () => void;
   /** One-shot deep link into History's Timeline at a moment (the album
    *  header's "last played" fact); the Timeline consumes and clears it. */
   historyJump: { at: number; nonce: number } | null;
@@ -687,6 +691,8 @@ export const useStore = create<TTState>((set, get) => ({
     set({ settingsJump: tab });
   },
   clearSettingsJump: () => set({ settingsJump: null }),
+  updateCheckAsk: false,
+  clearUpdateCheckAsk: () => set({ updateCheckAsk: false }),
   historyJump: null,
   jumpToHistory: (at) => {
     get().setScreen("recently-played");
@@ -1174,6 +1180,12 @@ export const useStore = create<TTState>((set, get) => ({
         break;
       case "screen":
         s.setScreen(command.screen as Screen);
+        break;
+      // Settings › Updates, from the menus, the tray and the system's notice; Check for Updates…
+      // also asks the feed (the section runs the check, so its outcome shows there)
+      case "updates":
+        s.jumpToSettingsTab("updates");
+        if (command.check) set({ updateCheckAsk: true });
         break;
       // View › Back/Forward (⌘[ ⌘]): the Info window's own pages while it is open, nothing
       // behind another modal, else the app's (lib/keyboardOwner, lib/infoSteps)

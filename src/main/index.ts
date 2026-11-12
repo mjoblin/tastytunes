@@ -12,6 +12,7 @@ import { deviceManager, mcpBridge } from "./app/runtime";
 import { catchUpOnResume, noteSuspend, startScheduler } from "./app/scheduler";
 import { hasTray, refreshTrayMenu, syncTray, trayWantsRefresh } from "./app/tray";
 import { startUpdater } from "./app/updater";
+import { announceUpdate, shouldAnnounce } from "./app/updateNotice";
 import { serveUrlActions } from "./app/urlActions";
 import { takeUrlFromArgv } from "./app/urlInbox";
 import {
@@ -25,7 +26,7 @@ import {
   showMainWindow,
   trayDeps,
 } from "./app/windows";
-import { getSettings, moveSecrets } from "./data/persist";
+import { getSettings, moveSecrets, updateSettings } from "./data/persist";
 import { LOGIN_ARG, openedAtLogin, startsInTray } from "./app/loginItem";
 import { listeningRecord } from "./data/listeningRecord";
 import { registerIpc } from "./ipc";
@@ -136,6 +137,17 @@ if (!gotLock) {
       });
       startUpdater((state) => {
         getMainWindow()?.webContents.send(IPC.push, { kind: "updateState", state });
+        // the menu bar or tray menu offers it too
+        if (hasTray()) refreshTrayMenu();
+        // and someone running from the menu bar or tray, the window out of view, hears it once
+        const main = getMainWindow();
+        const inView = !!main && !main.isDestroyed() && main.isVisible() && !main.isMinimized();
+        if (state.version && shouldAnnounce(state, getSettings(), inView)) {
+          const version = state.version;
+          if (announceUpdate(version, () => sendMenuCommand({ id: "updates" }))) {
+            updateSettings({ updateNotified: version });
+          }
+        }
       });
 
       // Node timers stall during system sleep. The sleep timer fires what came

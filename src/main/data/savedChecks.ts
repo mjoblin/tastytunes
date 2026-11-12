@@ -175,6 +175,8 @@ const NULLABLE: Partial<Record<keyof AppSettings, Kind>> = {
   libraryHeaderArt: "number",
   miniBounds: "object",
   mainBounds: "object",
+  updateSnooze: "object",
+  updateNotified: "string",
 };
 
 function kindOfDefault(v: unknown): Kind | null {
