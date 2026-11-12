@@ -336,6 +336,7 @@ must be integrated with the desktop for links to work).
 - Only the controls the streamer itself reports (based on source) are enabled
 - Pre-amp mode (absolute volume) and Control Bus mode (nudge), mute, and an optional volume limit
 - Scroll-wheel volume on the volume control and the mini player
+- A click far up the volume slider raises the volume by 5 rather than jumping there, and a held key raises it gradually
 
 ### Queue
 
@@ -443,10 +444,12 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 
 - A requests console (<kbd>`</kbd>) listing every outbound request the app makes: service, method, status, timing
 - A SMOIP console showing the raw streamer traffic
+- A diagnostics log saved on your computer, never sent anywhere, for attaching to a problem report
 
 ### Updates & packaging
 
 - An update is downloaded only when you click Download, and installed when you click Restart
+- Favorites, playlists, and settings are protected from damaged files, with a copy of each kept at every update
 - Signed and notarized universal macOS builds (Intel and Apple Silicon); one signed Windows installer covering x64 and arm64 (native on Windows-on-ARM); Linux AppImages for x64 and arm64, including 64-bit Raspberry Pi OS
 
 ## What leaves your machine
