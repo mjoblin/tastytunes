@@ -1,6 +1,8 @@
 import { app, protocol } from "electron";
 import { join } from "node:path";
 import { installNavigationGuard } from "./guard";
+import { keepVersionCopy } from "../data/savedFiles";
+import { version as appVersion } from "../../../package.json";
 // tastytunes:// URLs: listened for before ready, held until whenReady takes them (app/urlInbox)
 import "./urlInbox";
 
@@ -32,6 +34,14 @@ app.setPath(
   "userData",
   process.env["TASTYTUNES_USER_DATA"] ?? join(app.getPath("appData"), "tastytunes"),
 );
+
+// a new version keeps a copy of the saved files as the last one left them, before anything in it
+// writes (data/savedFiles); the version from package.json, as the log's header reads it
+keepVersionCopy(app.getPath("userData"), appVersion, [
+  "settings.json",
+  "favorites.json",
+  "playlists.json",
+]);
 
 // every web contents the app creates is held to its own page (app/guard)
 installNavigationGuard();

@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { app } from "electron";
 import { favoriteKey, type Favorite } from "@shared/model";
 import { jsonFileStore } from "./jsonStore";
+import { checkFavorites } from "./savedChecks";
 
 // The local favorites collection (stations, albums, tracks), persisted beside
 // settings.json. User-curated and unbounded (it's a small JSON of things
@@ -12,7 +13,7 @@ import { jsonFileStore } from "./jsonStore";
 const store = jsonFileStore<Favorite[]>({
   pathOf: () => join(app.getPath("userData"), "favorites.json"),
   scope: "favorites",
-  load: (parsed) => (Array.isArray(parsed) ? (parsed as Favorite[]) : []),
+  load: (parsed, setAside) => checkFavorites(parsed, setAside),
 });
 
 export function getFavorites(): Favorite[] {

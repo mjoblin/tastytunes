@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { isRecord } from "@shared/guards";
+import { isRecord, kindOf } from "@shared/guards";
 import { join } from "node:path";
 import { app } from "electron";
 import {
@@ -11,9 +10,13 @@ import {
   type AppSettings,
 } from "@shared/model";
 import { atomicWriteFileSync } from "./jsonStore";
+import { checkSettingsKinds } from "./savedChecks";
+import { keepAsFound, readSaved } from "./savedFiles";
 import { getSecret, setSecret } from "./secrets";
 
 let cached: AppSettings | null = null;
+/** settings.json couldn't be read this session: nothing writes over it (data/savedFiles). */
+let unreadable = false;
 
 /** The MCP server's bearer token (the secrets store's mcpToken): minted here and nowhere else. */
 const mintToken = (): string => randomBytes(24).toString("base64url");
@@ -40,11 +43,20 @@ function settingsPath(): string {
 export function getSettings(): AppSettings {
   if (cached) return cached;
   let loaded: AppSettings;
+  // THE FILE CHECKED ON LOAD (0.16.0, data/savedFiles and data/savedChecks): a file that isn't JSON
+  // is moved aside, one that can't be read is never written over this session, and a value of the
+  // wrong kind is set aside so its default stands, the file as it was copied aside first
+  const path = settingsPath();
+  const read = readSaved(path);
+  unreadable = read.state === "unreadable";
+  const setAside: string[] = [];
+  const raw = read.state === "read" ? read.parsed : undefined;
+  if (raw !== undefined && !isRecord(raw)) setAside.push(`it held ${kindOf(raw)}, not settings`);
+  // our own file: an object is ours to read as settings (missing or retired keys are backfilled
+  // below), anything else is ignored
+  const file = checkSettingsKinds(isRecord(raw) ? raw : {}, setAside);
+  keepAsFound(path, setAside);
   try {
-    const raw: unknown = JSON.parse(readFileSync(settingsPath(), "utf-8"));
-    // our own file: an object is ours to read as settings (the cast says so;
-    // missing or retired keys are backfilled below), anything else is ignored
-    const file: Record<string, unknown> = isRecord(raw) ? raw : {};
     loaded = { ...DEFAULT_SETTINGS, ...(file as Partial<AppSettings>) };
     // The merge above is shallow — backfill nested objects from older files.
     loaded.mcp = { ...DEFAULT_SETTINGS.mcp, ...loaded.mcp };
@@ -113,6 +125,7 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const merged = { ...getSettings(), ...patch };
   const next = secretsMoved ? withoutSecrets(merged) : merged;
   cached = next;
+  if (unreadable) return next;
   try {
     // atomic (temp + rename) — a crash mid-write must not truncate settings.
     // Pretty-printed: this is the one file the user might open or diff.

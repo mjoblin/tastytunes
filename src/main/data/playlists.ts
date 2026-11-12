@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { app } from "electron";
 import { jsonFileStore } from "./jsonStore";
+import { checkPlaylists } from "./savedChecks";
 import {
   MAX_PLAYLISTS,
   MAX_PLAYLIST_ITEMS,
@@ -25,7 +26,7 @@ function sortNewest(list: Playlist[]): Playlist[] {
 const store = jsonFileStore<Playlist[]>({
   pathOf: () => join(app.getPath("userData"), "playlists.json"),
   scope: "playlists",
-  load: (parsed) => (Array.isArray(parsed) ? sortNewest(parsed as Playlist[]) : []),
+  load: (parsed, setAside) => sortNewest(checkPlaylists(parsed, setAside)),
 });
 
 export function getPlaylists(): Playlist[] {

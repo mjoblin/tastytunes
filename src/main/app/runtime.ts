@@ -1,5 +1,6 @@
 import { DeviceManager } from "../device/deviceManager";
 import { McpBridge } from "../servers/mcpServer";
+import { onSavedNotes } from "../data/savedFiles";
 
 // The main process's two long-lived services, one instance each (split out of index.ts in the
 // 0.11.0 sweep). Constructed when first imported, which is after app/boot has pinned userData.
@@ -11,6 +12,8 @@ process.on("unhandledRejection", (reason) => deviceManager.logUnhandled(reason))
 // The last resort for a throw nothing caught: logged where the drawer shows it, the app kept up
 // (Electron's default is a modal error box and a main process in an unknown state either way).
 process.on("uncaughtException", (err) => deviceManager.logUnhandled(err, "uncaught exception"));
+// what the saved files' checks found (data/savedFiles), the notes from before this point first
+onSavedNotes((note) => deviceManager.log(note.level, "saved", note.text));
 export const mcpBridge = new McpBridge(deviceManager);
 
 /** The connected streamer's host; media-browser calls need one and throw without it. */

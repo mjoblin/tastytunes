@@ -1,13 +1,6 @@
-import {
-  chmodSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, mkdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { keepAsFound, readSaved } from "./savedFiles";
 
 // The one JSON-persistence layer for the local data files (favorites,
 // playlists, recents, settings, the media index). Deliberately electron-free
@@ -51,34 +44,40 @@ export function atomicWriteFileSync(path: string, data: string, mode?: number): 
 /**
  * A cached, atomically-persisted JSON file — the load/save half that
  * favorites.ts and playlists.ts used to hand-roll identically. `load` turns
- * whatever was parsed (or undefined, for a missing/corrupt file) into a valid
- * T; domain logic (sorting, bounds, healing) stays in the owning store, ON TOP
- * of get/set. Stores whose load is itself domain-heavy (recents' upgrade +
- * collapse pass, settings' nested-default backfill) keep their own flow and
- * take just atomicWriteFileSync.
+ * whatever was parsed (or undefined, for a missing file or one moved aside) into
+ * a valid T, naming in `setAside` whatever it left out (data/savedChecks); domain
+ * logic (sorting, bounds, healing) stays in the owning store, ON TOP of get/set.
+ * The read goes through data/savedFiles (0.16.0): a file that isn't JSON is moved
+ * aside before anything writes, one that can't be read is never written over this
+ * session, and when a load sets anything aside the file as it was is copied aside
+ * first. Stores whose load is itself domain-heavy (recents' upgrade + collapse
+ * pass, settings' nested-default backfill) keep their own flow and take just
+ * atomicWriteFileSync (settings reads through savedFiles too).
  */
 export function jsonFileStore<T>(opts: {
   /** Lazy: app.getPath('userData') isn't available at import time. */
   pathOf(): string;
   /** For the persist-failure log line. */
   scope: string;
-  load(parsed: unknown): T;
+  load(parsed: unknown, setAside: string[]): T;
 }): { get(): T; set(next: T): T } {
   let cached: T | null = null;
+  // a file that couldn't be read is never written over this session (data/savedFiles)
+  let unreadable = false;
   return {
     get() {
       if (cached !== null) return cached;
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(readFileSync(opts.pathOf(), "utf-8"));
-      } catch {
-        parsed = undefined;
-      }
-      cached = opts.load(parsed);
+      const path = opts.pathOf();
+      const read = readSaved(path);
+      unreadable = read.state === "unreadable";
+      const setAside: string[] = [];
+      cached = opts.load(read.state === "read" ? read.parsed : undefined, setAside);
+      keepAsFound(path, setAside);
       return cached;
     },
     set(next: T) {
       cached = next;
+      if (unreadable) return next;
       try {
         atomicWriteFileSync(opts.pathOf(), JSON.stringify(next));
       } catch (err) {

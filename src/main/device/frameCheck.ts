@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { kindOf } from "@shared/guards";
 
 // THE WIRE'S CHECK (0.16.0 hardening). What the streamer pushes was cast to its type on arrival, so
 // a frame from firmware or a model we haven't met could hand a reader null, or a number where it
@@ -15,18 +16,6 @@ export type FrameCheck =
 
 // the names set aside during one check (checks are synchronous, so one list serves them all)
 let setAside: string[] = [];
-
-/** "a string", "a list", "null": what a value was, for the log. */
-export const kindOf = (v: unknown): string =>
-  v === null
-    ? "null"
-    : Array.isArray(v)
-      ? "a list"
-      : typeof v === "object"
-        ? "an object"
-        : typeof v === "boolean"
-          ? "a yes/no"
-          : `a ${typeof v}`;
 
 /** A field that may be missing or null; of the wrong kind it is set aside as null and named. */
 function opt(name: string, kind: z.ZodType): z.ZodType {
