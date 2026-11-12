@@ -139,7 +139,7 @@ export function keepAsFound(path: string, setAside: readonly string[], now = new
 }
 
 /**
- * The files as the last version left them, copied into backups/<that version>/ the first time a
+ * The files as the last version left them, copied into backups/<when> from <version>/ the first time a
  * different version runs, before it writes anything; the last KEEP versions' backups kept. The
  * version is remembered in backups/last-version. Never a throw: a backup that fails is noted.
  */
@@ -157,13 +157,15 @@ export function keepVersionCopy(
     const present = files.filter((f) => existsSync(join(dir, f)));
     mkdirSync(backups, { recursive: true });
     if (present.length > 0) {
-      // a version from before the backups is "earlier"; the folder's date tells the copies apart
-      const into = join(backups, `${last ?? "earlier"} ${day(now)}`);
+      // named by when, then from which version ("an earlier version" for one from before the
+      // backups), so the names sort in the order they were made, the newest last
+      const into = join(backups, `${stamp(now)} from ${last ?? "an earlier version"}`);
       mkdirSync(into, { recursive: true });
       for (const f of present) copyFileSync(join(dir, f), join(into, f));
       const kept = readdirSync(backups)
         .filter((f) => statSync(join(backups, f)).isDirectory())
-        .sort((a, b) => statSync(join(backups, b)).mtimeMs - statSync(join(backups, a)).mtimeMs);
+        .sort()
+        .reverse();
       for (const old of kept.slice(KEEP))
         rmSync(join(backups, old), { recursive: true, force: true });
       noteSaved(

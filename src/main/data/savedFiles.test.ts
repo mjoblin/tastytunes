@@ -148,13 +148,12 @@ describe("keepVersionCopy", () => {
     keepVersionCopy(dir, "0.16.0", FILES, at(0));
     // from before the backups: the version is unknown
     expect(readdirSync(join(dir, "backups")).sort()).toEqual([
-      "earlier 2026-11-11",
+      "2026-11-11T09-30-00 from an earlier version",
       "last-version",
     ]);
-    expect(readdirSync(join(dir, "backups", "earlier 2026-11-11")).sort()).toEqual([
-      "favorites.json",
-      "settings.json",
-    ]);
+    expect(
+      readdirSync(join(dir, "backups", "2026-11-11T09-30-00 from an earlier version")).sort(),
+    ).toEqual(["favorites.json", "settings.json"]);
     expect(readFileSync(join(dir, "backups", "last-version"), "utf-8")).toBe("0.16.0");
     // the same version again: nothing new
     keepVersionCopy(dir, "0.16.0", FILES, at(1));
@@ -165,9 +164,9 @@ describe("keepVersionCopy", () => {
     }
     const kept = readdirSync(join(dir, "backups")).filter((f) => f !== "last-version");
     expect(kept).toHaveLength(KEEP);
-    expect(kept).toContain("1.1.0 2026-12-04");
+    expect(kept).toContain("2026-12-04T12-00-00 from 1.1.0");
     expect(notes.at(-1)?.text).toBe(
-      "settings.json, favorites.json from 1.1.0 kept in backups/1.1.0 2026-12-04",
+      "settings.json, favorites.json from 1.1.0 kept in backups/2026-12-04T12-00-00 from 1.1.0",
     );
   });
 
