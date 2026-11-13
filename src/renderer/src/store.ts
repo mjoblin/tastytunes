@@ -154,6 +154,21 @@ export interface LastStation {
   radioBrowserUuid: string | null;
 }
 
+/** The album being played, analyzed while it plays (lib/albumOnPlay): told by its queue entry's
+ *  album and artist, as the playing album is; the track being measured counted from 1, and how
+ *  many. Shown where the album's DR will land, never in the Library's header (nobody asked). */
+export interface AlbumPass {
+  id: number;
+  entry: {
+    title: string | null;
+    artist: string | null;
+    album: string | null;
+    duration: number | null;
+  };
+  at: number;
+  of: number;
+}
+
 /** EXPERIMENT (0.7 exploration): the Analyze-audio sweep's live position. */
 export interface AnalysisProgress {
   /** albumDrKey of the album under the needle. */
@@ -498,6 +513,8 @@ interface TTState {
   /** EXPERIMENT: the running sweep's position (null = idle). */
   analysisProgress: AnalysisProgress | null;
   setAnalysisProgress: (p: AnalysisProgress | null) => void;
+  /** The album being played, analyzed while it plays; null when no such pass runs. */
+  albumPass: AlbumPass | null;
   setPaletteOpen: (open: boolean) => void;
   setDisplayMode: (on: boolean) => void;
   setLyricsOpen: (open: boolean) => void;
@@ -839,6 +856,7 @@ export const useStore = create<TTState>((set, get) => ({
   setAlbumDrEntry: (key, entry) => set((s) => ({ albumDr: { ...s.albumDr, [key]: entry } })),
   analysisProgress: null,
   setAnalysisProgress: (analysisProgress) => set({ analysisProgress }),
+  albumPass: null,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDisplayMode: (displayMode) => {
     set({ displayMode });

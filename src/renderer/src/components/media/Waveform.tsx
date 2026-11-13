@@ -156,6 +156,30 @@ export function DrBadge({
   );
 }
 
+/** Where an album's DR will land while the album is being analyzed: the badge's place held by a
+ *  faint "DR", pulsing gently (motion-safe), its tip saying how far the analysis has got. No count
+ *  in the chip: "4/13" there would read as a DR. */
+export function DrPending({
+  at,
+  of,
+  className,
+}: {
+  at: number;
+  of: number;
+  /** Overrides the default ml-2.5, as DrBadge's. */
+  className?: string;
+}): React.JSX.Element {
+  return (
+    <span
+      data-dr-pending
+      title={at > 0 && of > 0 ? `Analyzing, track ${at} of ${of}` : "Analyzing"}
+      className={`rounded px-1 py-px text-faint ring-1 ring-inset ring-edge motion-safe:animate-pulse ${className ?? "ml-2.5"}`}
+    >
+      DR
+    </span>
+  );
+}
+
 /** The Stream tab's panel view: envelopes, playhead, click-to-seek, stats. */
 export function Waveform({
   serverUdn,

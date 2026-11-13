@@ -59,6 +59,7 @@ import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
 import { AlbumCompactVerbs, AlbumHeader } from "@/components/library/AlbumHeader";
+import { useAlbumAnalyzing } from "@/lib/albumOnPlay";
 import { ArtistHeader } from "@/components/library/ArtistHeader";
 import { ArtistPage } from "@/components/library/ArtistPage";
 import { LibrarySearchBar } from "@/components/library/LibrarySearchBar";
@@ -705,7 +706,10 @@ export function LibraryScreen(): React.JSX.Element {
       : null;
   // the album's integrated loudness (0.8.0) rides the same freshness rule
   const albumLufsShown = albumDrShown != null ? (albumDrEntry?.lufs ?? null) : null;
-  const albumSweeping = albumNode != null && analysisProgress?.key === albumDrKey(albumNode);
+  // analyzed by a sweep or while it plays (lib/albumOnPlay): the header says so where its DR lands
+  const analyzingOf = useAlbumAnalyzing();
+  const albumAnalyzing = albumNode ? analyzingOf(albumNode) : null;
+  const albumSweeping = albumAnalyzing != null;
   // the note a row carries when its format differs from the album headline
   const albumNoteFor = (node: MediaNode): string | null => {
     if (!albumNode) return null;
@@ -840,6 +844,7 @@ export function LibraryScreen(): React.JSX.Element {
         menuOpen={menuNodeId === node.id}
         favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
         dr={isAlbumClass(node.upnpClass) ? (albumDrMap[albumDrKey(node)]?.dr ?? null) : null}
+        analyzing={isAlbumClass(node.upnpClass) ? analyzingOf(node) : null}
         onArtistLink={
           isAlbumClass(node.upnpClass) && node.artist ? () => goToArtistFromLens(node) : undefined
         }
@@ -1286,7 +1291,7 @@ export function LibraryScreen(): React.JSX.Element {
             albumDrShown={albumDrShown}
             albumLufsShown={albumLufsShown}
             albumSweeping={albumSweeping}
-            analysisProgress={analysisProgress}
+            albumAnalyzing={albumAnalyzing}
             albumComposerLine={albumComposerLine}
             playContainer={playContainer}
             nodeFavorited={nodeFavorited}

@@ -9,7 +9,7 @@ import { RowHeart } from "@/components/media/RowHeart";
 import { ArtImage } from "@/components/media/ArtImage";
 import { MediaArt } from "@/components/media/MediaArt";
 import { cardChip } from "@/components/chrome/Chrome";
-import { DrBadge, drTone, fmtLufs } from "@/components/media/Waveform";
+import { DrBadge, DrPending, drTone, fmtLufs } from "@/components/media/Waveform";
 import { SignalDot } from "@/components/device/SignalLamp";
 import type { CardDetails } from "@/components/library/useCardDetails";
 import { FACT_SEP } from "@/lib/mediaFacts";
@@ -83,6 +83,7 @@ export function ContainerCard({
   note,
   subtitle: line,
   details,
+  analyzing,
   onHeart,
   onEnter,
   onPlay,
@@ -116,6 +117,8 @@ export function ContainerCard({
   /** An album's format line under its names (useCardDetails), absent where the surface has none
    *  or View options turns it off. */
   details?: CardDetails;
+  /** The album is being analyzed (useAlbumAnalyzing): with no DR yet, the format line holds its place. */
+  analyzing?: { at: number; of: number } | null;
   onHeart?(): void;
   /** The body click, with its event: a caller with a selection model reads the
    *  chord (⌘/ctrl, shift) and decides whether this click opens or picks. */
@@ -229,7 +232,7 @@ export function ContainerCard({
             {badge && <CardBadge label={badge} tip={badgeTip} />}
           </div>
         )}
-        {details && <CardFormatLine details={details} />}
+        {details && <CardFormatLine details={details} analyzing={analyzing} />}
         {note && (
           // LAST, under the names: the card's own artist and year are what it
           // says about itself, and a surface's fact goes after them, never
@@ -473,7 +476,14 @@ export function CardBadge({ label, tip }: { label: string; tip?: string }): Reac
  * narrow card stays about its width. Held at its height when nothing is known, so every card in
  * a grid keeps one height.
  */
-function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Element {
+function CardFormatLine({
+  details,
+  analyzing,
+}: {
+  details: CardDetails;
+  /** The album is being analyzed: with no DR yet, the line's end holds its place. */
+  analyzing?: { at: number; of: number } | null;
+}): React.JSX.Element {
   const dr = details.dr != null && details.dr > 0 ? details.dr : null;
   const drWords =
     dr != null
@@ -498,12 +508,20 @@ function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Elemen
         </span>
       )}
       {details.label && <span className="truncate">{details.label}</span>}
-      {dr != null && (
+      {dr != null ? (
         <DrBadge
           dr={dr}
           titled={false}
           className="ml-auto shrink-0 font-mono text-[10px] leading-[13px]"
         />
+      ) : (
+        analyzing && (
+          <DrPending
+            at={analyzing.at}
+            of={analyzing.of}
+            className="ml-auto shrink-0 font-mono text-[10px] leading-[13px]"
+          />
+        )
       )}
     </div>
   );
@@ -523,6 +541,7 @@ export function ContainerRow({
   badge,
   badgeTip,
   dr,
+  analyzing,
   onArtistLink,
   onNavDrag,
   onHeart,
@@ -549,6 +568,8 @@ export function ContainerRow({
   /** EXPERIMENT (0.7): the album's recorded TT-DR for the data cluster;
    *  null renders the reserved cell empty (absence as absence). */
   dr?: number | null;
+  /** The album is being analyzed (useAlbumAnalyzing): with no DR yet, its cell holds the place. */
+  analyzing?: { at: number; of: number } | null;
   /** The album artist as a link (rows are the data view: names navigate;
    *  the row itself keeps opening the album). */
   onArtistLink?(): void;
@@ -647,7 +668,11 @@ export function ContainerRow({
       )}
       {album && (
         <div className="flex w-12 justify-end font-mono text-[10.5px]">
-          {dr != null && <DrBadge dr={dr} className="" />}
+          {dr != null ? (
+            <DrBadge dr={dr} className="" />
+          ) : (
+            analyzing && <DrPending at={analyzing.at} of={analyzing.of} className="" />
+          )}
         </div>
       )}
       {playing ? <Eqbars /> : <span />}
