@@ -19,7 +19,8 @@ import { measuringNow, storedIsCurrent } from "@/components/media/waveformAnalys
  * main records the album's DR and loudness once every track is measured, as it does for an album
  * measured track by track. A new queue stops it, keeping what finished. Nothing for a playlist or
  * a mixed queue, the streamer's own USB drive (out of reach), or with waveforms off; no progress
- * is shown, nobody having asked for it. Mounted once, in App.
+ * is shown, nobody having asked for it, but each track's DR arrives in the rows that list it, the
+ * Queue's among them, as it is measured. Mounted once, in App.
  */
 export function useAnalyzeAlbumOnPlay(): void {
   const on = useStore((s) => s.settings.waveforms);
@@ -89,6 +90,8 @@ async function measureAlbum(plan: AlbumQueue, run: { stopped: boolean }): Promis
     if (!file || (await storedIsCurrent(file.key))) continue;
     while (!run.stopped && measuringNow()) await pause(WAIT_MS);
     if (run.stopped || !useStore.getState().settings.waveforms) return;
-    await analyzeInTurn(file.udn, file.id, file.key);
+    // each track's DR shows in the rows that list it (the Queue's among them) as it is measured
+    if (await analyzeInTurn(file.udn, file.id, file.key))
+      useStore.setState((s) => ({ analysisStatsEpoch: s.analysisStatsEpoch + 1 }));
   }
 }
