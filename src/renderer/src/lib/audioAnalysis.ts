@@ -160,6 +160,23 @@ async function sweepTracks(
 }
 
 /**
+ * One track measured in its turn on the sweeps' queue, quietly (0.16.0, the album being played:
+ * lib/albumOnPlay): no progress shown, an Analyze audio asked for meanwhile waiting for this one
+ * file only, the file read at the unhurried pace and kept against a skip. Its analysis, or null.
+ */
+export function analyzeInTurn(
+  serverUdn: string,
+  objectId: string,
+  contentKey: string,
+): Promise<Awaited<ReturnType<typeof analyzeTrack>>> {
+  const run = queueTail.then(() =>
+    analyzeTrack(serverUdn, objectId, contentKey, { keep: true, pace: true }).catch(() => null),
+  );
+  queueTail = run.catch(() => undefined);
+  return run;
+}
+
+/**
  * Analyze an arbitrary set of tracks — the Tracks lens's "Analyze audio" on
  * whatever is shown ("all my 2023 tracks"). Same queue, same pulse (labelled
  * by the caller: "48 tracks"), same per-track persistence; no album DR is

@@ -29,6 +29,7 @@ import { MediaInfoModal } from "@/components/overlays/MediaInfoModal";
 import { ArtistPictureHost } from "@/components/library/ArtistPictureDialog";
 import { useArtistChoicesKept } from "@/lib/artistPictures";
 import { useStopSkippedAnalysis } from "@/components/media/waveformAnalysis";
+import { useAnalyzeAlbumOnPlay } from "@/lib/albumOnPlay";
 import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
 import { SurfaceBoundary } from "@/components/chrome/SurfaceBoundary";
 import { DisplayMode } from "@/components/playback/DisplayMode";
@@ -58,6 +59,7 @@ export default function App(): React.JSX.Element {
   useArtistChoicesKept();
   // a skipped track's measuring stops with its download (0.14.0)
   useStopSkippedAnalysis();
+  useAnalyzeAlbumOnPlay();
 
   const screen = useStore((s) => s.screen);
   const connection = useStore((s) => s.connection);

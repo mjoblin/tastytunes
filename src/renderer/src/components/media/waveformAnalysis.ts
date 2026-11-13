@@ -158,6 +158,18 @@ function partialOf(l: Live): Analysis {
   };
 }
 
+/** Whether any file is being measured now (the album being played waits its turn behind the
+ *  playing track's own measuring, Info's and a sweep's: lib/albumOnPlay). */
+export function measuringNow(): boolean {
+  return controllers.size > 0;
+}
+
+// AN UNHURRIED READ (0.16.0): a measuring nobody is waiting on (the album being played,
+// lib/albumOnPlay) asks for the file's next piece (main hands at most 2 MB a read) no sooner than
+// PACE_MS after the last, so it reads no faster than 2 MB a second beside the streamer's own read
+// of the same server; a server that is read no faster sends no faster
+const PACE_MS = 1000;
+
 /** A file measured in pieces (FLAC, WAV, AIFF): its analysis; "whole" when only the whole-file
  *  decode reads it; null when it couldn't be measured (`stalled` says when the server stopped). */
 async function measureInPieces(
@@ -165,16 +177,21 @@ async function measureInPieces(
   objectId: string,
   key: string,
   signal: AbortSignal,
+  pace: boolean,
 ): Promise<Analysis | "whole" | null> {
   const opened = await tt.audioStreamOpen(serverUdn, objectId).catch(() => null);
   if (!opened) return null;
+  let nextRead = 0;
+  const read = async (): ReturnType<typeof tt.audioStreamRead> => {
+    if (pace) {
+      const wait = nextRead - Date.now();
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      nextRead = Date.now() + PACE_MS;
+    }
+    return tt.audioStreamRead(opened.id);
+  };
   try {
-    const out = await measureStreamOffThread(
-      () => tt.audioStreamRead(opened.id),
-      CAPTURE_BUCKETS,
-      (p) => setLive(key, p),
-      signal,
-    );
+    const out = await measureStreamOffThread(read, CAPTURE_BUCKETS, (p) => setLive(key, p), signal);
     if ("measured" in out) return out.measured;
     if ("whole" in out) return "whole";
     if (out.failed === "stalled") stalled.set(key, true);
@@ -271,12 +288,17 @@ export async function storedIsCurrent(contentKey: string): Promise<boolean> {
  *  key stays LOCATION (udn|objectId), scoped to the session. `force` measures
  *  the file again even when a current analysis is stored (Analyze audio with
  *  nothing else to do, 0.12.0: a file replaced under the same title, artist,
- *  album and length keeps its old analysis otherwise). */
+ *  album and length keeps its old analysis otherwise). `pace` reads the file at the unhurried
+ *  pace (PACE_MS), for a measuring nobody is waiting on. */
 export function analyzeTrack(
   serverUdn: string,
   objectId: string,
   contentKey: string | null = null,
-  { force = false, keep = false }: { force?: boolean; keep?: boolean } = {},
+  {
+    force = false,
+    keep = false,
+    pace = false,
+  }: { force?: boolean; keep?: boolean; pace?: boolean } = {},
 ): Promise<Analysis | null> {
   const key = `${serverUdn}|${objectId}`;
   const hit = force ? undefined : cache.get(key);
@@ -297,7 +319,7 @@ export function analyzeTrack(
     const release = keep || force ? holdAnalysis(serverUdn, objectId) : null;
     let pieces: Analysis | "whole" | null;
     try {
-      pieces = await measureInPieces(serverUdn, objectId, key, ac.signal);
+      pieces = await measureInPieces(serverUdn, objectId, key, ac.signal, pace);
     } finally {
       release?.();
       if (controllers.get(key) === ac) controllers.delete(key);
