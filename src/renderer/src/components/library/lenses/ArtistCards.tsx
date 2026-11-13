@@ -199,7 +199,7 @@ export function ArtistCards({
         aria-label="Artists"
         data-lens-artist-cards
         onScroll={(e) => onScrolled(e.currentTarget.scrollTop)}
-        className="h-full overflow-y-auto pb-2"
+        className="h-full overflow-y-auto pb-10 fade-bottom"
         style={{
           ...CARD_GRID_SCROLLER,
           marginInline: -PAGE_PAD,

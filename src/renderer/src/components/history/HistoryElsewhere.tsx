@@ -403,7 +403,7 @@ export function HistoryElsewhere({
         ref={scrollRef}
         // ring room, the floating rows' idiom: their ring and hover fill sit
         // outside the border box, and a scroller clips at its padding box
-        className="flex-1 min-h-0 overflow-y-auto px-1.5 -mx-1.5 pb-8"
+        className="flex-1 min-h-0 overflow-y-auto px-1.5 -mx-1.5 pb-10 fade-bottom"
         data-history-elsewhere={ownedOnly ? "owned" : "all"}
       >
         <div className="max-w-2xl">

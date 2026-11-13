@@ -385,7 +385,7 @@ export function HistoryScreen(): React.JSX.Element {
           ) : (
             <div
               ref={scrollRef}
-              className="flex-1 overflow-y-auto px-1" /* px-1: ring room at the scrollport's edges */
+              className="flex-1 overflow-y-auto px-1 pb-10 fade-bottom" /* px-1: ring room at the scrollport's edges */
             >
               {/* FROM THE KEYBOARD (0.14.0): the list one Tab stop, up and down
                   through its sessions and tracks across the days, Enter opens or closes a

@@ -300,7 +300,11 @@ export function HistoryStats({
           {cardBusy ? "Drawing…" : "Save image"}
         </Chip>
       </div>
-      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-1 pb-8" data-history-stats>
+      <div
+        ref={scrollRef}
+        className="flex-1 min-h-0 overflow-y-auto px-1 pb-10 fade-bottom"
+        data-history-stats
+      >
         <div className="max-w-3xl space-y-8">
           {empty ? (
             <div className="text-[15px] text-faint pt-6 px-1">Nothing in this period.</div>

@@ -537,7 +537,7 @@ export function AlbumsLens({
           onScroll={(e) => {
             albumsMem.scroll = e.currentTarget.scrollTop;
           }}
-          className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pb-2"
+          className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pb-10 fade-bottom"
           style={CARD_GRID_SCROLLER}
         >
           <ListKeysContext.Provider value={true}>
