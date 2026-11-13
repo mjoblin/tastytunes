@@ -1,4 +1,4 @@
-import { useEffect, useState, useEffectEvent } from "react";
+import { useEffect, useRef, useState, useEffectEvent } from "react";
 import { playKey, type EmbeddedArt, type EmbeddedArtQuery } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -57,8 +57,13 @@ export function useBestArt(
   const enabled = useStore((s) => s.settings.artFromFiles) && fileLookup;
   const [best, setBest] = useState<string | null>(serverUrl ?? null);
   const queryKey = query ? JSON.stringify(query) : null;
+  const lastServer = useRef(serverUrl);
   const findBest = useEffectEvent(() => {
-    setBest(serverUrl ?? null);
+    // A NEW SERVER PICTURE SHOWS AT ONCE; THE SAME ONE (the next track of an album) keeps what is
+    // shown while the file is asked (0.16.0: every track stepped back to the server's small cover
+    // and forward to the file's again a moment later, and the wash behind the window flickered)
+    if (serverUrl !== lastServer.current || !query) setBest(serverUrl ?? null);
+    lastServer.current = serverUrl;
     if (!query) return;
     let live = true;
     void (async () => {
@@ -73,8 +78,10 @@ export function useBestArt(
       if (
         serverWidth != null &&
         (serverWidth >= SMALL_PX || (probe !== serverUrl && serverWidth >= 480))
-      )
+      ) {
+        setBest(serverUrl ?? null);
         return;
+      }
       if (enabled) {
         const art = await embedded(query);
         if (!live) return;
@@ -88,8 +95,14 @@ export function useBestArt(
         const cover = await tt
           .recentCover(playKey(query.title, query.artist, query.album))
           .catch(() => null);
-        if (live && cover) setBest(cover);
+        if (!live) return;
+        if (cover) {
+          setBest(cover);
+          return;
+        }
       }
+      // nothing better: the server's own (what was kept from the last track goes)
+      setBest(serverUrl ?? null);
     })();
     return () => {
       live = false;
