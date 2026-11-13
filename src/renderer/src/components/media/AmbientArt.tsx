@@ -20,6 +20,12 @@ import { useBlurredArt } from "@/hooks/useBlurredArt";
  *
  * A null `src` fades the wash OUT rather than yanking it: art that fails to
  * load, or a disconnect, used to remove it in a single frame.
+ *
+ * NO DIP BETWEEN PICTURES (0.16.0): the outgoing layer stays whole UNDER the
+ * incoming one and goes when the new one is in. Two layers fading at once
+ * (one out, one in) dimmed the wash at the middle of every change, a flicker
+ * even between two near-identical covers. Only with nothing coming does the
+ * outgoing layer fade out itself.
  */
 export function AmbientArt({ src: rawSrc }: { src: string | null }): React.JSX.Element | null {
   // THE BLUR IS BAKED IN, not applied live — see useBlurredArt for the
@@ -28,13 +34,13 @@ export function AmbientArt({ src: rawSrc }: { src: string | null }): React.JSX.E
   // no wash yet, which the crossfade already handles (a null src fades out).
   const src = useBlurredArt(rawSrc);
   const [cur, setCur] = useState<{ src: string | null; k: number }>({ src, k: 0 });
-  const [prev, setPrev] = useState<{ src: string; k: number } | null>(null);
+  const [prev, setPrev] = useState<{ src: string; k: number; leaving: boolean } | null>(null);
   const curRef = useRef(cur);
   const kRef = useRef(0);
   useEffect(() => {
     if (src === curRef.current.src) return;
     const outgoing = curRef.current;
-    if (outgoing.src) setPrev({ src: outgoing.src, k: outgoing.k });
+    if (outgoing.src) setPrev({ src: outgoing.src, k: outgoing.k, leaving: src == null });
     const next = { src, k: ++kRef.current };
     curRef.current = next;
     setCur(next);
@@ -47,7 +53,7 @@ export function AmbientArt({ src: rawSrc }: { src: string | null }): React.JSX.E
         {prev && (
           <div
             key={`p${prev.k}`}
-            className="ambient-layer ambient-layer-out"
+            className={prev.leaving ? "ambient-layer ambient-layer-out" : "ambient-layer"}
             style={{ backgroundImage: `url(${prev.src})` }}
             onAnimationEnd={(e) => {
               if (e.target === e.currentTarget) setPrev(null);
@@ -59,6 +65,10 @@ export function AmbientArt({ src: rawSrc }: { src: string | null }): React.JSX.E
             key={`c${cur.k}`}
             className="ambient-layer ambient-layer-in"
             style={{ backgroundImage: `url(${cur.src})` }}
+            // the new picture is in: the one kept whole beneath it goes
+            onAnimationEnd={(e) => {
+              if (e.target === e.currentTarget) setPrev((p) => (p && !p.leaving ? null : p));
+            }}
           />
         )}
       </div>
