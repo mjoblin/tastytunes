@@ -36,6 +36,13 @@ import { holdKeyboard } from "@/lib/keyboardOwner";
 // surface on software compositing, which these never do (they mount without a transition)
 export const POPOVER_CARD = "rounded-xl ring-1 ring-edge2 bg-raised/85 backdrop-blur-md shadow-xl";
 
+// THE SIDE PANELS (Lyrics, the artist's panel): glass over the screen they open on, at 85 (0.16.0:
+// at 60 over a 12px blur, the Now Playing title's big white letters glowed through as a smear
+// behind the words; a wider blur would soften it too, but a full-height blur that size is the
+// cost software compositing can't carry). One home, so the two can't drift apart.
+export const SIDE_PANEL =
+  "no-drag absolute inset-y-0 right-0 z-10 max-w-[60%] flex flex-col bg-panel/85 backdrop-blur-md border-l border-edge";
+
 /**
  * A popover anchored at a click point: portaled to <body>, backed by a
  * full-window click-catcher, clamped on-screen by its measured size, and
