@@ -5,7 +5,6 @@ import { useStore } from "@/store";
 import { artSrc, artKeyOf } from "@/lib/artSrc";
 import type { MediaNode } from "@shared/model";
 import { HeaderArt } from "@/components/library/HeaderArt";
-import { ArtImage } from "@/components/media/ArtImage";
 import { HEADER_ART_PX, useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 import { NameLink } from "@/components/media/NameLine";
 import { DrChip, LufsChip } from "@/components/media/Waveform";
@@ -263,33 +262,13 @@ export function AlbumHeader(
 
 /**
  * THE COMPACT BAR (0.13.0 round 5): once the header's verbs have scrolled away on a long album,
- * the trail tightens instead of a bar arriving. The album's crumb gains its cover (AlbumCrumbArt)
- * and the header's Play, heart and menu join the
- * trail's right end (AlbumCompactVerbs), the same verbs with the same handlers, so the album keeps
- * its identity and its Play in reach. Pinning the header was ruled out: at the smallest window
- * (800x520) it left about 150px for tracks. LibraryScreen decides when (the verbs' row out of
- * view above the scroller's faded top).
+ * the trail tightens instead of a bar arriving: the header's Play, heart and menu join the trail's
+ * right end (AlbumCompactVerbs), the same verbs with the same handlers, so the album keeps its Play
+ * in reach and the album's crumb names it. (Its cover beside the crumb went in 0.16.0: at 18px it
+ * barely read, and its arrival pushed the album's name aside.) Pinning the header was ruled out:
+ * at the smallest window (800x520) it left about 150px for tracks. LibraryScreen decides when (the
+ * verbs' row out of view above the scroller's faded top).
  */
-export function AlbumCrumbArt({
-  albumNode,
-  albumArt,
-}: {
-  albumNode: MediaNode;
-  albumArt: string | null;
-}): React.JSX.Element {
-  return (
-    <span
-      data-album-crumb-art
-      className="compact-in h-[18px] w-[18px] shrink-0 overflow-hidden rounded-[4px] bg-veil ring-1 ring-edge"
-    >
-      <ArtImage
-        src={artSrc(albumArt, 18, artKeyOf(albumNode))}
-        fallback={<Disc3 size={18} strokeWidth={1} className="text-faint" />}
-      />
-    </span>
-  );
-}
-
 export function AlbumCompactVerbs(
   p: Pick<Fav, "nodeFavorited" | "heartNode"> &
     Pick<Men, "openMenu"> & {

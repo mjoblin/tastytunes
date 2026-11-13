@@ -48,7 +48,7 @@ import { favoriteAct, favoriteHasRoute, type FavoriteActResult } from "@/lib/fav
 import { flashTarget } from "@/lib/scroll";
 import { playingStationName, stationMenuItems } from "@/lib/radio";
 import { useStationTuning } from "@/hooks/useStationTuning";
-import { ScreenTitle, GAP_BETWEEN } from "@/components/chrome/Chrome";
+import { ScreenTitle, GAP_BETWEEN, pageEdges } from "@/components/chrome/Chrome";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { lensIndexOf, useLensIndex } from "@/components/library/lenses/useLensIndex";
@@ -425,7 +425,7 @@ export function FavoritesScreen(): React.JSX.Element {
           />
         </EmptyState>
       ) : (
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
+        <div ref={scrollRef} className={`flex-1 overflow-y-auto px-8 ${pageEdges()}`}>
           {shownCount === 0 && (
             <div className="text-[15px] text-faint pt-4 px-1">
               {filter

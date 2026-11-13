@@ -3,6 +3,7 @@ import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { Search } from "lucide-react";
 import { useStore } from "@/store";
 import { EmptyState } from "@/components/chrome/EmptyState";
+import { pageEdges } from "@/components/chrome/Chrome";
 import { sanitizeScope, type SearchScope } from "@/lib/searchGroups";
 import { useSearchQuery } from "@/components/search/useSearchQuery";
 import { useUnifiedSearch } from "@/components/search/useUnifiedSearch";
@@ -76,7 +77,7 @@ export function SearchScreen(): React.JSX.Element {
           answer and its absence would read as "we didn't look". */}
       {q && <SearchRail search={search} scope={scope} setScope={choose} />}
 
-      <div ref={resultsScroll} className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
+      <div ref={resultsScroll} className={`flex-1 overflow-y-auto px-8 ${pageEdges()}`}>
         {!q ? (
           // Centered: with no query there is nothing else on the screen, and a
           // block hugging the top of an empty page reads as a loading state.

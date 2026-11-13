@@ -84,6 +84,19 @@ export function HeaderChip({
 }
 
 /**
+ * A PAGE SCROLLER'S EDGES (0.16.0): what every screen's page scroller wears, so a row scrolled
+ * past the header or the playback bar dissolves instead of being cut through its letters
+ * (.fade-edges). It reaches 12px up into the padding of whatever sits above it (a header's
+ * pb-4, a rail's pb-3: nothing clickable there) and pads its top past the 20px ramp, so content
+ * at rest sits 4px lower than it did; the bottom pads past the 28px ramp, or clears the floating
+ * selection bar while one shows; a row brought into view stops clear of both. The Library page
+ * sets its own (its trail reaches into the strip); a lens scrolls its own columns, unmasked.
+ */
+export function pageEdges(selecting = false): string {
+  return cx("-mt-3 pt-5 scroll-pt-5 scroll-pb-8 fade-edges", selecting ? "pb-28" : "pb-12");
+}
+
+/**
  * The h1 every screen opens with. `screen-title` is the display-font opt-out
  * (zoom 1 + a fixed line-height) that keeps every header EXACTLY the same
  * height across the seven display faces — see useDisplayFont. Because that

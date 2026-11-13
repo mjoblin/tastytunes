@@ -884,6 +884,25 @@ img {
   );
 }
 
+/* a page scroller whose content dissolves at BOTH edges (0.16.0): under the header at the top,
+   by fade-top's rule (clear where a header's words reach down into it, --fade-top-clear, solid
+   by --fade-top-solid), and over its last --fade-bottom above the playback bar, so a row passing
+   either edge fades out instead of being cut through its letters. No veil or blur, as History's.
+   The scroller pads each end past its ramp, so content at rest and the last row at full scroll
+   sit clear of it (Chrome's pageEdges; the Library page sets its own). */
+.fade-edges {
+  --fade-edges: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent var(--fade-top-clear, 0px),
+    #000 var(--fade-top-solid, 20px),
+    #000 calc(100% - var(--fade-bottom, 28px)),
+    transparent 100%
+  );
+  -webkit-mask-image: var(--fade-edges);
+  mask-image: var(--fade-edges);
+}
+
 /* display mode hides the cursor after idle */
 .cursor-hidden,
 .cursor-hidden * {

@@ -16,7 +16,7 @@ import { PresetSavePanel } from "@/components/library/LibraryMenus";
 import { PopoverCard } from "@/components/chrome/Overlay";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { cx } from "@/lib/format";
-import { Chip, ScreenTitle, GAP_WITHIN } from "@/components/chrome/Chrome";
+import { Chip, ScreenTitle, GAP_WITHIN, pageEdges } from "@/components/chrome/Chrome";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { Lru } from "@/lib/lru";
 import { nameKey } from "@shared/keys";
@@ -347,7 +347,7 @@ export function RadioScreen(): React.JSX.Element {
           </div>
         )
       ) : (
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
+        <div ref={scrollRef} className={`flex-1 overflow-y-auto px-8 ${pageEdges()}`}>
           <div className="max-w-2xl">
             <div className="microlabel mb-2 px-1 flex items-center gap-2">
               {heading}
