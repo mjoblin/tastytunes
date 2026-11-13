@@ -537,7 +537,9 @@ export function AlbumsLens({
           onScroll={(e) => {
             albumsMem.scroll = e.currentTarget.scrollTop;
           }}
-          className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pb-2"
+          // pt-1 with its matching negative margin: room inside the scrollport for the playing
+          // row's 2px ring above the first row (box-shadows clip at the padding box)
+          className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pt-1 -mt-1 pb-2"
           style={CARD_GRID_SCROLLER}
         >
           <ListKeysContext.Provider value={true}>
