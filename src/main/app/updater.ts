@@ -33,8 +33,8 @@ const CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
 // Mac App Store builds never self-update (the store owns delivery — shipping
 // an in-app updater is a rejection) and never probe GitHub for releases.
 // Mirrors `storeBuild` in the preload; TASTYTUNES_MAS=1 lets harnesses
-// exercise the store-build behavior in unpackaged runs.
-const STORE_BUILD = process.mas === true || process.env["TASTYTUNES_MAS"] === "1";
+// exercise the store-build behavior in unpackaged runs. The app menu asks it too.
+export const STORE_BUILD = process.mas === true || process.env["TASTYTUNES_MAS"] === "1";
 
 let state: UpdateState = {
   phase: "idle",
