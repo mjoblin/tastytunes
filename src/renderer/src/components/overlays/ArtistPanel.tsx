@@ -41,6 +41,7 @@ import {
 } from "@/components/media/waveformAnalysis";
 import { audioAnalysisKey } from "@shared/model";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { SIDE_PANEL } from "@/components/chrome/Overlay";
 
 type Status = "loading" | "ready" | "none";
 type Tab = "artist" | "album" | "track" | "stream";
@@ -296,13 +297,7 @@ export function ArtistPanel({ className }: { className?: string }): React.JSX.El
         ].filter((g) => g.credits.length > 0);
 
   return (
-    <aside
-      style={{ width }}
-      className={cx(
-        "no-drag absolute inset-y-0 right-0 z-10 max-w-[60%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge",
-        className,
-      )}
-    >
+    <aside style={{ width }} className={cx(SIDE_PANEL, className)}>
       <PanelResizeHandle dragging={dragging} snapped={snapped} handleProps={handleProps} />
       <div className="flex items-center justify-between px-6 pt-5 pb-3">
         <div className="microlabel text-ink/80 flex items-center gap-2">
