@@ -39,6 +39,7 @@ import { useCardDetails } from "@/components/library/useCardDetails";
 import { useLensIndex } from "./useLensIndex";
 import { ViewOptions } from "./ViewOptions";
 import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
+import { useAlbumAnalyzing } from "@/lib/albumOnPlay";
 import { menuAt } from "@/lib/menuAt";
 import { nameKey } from "@shared/keys";
 
@@ -116,6 +117,8 @@ export function AlbumsLens({
   const sort = !play.ready && RECORD_SORTS.has(sortSetting) ? "title" : sortSetting;
   const saveSettings = useStore((s) => s.saveSettings);
   const albumDr = useAlbumDr();
+  // an album being analyzed holds its DR's place (a sweep, or the pass while it plays)
+  const analyzingOf = useAlbumAnalyzing();
 
   // what the lenses derive from the pools, once per snapshot (useLensIndex)
   const index = useLensIndex(pools);
@@ -386,6 +389,7 @@ export function AlbumsLens({
         badgeTip={set ? undefined : COPY_BADGE_TIP}
         item={keys.item(ti)}
         details={detailsOf?.(rawNode, set?.volumes)}
+        analyzing={set ? null : analyzingOf(rawNode)}
         // in Recently added order a card says when its album arrived, where the app knows
         note={sort === "added" && rawNode.addedAt ? fmtAdded(rawNode.addedAt) : undefined}
         selected={selA.has(nodeKey(rawNode))}
@@ -414,6 +418,7 @@ export function AlbumsLens({
         badge={badge}
         badgeTip={set ? undefined : COPY_BADGE_TIP}
         dr={albumDr[albumDrKey(node)]?.dr ?? null}
+        analyzing={set ? null : analyzingOf(rawNode)}
         onArtistLink={
           actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined
         }

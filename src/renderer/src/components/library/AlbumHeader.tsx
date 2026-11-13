@@ -39,7 +39,8 @@ export function AlbumHeader(
       albumDrShown: number | null;
       albumLufsShown: number | null;
       albumSweeping: boolean;
-      analysisProgress: Store["analysisProgress"];
+      /** How far the album's analysis has got (useAlbumAnalyzing), while albumSweeping. */
+      albumAnalyzing: { at: number; of: number } | null;
       albumComposerLine: string | null;
       playContainer(node: MediaNode, el: HTMLElement | null): Promise<void>;
       goToArtistFromLens(node: MediaNode): void;
@@ -61,7 +62,7 @@ export function AlbumHeader(
     albumDrShown,
     albumLufsShown,
     albumSweeping,
-    analysisProgress,
+    albumAnalyzing,
     albumComposerLine,
     playContainer,
     nodeFavorited,
@@ -173,9 +174,10 @@ export function AlbumHeader(
                     data-album-analyzing
                   >
                     analyzing
-                    {analysisProgress != null &&
-                      analysisProgress.at > 0 &&
-                      ` ${analysisProgress.at}/${analysisProgress.total}`}
+                    {albumAnalyzing != null &&
+                      albumAnalyzing.at > 0 &&
+                      albumAnalyzing.of > 0 &&
+                      ` ${albumAnalyzing.at}/${albumAnalyzing.of}`}
                     …
                   </span>
                 ) : (
