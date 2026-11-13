@@ -1,6 +1,7 @@
 import { app, Menu, shell, type MenuItemConstructorOptions } from "electron";
 import type { MenuCommand, StreamerCommand } from "@shared/ipc";
 import { AGENTS_GUIDE_URL, REPO_URL } from "@shared/ipc";
+import { STORE_BUILD } from "./updater";
 
 export interface MenuDeps {
   /** Streamer commands go straight to the DeviceManager (safe no-op offline). */
@@ -44,7 +45,7 @@ export function installAppMenu(deps: MenuDeps): void {
   };
 
   // where each platform's people look for it: the app menu on macOS, Help elsewhere; Settings ›
-  // Updates opens and asks the feed at once
+  // Updates opens and asks the feed at once. Store builds leave it out: the App Store owns updates.
   const checkUpdatesItem: MenuItemConstructorOptions = {
     id: "menu-check-updates",
     label: "Check for Updates…",
@@ -59,7 +60,7 @@ export function installAppMenu(deps: MenuDeps): void {
         label: "About TastyTunes",
         click: () => deps.sendToMain({ id: "about" }),
       },
-      checkUpdatesItem,
+      ...(STORE_BUILD ? [] : [checkUpdatesItem]),
       { type: "separator" },
       settingsItem,
       { type: "separator" },
