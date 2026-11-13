@@ -564,8 +564,8 @@ export function TracksLens({
                 tracksMem.scroll = e.currentTarget.scrollTop;
               }}
               className={cx(
-                "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1 fade-bottom",
-                selT.size > 0 ? "pt-1 pb-24" : "pt-1 pb-10",
+                "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1",
+                selT.size > 0 ? "pt-1 pb-24" : "py-1",
               )}
               data-lens-tracks-list
             >

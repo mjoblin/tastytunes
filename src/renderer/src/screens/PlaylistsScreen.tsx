@@ -433,7 +433,7 @@ export function PlaylistsScreen(): React.JSX.Element {
               listKeys.container.ref(el);
             }}
             aria-label="Playlists"
-            className="w-[280px] shrink-0 min-h-0 overflow-y-auto pb-10 fade-bottom"
+            className="w-[280px] shrink-0 min-h-0 overflow-y-auto"
           >
             <div className="flex flex-col gap-1">
               {shown.map((p, pi) => (
@@ -636,7 +636,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                   trackKeys.container.ref(el);
                 }}
                 aria-label="Tracks"
-                className="flex-1 min-h-0 overflow-y-auto px-1.5 -mx-1.5 pt-1 pb-10 -my-1 divide-y divide-edge/50 fade-bottom"
+                className="flex-1 min-h-0 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1 divide-y divide-edge/50"
               >
                 <ListKeysContext.Provider value={true}>
                   <DndContext

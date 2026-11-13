@@ -673,8 +673,7 @@ export function HistoryTimeline({
             <span aria-hidden className="flex-1 border-t border-edge/60" />
           </div>
           {/* fade-top only while a day is held: at rest the first header must
-              not dissolve; scrolled, the rows dissolve before they reach the label.
-              The bottom fades either way (fade-bottom at rest), padded past it */}
+              not dissolve; scrolled, the rows dissolve before they reach the label */}
           <div
             {...keys.container}
             ref={(el) => {
@@ -682,10 +681,7 @@ export function HistoryTimeline({
               keys.container.ref(el);
             }}
             aria-label="Timeline"
-            className={cx(
-              "h-full overflow-y-auto px-1 pb-10",
-              overlayDay != null ? "fade-top" : "fade-bottom",
-            )}
+            className={cx("h-full overflow-y-auto px-1", overlayDay != null && "fade-top")}
             data-history-timeline
           >
             <ListKeysContext.Provider value={true}>

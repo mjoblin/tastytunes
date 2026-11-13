@@ -111,10 +111,7 @@ export function TrackCards({
       onScroll={(e) => onScrolled(e.currentTarget.scrollTop)}
       // the page's side padding, spanned so a hovered card's growth and glow keep it (the Albums
       // lens's grid does the same)
-      className={cx(
-        "min-h-0 flex-1 overflow-y-auto px-8 -mx-8 fade-bottom",
-        roomBelow ? "pb-24" : "pb-10",
-      )}
+      className={cx("min-h-0 flex-1 overflow-y-auto px-8 -mx-8", roomBelow ? "pb-24" : "pb-2")}
       style={CARD_GRID_SCROLLER}
     >
       <ListKeysContext.Provider value={true}>

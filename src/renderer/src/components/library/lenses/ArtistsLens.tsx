@@ -468,7 +468,7 @@ export function ArtistsLens({
                 // px/py with matching negative margins: room INSIDE the scrollport
                 // for the rings and the row-playing glow (box-shadows clip at the
                 // padding box) without shifting the rows off the heading's edge
-                className="relative min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 pt-1 pb-10 -my-1 fade-bottom"
+                className="relative min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1"
               >
                 <ListKeysContext.Provider value={true}>
                   {win.padTop > 0 && <div style={{ height: win.padTop }} />}
@@ -619,7 +619,7 @@ export function ArtistsLens({
               onScroll={(e) => {
                 artistsMem.scroll.albums = e.currentTarget.scrollTop;
               }}
-              className="min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 pt-1 pb-10 -my-1 fade-bottom"
+              className="min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 py-1 -my-1"
               data-lens-albums-col
             >
               {!selectedArtist ? (
@@ -760,10 +760,10 @@ export function ArtistsLens({
                 artistsMem.scroll.tracks = e.currentTarget.scrollTop;
               }}
               className={cx(
-                "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1 fade-bottom",
+                "min-h-0 flex-1 overflow-y-auto px-1.5 -mx-1.5 -my-1",
                 // the floating bar overlaps the last rows at full scroll —
                 // selection mode adds scroll-room so every row can clear it
-                selT.size > 0 ? "pt-1 pb-24" : "pt-1 pb-10",
+                selT.size > 0 ? "pt-1 pb-24" : "py-1",
               )}
               data-lens-tracks-col
             >

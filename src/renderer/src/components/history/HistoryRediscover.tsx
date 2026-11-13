@@ -459,7 +459,7 @@ export function HistoryRediscover({
         <div
           ref={attachScroller}
           onScroll={onScroll}
-          className="h-full overflow-y-auto px-4 pb-10 fade-top"
+          className="h-full overflow-y-auto px-4 pb-8 fade-top"
           // the first twin rests exactly at the label's home, so the first row is
           // simply the first heading; measure() keeps this in step with the rows'
           // geometry rather than two numbers agreeing
