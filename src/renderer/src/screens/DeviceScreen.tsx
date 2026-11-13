@@ -22,7 +22,7 @@ import { Segmented } from "@/components/controls/Segmented";
 import { SourcesPanel } from "@/components/device/SourcesPanel";
 import { ToneEq } from "@/components/device/ToneEq";
 import { DeviceControls } from "@/components/device/DeviceControls";
-import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
+import { HeaderChip, ScreenTitle, pageEdges } from "@/components/chrome/Chrome";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 export function DeviceScreen(): React.JSX.Element {
@@ -142,7 +142,7 @@ export function DeviceScreen(): React.JSX.Element {
       </header>
 
       {/* pinned header; only the content scrolls (house pattern) */}
-      <div ref={useScrollMemory("device")} className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
+      <div ref={useScrollMemory("device")} className={`flex-1 overflow-y-auto px-8 ${pageEdges()}`}>
         <div className="max-w-2xl space-y-8">
           {/* ------------------------------------------------------------ connection */}
           <section className="space-y-3">

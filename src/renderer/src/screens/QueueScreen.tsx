@@ -88,6 +88,7 @@ import {
   GAP_BETWEEN,
   GAP_WITHIN,
   cardChip,
+  pageEdges,
 } from "@/components/chrome/Chrome";
 import { artSrc } from "@/lib/artSrc";
 import { useQueueDrag } from "@/components/queue/useQueueDrag";
@@ -850,8 +851,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
         </SelectionBar>
       )}
 
-      {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
-          hover grow + glow ring headroom on the top row */}
+      {/* pageEdges' top padding keeps the current row's ring unclipped and gives a card's
+          hover grow and glow ring headroom on the top row */}
       <div
         {...keys.container}
         ref={(el) => {
@@ -867,10 +868,10 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
           "flex-1 overflow-y-auto [overflow-anchor:none]",
           // the albums view separates by its header surface, not by rules —
           // dividers would double the boundary the veil bar already draws
-          cards ? "px-8 pt-2" : albums ? "px-6 pt-1" : "px-6 pt-1 divide-y divide-edge/50",
-          // the floating bar overlaps the last rows at full scroll — selection
+          cards ? "px-8" : albums ? "px-6" : "px-6 divide-y divide-edge/50",
+          // the floating bar overlaps the last rows at full scroll: selection
           // mode adds scroll-room below the content so every row can clear it
-          selected.size > 0 ? "pb-28" : cards ? "pb-8" : "pb-6",
+          pageEdges(selected.size > 0),
         )}
       >
         {items.length === 0 && (

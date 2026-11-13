@@ -58,7 +58,7 @@ import { EmptyCrate } from "@/components/library/DoorArt";
 import { useIndexDoors } from "@/components/library/useIndexDoors";
 import { usePlayingMatch } from "@/components/library/usePlayingMatch";
 import { useQueueMatch } from "@/components/library/useQueueMatch";
-import { AlbumCompactVerbs, AlbumCrumbArt, AlbumHeader } from "@/components/library/AlbumHeader";
+import { AlbumCompactVerbs, AlbumHeader } from "@/components/library/AlbumHeader";
 import { ArtistHeader } from "@/components/library/ArtistHeader";
 import { ArtistPage } from "@/components/library/ArtistPage";
 import { LibrarySearchBar } from "@/components/library/LibrarySearchBar";
@@ -1117,10 +1117,6 @@ export function LibraryScreen(): React.JSX.Element {
                           onClick: () => jumpTo(i + 2),
                           current: i === path.length - 1,
                           search: crumb.id === SEARCH_CRUMB_ID,
-                          lead:
-                            compactBar && albumNode && i === path.length - 1 ? (
-                              <AlbumCrumbArt albumNode={albumNode} albumArt={albumArt} />
-                            ) : undefined,
                         },
                       ],
                 ),
@@ -1156,15 +1152,16 @@ export function LibraryScreen(): React.JSX.Element {
         // RING ROOM at the top edge (when the doors'
         // label went and their hover glow was cut flat at this edge): the scroller reaches 24px
         // up under the header and the trail, padded by as much, so nothing moves and a hover
-        // glow has room above the first row; the strip fades rather than cuts (fade-top), clear
+        // glow has room above the first row; the strip fades rather than cuts (fade-edges), clear
         // across its top 12px, where the heading's letters and the trail's words reach down into
         // it (nothing shows behind words: History's rule), in over the 12px below them, so the
         // glow and any row scrolled up dissolve under the heading; a row scrolled into view stops
-        // below the strip (scroll-pt-6). The header and the trail sit above the scroller, their
-        // controls clickable over the strip. Only while the PAGE scrolls: a lens scrolls its own
-        // columns, and a mask around them stopped Chromium's own lazy loading inside them (the
-        // lenses' pictures, 0.12.0-rc.3), so a lens keeps the page as it was. Under the mask
-        // ArtImage looks ahead for its lazy pictures itself (S84).
+        // below the strip (scroll-pt-6). The bottom dissolves over its last 28px above the
+        // playback bar, padded past it (pageEdges' rule). The header and the trail sit above the
+        // scroller, their controls clickable over the strip. Only while the PAGE scrolls: a lens
+        // scrolls its own columns, and a mask around them stopped Chromium's own lazy loading
+        // inside them (the lenses' pictures, 0.12.0-rc.3), so a lens keeps the page as it was.
+        // Under the mask ArtImage looks ahead for its lazy pictures itself (S84).
         style={{ "--fade-top-clear": "12px", "--fade-top-solid": "24px" } as React.CSSProperties}
         className={cx(
           // stable gutter: without it the scrollbar's appearance shifts every
@@ -1177,10 +1174,10 @@ export function LibraryScreen(): React.JSX.Element {
           atRoot && lens != null && !searchMode && !artistPage
             ? "pt-1 overflow-hidden min-h-0 pb-6"
             : cx(
-                "-mt-6 pt-7 scroll-pt-6 fade-top",
+                "-mt-6 pt-7 scroll-pt-6 scroll-pb-8 fade-edges",
                 // the floating bar overlaps the last rows at full scroll —
                 // selection mode adds scroll-room so every row can clear it
-                selTracks.size > 0 ? "overflow-y-auto pb-28" : "overflow-y-auto pb-8",
+                selTracks.size > 0 ? "overflow-y-auto pb-28" : "overflow-y-auto pb-12",
               ),
         )}
       >

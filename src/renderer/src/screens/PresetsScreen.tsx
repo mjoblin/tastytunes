@@ -30,7 +30,13 @@ import { gridColumnsOf, ListKeysContext, useListKeys } from "@/hooks/useListKeys
 import { openMenuOn } from "@/lib/menuAt";
 import { cx, matchesFilter } from "@/lib/format";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import {
+  HeaderChip,
+  ScreenTitle,
+  GAP_BETWEEN,
+  GAP_WITHIN,
+  pageEdges,
+} from "@/components/chrome/Chrome";
 import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
 import { PresetCard, PresetRow } from "@/components/presets/PresetTiles";
 
@@ -349,7 +355,8 @@ export function PresetsScreen(): React.JSX.Element {
         aria-label="Presets"
         className={cx(
           "flex-1 overflow-y-auto",
-          cards ? "px-8 pb-8 pt-2" : "px-6 pb-6 pt-1 divide-y divide-edge/50",
+          pageEdges(),
+          cards ? "px-8" : "px-6 divide-y divide-edge/50",
         )}
       >
         <ListKeysContext.Provider value={true}>
