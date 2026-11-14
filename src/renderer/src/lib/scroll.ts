@@ -8,9 +8,15 @@
  * (target-flash), a second grammar for the same meaning. WAAPI, not a
  * class, so a re-render mid-wash can't snap it; skipped under reduced
  * motion (the OS preference or the app's own setting).
+ *
+ * NEVER OVER THE PLAYING RING (0.16.0): a row or tile that is playing already wears the ring that
+ * says "here" (row-playing, tile-playing), so the wash goes only where nothing else marks the row:
+ * an album opened from Now Playing landed on its playing track and washed it under its ring.
  */
+const PLAYING = ".row-playing, .tile-playing";
 export function flashTarget(el: HTMLElement | null): void {
   if (!el) return;
+  if (el.matches(PLAYING) || el.querySelector(PLAYING)) return;
   if (
     window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
     document.documentElement.classList.contains("reduce-motion")
