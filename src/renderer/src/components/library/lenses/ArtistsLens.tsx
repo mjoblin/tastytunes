@@ -189,7 +189,11 @@ export function ArtistsLens({
   // artist out empties the albums/tracks columns rather than showing content
   // for a row that isn't on screen; clearing the filter brings it back.
   const selectedArtist = shownArtists.find((a) => a.key === mem.artist) ?? null;
-  const selectedAlbum = selectedArtist?.albums.find((a) => nodeKey(a) === mem.album) ?? null;
+  // AN ARTIST WITH ONE ALBUM OPENS IT (0.16.0): its tracks show with the artist, one click, where
+  // the tracks column used to wait on a second one; with several, one is picked
+  const soleAlbum = selectedArtist?.albums.length === 1 ? selectedArtist.albums[0] : null;
+  const selectedAlbum = selectedArtist?.albums.find((a) => nodeKey(a) === mem.album) ?? soleAlbum;
+  const selectedAlbumKey = selectedAlbum ? nodeKey(selectedAlbum) : null;
   // the album's own tracks, the index's one rule (albumTracksOf): another artist's album of the
   // same title keeps its tracks, a featured track ("Daft Punk; Julian Casablancas" on Daft Punk's
   // album) stays in, and two editions of one album split by the art their tracks carry
@@ -270,7 +274,7 @@ export function ArtistsLens({
   const columnAlbums = selectedArtist?.albums ?? [];
   const albumKeys = useListKeys({
     count: columnAlbums.length,
-    initial: () => columnAlbums.findIndex((alb) => nodeKey(alb) === mem.album),
+    initial: () => columnAlbums.findIndex((alb) => nodeKey(alb) === selectedAlbumKey),
     onEnter: (i) => {
       const alb = columnAlbums[i];
       if (alb) setMem({ album: nodeKey(alb) === mem.album ? null : nodeKey(alb) });
@@ -454,7 +458,7 @@ export function ArtistsLens({
                 ? `${shownArtists.length}/${artists.length}`
                 : String(artists.length),
             )}
-            <div className="min-h-0 flex-1 flex gap-1">
+            <div className="group/az min-h-0 flex-1 flex gap-1">
               <div
                 {...artistKeys.container}
                 ref={(el) => {
@@ -587,8 +591,12 @@ export function ArtistsLens({
                   {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
                 </ListKeysContext.Provider>
               </div>
-              {/* the A-Z rail: fast travel for a long first column, in name order */}
-              {letterStarts && <AzRail letters={[...letterStarts.keys()]} onJump={jumpToLetter} />}
+              {/* the A-Z rail: fast travel for a long first column, in name order; shown while the
+                  pointer is over the column or a letter has the keyboard (0.16.0: always on, it
+                  floated between the columns) */}
+              {letterStarts && (
+                <AzRail letters={[...letterStarts.keys()]} onJump={jumpToLetter} quiet />
+              )}
             </div>
           </div>
 
@@ -628,7 +636,7 @@ export function ArtistsLens({
                 <div className="text-[12.5px] text-faint pt-2 px-1">No albums</div>
               ) : (
                 selectedArtist.albums.map((alb, ai) => {
-                  const selected = nodeKey(alb) === mem.album;
+                  const selected = nodeKey(alb) === selectedAlbumKey;
                   const playing = actions.isPlayingAlbum(alb);
                   const menuOpen = actions.menuNodeId === alb.id;
                   const badge = index.copyBadge(alb);
