@@ -20,10 +20,11 @@ import { keepArt, shownBefore } from "@/lib/artKeep";
  * retried. While a retry waits the FALLBACK shows, never the failed <img>:
  * Chromium paints a broken-image glyph on one.
  *
- * `fallbackArt` (an album's artist + title) tries the Cover Art Archive
- * before giving up on the icon: consulted ONLY when the server offered no
- * art or its URL failed — server art always wins. Off with the same switch
- * as the context lookups (main answers null when the toggle is off).
+ * `fallbackArt` (an album's artist + title) tries the same album's cover in
+ * another library, then the Cover Art Archive, before giving up on the icon:
+ * consulted ONLY when the server offered no art or its URL failed — server
+ * art always wins. The archive is off with the same switch as the context
+ * lookups (main answers null for it when the toggle is off).
  */
 const RETRY_DELAYS_MS = [1500, 4000];
 /** How long a pending picture waits before the well shimmers (a cached one never does). */

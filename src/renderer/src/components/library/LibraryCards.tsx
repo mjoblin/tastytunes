@@ -633,6 +633,9 @@ export function ContainerRow({
       )}
       <MediaArt
         src={artistPic ?? artSrc(node.artUrl, 240, artKeyOf(node))}
+        fallbackArt={
+          album ? { artist: node.albumArtist ?? node.artist, album: node.title } : undefined
+        }
         kind={album ? "album" : artist ? "artist" : "folder"}
         className={muted ? "opacity-60 saturate-[.6]" : undefined}
       />

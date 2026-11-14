@@ -665,7 +665,11 @@ export function ArtistsLens({
                         selected ? "bg-accentdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                       )}
                     >
-                      <MediaArt src={alb.artUrl} kind="album" />
+                      <MediaArt
+                        src={alb.artUrl}
+                        fallbackArt={{ artist: alb.albumArtist ?? alb.artist, album: alb.title }}
+                        kind="album"
+                      />
                       <div className={cx("min-w-0", NAME_FADE.idle[menuOpen ? "on" : "hover"])}>
                         <div
                           className={cx(

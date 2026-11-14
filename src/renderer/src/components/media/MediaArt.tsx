@@ -74,6 +74,7 @@ const GLYPH_STROKE: Record<MediaArtSize, number> = { row: 2, dense: 2, card: CAR
 export function MediaArt({
   src,
   artKey,
+  fallbackArt,
   kind = "track",
   icon,
   size = "row",
@@ -88,6 +89,9 @@ export function MediaArt({
    * dies; libraryArtByKeys answers). Live rows (the queue, the library's own) pass none.
    */
   artKey?: string | null;
+  /** An album row's album and artist: when its picture is missing or fails, the same album's
+   *  cover from another library, then the Cover Art Archive's (ArtImage's fallbackArt). */
+  fallbackArt?: { artist: string | null | undefined; album: string | null | undefined };
   kind?: MediaArtKind;
   /** Escape hatch for a caller with a better icon than the kind default. */
   icon?: React.ComponentType<{ size?: number; className?: string }>;
@@ -124,6 +128,7 @@ export function MediaArt({
           // fetch at the drawn size — Asset serves the 1400px original for a
           // 40px thumb otherwise (shared/artUrl); cards fill up to ~240px tiles
           src={artSrc(src, px)}
+          fallbackArt={fallbackArt}
           lazy
           shimmer={size === "card"}
           portraitTop={kind === "artist"}
