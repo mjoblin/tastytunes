@@ -4,7 +4,6 @@ import type { QueueListItem } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { trackMatchesEntry } from "@/lib/playingEntry";
-import { flashTarget } from "@/lib/scroll";
 
 /** The Library's tracks against the queue: which are queued, and a bare click's jump to a
  *  queued entry instead of a duplicate. `insert` is the screen's PLAY_NOW write for a track
@@ -52,8 +51,8 @@ export function useQueueMatch(insert: (node: MediaNode, el: HTMLElement | null) 
     if (matches.length > 0) {
       const curIdx = items.findIndex((i) => i.id === effectivePlayId);
       const target = matches.find((mi) => items.indexOf(mi) >= curIdx) ?? matches[0];
+      // no arrival wash: the row is about to wear the playing ring, which says it (0.16.0)
       void tt.command({ type: "playQueueId", queueId: target.id as number });
-      if (el) flashTarget(el);
       return;
     }
     insert(node, el);
