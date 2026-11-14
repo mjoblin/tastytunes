@@ -37,6 +37,7 @@ import { scrobbler } from "../lookups/scrobbler";
 import { fetchTrackInfo } from "../lookups/trackInfo";
 import { artistIndex } from "../media/artistIndex";
 import * as mediaIndex from "../media/mediaIndex";
+import { albumArtElsewhere } from "../media/albumArtElsewhere";
 import { demoHost } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
 import { nameKey } from "@shared/keys";
@@ -225,11 +226,15 @@ export function registerLookupsIpc(): void {
       ? fetchTrackInfo(query, !!force)
       : null,
   );
-  handle(IPC.albumArt, (_e, artist: string, album: string) =>
-    getSettings().albumArtLookup && typeof artist === "string" && typeof album === "string"
-      ? fetchCoverArt(artist, album)
-      : null,
-  );
+  // an album's cover when its own is missing or failed: the same album in another library first
+  // (never on the streamer's own address, re-minted on every wake; no request leaves the
+  // network), then the Cover Art Archive with the lookups on
+  handle(IPC.albumArt, (_e, artist: string, album: string) => {
+    if (typeof artist !== "string" || typeof album !== "string") return null;
+    const elsewhere = albumArtElsewhere(mediaIndex.pools(), artist, album, connectedHost());
+    if (elsewhere) return elsewhere;
+    return getSettings().albumArtLookup ? fetchCoverArt(artist, album) : null;
+  });
   handle(IPC.lookupCacheStats, () => lookupCacheStats());
   handle(IPC.clearLookupCaches, () => clearLookupCaches());
   handle(IPC.artThumbsStats, () => artThumbsStats());
