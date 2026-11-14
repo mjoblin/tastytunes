@@ -16,6 +16,13 @@ import { useStore } from "@/store";
 import { flashTarget } from "@/lib/scroll";
 import type { Crumb } from "@/components/library/libraryPlaces";
 
+/** The queue actions that start the row playing: their acknowledgment is the playing ring. */
+const STARTS_PLAYING: ReadonlySet<MediaQueueAction> = new Set([
+  "PLAY_NOW",
+  "PLAY_FROM_HERE",
+  "REPLACE",
+]);
+
 /** One wording for a queue write that didn't land, whichever verb sent it. */
 export const QUEUE_FAILED = "Couldn't reach the streamer. Nothing was queued.";
 
@@ -50,11 +57,13 @@ export function useLibraryPlay(d: {
     if (!udn) return;
     const outcome = await queueWrite(() => tt.mediaQueueAdd(udn, node.id, action, playFromId));
     if (outcome === "failed") showNotice(QUEUE_FAILED);
-    else if (outcome === "ok" && el) flashTarget(el);
+    // the wash acknowledges an add (Play next, Add to queue), whose row nothing else marks; a play
+    // is acknowledged by the playing ring the row is about to wear (0.16.0: the two together)
+    else if (outcome === "ok" && el && !STARTS_PLAYING.has(action)) flashTarget(el);
   };
 
   /** "Play" on a container: replace the queue with it and start at its first track. */
-  const playContainer = async (node: MediaNode, el: HTMLElement | null): Promise<void> => {
+  const playContainer = async (node: MediaNode, _el: HTMLElement | null): Promise<void> => {
     const udn = nodeUdn(node);
     if (!udn) return;
     const outcome = await queueWrite(async () => {
@@ -66,8 +75,8 @@ export function useLibraryPlay(d: {
       if (firstTrack) await tt.mediaQueueAdd(udn, node.id, "PLAY_FROM_HERE", firstTrack.id);
       else await tt.mediaQueueAdd(udn, node.id, "REPLACE");
     });
+    // a played album wears the playing ring: no wash (as a played track, above)
     if (outcome === "failed") showNotice(QUEUE_FAILED);
-    else if (outcome === "ok" && el) flashTarget(el);
   };
 
   /** "Play album from here" on a track: the album's OWN browse supplies both
