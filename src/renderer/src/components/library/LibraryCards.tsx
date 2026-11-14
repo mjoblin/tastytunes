@@ -595,7 +595,7 @@ export function ContainerRow({
     <div
       {...item}
       className={cx(
-        "group relative grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        "group relative grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-3 py-1.5 cursor-pointer transition-colors",
         playing
           ? "row-playing bg-gold/10"
           : selected
@@ -814,7 +814,9 @@ export function TrackRow({
       ref={ref}
       {...item}
       className={cx(
-        "group relative grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        // 12px of inner room (0.16.0, was 8): the playing ring's room beside the bars and the
+        // time; a list that hangs its rows into the margin hangs them as far (-mx-3)
+        "group relative grid items-center gap-3 rounded-lg px-3 py-1.5 cursor-pointer transition-colors",
         TRACK_GRID[
           [
             showPosition && "pos",

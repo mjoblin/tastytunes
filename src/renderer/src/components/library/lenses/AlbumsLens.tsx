@@ -585,7 +585,7 @@ export function AlbumsLens({
               ) : (
                 <div
                   className={cx(
-                    !cards && "divide-y divide-edge/50 -mx-2",
+                    !cards && "divide-y divide-edge/50 -mx-3",
                     // selection mode adds scroll-room under the floating bar (the S45 rule)
                     selA.size > 0 && "pb-24",
                   )}

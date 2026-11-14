@@ -356,7 +356,7 @@ export function PresetsScreen(): React.JSX.Element {
         className={cx(
           "flex-1 overflow-y-auto",
           pageEdges(),
-          cards ? "px-8" : "px-6 divide-y divide-edge/50",
+          cards ? "px-8" : "px-5 divide-y divide-edge/50",
         )}
       >
         <ListKeysContext.Provider value={true}>

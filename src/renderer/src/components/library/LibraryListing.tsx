@@ -84,7 +84,7 @@ export function ContainerGrid({
         if (n && (isAlbumClass(n.upnpClass) || isArtistClass(n.upnpClass) || folderMenus))
           openMenu(n, keyedEvent(el));
       }}
-      className={cx(!cards && "divide-y divide-edge/50 -mx-2")}
+      className={cx(!cards && "divide-y divide-edge/50 -mx-3")}
       style={
         cards
           ? {
@@ -195,7 +195,7 @@ export function LibraryTracks({
           if (t) openMenu(t, keyedEvent(el), tracks);
         }}
         className={cx(
-          "divide-y divide-edge/50 -mx-2",
+          "divide-y divide-edge/50 -mx-3",
           containers.length > 0 && !searchMode && !artistNode && "mt-4",
         )}
       >

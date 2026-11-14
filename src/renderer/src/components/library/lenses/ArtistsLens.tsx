@@ -504,7 +504,7 @@ export function ArtistsLens({
                         className={cx(
                           // the eqbars' column only while the artist plays: the row's buttons float
                           // (below), so a name has the row's whole width at rest
-                          "group relative grid items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+                          "group relative grid items-center gap-2.5 rounded-lg px-3 py-1.5 cursor-pointer transition-colors",
                           playing ? "grid-cols-[44px_1fr_auto]" : "grid-cols-[44px_1fr]",
                           // SELECTED is "open here" — the Playlists sidebar's accent, so it
                           // reads apart from gold (= playing); a row that is both keeps
@@ -653,7 +653,7 @@ export function ArtistsLens({
                       className={cx(
                         // the row's buttons float (below), as the artist rows' do: a title has
                         // the row's whole width at rest
-                        "group relative grid grid-cols-[44px_1fr] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+                        "group relative grid grid-cols-[44px_1fr] items-center gap-2.5 rounded-lg px-3 py-1.5 cursor-pointer transition-colors",
                         // SELECTED is "open here" — the Playlists sidebar's accent, so it
                         // reads apart from gold (= playing); a row that is both keeps
                         // the playing signals (gold title, eqbars) on the accent fill

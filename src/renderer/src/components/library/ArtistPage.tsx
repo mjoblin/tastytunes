@@ -138,7 +138,7 @@ export function ArtistPage({
               const n = albums[i];
               if (n) actions.openMenu(n, keyedEvent(el));
             }}
-            className={cx(!cards && "divide-y divide-edge/50 -mx-2")}
+            className={cx(!cards && "divide-y divide-edge/50 -mx-3")}
             style={
               cards
                 ? {
@@ -209,7 +209,7 @@ export function ArtistPage({
                     const t = others[run.from + i];
                     if (t) sel.rowMenu(t, keyedEvent(el));
                   }}
-                  className="divide-y divide-edge/50 -mx-2"
+                  className="divide-y divide-edge/50 -mx-3"
                 >
                   {(item) =>
                     others.slice(run.from, run.to).map((t, i) => {
