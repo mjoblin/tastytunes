@@ -256,6 +256,23 @@ describe("orderTracks: sort only when (disc, position) is unique", () => {
     expect(orderTracks(listing).map((t) => t.id)).toEqual([1, 2, 0, 3]);
   });
 
+  it("keeps a box set's listing: each disc starts again from the lowest number", () => {
+    const listing = [1, 2, 11, 1, 2, 11].map((n, i) => ({ ...at(n), id: i }));
+    expect(orderTracks(listing)).toEqual(listing);
+  });
+
+  it("sorts a title order whose drops land anywhere, however few", () => {
+    // two 17-track albums under one title, every track on disc 1, listed by title: 16 drops in
+    // 34 tracks, under half, read as discs and kept the alphabetical order
+    const byTitle = [
+      1, 2, 5, 1, 8, 9, 7, 4, 14, 15, 12, 14, 10, 4, 5, 12, 6, 7, 3, 11, 17, 13, 3, 8, 15, 10, 13,
+      11, 16, 2, 17, 16, 9, 6,
+    ];
+    const listing = byTitle.map((n, i) => ({ ...at(n, 1), id: i }));
+    const ordered = orderTracks(listing).map((t) => t.trackNumber);
+    expect(ordered).toEqual(Array.from({ length: 34 }, (_, i) => Math.floor(i / 2) + 1));
+  });
+
   it("never reorders the caller's array", () => {
     const listing = [at(2), at(1)];
     orderTracks(listing);
