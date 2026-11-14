@@ -526,19 +526,24 @@ export function orderTracks<T extends Pick<MediaNode, "trackNumber" | "discNumbe
   }
   if (!repeats) return [...tracks].sort(compareTrackOrder);
   // Repeats: the listing order stands ONLY when it reads as discs — ascending
-  // runs, each restarting lower than the last position (Browse of a minidlna
-  // or MinimServer album). A search-built index lists by title (Gerbera,
-  // Minim) and that order says nothing about discs; sort by position then,
-  // interleaved but ordered (survey 2026-08-17: OKNOTOK came out alphabetical).
+  // runs, each new disc starting again from the album's lowest position (Browse
+  // of a minidlna or MinimServer album: 1, 2, 3, 1, 2, 3). A search-built index
+  // lists by title (Gerbera, Minim, Asset) and that order says nothing about
+  // discs; sort by position then, interleaved but ordered (survey 2026-08-17:
+  // OKNOTOK came out alphabetical). A drop that lands anywhere else is a title
+  // order, however few the drops (0.16.0): two albums of one title, every track
+  // on disc 1, listed by title dropped 16 times in 34 tracks, under half, and
+  // the alphabetical order stood with its numbers all over the place.
   const positions = tracks.map(trackPosition);
+  const lowest = Math.min(...positions.filter((p): p is number => p != null));
   let ascendingRuns = true;
   let restarts = 0;
   for (let i = 1; i < positions.length; i++) {
     const a = positions[i - 1];
     const b = positions[i];
     if (a == null || b == null) continue;
-    if (b < a) restarts++;
-    else if (b === a) {
+    if (b < a && b === lowest) restarts++;
+    else if (b <= a) {
       ascendingRuns = false;
       break;
     }
