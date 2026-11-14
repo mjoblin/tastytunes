@@ -119,7 +119,7 @@ export function PresetRow({
         // FIVE columns for five children — the sixth column outlived the
         // trailing grip when it moved into the position cell (OrderHandle),
         // and an empty grid track still costs its gap.
-        "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-3 py-1.5",
         "cursor-default",
         isDragging && "z-10 bg-raised shadow-xl",
         // hold the hover highlight while this row's volume popover is open —

@@ -809,7 +809,7 @@ function TrackRow({
         onMenu(e);
       }}
       className={cx(
-        "group grid items-center gap-3 rounded-lg px-2 py-1.5",
+        "group grid items-center gap-3 rounded-lg px-3 py-1.5",
         // the DR cell is a sixth column only while it renders: an empty auto
         // column would still cost a gap and inset the duration
         dr !== undefined

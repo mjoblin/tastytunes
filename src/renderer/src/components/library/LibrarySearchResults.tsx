@@ -307,7 +307,7 @@ export function LibrarySearchResults({
       <div
         key={line.key}
         {...attrs}
-        className={cx("-mx-2 border-t", line.index === 0 ? "border-transparent" : "border-edge/50")}
+        className={cx("-mx-3 border-t", line.index === 0 ? "border-transparent" : "border-edge/50")}
       >
         {line.kind === "crow"
           ? containerItem(line.node, searchKeys.item(at))

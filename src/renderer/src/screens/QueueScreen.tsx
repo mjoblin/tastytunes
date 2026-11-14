@@ -868,7 +868,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
           "flex-1 overflow-y-auto [overflow-anchor:none]",
           // the albums view separates by its header surface, not by rules —
           // dividers would double the boundary the veil bar already draws
-          cards ? "px-8" : albums ? "px-6" : "px-6 divide-y divide-edge/50",
+          cards ? "px-8" : albums ? "px-5" : "px-5 divide-y divide-edge/50",
           // the floating bar overlaps the last rows at full scroll: selection
           // mode adds scroll-room below the content so every row can clear it
           pageEdges(selected.size > 0),
@@ -1120,7 +1120,7 @@ function QueueAlbumGroups({
             <div
               {...groupItem(gi)}
               className={cx(
-                "group mb-1.5 grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+                "group mb-1.5 grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg px-3 py-1.5",
                 // the header rests one veil step above the tracks (they are
                 // transparent until hover), and hover moves it one step further
                 // — the same ladder the wells and hover fills already use
@@ -1506,7 +1506,7 @@ function QueueRow({
       data-selected={selected || undefined}
       {...(bodyDrag ? listeners : {})}
       className={cx(
-        "group relative grid items-center gap-3 rounded-lg px-2 py-1.5",
+        "group relative grid items-center gap-3 rounded-lg px-3 py-1.5",
         lean && LEAN_ROW,
         // the DR cell is a sixth column only while it renders: an empty auto
         // column would still cost a gap and inset the duration
