@@ -168,7 +168,7 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
                     text={claudeCommand(localUrl, null)}
                     copied={copied === "claude-local"}
                     onCopy={() => copy("claude-local", claudeCommand(localUrl, null))}
-                    hint="For Claude Code on this computer. Needs no token, and keeps working if this computer's address changes."
+                    hint="For Claude Code on this computer. No token is needed."
                   />
                 )}
                 <CopyRow
@@ -180,7 +180,9 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
                       ? copyWithToken("claude", (token) => claudeCommand(status.url!, token))
                       : copy("claude", claudeCommand(status.url!, null))
                   }
-                  hint={lan ? "For Claude Code on another computer. Carries the token." : undefined}
+                  hint={
+                    lan ? "For Claude Code on another computer. Includes the token." : undefined
+                  }
                 />
                 <CopyRow
                   label="JSON config"
