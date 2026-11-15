@@ -70,12 +70,14 @@ function describeSchedule(s: Schedule): string {
         : s.days.join(",") === "0,6"
           ? "on weekends"
           : `on ${s.days.map((d) => DAY_NAMES[d]).join(", ")}`;
-  if (s.action === "standby") return `Puts the streamer in standby at ${s.time} ${days}.`;
+  // a schedule an agent set for another streamer names it (0.16.0)
+  const who = s.streamer?.name ?? "the streamer";
+  if (s.action === "standby") return `Puts ${who} in standby at ${s.time} ${days}.`;
   const extras = [
     s.presetId != null ? `recalls preset ${s.presetId}` : null,
     s.volumePercent != null ? `sets volume to ${s.volumePercent}%` : null,
   ].filter(Boolean);
-  return `Wakes the streamer${extras.length ? `, ${extras.join(", ")},` : ""} at ${s.time} ${days}.`;
+  return `Wakes ${who}${extras.length ? `, ${extras.join(", ")},` : ""} at ${s.time} ${days}.`;
 }
 
 /**

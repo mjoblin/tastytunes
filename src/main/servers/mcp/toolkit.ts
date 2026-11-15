@@ -779,5 +779,7 @@ export function scheduleOut(s: Schedule): Record<string, unknown> {
     action: s.action === "on" ? "wake" : "standby",
     preset_id: s.presetId,
     volume_percent: s.volumePercent,
+    // the streamer it acts on, when not the window's (0.16.0)
+    streamer: s.streamer?.name ?? null,
   };
 }

@@ -98,7 +98,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "list_schedules",
         title: "List schedules",
         description:
-          "The user's wake/standby schedules (alarms): time, days, action, enabled. Note: schedules fire only while TastyTunes is running and connected.",
+          "The user's wake/standby schedules (alarms): time, days, action, enabled, and the streamer one acts on when it isn't the window's. Note: schedules fire only while TastyTunes is running.",
       },
       {
         name: "list_scenes",
@@ -746,7 +746,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "create_schedule",
         title: "Create schedule",
         description:
-          "Add a schedule: time (24h HH:MM), days of the week, and wake (power on, optionally recall a preset and set a volume) or standby. Fires only while TastyTunes is running and connected.",
+          "Add a schedule: time (24h HH:MM), days of the week, and wake (power on, optionally recall a preset and set a volume) or standby. By default it acts on the streamer the TastyTunes window shows when it fires; device names another (its presets are that streamer's). Fires only while TastyTunes is running.",
       },
       {
         name: "set_schedule_enabled",

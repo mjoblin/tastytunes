@@ -243,10 +243,24 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           .optional()
           .describe("Wake only: volume to set after the preset settles."),
         enabled: z.boolean().optional().describe("Default true."),
+        device: z
+          .string()
+          .optional()
+          .describe(
+            "Another streamer it acts on, by name or host from list_devices (its own presets). Default: the streamer the TastyTunes window shows, whichever that is when it fires.",
+          ),
       },
-      handler: (a) => {
+      handler: async (a) => {
         if (a.action === "standby" && (a.preset_id != null || a.volume_percent != null)) {
           return err("preset_id and volume_percent only apply to wake schedules.");
+        }
+        // a schedule names its streamer by udn (0.16.0): reached now, to learn who it is
+        let streamer: Schedule["streamer"] = null;
+        if (a.device != null) {
+          const t = await ctx.target(a.device);
+          const udn = t.snapshot().systemInfo?.udn;
+          if (!udn) return err(`${t.name} didn't say who it is. Try again in a moment.`);
+          if (!t.window) streamer = { udn, name: t.name };
         }
         const sched: Schedule = {
           id: randomUUID(),
@@ -256,6 +270,7 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           action: a.action === "wake" ? "on" : "standby",
           presetId: a.preset_id ?? null,
           volumePercent: a.volume_percent ?? null,
+          ...(streamer ? { streamer } : {}),
         };
         ctx.mutateSchedules((list) => [...list, sched]);
         return ok({

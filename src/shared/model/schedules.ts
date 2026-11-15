@@ -22,6 +22,9 @@ export interface Schedule {
   volumePercent: number | null;
   /** Wake only, with a volume: ramp up to it instead of jumping (absent = true). */
   fadeIn?: boolean;
+  /** The streamer it acts on, by udn with its name to show (0.16.0, additive): absent is the
+   *  streamer the TastyTunes window shows, as every schedule before. A preset is that streamer's. */
+  streamer?: { udn: string; name: string } | null;
 }
 
 /**
