@@ -574,7 +574,8 @@ function ConnectGate(): React.JSX.Element {
           {stillLooking && localNetworkPrivacy && (
             <div data-local-network className="text-[12.5px] text-faint max-w-sm leading-relaxed">
               Your Mac may be blocking TastyTunes from your local network. Allow it in System
-              Settings › Privacy & Security › Local Network.
+              Settings › Privacy & Security › Local Network, and if TastyTunes is already on there,
+              turn it off and on.
             </div>
           )}
           {stillLooking && IS_WINDOWS && (
