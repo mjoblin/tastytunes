@@ -293,7 +293,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Search library",
         hints: { readOnly: true },
         description:
-          'Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media, a TRUE total, and pages with limit/offset — page again rather than assuming the first page is everything. match: \'title\' scopes to items whose own title contains the query. Accents and punctuation are ignored ("motorhead" finds Motörhead), and when nothing matches the answer names the nearest artists and albums. Composers are searchable too ("bangalter" finds the tracks he wrote); indexed tracks carry album_artist, performers, composers and format when the server sends them.',
+          'Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media, a TRUE total, and pages with limit/offset — page again rather than assuming the first page is everything. match: \'title\' scopes to items whose own title contains the query. Accents and punctuation are ignored ("motorhead" finds Motörhead), and when nothing matches the answer names the nearest artists and albums. Composers are searchable too ("bangalter" finds the tracks Thomas Bangalter wrote); indexed tracks carry album_artist, performers, composers and format when the server sends them.',
       },
       {
         name: "library_facets",
