@@ -22,6 +22,7 @@ import {
   audioAnalysisKey,
   albumDrKey,
   currentFeatures,
+  keyFromStored,
   keyMatches,
   keyName,
   parseKeyName,
@@ -55,8 +56,12 @@ import {
   largeQueueAsk,
   freshObjectId,
   defineTool,
+  DECADE_ARG,
+  decadeStart,
+  decadeError,
+  inDecade,
 } from "./toolkit";
-import { nameKey } from "@shared/keys";
+import { matchesQuery, nameKey, searchFold } from "@shared/keys";
 
 // The MCP bridge's library tools (the library: servers, browsing, the lenses' lists, search and
 // the index), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and helpers
@@ -276,7 +281,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           .string()
           .optional()
           .describe("Case-insensitive genre, e.g. 'Rock' (results list each album's genres)."),
-        decade: z.string().optional().describe("e.g. '1990s' (or just '1990')."),
+        decade: DECADE_ARG,
         kind: z
           .enum(["all", "albums", "compilations"])
           .optional()
@@ -339,20 +344,20 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               : ctx.kickIndex(),
           );
         }
-        const artistNeedle = a.artist?.toLowerCase();
+        // the text filters fold accents and punctuation (shared/keys' matchesQuery): "motorhead"
+        // finds Motörhead
+        const artistQuery = a.artist;
         const genreNeedle = a.genre?.toLowerCase();
-        const decade = a.decade != null ? String(a.decade).replace(/s$/i, "") : null;
+        const decade = a.decade != null ? decadeStart(a.decade) : null;
+        if (a.decade != null && decade == null) return err(decadeError(a.decade));
         let albums = groups.flatMap((p) => p.albums);
-        if (artistNeedle != null)
-          albums = albums.filter((n) => n.artist?.toLowerCase().includes(artistNeedle));
+        if (artistQuery != null)
+          albums = albums.filter((n) => matchesQuery(artistQuery, [n.artist]));
         if (genreNeedle != null)
           albums = albums.filter((n) =>
             (n.genre ?? []).some((g) => g.toLowerCase() === genreNeedle),
           );
-        if (decade != null)
-          albums = albums.filter(
-            (n) => n.year != null && String(Math.floor(Number(n.year) / 10) * 10) === decade,
-          );
+        if (decade != null) albums = albums.filter((n) => inDecade(n.year, decade));
         // Each album's tracks, summed once (the same derivations the album
         // leaf, the lens and the Info modal use — albumTracksOf/albumSummary):
         // the filters below and the per-album fields both read this map.
@@ -403,11 +408,11 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               tracks.some((t) => (formatLabel(t.format) ?? "").toLowerCase().includes(formatNeedle))
             );
           });
-        const composerNeedle = a.composer?.toLowerCase();
-        if (composerNeedle != null)
+        const composerQuery = a.composer;
+        if (composerQuery != null)
           albums = albums.filter((n) =>
             summaryFor(n).tracks.some((t) =>
-              (t.composers ?? []).some((c) => c.toLowerCase().includes(composerNeedle)),
+              (t.composers ?? []).some((c) => matchesQuery(composerQuery, [c])),
             ),
           );
         const sort = (a.sort as string | undefined) ?? "title";
@@ -575,7 +580,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           .describe("Case-insensitive substring on the track's performers."),
         album: z.string().optional().describe("Case-insensitive substring on the album title."),
         genre: z.string().optional().describe("Case-insensitive genre."),
-        decade: z.string().optional().describe("e.g. '1990s'."),
+        decade: DECADE_ARG,
         format: z
           .string()
           .optional()
@@ -646,10 +651,11 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               : ctx.kickIndex(),
           );
         const lc = (v: string | null | undefined): string => (v ?? "").toLowerCase();
-        const artistNeedle = a.artist?.toLowerCase();
-        const albumNeedle = a.album?.toLowerCase();
+        const artistQuery = a.artist;
+        const albumQuery = a.album;
         const genreNeedle = a.genre?.toLowerCase();
-        const decade = a.decade != null ? String(a.decade).replace(/s$/i, "") : null;
+        const decade = a.decade != null ? decadeStart(a.decade) : null;
+        if (a.decade != null && decade == null) return err(decadeError(a.decade));
         const formatNeedle = a.format?.toLowerCase();
         const drOf = (t: MediaNode): number | null => {
           const an = audioAnalysisGet(audioAnalysisKey(t));
@@ -667,21 +673,18 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             `"${a.key}" doesn't name a key. Try 'A minor', 'F# major', 'Bbm', 'Eb' or 'minor'.`,
           );
         let tracks = groups.flatMap((p) => p.tracks);
-        if (artistNeedle != null)
+        if (artistQuery != null)
           tracks = tracks.filter(
             (t) =>
-              trackArtists(t).some((n) => n.toLowerCase().includes(artistNeedle)) ||
-              lc(t.artist).includes(artistNeedle),
+              trackArtists(t).some((n) => matchesQuery(artistQuery, [n])) ||
+              matchesQuery(artistQuery, [t.artist]),
           );
-        if (albumNeedle != null) tracks = tracks.filter((t) => lc(t.album).includes(albumNeedle));
+        if (albumQuery != null) tracks = tracks.filter((t) => matchesQuery(albumQuery, [t.album]));
         if (genreNeedle != null)
           tracks = tracks.filter((t) =>
             (t.genre ?? []).some((g) => g.toLowerCase() === genreNeedle),
           );
-        if (decade != null)
-          tracks = tracks.filter(
-            (t) => t.year != null && String(Math.floor(Number(t.year) / 10) * 10) === decade,
-          );
+        if (decade != null) tracks = tracks.filter((t) => inDecade(t.year, decade));
         if (formatNeedle != null)
           tracks = tracks.filter(
             (t) =>
@@ -703,7 +706,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             return bpm != null && bpm >= lo && bpm <= hi;
           });
         }
-        if (wantKey != null) tracks = tracks.filter((t) => keyMatches(featuresOf(t)?.key, wantKey));
+        if (wantKey != null)
+          tracks = tracks.filter((t) => keyMatches(keyFromStored(featuresOf(t)), wantKey));
         const stats = await playStatsFromRecord();
         const peersOf = peersByPlayKey(indexPools());
         const statOf = (t: MediaNode) =>
@@ -746,7 +750,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             const st = statOf(t);
             const dr = drOf(t);
             const bpm = bpmOf(t);
-            const key = keyName(featuresOf(t)?.key);
+            const key = keyName(keyFromStored(featuresOf(t)));
             return {
               server_udn: t.serverUdn,
               object_id: t.id,
@@ -777,22 +781,22 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         album: z.string().optional(),
       },
       handler: (a) => {
-        const lc = (v: string | null | undefined): string => (v ?? "").toLowerCase();
         let t:
           | (Pick<MediaNode, "title" | "artist" | "album" | "durationSecs"> & {
               albumArtist?: string | null;
             })
           | null = null;
         if (a.title) {
-          const title = lc(a.title);
+          const title = searchFold(a.title);
+          const { artist, album } = a;
           t =
             indexPools()
               .flatMap((p) => p.tracks)
               .find(
                 (n) =>
-                  lc(n.title) === title &&
-                  (!a.artist || lc(n.artist).includes(lc(a.artist))) &&
-                  (!a.album || lc(n.album).includes(lc(a.album))),
+                  searchFold(n.title) === title &&
+                  (!artist || matchesQuery(artist, [n.artist])) &&
+                  (!album || matchesQuery(album, [n.album])),
               ) ?? null;
           if (!t)
             return err(
@@ -814,7 +818,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         // only the current version's (an older one's tempo may sit an octave off)
         const features = currentFeatures(an?.features);
         const beats = features?.beats ?? null;
-        const key = features?.key ?? null;
+        const key = keyFromStored(features);
         const round2 = (v: number): number => Math.round(v * 100) / 100;
         return ok({
           track: { title: t.title, artist: t.artist, album: t.album },

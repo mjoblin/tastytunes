@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mediaType, nameKey } from "./keys";
+import { matchesQuery, mediaType, nameKey, queryWords, searchFold } from "./keys";
 
 describe("nameKey", () => {
   it("finds a name the same however it is cased, padded or composed", () => {
@@ -35,5 +35,44 @@ describe("mediaType", () => {
     expect(mediaType("Image/JPEG; charset=binary")).toBe("image/jpeg");
     expect(mediaType(" application/json ")).toBe("application/json");
     expect(mediaType(null)).toBe("");
+  });
+});
+
+describe("searchFold and the one text match", () => {
+  it("folds accents, the letters that carry none, and punctuation", () => {
+    expect(searchFold("Motörhead")).toBe("motorhead");
+    expect(searchFold("RÜFÜS")).toBe("rufus");
+    expect(searchFold("Sigur Rós")).toBe("sigur ros");
+    expect(searchFold("Mø")).toBe("mo");
+    expect(searchFold("Straße")).toBe("strasse");
+    expect(searchFold("AC/DC")).toBe("acdc");
+    expect(searchFold("Hip-Hop")).toBe("hiphop");
+    expect(searchFold("Don't")).toBe("dont");
+    expect(searchFold("Beyoncé")).toBe("beyonce");
+  });
+
+  it("finds a name however its accents and punctuation are typed", () => {
+    expect(matchesQuery("motorhead", ["Motörhead"])).toBe(true);
+    expect(matchesQuery("Motörhead", ["Motorhead"])).toBe(true);
+    expect(matchesQuery("rufus", ["RÜFÜS DU SOL"])).toBe(true);
+    expect(matchesQuery("acdc", ["AC/DC"])).toBe(true);
+    expect(matchesQuery("ac/dc back", ["AC/DC", "Back in Black"])).toBe(true);
+    expect(matchesQuery("hip hop", ["Hip-Hop"])).toBe(true);
+    expect(matchesQuery("maiden beast", ["Iron Maiden", "The Number of the Beast"])).toBe(true);
+    expect(matchesQuery("maiden piece", ["Iron Maiden", "The Number of the Beast"])).toBe(false);
+  });
+
+  it("keeps a word that is all punctuation as typed", () => {
+    expect(queryWords("!!! strange")).toEqual([
+      { typed: "!!!", folded: "" },
+      { typed: "strange", folded: "strange" },
+    ]);
+    expect(matchesQuery("!!!", ["!!!", "Strange Weather, Isn't It?"])).toBe(true);
+    expect(matchesQuery("!!!", ["Strange Weather"])).toBe(false);
+  });
+
+  it("matches everything on an empty query, as the filters always have", () => {
+    expect(queryWords("   ")).toEqual([]);
+    expect(matchesQuery("", ["anything"])).toBe(true);
   });
 });

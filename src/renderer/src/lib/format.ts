@@ -1,6 +1,6 @@
 import { isHiRes, LOSSLESS_CODECS, type MediaFormat } from "@shared/model";
 import { cdToc, isCdPlayback, type ZoneNowPlaying, type ZonePlayState } from "@shared/smoip";
-import { nameKey } from "@shared/keys";
+import { matchesQuery } from "@shared/keys";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -213,15 +213,12 @@ export function controlSet(nowPlaying: ZoneNowPlaying | null): Set<string> {
 // ------------------------------------------------------------------ list filter
 
 /**
- * Tokenized, case-insensitive list filter: every whitespace-separated token in
- * `filter` must appear somewhere in the joined haystack, so "maiden beast"
- * matches across artist + title.
+ * The list filter: every word of `filter` somewhere in the joined fields, accents and punctuation
+ * folded, so "maiden beast" matches across artist and title and "motorhead" finds Motörhead
+ * (shared/keys' matchesQuery, the Library's search's own).
  */
 export function matchesFilter(filter: string, fields: Array<string | null | undefined>): boolean {
-  const hay = nameKey(fields.filter(Boolean).join(" "));
-  return nameKey(filter)
-    .split(/\s+/)
-    .every((token) => hay.includes(token));
+  return matchesQuery(filter, fields);
 }
 
 // ------------------------------------------------------------ signal quality lamp

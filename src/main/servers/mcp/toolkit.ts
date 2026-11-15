@@ -64,7 +64,73 @@ export const err = (message: string): ToolResult => ({
   isError: true,
 });
 
-/** First non-internal IPv4 address, for the reachable URL when bound to LAN. */
+/** Today as the history tools' days are written, local "YYYY-MM-DD" (an error names it, since an
+ *  agent may not know the date). */
+export function localToday(now = new Date()): string {
+  const p = (n: number): string => String(n).padStart(2, "0");
+  return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+}
+
+/** A local day, "YYYY-MM-DD", to its first millisecond, or null when it isn't one (a day past the
+ *  month's end too: Date would roll "2026-02-30" into March). */
+export function localDayStart(day: string): number | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day.trim());
+  if (!m) return null;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]) - 1, Number(m[3])];
+  const at = new Date(y, mo, d);
+  return at.getFullYear() === y && at.getMonth() === mo && at.getDate() === d ? at.getTime() : null;
+}
+
+/**
+ * THE HISTORY TOOLS' DAYS, READ ONCE (0.16.0): from and to as local days, to the first millisecond
+ * of from and the last of to, or the error that says what is accepted. Before, each tool parsed
+ * its own and two of five checked: "last week" parsed to NaN, so list_history found nothing and
+ * history_top ranked all time, both as ordinary answers.
+ */
+export function dayRange(a: {
+  from?: string;
+  to?: string;
+}): { from: number | null; to: number | null } | { error: string } {
+  const bad = (name: string, v: string): { error: string } => ({
+    error: `"${v}" isn't a day: ${name} takes a local date, YYYY-MM-DD (today is ${localToday()}).`,
+  });
+  const from = a.from != null ? localDayStart(a.from) : null;
+  if (a.from != null && from == null) return bad("from", a.from);
+  const toStart = a.to != null ? localDayStart(a.to) : null;
+  if (a.to != null && toStart == null) return bad("to", a.to);
+  // the last millisecond of to's day, through the next midnight (a daylight-saving day is not 24h)
+  const dayEnd = (start: number): number => {
+    const d = new Date(start);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() - 1;
+  };
+  const to = toStart != null ? dayEnd(toStart) : null;
+  if (from != null && to != null && from > to)
+    return { error: `from (${a.from}) is after to (${a.to}).` };
+  return { from, to };
+}
+
+/**
+ * A decade as an agent writes it, to its first year: "1990s", "1990", "90s", "'90s", "90", or a
+ * year inside it ("1995"). Two digits under 30 are this century's ("20s" is the 2020s). Null when
+ * it names none (0.16.0: only "1990" and "1990s" matched, and "90s" quietly matched nothing).
+ */
+export function decadeStart(v: string): number | null {
+  const t = nameKey(v).replace(/^['’]/, "").replace(/s$/, "");
+  if (/^\d{4}$/.test(t)) return Math.floor(Number(t) / 10) * 10;
+  if (/^\d0$/.test(t)) return Number(t) >= 30 ? 1900 + Number(t) : 2000 + Number(t);
+  return null;
+}
+export const DECADE_ARG = z
+  .string()
+  .optional()
+  .describe("A decade: '1990s', '90s', '1990', or a year in it.");
+export const decadeError = (v: string): string =>
+  `"${v}" isn't a decade. Try '1990s', '90s' or a year such as '1994'.`;
+/** Whether an item's year (a tag's "1994" or "1994-05-01") falls in the decade starting there. */
+export const inDecade = (year: string | null | undefined, start: number): boolean => {
+  const y = Number.parseInt(String(year ?? "").slice(0, 4), 10);
+  return Number.isFinite(y) && y >= start && y < start + 10;
+};
 
 /** What resume_album finds: the run left unfinished and where it stands, or why not. */
 export type ResumeOffer =
@@ -272,7 +338,8 @@ export const status = (ctx: ToolContext): unknown => {
       position_seconds: s.position?.position ?? s.playState?.position ?? null,
       duration_seconds: md?.duration ?? null,
       queue_index: s.playState?.queue_index ?? null,
-      queue_length: s.playState?.queue_length ?? null,
+      // the queue list's own count, as list_queue says it: the play state's lags an append
+      queue_length: s.queue?.total ?? s.playState?.queue_length ?? null,
       shuffle: s.playState?.mode_shuffle ?? null,
       repeat: s.playState?.mode_repeat ?? null,
       // The playing copy's heart, as the Now Playing heart reads it (station
