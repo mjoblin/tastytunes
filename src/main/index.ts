@@ -47,6 +47,10 @@ wireListeningPushes();
 // MCP tools can mutate settings (schedules) — the renderer must hear about it
 mcpBridge.onSettingsMutated = (settings) => broadcastSettings(settings);
 mcpBridge.sendCommand = (command) => sendMenuCommand(command);
+mcpBridge.windowOpen = () => {
+  const w = getMainWindow();
+  return w != null && !w.isDestroyed();
+};
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {

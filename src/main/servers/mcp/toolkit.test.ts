@@ -3,6 +3,8 @@ import { z } from "zod";
 import {
   dayRange,
   decadeStart,
+  genreKey,
+  nearestNames,
   inDecade,
   localDayStart,
   localTime,
@@ -109,5 +111,32 @@ describe("answers", () => {
   it("are compact JSON, and a sentence stays a sentence", () => {
     expect(ok({ a: 1, b: [2] }).content[0]).toEqual({ type: "text", text: '{"a":1,"b":[2]}' });
     expect(ok("Skipped.").content[0]).toEqual({ type: "text", text: "Skipped." });
+  });
+});
+
+describe("the library's shape for an agent", () => {
+  it("joins a genre's spellings", () => {
+    expect(genreKey("Hip-Hop")).toBe(genreKey("Hip Hop"));
+    expect(genreKey("hiphop")).toBe(genreKey("HIP HOP"));
+    expect(genreKey("Électronique")).toBe("electronique");
+    expect(genreKey("Rock")).not.toBe(genreKey("Rock & Roll"));
+  });
+
+  it("offers the names closest to a miss, closest first", () => {
+    const artists = ["The Beatles", "Beat Happening", "Massive Attack", "Motörhead", "Keane"];
+    // the closer first: one edit to "Beatles", two to "Beat"
+    expect(nearestNames("beatls", artists)).toEqual(["The Beatles", "Beat Happening"]);
+    expect(nearestNames("massiv atack", artists)).toEqual(["Massive Attack"]);
+    expect(nearestNames("motorhed", artists)).toEqual(["Motörhead"]);
+    expect(nearestNames("keane", artists)).toEqual(["Keane"]);
+    expect(nearestNames("zzzz", artists)).toEqual([]);
+    expect(nearestNames("", artists)).toEqual([]);
+  });
+
+  it("puts a genre that contains the word first", () => {
+    expect(nearestNames("electro", ["Electronic", "Electro Swing", "Rock", "Metal"])).toEqual([
+      "Electro Swing",
+      "Electronic",
+    ]);
   });
 });
