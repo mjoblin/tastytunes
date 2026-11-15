@@ -10,7 +10,14 @@ import {
   type Schedule,
   type SleepTimer,
 } from "@shared/model";
-import { type Favorite, heartOf, heartPeersFrom, resumeRun, trackArtists } from "@shared/model";
+import {
+  creditNames,
+  type Favorite,
+  heartOf,
+  heartPeersFrom,
+  resumeRun,
+  trackArtists,
+} from "@shared/model";
 import { audioCaps, type ZonePlayState } from "@shared/smoip";
 import type { DeviceManager } from "../../device/deviceManager";
 import { getSettings } from "../../data/persist";
@@ -247,19 +254,24 @@ function editDistance(a: string, b: string, max: number): number {
  * THE NAMES CLOSEST TO WHAT WAS ASKED, for an answer that found nothing (0.16.0: "beatls" found
  * nothing and offered nothing). Compared folded, against the whole name and against each run of
  * its words as long as the query ("beatls" meets "Beatles" inside "The Beatles"), within a third
- * of the query's length; a name that contains the query, or is contained in it, comes first.
+ * of the query's length; a name that contains the query, or is contained in it as whole words,
+ * comes first. A query under three letters has none.
  * Closest first, then A to Z, at most `max`.
  */
 export function nearestNames(query: string, names: Iterable<string>, max = 5): string[] {
   const q = searchFold(query).replace(/\s+/g, " ").trim();
-  if (q === "") return [];
+  // under three letters, a third of the query is one edit and every short word is near
+  if (q.length < 3) return [];
   const qWords = q.split(" ").length;
   const allowed = Math.max(1, Math.floor(q.length / 3));
   const scored = new Map<string, number>();
   for (const name of new Set(names)) {
     const f = searchFold(name).replace(/\s+/g, " ").trim();
     if (f === "") continue;
-    let best = f.includes(q) || q.includes(f) ? 0 : editDistance(q, f, allowed);
+    // a name inside the query counts as words of it, three letters or more: a title "N" had come
+    // first for every miss with an n in it
+    const inQuery = f.length >= 3 && ` ${q} `.includes(` ${f} `);
+    let best = f.includes(q) || inQuery ? 0 : editDistance(q, f, allowed);
     const words = f.split(" ");
     for (let i = 0; best > 0 && i + qWords <= words.length; i++)
       best = Math.min(best, editDistance(q, words.slice(i, i + qWords).join(" "), allowed));
@@ -500,15 +512,31 @@ export interface TitleRef {
 }
 
 /**
+ * Whether a reference's artist is among an item's credits: each of its words among them, or, for a
+ * credit written as one string ("A feat. B", the record's and the firmware's way), one of the names
+ * it packs (creditNames, which a caller tries after the whole credit). An item crediting no one is
+ * not ruled out (resolveContent's asymmetry). Before, "feat" had to be among the credits too, so a
+ * reference copied from a history row missed every featured track.
+ */
+export function creditedBy(
+  artist: string | null | undefined,
+  credits: ReadonlyArray<string | null | undefined>,
+): boolean {
+  if (!artist?.trim() || credits.every((c) => !c)) return true;
+  if (matchesQuery(artist, credits)) return true;
+  const names = creditNames(artist);
+  return names.length > 1 && names.some((n) => matchesQuery(n, credits));
+}
+
+/**
  * ONE TITLE MATCH FOR AN AGENT (0.16.0), asked by every tool that takes a title (a track
  * reference, history_stats, history_first_listen), so a song named from memory is found. The
  * title is folded as search folds it; failing that, with an artist named, a title matches once its
  * trailing parenthesized or bracketed part is set aside ("Harbour Lights" by Dusk Parade is
- * "Harbour Lights (feat. June Vale)"). A named artist is matched folded, each of its words among
- * the item's credits, and an item crediting no one is not ruled out by it (resolveContent's
- * asymmetry). Before, search folded while a track reference and the history tools matched the
- * title exactly, so a playlist lost the songs an agent spelled without their apostrophe and
- * history_stats answered zero plays for them. Built once for many references.
+ * "Harbour Lights (feat. June Vale)"). A named artist is matched by creditedBy. Before, search
+ * folded while a track reference and the history tools matched the title exactly, so a playlist
+ * lost the songs an agent spelled without their apostrophe and history_stats answered zero plays
+ * for them. Built once for many references.
  */
 export function titleMatcher<T>(
   items: Iterable<T>,
@@ -535,8 +563,7 @@ export function titleMatcher<T>(
     const want = titleFold(ref.title);
     if (want === "") return [];
     const artist = ref.artist?.trim() ? ref.artist : null;
-    const credited = (e: Entry): boolean =>
-      artist == null || e.credits.every((c) => !c) || matchesQuery(artist, e.credits);
+    const credited = (e: Entry): boolean => creditedBy(artist, e.credits);
     const folded = (byTitle.get(want) ?? []).filter(credited);
     if (folded.length > 0 || artist == null) return folded.map((e) => e.item);
     return (byBare.get(want) ?? []).filter(credited).map((e) => e.item);
@@ -556,7 +583,7 @@ export function nearestTitles<T>(
     const { title, credits } = read(item);
     if (!title) continue;
     all.push(title);
-    if (ref.artist && matchesQuery(ref.artist, credits)) theirs.push(title);
+    if (ref.artist && credits.some(Boolean) && creditedBy(ref.artist, credits)) theirs.push(title);
   }
   const near = theirs.length > 0 ? nearestNames(ref.title, theirs) : [];
   return near.length > 0 ? near : nearestNames(ref.title, all);
@@ -652,8 +679,47 @@ export function readTrackRefs(
           : "No indexed server with that server_udn.",
       );
     }
+    const takeClose = (node: MediaNode, udn: string, serverName: string): void => {
+      take(index, itemOfNode(node, udn, serverName));
+      out.close.push({
+        index,
+        ref: refLabel(ref),
+        title: node.title,
+        artist: node.artist,
+        album: node.album,
+      });
+    };
+    // titles that still differ once folded are different songs, offered to choose between
+    const choose = (found: readonly Hit[]): void => {
+      const songs = new Map<string, Hit>();
+      for (const h of found)
+        if (!songs.has(titleFold(h.node.title))) songs.set(titleFold(h.node.title), h);
+      if (songs.size > 1)
+        return miss("Names more than one track: give one's server_udn and object_id.", {
+          candidates: [...songs.values()].slice(0, 10).map(row),
+        });
+      takeClose(found[0].node, found[0].pool.udn, found[0].pool.serverName);
+    };
+    const album = ref.album != null ? titleFold(ref.album) : null;
+    const onAlbum = (h: Hit): boolean => album != null && titleFold(h.node.album) === album;
     const hit = exact({ title: ref.title, artist: ref.artist ?? null, album: ref.album ?? null });
-    if (hit) return take(index, itemOfNode(hit.node, hit.serverUdn, hit.serverName));
+    if (hit && (album == null || titleFold(hit.node.album) === album))
+      return take(index, itemOfNode(hit.node, hit.serverUdn, hit.serverName));
+    // AN ALBUM NAMED IS THE AGENT'S OWN (0.16.0): the heal's rule lets the album only tell twins
+    // apart, so a demo album's "Song [Demo]" had lost to the studio "Song", unsaid. The named
+    // album's tracks come first, a trailing part set aside; failing them, the match on another
+    // album is taken and said among the close matches.
+    if (album != null) {
+      const want = titleFold(ref.title);
+      const there = tracks().filter(
+        (h) =>
+          onAlbum(h) &&
+          creditedBy(ref.artist, read(h).credits) &&
+          (titleFold(h.node.title) === want || titleFold(bareTitle(h.node.title)) === want),
+      );
+      if (there.length > 0) return choose(there);
+    }
+    if (hit) return takeClose(hit.node, hit.serverUdn, hit.serverName);
     loose ??= titleMatcher(tracks(), read);
     const hits = loose(ref);
     if (hits.length === 0)
@@ -664,25 +730,8 @@ export function readTrackRefs(
           : {},
       );
     // the album given narrows them first, when any of them is on it
-    const onAlbum =
-      ref.album != null ? hits.filter((h) => titleFold(h.node.album) === titleFold(ref.album)) : [];
-    const kept = onAlbum.length > 0 ? onAlbum : hits;
-    const songs = new Map<string, Hit>();
-    for (const h of kept)
-      if (!songs.has(titleFold(h.node.title))) songs.set(titleFold(h.node.title), h);
-    if (songs.size > 1)
-      return miss("Names more than one track: give one's server_udn and object_id.", {
-        candidates: [...songs.values()].slice(0, 10).map(row),
-      });
-    const pick = kept[0];
-    take(index, itemOfNode(pick.node, pick.pool.udn, pick.pool.serverName));
-    out.close.push({
-      index,
-      ref: refLabel(ref),
-      title: pick.node.title,
-      artist: pick.node.artist,
-      album: pick.node.album,
-    });
+    const kept = hits.filter(onAlbum);
+    choose(kept.length > 0 ? kept : hits);
   });
   return out;
 }

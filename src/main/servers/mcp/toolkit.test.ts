@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
   bareTitle,
+  creditedBy,
   dayRange,
   decadeStart,
   genreKey,
@@ -199,6 +200,16 @@ describe("one title match for an agent's reference", () => {
     expect(titles({ title: "intro", artist: "Anyone" })).toEqual(["Intro"]);
   });
 
+  it("takes an artist written as one credit, as a history row writes it", () => {
+    expect(titles({ title: "Harbour Lights", artist: "Dusk Parade feat. June Vale" })).toEqual([
+      "Harbour Lights (feat. June Vale)",
+    ]);
+    expect(creditedBy("Dusk Parade feat. June Vale", ["Dusk Parade"])).toBe(true);
+    expect(creditedBy("Simon and Garfunkel", ["Simon & Garfunkel"])).toBe(true);
+    expect(creditedBy("Dusk Parade feat. June Vale", ["Glass Orchard"])).toBe(false);
+    expect(creditedBy("Glass Orchard", [null, ""])).toBe(true);
+  });
+
   it("sets aside every trailing part, and keeps a title that is only one", () => {
     expect(bareTitle("Song (feat. X) [Remastered 2011]")).toBe("Song");
     expect(bareTitle("Harbour Lights (feat. June Vale)")).toBe("Harbour Lights");
@@ -215,5 +226,16 @@ describe("one title match for an agent's reference", () => {
       nearestTitles({ title: "dont look bak", artist: "Glass Orchard" }, library, read),
     ).toEqual(["Don't Look Back"]);
     expect(nearestTitles({ title: "zzzz qqqq" }, library, read)).toEqual([]);
+  });
+
+  it("offers no one- or two-letter title for a miss, and nothing for a short query", () => {
+    const short = ["N", "NO", "Paper Moons [Demo]", "4048 X"];
+    expect(nearestNames("zzz not a song", short)).toEqual([]);
+    expect(nearestNames("paper moons demi", short)).toEqual(["Paper Moons [Demo]"]);
+    expect(nearestNames("x1", short)).toEqual([]);
+    // a name inside the query still comes first when it is whole words of it
+    expect(nearestNames("paper moons demo live", ["Paper Moons Demo", "Moon"])).toEqual([
+      "Paper Moons Demo",
+    ]);
   });
 });
