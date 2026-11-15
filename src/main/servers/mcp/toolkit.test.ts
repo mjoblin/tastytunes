@@ -44,6 +44,20 @@ describe("the history tools' days, read once", () => {
     });
   });
 
+  it("reads a named period in local days", () => {
+    const now = new Date();
+    const [y, m, d] = [now.getFullYear(), now.getMonth(), now.getDate()];
+    const day = (dd: number, mm = m, yy = y): number => new Date(yy, mm, dd).getTime();
+    expect(dayRange({ period: "today" })).toEqual({ from: day(d), to: day(d + 1) - 1 });
+    expect(dayRange({ period: "yesterday" })).toEqual({ from: day(d - 1), to: day(d) - 1 });
+    expect(dayRange({ period: "last_7_days" })).toEqual({ from: day(d - 6), to: day(d + 1) - 1 });
+    expect(dayRange({ period: "this_month" })).toEqual({ from: day(1), to: day(d + 1) - 1 });
+    expect(dayRange({ period: "this_year" })).toEqual({ from: day(1, 0), to: day(d + 1) - 1 });
+    expect(dayRange({ period: "today", from: "2026-01-01" })).toEqual({
+      error: "Give period, or from and to, not both.",
+    });
+  });
+
   it("writes today as the tools take a day", () => {
     expect(localToday(new Date(2026, 0, 5))).toBe("2026-01-05");
   });

@@ -68,6 +68,9 @@ import {
   nearestNames,
   localDayStart,
   localToday,
+  settle,
+  trackMoved,
+  queueGrew,
   tracksOfRefs,
   someTitles,
   decadeStart,
@@ -1434,6 +1437,9 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const s = ctx.connected();
         const host = s.connection.host;
         const mode = a.mode ?? "play_now";
+        // what it left, once the streamer says so (0.16.0): a play waits for the track to move,
+        // an add for the queue to grow
+        const settled = mode === "append" || mode === "play_next" ? queueGrew : trackMoved;
         // what a replace threw away, said so the agent can tell the user (0.16.0)
         const before = s.queue?.total ?? 0;
         const replacedNote = (n: number | null): string =>
@@ -1475,8 +1481,11 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                 : mode === "play_next"
                   ? "to play next"
                   : "at the end of the queue";
-          return ok(
+          return settle(
+            ctx,
+            s,
             `Queued ${res.added} of ${a.items.length} ${a.items.length === 1 ? "track" : "tracks"}, ${how}.${replacedNote(res.replaced)}${gone.length > 0 ? ` Not found: ${someTitles(gone)}.` : ""}`,
+            settled,
           );
         }
 
@@ -1511,7 +1520,12 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             if (e instanceof LargeQueueError) return err(largeQueueAsk(e.tracks, "play_media"));
             return err(`Couldn't queue the album. (${(e as Error).message})`);
           }
-          return ok(`Playing from track ${a.start_at}, "${target.title}".${replacedNote(before)}`);
+          return settle(
+            ctx,
+            s,
+            `Playing from track ${a.start_at}, "${target.title}".${replacedNote(before)}`,
+            trackMoved,
+          );
         }
 
         try {
@@ -1524,7 +1538,9 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             `Couldn't queue that item — its object id may be stale; run search_library again. (${(e as Error).message})`,
           );
         }
-        return ok(
+        return settle(
+          ctx,
+          s,
           mode === "replace"
             ? `Playing.${replacedNote(before) || " The queue was empty."}`
             : mode === "play_now"
@@ -1532,6 +1548,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               : mode === "play_next"
                 ? "Queued to play next."
                 : "Added to the end of the queue.",
+          settled,
         );
       },
     }),
