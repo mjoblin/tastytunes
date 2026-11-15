@@ -1,5 +1,5 @@
 import { z, type ZodRawShape } from "zod";
-import { type MenuCommand, type Snapshot } from "@shared/ipc";
+import { type MenuCommand, type Snapshot, type StreamerCommand } from "@shared/ipc";
 import {
   type AppSettings,
   type ConnectionState,
@@ -8,6 +8,7 @@ import {
   type MediaQueueAction,
   type PlaylistItem,
   type Schedule,
+  type SleepTimer,
 } from "@shared/model";
 import { type Favorite, heartOf, heartPeersFrom, resumeRun } from "@shared/model";
 import { audioCaps, type ZonePlayState } from "@shared/smoip";
@@ -271,12 +272,51 @@ export type ConnectedSnapshot = Snapshot & {
   connection: Extract<ConnectionState, { phase: "connected" }>;
 };
 
+/**
+ * THE STREAMER A TOOL ACTS ON (0.16.0, more than one streamer): the one the TastyTunes window
+ * shows, or another named by the tool's device argument, reached on a background connection
+ * (device/remoteStreamer) so the window stays where the user put it. The tools read and act
+ * through this, never through the device manager directly, so one argument moves them all.
+ */
+export interface Target {
+  /** The streamer the window shows (false: an agent's background connection). */
+  window: boolean;
+  host: string;
+  name: string;
+  /** Its state, as a snapshot (the app's own lists beside it, the window's). */
+  snapshot(): ConnectedSnapshot;
+  command(cmd: StreamerCommand): Promise<void>;
+  queueAdd(
+    serverUdn: string,
+    objectId: string,
+    action: MediaQueueAction,
+    playFromId?: string,
+    opts?: { confirmLarge?: boolean },
+  ): Promise<void>;
+  queueTracks(
+    items: readonly PlaylistItem[],
+    mode: "play_now" | "play_next" | "append" | "replace",
+  ): Promise<{ added: number; missed: string[]; total: number; replaced: number | null }>;
+  ensureAwake(): Promise<void>;
+  setSleep(sleep: SleepTimer | null): void;
+}
+
+export const DEVICE_ARG = z
+  .string()
+  .optional()
+  .describe(
+    "Another streamer, by its name or host from list_devices: the tool acts on it and the TastyTunes window stays on its own. Default: the streamer the window shows.",
+  );
+
 /** What the tool modules reach of the bridge: the device manager, the
  *  connected-or-throw snapshot, the index kick, the resume offer and the
  *  schedules write. Built by the bridge per server build. */
 export interface ToolContext {
   dm: DeviceManager;
   connected(): ConnectedSnapshot;
+  /** The streamer a call acts on: the window's, or the one its device argument names. Throws
+   *  (a clean tool error) when that streamer can't be reached. */
+  target(device?: string): Promise<Target>;
   kickIndex(): string;
   resumeOffer(): Promise<ResumeOffer>;
   mutateSchedules(fn: (list: Schedule[]) => Schedule[]): void;
@@ -565,8 +605,8 @@ function playingHearted(
   return heartOf(item, favorites, heartPeersFrom(indexPools())(item)) != null;
 }
 
-export const status = (ctx: ToolContext): unknown => {
-  const s = ctx.dm.snapshot();
+export const status = (ctx: ToolContext, t?: Target): unknown => {
+  const s: Snapshot = t ? t.snapshot() : ctx.dm.snapshot();
   // the time and day as the user lives them (0.16.0): an agent may not know either, and the
   // history tools take local days
   const clock = { local_time: localTime(Date.now()), today: localToday(), ...toolsOff() };
@@ -591,6 +631,8 @@ export const status = (ctx: ToolContext): unknown => {
       name: s.systemInfo?.name ?? null,
       model: s.systemInfo?.model ?? null,
       host: s.connection.host,
+      // the streamer the window shows, or another an agent reached (0.16.0)
+      shown_in_window: t ? t.window : true,
     },
     power: s.systemPower?.power ?? null,
     source: activeSourceId ? { id: activeSourceId, name: sourceName } : null,
@@ -688,30 +730,33 @@ export function nowState(s: Snapshot): Record<string, unknown> {
  * two calls). Before, every action answered with a sentence alone.
  */
 export async function acted(
-  ctx: ToolContext,
+  t: Target,
   act: () => Promise<unknown>,
   done: string | ((now: Snapshot) => string),
   settled: (before: Snapshot, now: Snapshot) => boolean,
 ): Promise<ToolResult> {
-  const before = ctx.dm.snapshot();
+  const before = t.snapshot();
   await act();
-  return settle(ctx, before, done, settled);
+  return settle(t, before, done, settled);
 }
 
 /** acted's wait for an action already taken: the state before it, then as above. */
 export async function settle(
-  ctx: ToolContext,
+  t: Target,
   before: Snapshot,
   done: string | ((now: Snapshot) => string),
   settled: (before: Snapshot, now: Snapshot) => boolean,
 ): Promise<ToolResult> {
   const until = Date.now() + 1500;
-  let now = ctx.dm.snapshot();
+  let now: Snapshot = t.snapshot();
   while (!settled(before, now) && Date.now() < until) {
     await new Promise((r) => setTimeout(r, 100));
-    now = ctx.dm.snapshot();
+    now = t.snapshot();
   }
-  return ok({ done: typeof done === "string" ? done : done(now), now: nowState(now) });
+  return ok({
+    done: typeof done === "string" ? done : done(now),
+    now: { ...nowState(now), ...(t.window ? {} : { streamer: t.name }) },
+  });
 }
 
 /** The queue's length changed (an add that plays nothing yet). */

@@ -71,6 +71,7 @@ import {
   settle,
   trackMoved,
   queueGrew,
+  DEVICE_ARG,
   tracksOfRefs,
   someTitles,
   decadeStart,
@@ -1432,10 +1433,13 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           .describe(
             `Only after the user agreed: queue a container over ${LARGE_QUEUE_TRACKS} tracks anyway.`,
           ),
+        device: DEVICE_ARG,
       },
       handler: async (a) => {
-        const s = ctx.connected();
-        const host = s.connection.host;
+        // the window's streamer, or another the device argument names (0.16.0)
+        const t = await ctx.target(a.device);
+        const s = t.snapshot();
+        const host = t.host;
         const mode = a.mode ?? "play_now";
         // what it left, once the streamer says so (0.16.0): a play waits for the track to move,
         // an add for the queue to grow
@@ -1468,7 +1472,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             );
           let res;
           try {
-            res = await ctx.dm.queueTracks(items, mode);
+            res = await t.queueTracks(items, mode);
           } catch (e) {
             return err((e as Error).message);
           }
@@ -1482,7 +1486,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                   ? "to play next"
                   : "at the end of the queue";
           return settle(
-            ctx,
+            t,
             s,
             `Queued ${res.added} of ${a.items.length} ${a.items.length === 1 ? "track" : "tracks"}, ${how}.${replacedNote(res.replaced)}${gone.length > 0 ? ` Not found: ${someTitles(gone)}.` : ""}`,
             settled,
@@ -1502,7 +1506,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             return err(
               "start_at plays the album from that track and replaces the queue: leave mode out.",
             );
-          await ctx.dm.ensureAwake();
+          await t.ensureAwake();
           const listed = await browseChildrenOf(host, a.server_udn, fresh.id);
           const tracks = orderTracks(
             (typeof listed === "string" ? [] : listed).filter((k) => !k.isContainer),
@@ -1513,7 +1517,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           if (!target)
             return err(`The album has ${tracks.length} tracks: start_at is 1 to ${tracks.length}.`);
           try {
-            await ctx.dm.queueAdd(a.server_udn, fresh.id, "PLAY_FROM_HERE", target.id, {
+            await t.queueAdd(a.server_udn, fresh.id, "PLAY_FROM_HERE", target.id, {
               confirmLarge: a.confirm_large === true,
             });
           } catch (e) {
@@ -1521,7 +1525,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             return err(`Couldn't queue the album. (${(e as Error).message})`);
           }
           return settle(
-            ctx,
+            t,
             s,
             `Playing from track ${a.start_at}, "${target.title}".${replacedNote(before)}`,
             trackMoved,
@@ -1529,7 +1533,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         }
 
         try {
-          await ctx.dm.queueAdd(a.server_udn, fresh.id, QUEUE_MODES[mode], undefined, {
+          await t.queueAdd(a.server_udn, fresh.id, QUEUE_MODES[mode], undefined, {
             confirmLarge: a.confirm_large === true,
           });
         } catch (e) {
@@ -1539,7 +1543,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           );
         }
         return settle(
-          ctx,
+          t,
           s,
           mode === "replace"
             ? `Playing.${replacedNote(before) || " The queue was empty."}`
