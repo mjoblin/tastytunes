@@ -590,6 +590,19 @@ export function fmtBytes(n: number): string {
 }
 
 /**
+ * The names a credit packs, in order: "A feat. B", "A ft. B", "A & B", "A and B", "A with B",
+ * "A, B; C", as a streaming service or a tag writes a credit (0.16.0, lifted from the record's
+ * in-library test, its one home since). The whole credit is not among them: a duo's name ("Simon
+ * & Garfunkel") splits too, so a caller tries the whole credit first.
+ */
+export function creditNames(credit: string): string[] {
+  return credit
+    .split(/\s*(?:,|;|&|\band\b|\bfeat\.?|\bft\.?|\bwith\b)\s*/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
  * A track's performers as separate names — the ONLY way to ask "who is on
  * this track": `artists` when the server packed several, else the single
  * `artist`. Never key identity on the packed string ("A; B" is two people).

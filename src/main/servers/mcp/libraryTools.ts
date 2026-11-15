@@ -1057,6 +1057,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
     }),
     get_track_analysis: defineTool({
       inputSchema: {
+        server_udn: z.string().optional().describe("With object_id: the track, from a listing."),
+        object_id: z.string().optional().describe("The track's id."),
         title: z
           .string()
           .optional()
@@ -1070,22 +1072,48 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               albumArtist?: string | null;
             })
           | null = null;
-        if (a.title) {
+        if (a.server_udn != null || a.object_id != null) {
+          // by its ids (0.16.0), the one way that names a copy exactly
+          const node = indexPools()
+            .find((p) => p.udn === a.server_udn)
+            ?.tracks.find((n) => n.id === a.object_id);
+          if (!node)
+            return err(
+              `No track '${String(a.object_id)}' in that server's index. Use list_tracks for its id.`,
+            );
+          t = node;
+        } else if (a.title) {
           const title = searchFold(a.title);
           const { artist, album } = a;
-          t =
-            indexPools()
-              .flatMap((p) => p.tracks)
-              .find(
-                (n) =>
-                  searchFold(n.title) === title &&
-                  (!artist || matchesQuery(artist, [n.artist])) &&
-                  (!album || matchesQuery(album, [n.album])),
-              ) ?? null;
-          if (!t)
+          const hits = indexPools()
+            .flatMap((p) => p.tracks)
+            .filter(
+              (n) =>
+                searchFold(n.title) === title &&
+                (!artist || matchesQuery(artist, [n.artist])) &&
+                (!album || matchesQuery(album, [n.album])),
+            );
+          if (hits.length === 0)
             return err(
               `No indexed track titled "${String(a.title)}". Use list_tracks or search_library.`,
             );
+          // AMBIGUITY IS AN ANSWER (0.16.0): a title on two albums had answered with the first,
+          // silently; tracks measured apart (another album, a reprise, another length) come back
+          // as candidates to choose between, copies of one track as one
+          const distinct = new Map(hits.map((n) => [audioAnalysisKey(n), n]));
+          if (distinct.size > 1)
+            return ok({
+              ambiguous: true,
+              note: "Several tracks have that title: call again with one's server_udn and object_id, or with artist or album.",
+              candidates: [...distinct.values()].slice(0, 10).map((n) => ({
+                title: n.title,
+                artist: n.artist,
+                album: n.album,
+                server_udn: n.serverUdn,
+                object_id: n.id,
+              })),
+            });
+          t = hits[0];
         } else {
           const md = dm.snapshot().playState?.metadata;
           if (!md?.title) return err("Nothing is playing and no track was named.");
