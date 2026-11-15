@@ -91,7 +91,8 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "list_devices",
         title: "List devices",
-        description: "StreamMagic streamers known on the network and which one is connected.",
+        description:
+          "StreamMagic streamers seen on the network now and remembered from before, and which one the TastyTunes window is connected to. Any of them can be named as device on the tools that take it.",
       },
       {
         name: "list_schedules",
@@ -243,7 +244,8 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "connect_device",
         title: "Connect device",
         hints: { idempotent: true },
-        description: "Connect to a different streamer by host/IP (see list_devices).",
+        description:
+          "Switch the TastyTunes window to a different streamer by host/IP (see list_devices): the user's window moves with it. To act on another streamer and leave the window as it is, pass device to the tool instead.",
       },
     ],
   },

@@ -559,9 +559,10 @@ export const ONE_HOME = [
     // the media browser's queue write, called bare
     selector: "CallExpression[callee.type='Identifier'][callee.name='queueAdd']",
     files: ["^src/main/"],
-    allow: ["device/(deviceManager|queueOps)\\.ts$", "\\.test\\.ts$"],
+    // an agent's connection to another streamer (0.16.0) is the device layer too, and wakes first
+    allow: ["device/(deviceManager|queueOps|remoteStreamer)\\.ts$", "\\.test\\.ts$"],
     message:
-      "Queue writes go through DeviceManager.queueAdd, which wakes the streamer first; the media browser's queueAdd is the device layer's alone",
+      "Queue writes go through DeviceManager.queueAdd (or RemoteStreamer.queueAdd for an agent's other streamer), which wakes the streamer first; the media browser's queueAdd is the device layer's alone",
     bad: {
       file: "src/main/servers/mcp/editTools.ts",
       code: 'await queueAdd(host, udn, id, "PLAY_NOW");',

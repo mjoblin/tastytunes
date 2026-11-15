@@ -41,9 +41,11 @@ import {
   type ResumeOffer,
   type ToolContext,
   type ToolImpl,
+  type Target,
   err,
   strictInput,
 } from "./mcp/toolkit";
+import { RemoteStreamers } from "../device/remoteStreamer";
 import { deviceTools } from "./mcp/deviceTools";
 import { libraryTools } from "./mcp/libraryTools";
 import { historyTools } from "./mcp/historyTools";
@@ -82,6 +84,7 @@ const INSTRUCTIONS = [
   "To find music by style or era, read library_facets and list_artists and use what you know about the artists, because genre tags are often missing.",
   "Dynamic range, loudness, tempo and key exist only for analyzed tracks, and answers that use them say how many were measured.",
   "Don't replace the queue unless the user asks.",
+  "The tools that act on a streamer take device, another streamer by its name from list_devices, and act on it without moving the TastyTunes window; connect_device is the one tool that moves the window.",
   "The history tools take local days (YYYY-MM-DD) or a named period.",
   "Some editing tools are off until the user turns them on in Settings › Integrations.",
 ].join(" ");
@@ -153,7 +156,12 @@ export class McpBridge {
    *  renderer state main would not otherwise know. */
   private displayModeOn = false;
 
-  constructor(private dm: DeviceManager) {}
+  /** The agent's connections to streamers the window isn't showing (0.16.0). */
+  private readonly remotes: RemoteStreamers;
+
+  constructor(private dm: DeviceManager) {
+    this.remotes = new RemoteStreamers((text) => this.dm.log("info", "agents", text));
+  }
 
   reportDisplayMode(on: boolean): void {
     this.displayModeOn = on;
@@ -187,6 +195,8 @@ export class McpBridge {
     this.http = null;
     this.active = null;
     if (!restarting) {
+      // the server off, no agent is left to use a background connection
+      this.remotes.closeAll();
       this.dm.setMcpStatus({ running: false, url: null, error: null }, "stopped");
     }
   }
@@ -393,6 +403,70 @@ export class McpBridge {
     return { run, node, target, position: tracks.indexOf(target) + 1, total: tracks.length };
   }
 
+  /**
+   * A device argument to a streamer's host: a name, a udn or a host from the streamers seen on
+   * the network and the device book, else the argument itself when it reads as an address.
+   */
+  private hostOf(device: string): string | null {
+    const snap = this.dm.snapshot();
+    const key = nameKey(device);
+    const known = [...snap.devices, ...getSettings().knownDevices].find(
+      (d) => nameKey(d.friendlyName) === key || nameKey(d.udn) === key || nameKey(d.host) === key,
+    );
+    if (known) return known.host;
+    return /^[\w.-]+(:\d+)?$/.test(device.trim()) && /[.:]/.test(device) ? device.trim() : null;
+  }
+
+  /** The streamer a call acts on (ToolContext.target). */
+  private async target(device?: string): Promise<Target> {
+    const snap = this.dm.snapshot();
+    const windowHost = snap.connection.phase === "connected" ? snap.connection.host : null;
+    const host = device != null ? this.hostOf(device) : null;
+    if (device != null && host == null)
+      throw new Error(`No streamer called '${device}'. Use list_devices for their names.`);
+    if (host == null || host === windowHost) {
+      // the window's streamer: an agent's own connection to it, if it had one, gives way
+      if (host != null) this.remotes.drop(host);
+      const s = this.connected();
+      return {
+        window: true,
+        host: s.connection.host,
+        name: s.systemInfo?.name ?? s.connection.host,
+        snapshot: () => this.connected(),
+        command: (cmd) => this.dm.command(cmd),
+        queueAdd: (udn, id, action, from, opts) => this.dm.queueAdd(udn, id, action, from, opts),
+        queueTracks: (items, mode) => this.dm.queueTracks(items, mode),
+        ensureAwake: () => this.dm.ensureAwake(),
+        setSleep: (sleep) => this.dm.setSleep(sleep),
+      };
+    }
+    const remote = this.remotes.get(host);
+    if (!(await remote.ready()))
+      throw new Error(
+        `Couldn't reach ${device} at ${host}. It may be off the network, or asleep in eco standby.`,
+      );
+    const snapshotOf = (): ConnectedSnapshot => ({
+      ...this.dm.snapshot(),
+      connection: { phase: "connected", host },
+      ...remote.cache,
+      sleep: remote.sleeper.current,
+      lastRecalledPresetId: null,
+      held: null,
+      playlistActivation: remote.queueOps.activation,
+    });
+    return {
+      window: false,
+      host,
+      name: remote.name,
+      snapshot: snapshotOf,
+      command: (cmd) => remote.command(cmd),
+      queueAdd: (udn, id, action, from, opts) => remote.queueAdd(udn, id, action, from, opts),
+      queueTracks: (items, mode) => remote.queueOps.queueTracks(items, mode),
+      ensureAwake: () => remote.ensureAwake(),
+      setSleep: (sleep) => remote.setSleep(sleep),
+    };
+  }
+
   private connected(): ConnectedSnapshot {
     const snap = this.dm.snapshot();
     if (snap.connection.phase !== "connected") {
@@ -429,6 +503,7 @@ export class McpBridge {
     const ctx: ToolContext = {
       dm: this.dm,
       connected: () => this.connected(),
+      target: (device) => this.target(device),
       kickIndex: () => this.kickIndex(),
       resumeOffer: () => this.resumeOffer(),
       mutateSchedules: (fn) => this.mutateSchedules(fn),
