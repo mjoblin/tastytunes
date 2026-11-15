@@ -23,6 +23,7 @@ import {
   localTime,
   dayRange,
   DETAIL_ARG,
+  PERIOD_ARG,
   rowIds,
 } from "./toolkit";
 import { nameKey } from "@shared/keys";
@@ -86,6 +87,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         streamer: STREAMER_ARG,
         from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
         to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
+        period: PERIOD_ARG,
         kind: z
           .enum(["play", "radio-session", "radio-track", "external"])
           .optional()
@@ -141,6 +143,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           ),
         from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
         to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
+        period: PERIOD_ARG,
         limit: z.number().int().min(1).max(100).optional().describe("Default 20."),
       },
       handler: async (a) => {
@@ -232,6 +235,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         streamer: STREAMER_ARG,
         from: z.string().optional().describe("Earliest local date, YYYY-MM-DD."),
         to: z.string().optional().describe("Latest local date, YYYY-MM-DD, inclusive."),
+        period: PERIOD_ARG,
         top: z
           .number()
           .int()

@@ -29,6 +29,9 @@ import {
   trackOfRef,
   someTitles,
   rowIds,
+  acted,
+  settle,
+  trackMoved,
 } from "./toolkit";
 import { nameKey } from "@shared/keys";
 
@@ -97,8 +100,12 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "streamRadio", url: a.url, name: a.name });
-        return ok(`Tuning to ${String(a.name)}.`);
+        return acted(
+          ctx,
+          () => dm.command({ type: "streamRadio", url: a.url, name: a.name }),
+          `Tuning to ${String(a.name)}.`,
+          trackMoved,
+        );
       },
     }),
     // ---- favorites
@@ -148,16 +155,20 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         const p = dm.snapshot().playlists.find((x) => x.id === a.id);
         if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
         if (p.items.length === 0) return err(`"${p.name}" is empty.`);
+        const before = dm.snapshot();
         const res = await dm.playlistActivate(a.id);
         const missed = res.missed.length;
         // Name a few and count the rest: a long playlist can miss dozens, and
         // twenty-two titles inline is noise an agent has to wade through.
         const sample = res.missed.slice(0, 3).join(", ");
         const more = res.missed.length - 3;
-        return ok(
+        return settle(
+          ctx,
+          before,
           missed > 0
             ? `Queued ${res.added} of ${res.total} from "${p.name}". ${missed} not found on any media server (${sample}${more > 0 ? `, +${more} more` : ""}).`
             : `Queued ${res.added} ${res.added === 1 ? "track" : "tracks"} from "${p.name}".`,
+          trackMoved,
         );
       },
     }),
@@ -365,12 +376,13 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           ),
       },
       handler: async (a) => {
+        const before = dm.snapshot();
         const s = ctx.connected();
         const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
         if (!fav) return err(`No favorite '${String(a.key)}'. Use list_favorites.`);
         if (fav.kind === "station") {
           await dm.command({ type: "streamRadio", url: fav.url, name: fav.name });
-          return ok(`Tuning to ${fav.name}.`);
+          return settle(ctx, before, `Tuning to ${fav.name}.`, trackMoved);
         }
         const host = s.connection.host;
         const confirm = { confirmLarge: a.confirm_large === true };
@@ -387,7 +399,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
               undefined,
               confirm,
             );
-            return ok(`Playing ${fav.title}.`);
+            return settle(ctx, before, `Playing ${fav.title}.`, trackMoved);
           } catch (e) {
             if (e instanceof LargeQueueError) return err(largeQueueAsk(e.tracks, "play_favorite"));
             // stored id went stale — heal by content below (the app's model:
@@ -415,7 +427,12 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
               serverName: server.name,
               objectId: match.id,
             });
-            return ok(`Playing ${fav.title} (found on ${server.name}).`);
+            return settle(
+              ctx,
+              before,
+              `Playing ${fav.title} (found on ${server.name}).`,
+              trackMoved,
+            );
           }
         }
         return err(`Couldn't find "${fav.title}" on any media server right now.`);

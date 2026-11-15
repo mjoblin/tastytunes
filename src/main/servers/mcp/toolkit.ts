@@ -132,10 +132,39 @@ export function localDayStart(day: string): number | null {
  * its own and two of five checked: "last week" parsed to NaN, so list_history found nothing and
  * history_top ranked all time, both as ordinary answers.
  */
+export const PERIOD_ARG = z
+  .enum(["today", "yesterday", "last_7_days", "this_month", "this_year"])
+  .optional()
+  .describe(
+    "A period in local days, instead of from and to: today, yesterday, the last 7 days (today one of them), this month or this year so far.",
+  );
+
 export function dayRange(a: {
   from?: string;
   to?: string;
+  period?: "today" | "yesterday" | "last_7_days" | "this_month" | "this_year";
 }): { from: number | null; to: number | null } | { error: string } {
+  // A NAMED PERIOD (0.16.0): an agent may not know today's date, and "last week" was the
+  // question it had tried to answer
+  if (a.period != null) {
+    if (a.from != null || a.to != null) return { error: "Give period, or from and to, not both." };
+    const now = new Date();
+    const day = (y: number, m: number, d: number): number => new Date(y, m, d).getTime();
+    const [y, m, d] = [now.getFullYear(), now.getMonth(), now.getDate()];
+    const endOfToday = day(y, m, d + 1) - 1;
+    switch (a.period) {
+      case "today":
+        return { from: day(y, m, d), to: endOfToday };
+      case "yesterday":
+        return { from: day(y, m, d - 1), to: day(y, m, d) - 1 };
+      case "last_7_days":
+        return { from: day(y, m, d - 6), to: endOfToday };
+      case "this_month":
+        return { from: day(y, m, 1), to: endOfToday };
+      case "this_year":
+        return { from: day(y, 0, 1), to: endOfToday };
+    }
+  }
   const bad = (name: string, v: string): { error: string } => ({
     error: `"${v}" isn't a day: ${name} takes a local date, YYYY-MM-DD (today is ${localToday()}).`,
   });
@@ -537,8 +566,12 @@ function playingHearted(
 
 export const status = (ctx: ToolContext): unknown => {
   const s = ctx.dm.snapshot();
+  // the time and day as the user lives them (0.16.0): an agent may not know either, and the
+  // history tools take local days
+  const clock = { local_time: localTime(Date.now()), today: localToday() };
   if (s.connection.phase !== "connected") {
     return {
+      ...clock,
       connection: s.connection.phase,
       hint: "Not connected. Use list_devices and connect_device.",
       ...appState(ctx),
@@ -551,6 +584,7 @@ export const status = (ctx: ToolContext): unknown => {
     s.nowPlaying?.source?.name ??
     null;
   return {
+    ...clock,
     connection: "connected",
     device: {
       name: s.systemInfo?.name ?? null,
@@ -614,6 +648,67 @@ export const status = (ctx: ToolContext): unknown => {
       : null,
   };
 };
+
+/** The state an agent's next question is about (0.16.0): what plays, how loud, where in the
+ *  queue. */
+export function nowState(s: Snapshot): Record<string, unknown> {
+  const md = s.playState?.metadata;
+  return {
+    state: s.playState?.state ?? null,
+    title: md?.title ?? null,
+    artist: md?.artist ?? null,
+    ...(md?.album ? { album: md.album } : {}),
+    ...(md?.station ? { station: md.station } : {}),
+    position_seconds: s.position?.position ?? s.playState?.position ?? null,
+    volume_percent: s.zoneState?.volume_percent ?? null,
+    muted: s.zoneState?.mute ?? null,
+    queue_position: s.playState?.queue_index ?? null,
+    queue_length: s.queue?.total ?? s.playState?.queue_length ?? null,
+  };
+}
+
+/**
+ * RESULTS AFTER ACTIONS (0.16.0): an action's sentence and the state it leaves, once the streamer
+ * says the change happened (`settled`, up to a second and a half; past that, the state as it then
+ * is), so an agent need not ask get_status next ("turn it down a little" and say the new level was
+ * two calls). Before, every action answered with a sentence alone.
+ */
+export async function acted(
+  ctx: ToolContext,
+  act: () => Promise<unknown>,
+  done: string | ((now: Snapshot) => string),
+  settled: (before: Snapshot, now: Snapshot) => boolean,
+): Promise<ToolResult> {
+  const before = ctx.dm.snapshot();
+  await act();
+  return settle(ctx, before, done, settled);
+}
+
+/** acted's wait for an action already taken: the state before it, then as above. */
+export async function settle(
+  ctx: ToolContext,
+  before: Snapshot,
+  done: string | ((now: Snapshot) => string),
+  settled: (before: Snapshot, now: Snapshot) => boolean,
+): Promise<ToolResult> {
+  const until = Date.now() + 1500;
+  let now = ctx.dm.snapshot();
+  while (!settled(before, now) && Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 100));
+    now = ctx.dm.snapshot();
+  }
+  return ok({ done: typeof done === "string" ? done : done(now), now: nowState(now) });
+}
+
+/** The queue's length changed (an add that plays nothing yet). */
+export const queueGrew = (before: Snapshot, now: Snapshot): boolean =>
+  (now.queue?.total ?? 0) !== (before.queue?.total ?? 0);
+
+/** The playing track changed: another title, another queue place, or another station. */
+export const trackMoved = (before: Snapshot, now: Snapshot): boolean =>
+  now.playState?.metadata?.title !== before.playState?.metadata?.title ||
+  now.playState?.queue_index !== before.playState?.queue_index ||
+  now.playState?.metadata?.station !== before.playState?.metadata?.station;
 
 /** Agent-facing schedule shape: 'wake' instead of the internal 'on'. */
 export function scheduleOut(s: Schedule): Record<string, unknown> {

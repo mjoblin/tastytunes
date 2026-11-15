@@ -62,7 +62,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "get_status",
         title: "Get status",
         description:
-          "One combined snapshot: connection and device, power state, active source, what's playing (title/artist/album/station, format, position/duration), volume and mute, shuffle/repeat, queue position, and any armed sleep timer. Call this first.",
+          "One combined snapshot: the local time and today's date, connection and device, power state, active source, what's playing (title/artist/album/station, format, position/duration), volume and mute, shuffle/repeat, queue position and length, and any armed sleep timer. Call this first. Actions answer with what they did and the same state after it (what plays, volume, queue position).",
       },
       {
         name: "list_queue",
@@ -119,7 +119,8 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "seek",
         title: "Seek",
-        description: "Jump to a position (seconds) in the current track.",
+        description:
+          "Jump to a position (seconds) in the current track, or move by relative_seconds from where it is (negative goes back).",
       },
       {
         name: "play_queue_item",
@@ -642,6 +643,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Save playing to preset",
         description:
           "Save the CURRENT playback (a station, or a single track) to a preset slot (1–99); optional name. Occupied slots need overwrite: true. For whole albums or queues use save_queue_as_preset.",
+      },
+      {
+        name: "save_media_to_preset",
+        title: "Save media to preset",
+        description:
+          "Save a library album, track or other item to a preset slot by its server_udn and object_id, without playing it (for a wake schedule with that album, say). An occupied slot needs overwrite: true.",
       },
     ],
   },

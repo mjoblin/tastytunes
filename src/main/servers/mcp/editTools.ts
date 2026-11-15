@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { type Schedule, trackPosition } from "@shared/model";
+import { type Schedule, presetVolumeKey, trackPosition } from "@shared/model";
 import { resumeTarget } from "@shared/model";
 import { getSettings } from "../../data/persist";
 import { randomUUID } from "node:crypto";
@@ -172,6 +172,45 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         }
         return ok(
           `Saved the current playback to preset ${String(a.slot)}${a.name ? ` as "${String(a.name)}"` : ""}.`,
+        );
+      },
+    }),
+    // A LIBRARY ITEM TO A PRESET WITHOUT PLAYING IT (0.16.0): "wake me at 7 with this album" had
+    // to play the album aloud first. The Library's Save as preset: the item by its ids, the slot's
+    // name, and the artist recorded beside it for the Presets filter.
+    save_media_to_preset: defineTool({
+      inputSchema: {
+        slot: z.number().int().min(1).max(99).describe("Preset slot 1–99."),
+        server_udn: z.string().describe("From a listing (list_albums, search_library)."),
+        object_id: z.string().describe("The album, track or other item's id."),
+        name: z
+          .string()
+          .optional()
+          .describe("Optional name (the firmware derives one from the item otherwise)."),
+        overwrite: z.boolean().optional().describe("Must be true to replace an occupied slot."),
+      },
+      handler: async (a) => {
+        const s = ctx.connected();
+        guardSlot(s, a.slot, a.overwrite === true);
+        // an id from before a re-mint is found again by content first
+        const fresh = await freshObjectId(s.connection.host, a.server_udn, a.object_id);
+        if ("error" in fresh) return err(fresh.error);
+        const pool = indexPools().find((p) => p.udn === a.server_udn);
+        const node =
+          pool?.albums.find((n) => n.id === fresh.id) ??
+          pool?.tracks.find((n) => n.id === fresh.id);
+        await presetSave(s.connection.host, a.server_udn, fresh.id, a.slot);
+        if (typeof a.name === "string" && a.name.length > 0)
+          await dm.command({ type: "presetRename", slot: a.slot, name: a.name });
+        if (node?.artist)
+          ctx.saveSettings({
+            presetArtists: {
+              ...getSettings().presetArtists,
+              [presetVolumeKey(s.systemInfo?.udn, a.slot)]: node.artist,
+            },
+          });
+        return ok(
+          `Saved ${node ? `"${a.name || node.title}"` : "it"} to preset ${String(a.slot)}, without playing it.`,
         );
       },
     }),

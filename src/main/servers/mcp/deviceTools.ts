@@ -10,6 +10,8 @@ import {
   scheduleOut,
   defineTool,
   rowIds,
+  acted,
+  trackMoved,
 } from "./toolkit";
 
 // The MCP bridge's device tools (the streamer itself: status and the lists, transport, volume,
@@ -117,62 +119,112 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
     play: defineTool({
       handler: async () => {
         ctx.connected();
-        await dm.command({ type: "play" });
-        return ok("Playing.");
+        return acted(
+          ctx,
+          () => dm.command({ type: "play" }),
+          "Playing.",
+          (_b, n) => n.playState?.state === "play",
+        );
       },
     }),
     pause: defineTool({
       handler: async () => {
         ctx.connected();
-        await dm.command({ type: "pause" });
-        return ok("Paused.");
+        return acted(
+          ctx,
+          () => dm.command({ type: "pause" }),
+          "Paused.",
+          (_b, n) => n.playState?.state === "pause",
+        );
       },
     }),
     stop: defineTool({
       handler: async () => {
         ctx.connected();
-        await dm.command({ type: "stop" });
-        return ok("Stopped.");
+        return acted(
+          ctx,
+          () => dm.command({ type: "stop" }),
+          "Stopped.",
+          (_b, n) => n.playState?.state === "stop",
+        );
       },
     }),
     next_track: defineTool({
       handler: async () => {
         ctx.connected();
-        await dm.command({ type: "nextTrack" });
-        return ok("Skipped to the next track.");
+        return acted(
+          ctx,
+          () => dm.command({ type: "nextTrack" }),
+          "Skipped to the next track.",
+          trackMoved,
+        );
       },
     }),
     previous_track: defineTool({
       handler: async () => {
         ctx.connected();
-        await dm.command({ type: "previousTrack" });
-        return ok("Went back to the previous track.");
+        return acted(
+          ctx,
+          () => dm.command({ type: "previousTrack" }),
+          "Went back to the previous track.",
+          trackMoved,
+        );
       },
     }),
     seek: defineTool({
       inputSchema: {
-        position_seconds: z.number().min(0).describe("Position in the current track, in seconds."),
+        position_seconds: z
+          .number()
+          .min(0)
+          .optional()
+          .describe("Position in the current track, in seconds."),
+        relative_seconds: z
+          .number()
+          .optional()
+          .describe(
+            "Instead: seconds from where it is now, back when negative ('go back 30 seconds').",
+          ),
       },
       handler: async (a) => {
-        ctx.connected();
-        await dm.command({ type: "seek", positionSecs: a.position_seconds });
-        return ok(`Seeked to ${String(a.position_seconds)}s.`);
+        const s = ctx.connected();
+        if ((a.position_seconds == null) === (a.relative_seconds == null))
+          return err("Give position_seconds or relative_seconds, one of them.");
+        // from where it is now (0.16.0: a relative seek had needed the position first)
+        const at = s.position?.position ?? s.playState?.position ?? 0;
+        const duration = s.playState?.metadata?.duration ?? null;
+        const wanted = a.position_seconds ?? at + (a.relative_seconds ?? 0);
+        const target = Math.max(0, duration != null ? Math.min(wanted, duration - 1) : wanted);
+        return acted(
+          ctx,
+          () => dm.command({ type: "seek", positionSecs: target }),
+          `Moved to ${Math.round(target)}s.`,
+          (_b, n) => Math.abs((n.position?.position ?? n.playState?.position ?? -99) - target) < 3,
+        );
       },
     }),
     play_queue_item: defineTool({
       inputSchema: { id: z.number().int().describe("Queue item id from list_queue.") },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "playQueueId", queueId: a.id });
-        return ok(`Playing queue item ${String(a.id)}.`);
+        return acted(
+          ctx,
+          () => dm.command({ type: "playQueueId", queueId: a.id }),
+          `Playing queue item ${String(a.id)}.`,
+          (_b, n) => n.queue?.play_id === a.id || n.playState?.queue_id === a.id,
+        );
       },
     }),
     set_shuffle: defineTool({
       inputSchema: { on: z.boolean() },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "setShuffle", mode: a.on ? "all" : "off" });
-        return ok(`Shuffle ${a.on ? "on" : "off"}.`);
+        const mode = a.on ? "all" : "off";
+        return acted(
+          ctx,
+          () => dm.command({ type: "setShuffle", mode }),
+          `Shuffle ${a.on ? "on" : "off"}.`,
+          (_b, n) => n.playState?.mode_shuffle === mode,
+        );
       },
     }),
     set_repeat: defineTool({
@@ -190,8 +242,14 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
         ctx.connected();
         const mode = a.mode ?? (a.on === true ? "all" : a.on === false ? "off" : null);
         if (!mode) return err("Say which: mode off, all or one.");
-        await dm.command({ type: "setRepeat", mode });
-        return ok(`Repeat ${mode}.`);
+        return acted(
+          ctx,
+          () => dm.command({ type: "setRepeat", mode }),
+          `Repeat ${mode}.`,
+          (b, n) =>
+            n.playState?.mode_repeat !== b.playState?.mode_repeat ||
+            n.playState?.mode_repeat === mode,
+        );
       },
     }),
     // ---- volume
@@ -199,13 +257,16 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
       inputSchema: { percent: z.number().min(0).max(100).describe("Absolute volume percent.") },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "setVolumePercent", percent: a.percent });
         const limit = getSettings().volumeLimitPercent;
         const capped = limit != null && a.percent > limit;
-        return ok(
+        const target = capped ? limit : a.percent;
+        return acted(
+          ctx,
+          () => dm.command({ type: "setVolumePercent", percent: a.percent }),
           capped
             ? `Volume set to ${limit}% (the app's volume limit).`
             : `Volume set to ${String(a.percent)}%.`,
+          (_b, n) => Math.abs((n.zoneState?.volume_percent ?? -99) - target) <= 1,
         );
       },
     }),
@@ -220,16 +281,25 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "volumeStepChange", delta: a.steps });
-        return ok(`Volume nudged by ${String(a.steps)} step(s).`);
+        return acted(
+          ctx,
+          () => dm.command({ type: "volumeStepChange", delta: a.steps }),
+          (n) =>
+            `Volume ${a.steps < 0 ? "down" : "up"} ${Math.abs(a.steps)} ${Math.abs(a.steps) === 1 ? "step" : "steps"}, now ${n.zoneState?.volume_percent ?? "?"}%.`,
+          (b, n) => n.zoneState?.volume_percent !== b.zoneState?.volume_percent,
+        );
       },
     }),
     set_mute: defineTool({
       inputSchema: { muted: z.boolean() },
       handler: async (a) => {
         ctx.connected();
-        await dm.command({ type: "setMute", mute: a.muted });
-        return ok(a.muted ? "Muted." : "Unmuted.");
+        return acted(
+          ctx,
+          () => dm.command({ type: "setMute", mute: a.muted }),
+          a.muted ? "Muted." : "Unmuted.",
+          (_b, n) => n.zoneState?.mute === a.muted,
+        );
       },
     }),
     // ---- presets / sources / power / devices
@@ -239,8 +309,12 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
         const s = ctx.connected();
         const preset = (s.presets?.presets ?? []).find((p) => p.id === a.id);
         if (!preset) return err(`No preset ${String(a.id)}. Use list_presets.`);
-        await dm.command({ type: "recallPreset", presetId: a.id });
-        return ok(`Recalled preset ${String(a.id)}${preset.name ? ` (${preset.name})` : ""}.`);
+        return acted(
+          ctx,
+          () => dm.command({ type: "recallPreset", presetId: a.id }),
+          `Recalled preset ${String(a.id)}${preset.name ? ` (${preset.name})` : ""}.`,
+          trackMoved,
+        );
       },
     }),
     set_source: defineTool({
@@ -251,8 +325,12 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
         const s = ctx.connected();
         const src = (s.sources?.sources ?? []).find((x) => x.id === a.id);
         if (!src) return err(`Unknown source '${String(a.id)}'. Use list_sources.`);
-        await dm.command({ type: "setSource", sourceId: a.id });
-        return ok(`Switched to ${src.name}.`);
+        return acted(
+          ctx,
+          () => dm.command({ type: "setSource", sourceId: a.id }),
+          `Switched to ${src.name}.`,
+          (_b, n) => n.zoneState?.source === a.id,
+        );
       },
     }),
     set_power: defineTool({
