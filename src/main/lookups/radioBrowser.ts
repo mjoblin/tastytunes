@@ -10,6 +10,7 @@
 import type { RadioStation } from "@shared/model";
 import { loggedFetch, USER_AGENT } from "../netlog";
 import { getSettings } from "../data/persist";
+import { nameKey } from "@shared/keys";
 
 // TASTYTUNES_RADIO_URL lets test harnesses point lookups at a local server.
 // all.api.radio-browser.info is the project's round-robin DNS over its
@@ -29,6 +30,9 @@ interface ApiStation {
   codec: string;
   bitrate: number;
   clickcount?: number;
+  countrycode?: string;
+  language?: string;
+  votes?: number;
 }
 
 function toStation(s: ApiStation): RadioStation | null {
@@ -44,6 +48,9 @@ function toStation(s: ApiStation): RadioStation | null {
     country: s.country ?? "",
     codec: s.codec ?? "",
     bitrate: s.bitrate ?? 0,
+    countryCode: s.countrycode ?? "",
+    language: s.language ?? "",
+    votes: s.votes ?? 0,
   };
 }
 
@@ -98,6 +105,45 @@ export function radioSearch(query: string): Promise<RadioStation[]> {
     order: "clickcount",
     reverse: "true",
   });
+  return stations(`/stations/search?${params.toString()}`);
+}
+
+/**
+ * A SEARCH FOR AN AGENT (0.16.0: fifteen results, no paging, no bitrate, the country's full
+ * name on every row): a name, a tag or both, narrowed by country (a two-letter code, or a name),
+ * language and a lowest bitrate, sorted by listeners, votes or bitrate (how a listener who cares
+ * about sound picks the best stream of a station), a page at a time. The directory does the
+ * narrowing, so a page is a page of what was asked.
+ */
+export function radioFind(o: {
+  name?: string;
+  tag?: string;
+  country?: string;
+  language?: string;
+  bitrateMin?: number;
+  order: "clickcount" | "votes" | "bitrate";
+  limit: number;
+  offset: number;
+}): Promise<RadioStation[]> {
+  const params = new URLSearchParams({
+    limit: String(o.limit),
+    offset: String(o.offset),
+    hidebroken: "true",
+    order: o.order,
+    reverse: "true",
+  });
+  if (o.name) params.set("name", o.name);
+  if (o.tag) {
+    params.set("tag", o.tag);
+    params.set("tagExact", "true");
+  }
+  if (o.country) {
+    if (/^[a-z]{2}$/i.test(o.country.trim()))
+      params.set("countrycode", o.country.trim().toUpperCase());
+    else params.set("country", o.country.trim());
+  }
+  if (o.language) params.set("language", nameKey(o.language));
+  if (o.bitrateMin) params.set("bitrateMin", String(o.bitrateMin));
   return stations(`/stations/search?${params.toString()}`);
 }
 

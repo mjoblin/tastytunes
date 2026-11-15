@@ -11,7 +11,7 @@ import {
 import { pools as indexPools } from "../../media/mediaIndex";
 import { isRadioMetadata } from "@shared/smoip";
 import { getSettings } from "../../data/persist";
-import { radioSearch, radioByTags } from "../../lookups/radioBrowser";
+import { radioFind } from "../../lookups/radioBrowser";
 import { LargeQueueError, refreshServers } from "../../media/upnpBrowser";
 import { searchServer as librarySearch } from "../../media/mediaIndex";
 import {
@@ -53,9 +53,26 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         genre: z
           .string()
           .optional()
+          .describe("Style tag, e.g. 'jazz', matched against the directory's tags."),
+        country: z
+          .string()
+          .optional()
+          .describe("A two-letter country code ('NZ') or a country's name."),
+        language: z.string().optional().describe("A language, e.g. 'english' or 'german'."),
+        min_bitrate: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Only streams of at least this many kbps."),
+        sort: z
+          .enum(["popular", "votes", "bitrate"])
+          .optional()
           .describe(
-            "Style tag, e.g. 'jazz' — matched against the directory's tags, most-listened first.",
+            "Default 'popular' (most listened); 'votes' the listeners' votes; 'bitrate' the best stream first.",
           ),
+        limit: z.number().int().min(1).max(60).optional().describe("Default 15."),
+        offset: z.number().int().min(0).optional().describe("For paging; default 0."),
       },
       handler: async (a) => {
         // The directory gate lives at the source (radioBrowser.fetchRaw), so
@@ -70,28 +87,33 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         const q = a.query?.trim();
         const g = a.genre != null ? nameKey(a.genre) : undefined;
         if (!q && !g) return err("Pass query and/or genre.");
-        let stations;
-        if (g && !q) stations = await radioByTags([g]);
-        else {
-          stations = await radioSearch(q as string);
-          if (g)
-            stations = stations.filter((st) =>
-              st.tags
-                .toLowerCase()
-                .split(",")
-                .map((t) => t.trim())
-                .includes(g),
-            );
-        }
-        return ok(
-          stations.slice(0, 15).map((st) => ({
+        const offset = a.offset ?? 0;
+        const limit = a.limit ?? 15;
+        const stations = await radioFind({
+          name: q,
+          tag: g,
+          country: a.country,
+          language: a.language,
+          bitrateMin: a.min_bitrate,
+          order: a.sort === "votes" ? "votes" : a.sort === "bitrate" ? "bitrate" : "clickcount",
+          limit,
+          offset,
+        });
+        return ok({
+          offset,
+          returned: stations.length,
+          ...(stations.length === limit ? { more: "Page on with offset for more." } : {}),
+          stations: stations.map((st) => ({
             name: st.name,
             url: st.url,
-            country: st.country,
+            country_code: st.countryCode || null,
+            ...(st.language ? { language: st.language } : {}),
             codec: st.codec,
+            bitrate_kbps: st.bitrate || null,
+            votes: st.votes ?? 0,
             tags: st.tags,
           })),
-        );
+        });
       },
     }),
     play_radio: defineTool({
