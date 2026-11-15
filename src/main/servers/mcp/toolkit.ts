@@ -16,6 +16,7 @@ import { getSettings } from "../../data/persist";
 import { pools as indexPools, revalidate } from "../../media/mediaIndex";
 import { bestInIndexes, indexFinder } from "../../media/resolveContent";
 import { nameKey, searchFold } from "@shared/keys";
+import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
 
 // The MCP bridge's TOOLKIT (2026-09-13, the bridge split: 74 tool implementations
 // had sat in one 2,400-line member): the tool result and implementation shapes,
@@ -568,7 +569,7 @@ export const status = (ctx: ToolContext): unknown => {
   const s = ctx.dm.snapshot();
   // the time and day as the user lives them (0.16.0): an agent may not know either, and the
   // history tools take local days
-  const clock = { local_time: localTime(Date.now()), today: localToday() };
+  const clock = { local_time: localTime(Date.now()), today: localToday(), ...toolsOff() };
   if (s.connection.phase !== "connected") {
     return {
       ...clock,
@@ -648,6 +649,19 @@ export const status = (ctx: ToolContext): unknown => {
       : null,
   };
 };
+
+/**
+ * THE TOOLS THAT ARE OFF, by name (0.16.0): with Playlist editing off, an agent saw no playlist
+ * tools and told the user it could not make playlists. Now it can say where to turn them on.
+ */
+export function toolsOff(): { tools_off?: { groups: string[]; tools: string[]; where: string } } {
+  const mcp = getSettings().mcp;
+  const groups = MCP_CLUSTERS.filter((c) => !mcpClusterEnabled(c, mcp)).map((c) => c.title);
+  const tools = mcp.disabledTools ?? [];
+  return groups.length === 0 && tools.length === 0
+    ? {}
+    : { tools_off: { groups, tools, where: "Settings › Integrations" } };
+}
 
 /** The state an agent's next question is about (0.16.0): what plays, how loud, where in the
  *  queue. */
