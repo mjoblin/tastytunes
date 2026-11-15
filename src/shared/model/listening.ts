@@ -186,15 +186,15 @@ export function copyStat(
 }
 
 /** "Not heard in a while": an album played, then left this long (the History
- *  screen's Rediscover shelf and the MCP's history_rediscover default). */
+ *  screen's Rediscover shelf and the MCP's history_shelves quiet shelf). */
 export const REDISCOVER_QUIET_DAYS = 90;
 
 /**
  * An album's tallies in the record: its tracks' plays summed, the latest of
  * them, and how many tracks it has, by content (playKey over albumTracksOf).
  * ONE home for "has this album been played, and when": the History screen's
- * Rediscover shelves and the MCP's history_unplayed and history_rediscover all
- * read it. Given `peersOf` (the library's tracks by play key), the tally is this
+ * Rediscover shelves, the MCP's history_shelves and list_albums' played filter
+ * all read it. Given `peersOf` (the library's tracks by play key), the tally is this
  * copy's own, as the Albums lens reads it (0.13.0); without, every copy's together,
  * as Rediscover's one row per album wants it.
  */

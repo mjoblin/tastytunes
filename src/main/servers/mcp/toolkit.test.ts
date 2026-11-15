@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { dayRange, decadeStart, inDecade, localDayStart, localToday } from "./toolkit";
+import { z } from "zod";
+import {
+  dayRange,
+  decadeStart,
+  inDecade,
+  localDayStart,
+  localTime,
+  localToday,
+  ok,
+  strictInput,
+} from "./toolkit";
 
 describe("the history tools' days, read once", () => {
   it("reads a local day to its first millisecond", () => {
@@ -56,5 +66,48 @@ describe("a decade as an agent writes it", () => {
     expect(inDecade("2000", 1990)).toBe(false);
     expect(inDecade(null, 1990)).toBe(false);
     expect(inDecade("unknown", 1990)).toBe(false);
+  });
+});
+
+describe("one time format, local with its offset", () => {
+  const at = Date.UTC(2026, 10, 15, 5, 55, 3);
+  it("says a moment in the offset it was recorded at", () => {
+    expect(localTime(at, 480)).toBe("2026-11-14T21:55:03-08:00");
+    expect(localTime(at, -780)).toBe("2026-11-15T18:55:03+13:00");
+    expect(localTime(at, -330)).toBe("2026-11-15T11:25:03+05:30");
+    expect(localTime(at, 0)).toBe("2026-11-15T05:55:03+00:00");
+  });
+
+  it("uses this machine's offset when none was kept", () => {
+    expect(localTime(at)).toBe(localTime(at, new Date(at).getTimezoneOffset()));
+  });
+});
+
+describe("strict arguments", () => {
+  const input = strictInput("list_tracks", {
+    artist: z.string().optional(),
+    limit: z.number().optional(),
+  });
+  it("refuses an argument the tool does not take, naming the ones it does", () => {
+    const r = input.safeParse({ query: "love" });
+    expect(r.success).toBe(false);
+    expect(r.error?.issues[0].message).toBe(
+      "list_tracks doesn't take 'query'. It takes artist, limit.",
+    );
+  });
+
+  it("takes the arguments it names, and a tool with none takes none", () => {
+    expect(input.safeParse({ artist: "Keane", limit: 3 }).success).toBe(true);
+    const none = strictInput("get_status").safeParse({ verbose: true });
+    expect(none.error?.issues[0].message).toBe(
+      "get_status doesn't take 'verbose'. It takes no arguments.",
+    );
+  });
+});
+
+describe("answers", () => {
+  it("are compact JSON, and a sentence stays a sentence", () => {
+    expect(ok({ a: 1, b: [2] }).content[0]).toEqual({ type: "text", text: '{"a":1,"b":[2]}' });
+    expect(ok("Skipped.").content[0]).toEqual({ type: "text", text: "Skipped." });
   });
 });

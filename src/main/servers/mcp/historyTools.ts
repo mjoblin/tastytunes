@@ -1,10 +1,9 @@
 import { z } from "zod";
-import { nameSortKey } from "@shared/model";
 import {
   isListen,
+  type ListeningEvent,
   type ListeningPlayEvent,
   playKey,
-  albumTally,
   REDISCOVER_QUIET_DAYS,
 } from "@shared/model";
 import { playStatsFromRecord } from "../../data/playStats";
@@ -21,19 +20,58 @@ import {
   STREAMER_ARG,
   streamerKeep,
   defineTool,
+  localTime,
   dayRange,
-  localDayStart,
-  localToday,
-  DECADE_ARG,
-  decadeStart,
-  decadeError,
-  inDecade,
+  DETAIL_ARG,
 } from "./toolkit";
 import { nameKey } from "@shared/keys";
 
 // The MCP bridge's history tools (the listening record: recents, stats, the unplayed and the
 // resume offer), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and
 // helpers they share live in ./toolkit.
+
+/**
+ * A line of the record as list_history and history_on_this_day answer it (0.16.0, brief rows): its
+ * local time (the offset it was recorded at), its kind and what a person asks about it, with a
+ * play's listen flag; detail "full" keeps every stored field (the streamer, the source's id, the
+ * picture's address, the format). Before, every row was the stored line as it was.
+ */
+function eventRow(
+  e: ListeningEvent,
+  detail: "brief" | "full" | undefined,
+): Record<string, unknown> {
+  const at = localTime(e.at, e.tzOffsetMin);
+  const listen = e.kind === "play" ? { listen: isListen(e.playedSeconds, e.duration) } : {};
+  if (detail === "full") return { ...e, at, ...listen };
+  switch (e.kind) {
+    case "play":
+      return {
+        at,
+        kind: e.kind,
+        title: e.title,
+        artist: e.artist,
+        album: e.album,
+        source: e.source,
+        seconds_played: e.playedSeconds,
+        duration_seconds: e.duration,
+        ...listen,
+      };
+    case "radio-session":
+      return { at, kind: e.kind, station: e.station, seconds_played: e.playedSeconds };
+    case "radio-track":
+      return { at, kind: e.kind, station: e.station, title: e.title, artist: e.artist };
+    case "external":
+      return {
+        at,
+        kind: e.kind,
+        source: e.source,
+        title: e.title,
+        artist: e.artist,
+        album: e.album,
+        seconds_played: e.playedSeconds,
+      };
+  }
+}
 
 export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
   const { dm } = ctx;
@@ -55,6 +93,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           ),
         limit: z.number().int().min(1).max(200).optional().describe("Default 50."),
         offset: z.number().int().min(0).optional().describe("For paging; default 0."),
+        detail: DETAIL_ARG,
       },
       // Local files only — works with the streamer off, so no connected() gate.
       handler: async (a) => {
@@ -76,11 +115,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           .sort((x, y) => y.at - x.at);
         const offset = a.offset ?? 0;
         const limit = a.limit ?? 50;
-        const page = filtered.slice(offset, offset + limit).map((e) => ({
-          ...e,
-          at: new Date(e.at).toISOString(),
-          ...(e.kind === "play" ? { listen: isListen(e.playedSeconds, e.duration) } : {}),
-        }));
+        const page = filtered.slice(offset, offset + limit).map((e) => eventRow(e, a.detail));
         return ok({
           total: filtered.length,
           offset,
@@ -174,6 +209,12 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           .max(50)
           .optional()
           .describe("How many of each top list (default 10)."),
+        include: z
+          .array(z.enum(["hours", "calendar"]))
+          .optional()
+          .describe(
+            "The large parts, on request: 'hours' the weekday by hour grid (168 cells), 'calendar' the seconds heard on each day.",
+          ),
       },
       // History's Stats view as a tool (2026-09-14, the MCP round three): the same
       // statsFor the screen draws from (shared/historyStats), so the figures agree.
@@ -229,13 +270,23 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             : {}),
           by_source: st.bySource,
           quality: st.quality,
-          weekday_hour_seconds: {
-            note: "rows Monday to Sunday, columns hour 0 to 23, seconds of library play",
-            rows: grid,
-          },
-          seconds_by_day: [...st.byDay.entries()]
-            .sort((x, y) => x[0] - y[0])
-            .map(([day, seconds]) => ({ day: localDay(day), seconds })),
+          // the two large parts only when asked (0.16.0: a grid of 168 cells and a row per day
+          // were half of every summary)
+          ...(a.include?.includes("hours")
+            ? {
+                weekday_hour_seconds: {
+                  note: "rows Monday to Sunday, columns hour 0 to 23, seconds of library play",
+                  rows: grid,
+                },
+              }
+            : {}),
+          ...(a.include?.includes("calendar")
+            ? {
+                seconds_by_day: [...st.byDay.entries()]
+                  .sort((x, y) => x[0] - y[0])
+                  .map(([day, seconds]) => ({ day: localDay(day), seconds })),
+              }
+            : {}),
         });
       },
     }),
@@ -246,8 +297,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           .enum(["all", "yes", "no"])
           .optional()
           .describe("Default all; 'no' is the artists the library does not have."),
-        limit: z.number().int().min(1).max(200).optional().describe("Artists, default 40."),
-        tracks_per_artist: z.number().int().min(0).max(50).optional().describe("Default 5."),
+        limit: z.number().int().min(1).max(200).optional().describe("Artists, default 20."),
+        tracks_per_artist: z.number().int().min(0).max(50).optional().describe("Default 3."),
       },
       // History's Elsewhere view as a tool: the same heardElsewhere (shared/elsewhere)
       // over the record and the library index, so "in your library" is the Library's
@@ -261,8 +312,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const artists = heard.artists.filter((x) =>
           want === "yes" ? x.inLibrary : want === "no" ? !x.inLibrary : true,
         );
-        const limit = a.limit ?? 40;
-        const perArtist = a.tracks_per_artist ?? 5;
+        const limit = a.limit ?? 20;
+        const perArtist = a.tracks_per_artist ?? 3;
         return ok({
           sources: heard.sources,
           stations: heard.stations,
@@ -271,7 +322,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           artists: artists.slice(0, limit).map((x) => ({
             name: x.name,
             heard: x.heard,
-            last_heard: new Date(x.lastAt).toISOString(),
+            last_heard: localTime(x.lastAt),
             where: x.where,
             in_library: x.inLibrary,
             library_albums: x.albums,
@@ -283,7 +334,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
               ...(tr.album ? { album: tr.album } : {}),
               where: tr.where,
               heard: tr.heard,
-              last_heard: new Date(tr.lastAt).toISOString(),
+              last_heard: localTime(tr.lastAt),
               in_library: tr.owned,
             })),
           })),
@@ -310,7 +361,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           artist: s.album.artist,
           year: s.album.year,
           plays: s.plays,
-          last_played: s.lastAt > 0 ? new Date(s.lastAt).toISOString() : null,
+          last_played: s.lastAt > 0 ? localTime(s.lastAt) : null,
           tracks: s.tracks,
           tracks_reached: s.reached,
         });
@@ -339,6 +390,9 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         streamer: STREAMER_ARG,
         month: z.number().int().min(1).max(12).optional().describe("Default: today's month."),
         day: z.number().int().min(1).max(31).optional().describe("Default: today's day."),
+        limit: z.number().int().min(1).max(200).optional().describe("Default 50."),
+        offset: z.number().int().min(0).optional().describe("For paging; default 0."),
+        detail: DETAIL_ARG,
       },
       handler: async (a) => {
         const now = new Date();
@@ -354,13 +408,12 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             const local = new Date(e.at - e.tzOffsetMin * 60000);
             return local.getUTCMonth() + 1 === month && local.getUTCDate() === day;
           })
-          .sort((x, y) => y.at - x.at)
-          .map((e) => ({
-            ...e,
-            at: new Date(e.at).toISOString(),
-            ...(e.kind === "play" ? { listen: isListen(e.playedSeconds, e.duration) } : {}),
-          }));
-        return ok({ month, day, total: hits.length, events: hits });
+          .sort((x, y) => y.at - x.at);
+        // bounded (0.16.0: a busy day across the years was 150 events, every one in full)
+        const offset = a.offset ?? 0;
+        const limit = a.limit ?? 50;
+        const page = hits.slice(offset, offset + limit).map((e) => eventRow(e, a.detail));
+        return ok({ month, day, total: hits.length, offset, returned: page.length, events: page });
       },
     }),
     history_first_listen: defineTool({
@@ -388,8 +441,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const listens = plays.filter((e) => isListen(e.playedSeconds, e.duration));
         return ok({
           found: true,
-          first_played: new Date(plays[0].at).toISOString(),
-          first_listen: listens.length > 0 ? new Date(listens[0].at).toISOString() : null,
+          first_played: localTime(plays[0].at),
+          first_listen: listens.length > 0 ? localTime(listens[0].at) : null,
           plays: plays.length,
           listens: listens.length,
         });
@@ -414,7 +467,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const title = a.title ?? (a.album ? undefined : (md?.title ?? undefined));
         const artist = a.artist ?? (a.title || a.album ? undefined : (md?.artist ?? undefined));
         const album = a.album ?? (a.title ? undefined : (md?.album ?? undefined));
-        const since = stats.since != null ? new Date(stats.since).toISOString() : null;
+        const since = stats.since != null ? localTime(stats.since) : null;
         if (title) {
           const exact = stats.tracks[playKey(title, artist ?? null, album ?? null)];
           const loose = exact
@@ -443,7 +496,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             track: { title, artist: artist ?? null, album: album ?? null },
             plays,
             listens,
-            last_played: new Date(lastAt).toISOString(),
+            last_played: localTime(lastAt),
             seconds_heard: seconds,
             record_since: since,
           });
@@ -469,118 +522,12 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             plays,
             listens,
             distinct_tracks_played: titles.size,
-            last_played: lastAt > 0 ? new Date(lastAt).toISOString() : null,
+            last_played: lastAt > 0 ? localTime(lastAt) : null,
             seconds_heard: seconds,
             record_since: since,
           });
         }
         return err("Nothing is playing and no track or album was named.");
-      },
-    }),
-    history_unplayed: defineTool({
-      inputSchema: {
-        streamer: STREAMER_ARG,
-        artist: z.string().optional().describe("Case-insensitive substring on the album artist."),
-        genre: z.string().optional(),
-        decade: DECADE_ARG,
-        limit: z.number().int().min(1).max(200).optional().describe("Default 50."),
-        offset: z.number().int().min(0).optional(),
-      },
-      handler: async (a) => {
-        const groups = indexPools();
-        if (groups.length === 0) return err(ctx.kickIndex());
-        const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
-        const poolOf = new Map(groups.map((p) => [p.udn, p]));
-        const artistNeedle = a.artist?.toLowerCase();
-        const genreNeedle = a.genre?.toLowerCase();
-        const decade = a.decade != null ? decadeStart(a.decade) : null;
-        if (a.decade != null && decade == null) return err(decadeError(a.decade));
-        const albums = groups
-          .flatMap((p) => p.albums)
-          .filter(
-            (n) => artistNeedle == null || (n.artist ?? "").toLowerCase().includes(artistNeedle),
-          )
-          .filter(
-            (n) =>
-              genreNeedle == null || (n.genre ?? []).some((g) => g.toLowerCase() === genreNeedle),
-          )
-          .filter((n) => decade == null || inDecade(n.year, decade))
-          .filter((n) => {
-            const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
-            return pool ? albumTally(n, pool, stats).plays === 0 : true;
-          })
-          .sort(
-            (x, y) =>
-              nameSortKey(x.artist ?? "￿").localeCompare(nameSortKey(y.artist ?? "￿")) ||
-              x.title.localeCompare(y.title),
-          );
-        const offset = a.offset ?? 0;
-        const limit = a.limit ?? 50;
-        const page = albums.slice(offset, offset + limit);
-        return ok({
-          record_since: stats.since != null ? new Date(stats.since).toISOString() : null,
-          note: "Unplayed means no recorded play since the listening record began, not never.",
-          total: albums.length,
-          offset,
-          returned: page.length,
-          albums: page.map((n) => ({
-            server_udn: n.serverUdn,
-            object_id: n.id,
-            title: n.title,
-            artist: n.artist,
-            year: n.year,
-            genres: n.genre ?? [],
-          })),
-        });
-      },
-    }),
-    history_rediscover: defineTool({
-      inputSchema: {
-        streamer: STREAMER_ARG,
-        not_since: z
-          .string()
-          .optional()
-          .describe("Local date YYYY-MM-DD; albums last played BEFORE ctx. Default: 90 days ago."),
-        min_plays: z.number().int().min(1).optional().describe("Default 1."),
-        limit: z.number().int().min(1).max(200).optional().describe("Default 30."),
-      },
-      handler: async (a) => {
-        const groups = indexPools();
-        if (groups.length === 0) return err(ctx.kickIndex());
-        const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
-        const cutoff =
-          a.not_since != null
-            ? localDayStart(a.not_since)
-            : Date.now() - REDISCOVER_QUIET_DAYS * 86_400_000;
-        if (cutoff == null)
-          return err(
-            `"${String(a.not_since)}" isn't a day: not_since takes a local date, YYYY-MM-DD (today is ${localToday()}).`,
-          );
-        const minPlays = a.min_plays ?? 1;
-        const poolOf = new Map(groups.map((p) => [p.udn, p]));
-        const rows = groups
-          .flatMap((p) => p.albums)
-          .flatMap((n) => {
-            const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
-            const { plays, lastAt } = pool ? albumTally(n, pool, stats) : { plays: 0, lastAt: 0 };
-            return plays >= minPlays && lastAt > 0 && lastAt < cutoff ? [{ n, plays, lastAt }] : [];
-          });
-        rows.sort((x, y) => x.lastAt - y.lastAt);
-        const limit = a.limit ?? 30;
-        return ok({
-          not_since: new Date(cutoff).toISOString(),
-          total: rows.length,
-          returned: Math.min(limit, rows.length),
-          albums: rows.slice(0, limit).map(({ n, plays, lastAt }) => ({
-            server_udn: n.serverUdn,
-            object_id: n.id,
-            title: n.title,
-            artist: n.artist,
-            year: n.year,
-            plays,
-            last_played: new Date(lastAt).toISOString(),
-          })),
-        });
       },
     }),
     history_resume: defineTool({
@@ -594,7 +541,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             server_udn: offer.node.serverUdn,
             object_id: offer.node.id,
             resume_from: { title: offer.target.title, track: offer.position, of: offer.total },
-            last_played: new Date(offer.run.last.at).toISOString(),
+            last_played: localTime(offer.run.last.at),
             plays_in_run: offer.run.plays.length,
             how: "resume_playback plays it from that track (opt-in queue editing).",
           },

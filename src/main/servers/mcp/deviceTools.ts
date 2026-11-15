@@ -21,12 +21,33 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
     // ---- status & lists
     get_status: defineTool({ handler: () => ok(status(ctx)) }),
     list_queue: defineTool({
-      handler: () => {
+      inputSchema: {
+        limit: z.number().int().min(1).max(200).optional().describe("Default 50."),
+        offset: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .describe(
+            "Where the page starts. Default: a few before the playing track, so the page shows what just played and what comes next.",
+          ),
+      },
+      handler: (a) => {
         const s = ctx.connected();
+        // bounded (0.16.0: a queue can hold thousands of tracks), and by default a window around
+        // the playing track, the part an agent asks about
+        const items = s.queue?.items ?? [];
+        const playing = items.findIndex((i) => i.id === s.queue?.play_id);
+        const offset = a.offset ?? Math.max(0, playing - 5);
+        const limit = a.limit ?? 50;
+        const page = items.slice(offset, offset + limit);
         return ok({
           current_id: s.queue?.play_id ?? null,
+          current_position: playing >= 0 ? playing : null,
           total: s.queue?.total ?? 0,
-          items: (s.queue?.items ?? []).map((i) => ({
+          offset,
+          returned: page.length,
+          items: page.map((i) => ({
             id: i.id,
             position: i.position,
             title: i.metadata?.title ?? i.metadata?.name ?? null,
@@ -72,27 +93,6 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
             model: d.model,
             connected: d.host === current,
           })),
-        );
-      },
-    }),
-    list_recently_played: defineTool({
-      inputSchema: {
-        limit: z.number().int().min(1).max(200).optional().describe("Max entries (default 25)."),
-      },
-      handler: (a) => {
-        const limit = typeof a.limit === "number" ? a.limit : 25;
-        return ok(
-          dm
-            .snapshot()
-            .recents.slice(0, limit)
-            .map((r) => ({
-              at: new Date(r.at).toISOString(),
-              title: r.title,
-              artist: r.artist,
-              album: r.album,
-              station: r.station,
-              source: r.source,
-            })),
         );
       },
     }),

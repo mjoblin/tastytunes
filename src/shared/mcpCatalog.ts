@@ -68,7 +68,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "list_queue",
         title: "List queue",
         description:
-          "The play queue: id, position, title, artist, album, and duration per track, plus which id is current.",
+          "The play queue, a page at a time (by default around the playing track): id, position, title, artist, album, and duration per track, the total, and which id and position are current.",
       },
       {
         name: "list_presets",
@@ -86,11 +86,6 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "list_devices",
         title: "List devices",
         description: "StreamMagic streamers known on the network and which one is connected.",
-      },
-      {
-        name: "list_recently_played",
-        title: "List recently played",
-        description: "Local history of tracks and stations that have played, newest first.",
       },
       {
         name: "list_schedules",
@@ -259,7 +254,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "list_albums",
         title: "List albums",
         description:
-          "Browse albums from the local library index — filter by artist, genre, decade, kind (albums vs compilations), hires, format (e.g. '24/96', 'MP3') or composer; sort by title, artist, year, dynamic range, loudness, last played or most played; played=true/false keeps the albums the listening record has or has not seen; page with limit/offset. Each album comes with what its tracks add up to: track count, discs, runtime, size, format headline (and how many tracks differ), hires, composers (when every track agrees), is_compilation. Returns object ids for play_media / get_media_info. Needs a ready index (see list_media_servers).",
+          "Browse albums from the local library index — filter by artist, genre, decade, kind (albums vs compilations), hires, format (e.g. '24/96', 'MP3') or composer; sort by title, artist, year, dynamic range, loudness, last played or most played; played=true/false keeps the albums the listening record has or has not seen (played=false is the unplayed list); page with limit/offset. Each album comes with what its tracks add up to: track count, discs, runtime, format headline, hires and is_compilation when true; detail 'full' adds the server's name, the folder, size, how many tracks differ in format, and composers (when every track agrees). Returns object ids for play_media / get_media_info. Needs a ready index (see list_media_servers).",
       },
       {
         name: "list_artists",
@@ -386,7 +381,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "list_history",
         title: "List history",
         description:
-          "Events from the listening record, newest first, filtered by date range, kind and listens only. A play's listen flag is derived: half the track or four minutes of real play time.",
+          "Events from the listening record, newest first, filtered by date range (local days, YYYY-MM-DD), kind and listens only, with local times. Each row is brief (time, kind, title, artist, album, source, seconds played) unless detail is 'full'. A play's listen flag is derived: half the track or four minutes of real play time.",
       },
       {
         name: "history_top",
@@ -398,7 +393,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "history_summary",
         title: "History summary",
         description:
-          "The listening record's figures for a period, as History's Stats view shows them: plays, listens, time heard, by source and by quality, distinct albums, artists and tracks, days with listening, the top albums, artists, tracks, stations, presets and playlists, listening by weekday and hour, and seconds per day for a calendar.",
+          "The listening record's figures for a period, as History's Stats view shows them: plays, listens, time heard, by source and by quality, distinct albums, artists and tracks, days with listening, and the top albums, artists, tracks, stations, presets and playlists. Listening by weekday and hour, and seconds per day for a calendar, come with include.",
       },
       {
         name: "history_elsewhere",
@@ -416,7 +411,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "history_on_this_day",
         title: "On this day",
         description:
-          "Plays from one calendar day across every year of the record, using the local day as it was recorded.",
+          "Plays from one calendar day across every year of the record, using the local day as it was recorded, newest first, paged with limit and offset.",
       },
       {
         name: "history_first_listen",
@@ -428,18 +423,6 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "History stats",
         description:
           "Plays, listens, last played and time heard for one track (the playing track by default) or, given only an album, for the whole album — from the listening record, library plays only.",
-      },
-      {
-        name: "history_unplayed",
-        title: "Unplayed albums",
-        description:
-          "Albums in the library with no recorded play since the listening record began (the record's start date is included). Filter by artist, genre or decade.",
-      },
-      {
-        name: "history_rediscover",
-        title: "Rediscover",
-        description:
-          "Albums that HAVE been played but not since a date (default: 90 days ago), longest-unheard first, with their play counts — the 'not heard since spring' list.",
       },
       {
         name: "history_resume",
