@@ -1,4 +1,9 @@
-import type { ContentRef, PlaylistActivation, QueueRestoreResult } from "@shared/model";
+import type {
+  ContentRef,
+  PlaylistActivation,
+  PlaylistItem,
+  QueueRestoreResult,
+} from "@shared/model";
 import type { PushMessage } from "@shared/ipc";
 import type { MediaQueueAction } from "@shared/model";
 import type { QueueList } from "@shared/smoip";
@@ -63,6 +68,8 @@ export class QueueOps {
   private readonly host: QueueOpsHost;
   private batch = false;
   private current: PlaylistActivation | null = null;
+  /** A list of tracks being queued (queueTracks), which holds the one-run claim as a playlist does. */
+  private tracksRunning = false;
   private cancelled = false;
 
   constructor(host: QueueOpsHost) {
@@ -104,6 +111,7 @@ export class QueueOps {
     if (this.current && !this.current.finished) {
       throw new Error(`Already loading “${this.current.name}”. Cancel that run first.`);
     }
+    if (this.tracksRunning) throw new Error("Already queueing tracks. Try again when that's done.");
 
     this.cancelled = false;
     const activation: PlaylistActivation = {
@@ -126,29 +134,74 @@ export class QueueOps {
     const announce = (): void => this.host.push({ kind: "playlistActivation", state: activation });
     announce();
 
-    // INVARIANT 3 — nothing has touched the queue until this flips.
-    let batchStarted = false;
-
-    // The FIRST successful add REPLACEs (clearing what was there); everything
-    // after appends. Keyed off success, not index — if entry one can't be
-    // resolved, entry two must still be the one that clears the old queue.
-    let replaced = false;
+    // INVARIANT 3 — nothing has touched the queue until the batch starts.
+    const run = { started: false };
     try {
-      await this.host.ensureAwake(); // activating is a play-shaped intent
+      await this.addEach(
+        host,
+        playlist.items,
+        // The FIRST successful add REPLACEs (clearing what was there); everything after appends.
+        // Keyed off success, not index: if entry one can't be resolved, entry two must still be
+        // the one that clears the old queue.
+        (_index, landed) => (landed > 0 ? "APPEND" : "REPLACE"),
+        (index, landed, found) => {
+          // heal in place, no updatedAt bump, so the collection keeps its order
+          if (found) healPlaylistItem(id, index, playlist.items[index], found);
+          if (landed) activation.added += 1;
+          else activation.missed.push(playlist.items[index].title);
+          activation.done += 1;
+          announce();
+        },
+        run,
+      );
+    } finally {
+      const batchStarted = run.started;
+      activation.cancelled = this.cancelled;
+      activation.finished = true;
+      if (batchStarted) listeningRecord.releaseContextBinding();
+      else listeningRecord.endContext();
+      // INVARIANT 3 — stamp the attempt only if the queue was actually touched.
+      if (batchStarted) markPlaylistPlayed(id, activation.missed);
+      announce();
+      this.host.push({ kind: "playlists", data: getPlaylists() });
+    }
+    return activation;
+  }
+
+  /**
+   * THE BATCH (0.16.0: the playlist activation's loop lifted out, so a list of tracks an agent
+   * queues runs on it too, and the invariants have one home). The entries go in one at a time, in
+   * the order given, each by its ids first and by content on a miss (invariant 4); the queue
+   * refetch is suppressed at the wire and the push until one reconciling read at the end
+   * (invariant 2); a run left behind by a switch to another streamer, or a disconnect, stops there
+   * (as a cancel) rather than adding the rest to a streamer no longer chosen, the socket's host
+   * surviving a reconnect to the same one. `actionFor` gives each entry's verb from how many landed
+   * before it; `onEntry` hears each entry tried, with `found` when it landed by content.
+   * `run.started` says whether the batch started (invariant 3: a run that died waking the device
+   * never touched the queue), set even when this throws.
+   */
+  private async addEach(
+    host: string,
+    items: readonly PlaylistItem[],
+    actionFor: (index: number, landed: number) => MediaQueueAction,
+    onEntry: (index: number, landed: boolean, found: ResolvedContent | null) => void,
+    run: { started: boolean },
+  ): Promise<void> {
+    let landedCount = 0;
+    try {
+      await this.host.ensureAwake(); // queueing is a play-shaped intent
 
       this.batch = true;
-      batchStarted = true;
+      run.started = true;
       const socket = this.host.socket();
       if (socket) socket.suppressQueueRefetch = true;
-      // A run belongs to the streamer it started on. Switched to another, or disconnected, it
-      // stops there (as a cancel) rather than adding the rest to a streamer no longer chosen; the
-      // socket's host survives a reconnect to the same streamer, so a blip doesn't stop it.
       const leftBehind = (): boolean => this.host.socket()?.host !== host;
-      for (const [index, item] of playlist.items.entries()) {
+      for (const [index, item] of items.entries()) {
         if (!this.cancelled && leftBehind()) this.cancelled = true;
         if (this.cancelled) break;
-        const action: MediaQueueAction = replaced ? "APPEND" : "REPLACE";
+        const action = actionFor(index, landedCount);
         let landed = false;
+        let healed: ResolvedContent | null = null;
 
         if (item.serverUdn && item.objectId) {
           try {
@@ -172,29 +225,22 @@ export class QueueOps {
             try {
               await queueAdd(host, found.serverUdn, found.objectId, action);
               landed = true;
-              // heal in place — no updatedAt bump, so the collection keeps its order
-              healPlaylistItem(id, index, item, found);
+              healed = found;
             } catch {
-              // couldn't add it after all — counted as missed below
+              // couldn't add it after all — counted as missed
             }
           }
         }
 
-        if (landed) {
-          replaced = true;
-          activation.added += 1;
-        } else {
-          activation.missed.push(item.title);
-        }
-        activation.done += 1;
-        announce();
+        if (landed) landedCount += 1;
+        onEntry(index, landed, healed);
       }
     } finally {
       this.batch = false;
       // Re-read the socket: a run can outlive the connection it started on.
       const socket = this.host.socket();
       if (socket) socket.suppressQueueRefetch = false;
-      if (batchStarted) {
+      if (run.started) {
         // INVARIANT 2's single authoritative read of the truth, whatever
         // happened above. The send throws on a half-dead socket (by design);
         // swallowed HERE only, so cleanup can't mask the loop's real error —
@@ -205,16 +251,67 @@ export class QueueOps {
           /* reconnect refetches */
         }
       }
-      activation.cancelled = this.cancelled;
-      activation.finished = true;
-      if (batchStarted) listeningRecord.releaseContextBinding();
-      else listeningRecord.endContext();
-      // INVARIANT 3 — stamp the attempt only if the queue was actually touched.
-      if (batchStarted) markPlaylistPlayed(id, activation.missed);
-      announce();
-      this.host.push({ kind: "playlists", data: getPlaylists() });
     }
-    return activation;
+  }
+
+  /**
+   * A list of tracks into the queue in one write (0.16.0, play_media's items), on the batch the
+   * playlists run on, in the order given whatever the verb: replace and append go in as listed;
+   * play_next inserts each right after the playing track, so the list goes in reversed; play_now
+   * plays the first and the rest follow it, so the rest go in reversed as next and the first goes
+   * last, played now. Says how many landed, the titles that didn't (any left untried by a
+   * cancel too), and, for a replace that touched the queue, how long the queue it replaced was.
+   */
+  async queueTracks(
+    items: readonly PlaylistItem[],
+    mode: "play_now" | "play_next" | "append" | "replace",
+  ): Promise<{ added: number; missed: string[]; total: number; replaced: number | null }> {
+    const host = this.host.host();
+    if (!host) throw new Error("Not connected");
+    // INVARIANT 1 — the claim below is synchronous with these checks
+    if (this.current && !this.current.finished)
+      throw new Error(`Already loading “${this.current.name}”. Try again when that's done.`);
+    if (this.tracksRunning) throw new Error("Already queueing tracks. Try again when that's done.");
+    this.tracksRunning = true;
+    this.cancelled = false;
+    const before = this.host.queue()?.total ?? 0;
+    const n = items.length;
+    const order =
+      mode === "play_next"
+        ? items.map((_, i) => n - 1 - i)
+        : mode === "play_now"
+          ? [...items.map((_, i) => n - 1 - i).slice(0, n - 1), 0]
+          : items.map((_, i) => i);
+    const landedAt = new Set<number>();
+    const run = { started: false };
+    try {
+      await this.addEach(
+        host,
+        order.map((i) => items[i]),
+        (index, landed) =>
+          mode === "replace"
+            ? landed > 0
+              ? "APPEND"
+              : "REPLACE"
+            : mode === "append"
+              ? "APPEND"
+              : mode === "play_now" && index === n - 1
+                ? "PLAY_NOW"
+                : "PLAY_NEXT",
+        (index, landed) => {
+          if (landed) landedAt.add(order[index]);
+        },
+        run,
+      );
+    } finally {
+      this.tracksRunning = false;
+    }
+    return {
+      added: landedAt.size,
+      missed: items.filter((_, i) => !landedAt.has(i)).map((t) => t.title),
+      total: n,
+      replaced: mode === "replace" && run.started && landedAt.size > 0 ? before : null,
+    };
   }
 
   /**

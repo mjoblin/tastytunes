@@ -6,6 +6,7 @@ import {
   type MediaIndexPools,
   type MediaNode,
   type MediaQueueAction,
+  type PlaylistItem,
   type Schedule,
 } from "@shared/model";
 import { type Favorite, heartOf, heartPeersFrom, resumeRun } from "@shared/model";
@@ -13,6 +14,7 @@ import { audioCaps, type ZonePlayState } from "@shared/smoip";
 import type { DeviceManager } from "../../device/deviceManager";
 import { getSettings } from "../../data/persist";
 import { pools as indexPools, revalidate } from "../../media/mediaIndex";
+import { bestInIndexes } from "../../media/resolveContent";
 import { nameKey } from "@shared/keys";
 
 // The MCP bridge's TOOLKIT (2026-09-13, the bridge split: 74 tool implementations
@@ -285,6 +287,88 @@ export async function freshObjectId(
     };
   return { id: again.id };
 }
+
+/**
+ * A TRACK REFERENCE (0.16.0): how an agent points at a track wherever a tool takes one, either
+ * its ids from a listing or its content. One shape for every tool, so a list an agent holds goes
+ * straight into a playlist or the queue.
+ */
+export const TRACK_REF = z.union([
+  z.strictObject({
+    server_udn: z.string().describe("From a listing (list_tracks, search_library)."),
+    object_id: z.string().describe("The track's id from the same listing."),
+  }),
+  z.strictObject({
+    title: z.string().min(1).describe("The track's title, as the library has it."),
+    artist: z.string().optional(),
+    album: z.string().optional().describe("Tells apart a title the library has more than once."),
+  }),
+]);
+export type TrackRef = z.infer<typeof TRACK_REF>;
+export const tracksArg = (max: number) =>
+  z
+    .array(TRACK_REF)
+    .min(1)
+    .max(max)
+    .describe(
+      `Up to ${max} tracks, in order: each {server_udn, object_id} from a listing, or {title, artist?, album?}.`,
+    );
+
+/** A library track as a playlist keeps it: its content, and its ids as the fast path. */
+export const itemOfNode = (node: MediaNode, udn: string, serverName?: string): PlaylistItem => ({
+  title: node.title,
+  artist: node.artist,
+  album: node.album,
+  artUrl: node.artUrl,
+  serverUdn: node.serverUdn ?? udn,
+  serverName: node.serverName ?? serverName ?? null,
+  objectId: node.id,
+  durationSecs: node.durationSecs,
+});
+
+/** What a reference says, for the answer that names a track it couldn't find. */
+export const refLabel = (ref: TrackRef): string =>
+  "object_id" in ref ? ref.object_id : ref.artist ? `${ref.title} · ${ref.artist}` : ref.title;
+
+/**
+ * A reference to the library track it names, read from the index: ids must name a track (an
+ * album's id is not one), content is matched as a heal matches it (resolveContent's rule, the
+ * album telling twins apart). Null when the index has no such track.
+ */
+export function trackOfRef(ref: TrackRef): PlaylistItem | null {
+  if ("object_id" in ref) {
+    const pool = indexPools().find((p) => p.udn === ref.server_udn);
+    const node = pool?.tracks.find((n) => n.id === ref.object_id);
+    return pool && node ? itemOfNode(node, pool.udn, pool.serverName) : null;
+  }
+  const hit = bestInIndexes({
+    title: ref.title,
+    artist: ref.artist ?? null,
+    album: ref.album ?? null,
+  });
+  return hit ? itemOfNode(hit.node, hit.serverUdn, hit.serverName) : null;
+}
+
+/** Several references at once: the tracks found, in order, and the labels of those not found. */
+export function tracksOfRefs(refs: readonly TrackRef[]): {
+  items: PlaylistItem[];
+  missed: string[];
+} {
+  const items: PlaylistItem[] = [];
+  const missed: string[] = [];
+  for (const ref of refs) {
+    const item = trackOfRef(ref);
+    if (item) items.push(item);
+    else missed.push(refLabel(ref));
+  }
+  return { items, missed };
+}
+
+/** A few named and the rest counted: an answer about many tracks stays short. */
+export const someTitles = (titles: readonly string[], shown = 3): string => {
+  const more = titles.length - shown;
+  return `${titles.slice(0, shown).join(", ")}${more > 0 ? `, +${more} more` : ""}`;
+};
 
 export const kindOf = (n: MediaNode): "album" | "artist" | "track" | "folder" =>
   n.upnpClass.includes("musicAlbum")

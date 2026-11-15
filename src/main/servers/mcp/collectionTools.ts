@@ -6,6 +6,7 @@ import {
   heartPeersFrom,
   type Favorite,
   LARGE_QUEUE_TRACKS,
+  type PlaylistItem,
 } from "@shared/model";
 import { pools as indexPools } from "../../media/mediaIndex";
 import { isRadioMetadata } from "@shared/smoip";
@@ -23,6 +24,10 @@ import {
   freshObjectId,
   defineTool,
   localTimeOrNull,
+  tracksArg,
+  tracksOfRefs,
+  trackOfRef,
+  someTitles,
 } from "./toolkit";
 import { nameKey } from "@shared/keys";
 
@@ -118,14 +123,19 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: (a) => {
         const p = dm.snapshot().playlists.find((x) => x.id === a.id);
         if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
+        // each row's place (edit_playlist's positions) and, when stored, its ids (0.16.0)
         return ok({
           id: p.id,
           name: p.name,
-          items: p.items.map((i) => ({
+          items: p.items.map((i, position) => ({
+            position,
             title: i.title,
             artist: i.artist,
             album: i.album,
             seconds: i.durationSecs ?? null,
+            ...(i.serverUdn && i.objectId
+              ? { server_udn: i.serverUdn, object_id: i.objectId }
+              : {}),
           })),
         });
       },
@@ -153,19 +163,36 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
     create_playlist: defineTool({
       inputSchema: {
         name: z.string().describe("Name for the new playlist."),
+        tracks: tracksArg(LARGE_QUEUE_TRACKS)
+          .optional()
+          .describe(
+            `The tracks, in order (up to ${LARGE_QUEUE_TRACKS}): each {server_udn, object_id} from a listing or {title, artist?, album?}. Stored with their ids; the play queue is not touched.`,
+          ),
         from_queue: z
           .boolean()
           .optional()
-          .describe("Seed it with the current play queue (default false — creates it empty)."),
+          .describe("Instead of tracks: seed it with the current play queue (default false)."),
       },
       handler: (a) => {
+        if (a.tracks != null && a.from_queue === true)
+          return err("Give tracks or from_queue, not both.");
         const s = dm.snapshot();
-        const items =
-          a.from_queue === true
-            ? (s.queue?.items ?? [])
-                .map((i) => i.metadata)
-                .filter((m): m is NonNullable<typeof m> => m != null)
-                .map((m) => ({
+        // tracks named by the agent (0.16.0), found in the index and kept with their ids, so the
+        // copy chosen is the copy played; the queue's entries carry no ids, so each is found in the
+        // index by its content, and kept by content when it isn't there
+        const fromQueue = (): PlaylistItem[] =>
+          (s.queue?.items ?? [])
+            .map((i) => i.metadata)
+            .filter((m): m is NonNullable<typeof m> => m != null)
+            .map(
+              (m) =>
+                (m.title
+                  ? trackOfRef({
+                      title: m.title,
+                      artist: m.artist ?? undefined,
+                      album: m.album ?? undefined,
+                    })
+                  : null) ?? {
                   title: m.title ?? "Unknown track",
                   artist: m.artist ?? null,
                   album: m.album ?? null,
@@ -174,22 +201,48 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
                   serverName: null,
                   objectId: null,
                   durationSecs: m.duration ?? null,
-                }))
-            : [];
+                },
+            );
+        const named = a.tracks != null ? tracksOfRefs(a.tracks) : null;
+        if (named && named.items.length === 0)
+          return err(
+            `None of those is a track in the library index (${someTitles(named.missed)}). Use list_tracks or search_library for their ids.`,
+          );
+        const items = named ? named.items : a.from_queue === true ? fromQueue() : [];
         // The returned playlist, not a lookup by name: on a name collision
         // the stored name is uniquified, and finding by the REQUESTED name
         // would report the old playlist's id — an agent would then edit
         // the wrong list.
         const made = dm.collections.playlistCreate(a.name, items);
-        return ok(`Created "${made.name}" with ${made.items.length} tracks. id: ${made.id}`);
+        const missed =
+          named && named.missed.length > 0 ? ` Not found: ${someTitles(named.missed)}.` : "";
+        return ok(
+          `Created "${made.name}" with ${made.items.length} tracks. id: ${made.id}${missed}`,
+        );
       },
     }),
     add_to_playlist: defineTool({
-      inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
+      inputSchema: {
+        id: z.string().describe("Playlist id from list_playlists."),
+        tracks: tracksArg(LARGE_QUEUE_TRACKS)
+          .optional()
+          .describe("Tracks to add at the end, in order. Default: the playing track."),
+      },
       handler: (a) => {
         const s = dm.snapshot();
         const p = s.playlists.find((x) => x.id === a.id);
         if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
+        if (a.tracks != null) {
+          const { items, missed } = tracksOfRefs(a.tracks);
+          if (items.length === 0)
+            return err(
+              `None of those is a track in the library index (${someTitles(missed)}). Use list_tracks or search_library for their ids.`,
+            );
+          dm.collections.playlistAppend(a.id, items);
+          return ok(
+            `Added ${items.length} ${items.length === 1 ? "track" : "tracks"} to "${p.name}".${missed.length > 0 ? ` Not found: ${someTitles(missed)}.` : ""}`,
+          );
+        }
         const md = s.playState?.metadata;
         // A playlist is an ordered list of TRACKS; a stream has no position
         // in one, and content identity needs a title and an artist.
@@ -208,6 +261,62 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           },
         ]);
         return ok(`Added "${md.title}" to "${p.name}".`);
+      },
+    }),
+    edit_playlist: defineTool({
+      inputSchema: {
+        id: z.string().describe("Playlist id from list_playlists."),
+        rename: z.string().min(1).optional().describe("A new name."),
+        remove_positions: z
+          .array(z.number().int().min(0))
+          .optional()
+          .describe("Rows to take out, by position from get_playlist (0 = the first)."),
+        move: z
+          .strictObject({
+            from: z.number().int().min(0).describe("The row's position now."),
+            to: z.number().int().min(0).describe("Its position after the move."),
+          })
+          .optional()
+          .describe("Move one row, after any removals (positions as they stand then)."),
+      },
+      // 0.16.0: an agent could not rename a playlist or take a track out of one
+      handler: (a) => {
+        const p = dm.snapshot().playlists.find((x) => x.id === a.id);
+        if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
+        if (a.rename == null && a.remove_positions == null && a.move == null)
+          return err("Nothing to change: give rename, remove_positions or move.");
+        const bad = (a.remove_positions ?? []).filter((i) => i >= p.items.length);
+        if (bad.length > 0)
+          return err(
+            `"${p.name}" has ${p.items.length} rows (0 to ${p.items.length - 1}): no ${bad.join(", ")}.`,
+          );
+        const drop = new Set(a.remove_positions ?? []);
+        const items = p.items.filter((_, i) => !drop.has(i));
+        if (a.move != null) {
+          const { from, to } = a.move;
+          if (from >= items.length || to >= items.length)
+            return err(
+              `After the removals "${p.name}" has ${items.length} rows: move from and to are 0 to ${items.length - 1}.`,
+            );
+          const [row] = items.splice(from, 1);
+          items.splice(to, 0, row);
+        }
+        const said: string[] = [];
+        if (drop.size > 0 || a.move != null) {
+          dm.collections.playlistSetItems(a.id, items);
+          if (drop.size > 0)
+            said.push(`took out ${drop.size} ${drop.size === 1 ? "track" : "tracks"}`);
+          if (a.move != null) said.push(`moved row ${a.move.from} to ${a.move.to}`);
+        }
+        let name = p.name;
+        if (a.rename != null) {
+          const list = dm.collections.playlistRename(a.id, a.rename);
+          name = list.find((x) => x.id === a.id)?.name ?? a.rename;
+          said.push(`renamed it "${name}"`);
+        }
+        return ok(
+          `"${name}": ${said.join(", ")}. ${items.length} ${items.length === 1 ? "track" : "tracks"}.`,
+        );
       },
     }),
     delete_playlist: defineTool({

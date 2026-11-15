@@ -73,6 +73,22 @@ function best(ref: ContentRef, items: MediaNode[]): MediaNode | null {
   return hits.find((n) => n.album != null && nameKey(n.album) === nameKey(ref.album)) ?? hits[0];
 }
 
+/**
+ * The index's best track for a ref, asking no server and revalidating nothing: an agent's track
+ * named by content, read where the index stands (0.16.0, the track references). The same
+ * matching as resolveContent's first step, so a reference finds what a heal would.
+ */
+export function bestInIndexes(
+  ref: ContentRef,
+): { serverUdn: string; serverName: string; node: MediaNode } | null {
+  if (!ref.title.trim()) return null;
+  for (const group of searchAllIndexes(ref.title)) {
+    const hit = best(ref, group.items);
+    if (hit) return { serverUdn: group.udn, serverName: group.serverName, node: hit };
+  }
+  return null;
+}
+
 export async function resolveContent(
   host: string,
   ref: ContentRef,
