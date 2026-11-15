@@ -21,6 +21,13 @@ import {
   STREAMER_ARG,
   streamerKeep,
   defineTool,
+  dayRange,
+  localDayStart,
+  localToday,
+  DECADE_ARG,
+  decadeStart,
+  decadeError,
+  inDecade,
 } from "./toolkit";
 import { nameKey } from "@shared/keys";
 
@@ -54,8 +61,9 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const { events: everyLine, unreadable } = await listeningRecord.readAll();
         const keep = streamerKeep(a.streamer, dm.snapshot().devices);
         const events = keep ? everyLine.filter(keep) : everyLine;
-        const fromMs = a.from != null ? Date.parse(`${a.from}T00:00:00`) : null;
-        const toMs = a.to != null ? Date.parse(`${a.to}T23:59:59.999`) : null;
+        const range = dayRange(a);
+        if ("error" in range) return err(range.error);
+        const { from: fromMs, to: toMs } = range;
         const filtered = events
           .filter(
             (e) =>
@@ -98,8 +106,9 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const { events: everyLine } = await listeningRecord.readAll();
         const keep = streamerKeep(a.streamer, dm.snapshot().devices);
         const events = keep ? everyLine.filter(keep) : everyLine;
-        const fromMs = a.from != null ? Date.parse(`${a.from}T00:00:00`) : null;
-        const toMs = a.to != null ? Date.parse(`${a.to}T23:59:59.999`) : null;
+        const range = dayRange(a);
+        if ("error" in range) return err(range.error);
+        const { from: fromMs, to: toMs } = range;
         const limit = a.limit ?? 20;
         if (a.by === "stations" || a.by === "presets" || a.by === "playlists") {
           // the Stats view's own ranks (shared/historyStats), over the range
@@ -172,10 +181,9 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const { events: everyLine } = await listeningRecord.readAll();
         const keep = streamerKeep(a.streamer, dm.snapshot().devices);
         const events = keep ? everyLine.filter(keep) : everyLine;
-        const fromMs = a.from != null ? Date.parse(`${a.from}T00:00:00`) : null;
-        const toMs = a.to != null ? Date.parse(`${a.to}T23:59:59.999`) : null;
-        if ((fromMs != null && Number.isNaN(fromMs)) || (toMs != null && Number.isNaN(toMs)))
-          return err("from and to must be YYYY-MM-DD.");
+        const range = dayRange(a);
+        if ("error" in range) return err(range.error);
+        const { from: fromMs, to: toMs } = range;
         const st = statsFor(events, {
           from: fromMs ?? 0,
           to: toMs != null ? toMs + 1 : Number.POSITIVE_INFINITY,
@@ -474,7 +482,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         streamer: STREAMER_ARG,
         artist: z.string().optional().describe("Case-insensitive substring on the album artist."),
         genre: z.string().optional(),
-        decade: z.string().optional().describe("e.g. '1990s'."),
+        decade: DECADE_ARG,
         limit: z.number().int().min(1).max(200).optional().describe("Default 50."),
         offset: z.number().int().min(0).optional(),
       },
@@ -485,7 +493,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const poolOf = new Map(groups.map((p) => [p.udn, p]));
         const artistNeedle = a.artist?.toLowerCase();
         const genreNeedle = a.genre?.toLowerCase();
-        const decade = a.decade != null ? String(a.decade).replace(/s$/i, "") : null;
+        const decade = a.decade != null ? decadeStart(a.decade) : null;
+        if (a.decade != null && decade == null) return err(decadeError(a.decade));
         const albums = groups
           .flatMap((p) => p.albums)
           .filter(
@@ -495,11 +504,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             (n) =>
               genreNeedle == null || (n.genre ?? []).some((g) => g.toLowerCase() === genreNeedle),
           )
-          .filter(
-            (n) =>
-              decade == null ||
-              (n.year != null && String(Math.floor(Number(n.year) / 10) * 10) === decade),
-          )
+          .filter((n) => decade == null || inDecade(n.year, decade))
           .filter((n) => {
             const pool = n.serverUdn ? poolOf.get(n.serverUdn) : undefined;
             return pool ? albumTally(n, pool, stats).plays === 0 : true;
@@ -545,9 +550,12 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
         const cutoff =
           a.not_since != null
-            ? Date.parse(`${a.not_since}T00:00:00`)
+            ? localDayStart(a.not_since)
             : Date.now() - REDISCOVER_QUIET_DAYS * 86_400_000;
-        if (Number.isNaN(cutoff)) return err("not_since must be YYYY-MM-DD.");
+        if (cutoff == null)
+          return err(
+            `"${String(a.not_since)}" isn't a day: not_since takes a local date, YYYY-MM-DD (today is ${localToday()}).`,
+          );
         const minPlays = a.min_plays ?? 1;
         const poolOf = new Map(groups.map((p) => [p.udn, p]));
         const rows = groups

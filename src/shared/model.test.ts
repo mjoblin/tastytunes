@@ -57,8 +57,11 @@ import {
   TEMPO_CONFIDENCE_FLOOR,
   currentFeatures,
   FEATURES_VERSION,
+  keyFromStored,
   keyMatches,
   keyName,
+  keyOfChroma,
+  KEY_VERSION,
   parseKeyName,
   tempoBpm,
 } from "./model";
@@ -919,5 +922,46 @@ describe("measured facts: tempo and key, said once (0.12.0)", () => {
     expect(currentFeatures({ ...now, version: FEATURES_VERSION - 1 })).toBeNull();
     expect(currentFeatures(null)).toBeNull();
     expect(currentFeatures(undefined)).toBeNull();
+  });
+
+  // a dense mix: every pitch class high (each frame is normalized to its loudest), the scale's
+  // notes a little higher and the triad's higher still, as a full band's chroma averages out
+  const mix = (scale: number[], triad: number[], frames = 8): Uint8Array => {
+    const frame = Array.from(
+      { length: 12 },
+      (_, p) => 0.6 + (scale.includes(p) ? 0.15 : 0) + (triad.includes(p) ? 0.1 : 0),
+    );
+    return Uint8Array.from({ length: frames * 12 }, (_, i) => Math.round(frame[i % 12] * 255));
+  };
+  const cMajor = mix([0, 2, 4, 5, 7, 9, 11], [0, 4, 7]);
+  const aMinor = mix([9, 11, 0, 2, 4, 5, 7], [9, 0, 4]);
+  const b64 = (u8: Uint8Array): string => btoa(String.fromCharCode(...u8));
+
+  it("names a dense mix's key by correlation, major as readily as minor", () => {
+    // the raw dot product this replaced read the C major mix as E minor at 0.023
+    expect(keyName(keyOfChroma(cMajor))).toBe("C major");
+    expect(keyName(keyOfChroma(aMinor))).toBe("A minor");
+    expect(keyName(keyOfChroma(mix([7, 9, 11, 0, 2, 4, 6], [7, 11, 2])))).toBe("G major");
+  });
+
+  it("withholds a key when nothing stands out or there is too little to read", () => {
+    expect(keyOfChroma(new Uint8Array(8 * 12).fill(200))).toBeNull();
+    expect(keyOfChroma(cMajor.subarray(0, 36))).toBeNull();
+    // the C and G triads both loud over C major's scale: two keys a fifth apart fit almost
+    // equally, and the lead is under the floor
+    expect(keyName(keyOfChroma(mix([0, 2, 4, 5, 7, 9, 11], [0, 4, 7, 11, 2])))).toBeNull();
+  });
+
+  it("reads a stored key of an older estimator again from the stored chroma", () => {
+    const chroma = { fps: 2, data: b64(cMajor) };
+    const older = { key: { tonic: 4, mode: "minor" as const, confidence: 0.023 }, chroma };
+    expect(keyName(keyFromStored(older))).toBe("C major");
+    const made = {
+      key: { tonic: 7, mode: "major" as const, confidence: 0.8, v: KEY_VERSION },
+      chroma,
+    };
+    expect(keyName(keyFromStored(made))).toBe("G major");
+    expect(keyFromStored({ key: older.key, chroma: null })).toBeNull();
+    expect(keyFromStored(null)).toBeNull();
   });
 });

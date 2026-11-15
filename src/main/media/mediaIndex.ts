@@ -59,7 +59,7 @@ import { learnArtMove, moveArt } from "./artMove";
 import { arrivalKey, recentRanks } from "@shared/recentlyAdded";
 import { arrivalsOf, noteArrivals } from "../data/albumArrivals";
 import { readRecentList, type RecentListRead } from "./recentList";
-import { nameKey } from "@shared/keys";
+import { matchesWords, nameKey, queryWords } from "@shared/keys";
 
 interface StoredIndex {
   udn: string;
@@ -1122,14 +1122,12 @@ export function searchIndex(
   load();
   const idx = indexes.get(udn);
   if (!idx || building.has(udn)) return null;
-  const tokens = query.toLowerCase().split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return { items: [], total: 0 };
-  const matches = (n: MediaNode): boolean => {
-    // composers are searchable ("bangalter" finds the track) without being artists
-    const hay =
-      `${n.title} ${n.artist ?? ""} ${n.album ?? ""} ${(n.composers ?? []).join(" ")}`.toLowerCase();
-    return tokens.every((t) => hay.includes(t));
-  };
+  const words = queryWords(query);
+  if (words.length === 0) return { items: [], total: 0 };
+  // the one text match (shared/keys), accents and punctuation folded; composers are searchable
+  // ("bangalter" finds the track) without being artists
+  const matches = (n: MediaNode): boolean =>
+    matchesWords(words, [n.title, n.artist, n.album, ...(n.composers ?? [])]);
   // EVERY MATCH (1,035 results once stopped at "first 500"): the scan is local, the lenses
   // already hold the whole index, and the Library reveals the results 500 at a time, so nothing
   // here needs a cap.
