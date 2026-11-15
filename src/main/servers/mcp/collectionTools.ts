@@ -25,9 +25,9 @@ import {
   defineTool,
   localTimeOrNull,
   tracksArg,
-  tracksOfRefs,
-  trackOfRef,
-  someTitles,
+  readTrackRefs,
+  refsNote,
+  noTrackFound,
   rowIds,
   acted,
   settle,
@@ -217,45 +217,55 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         // tracks named by the agent (0.16.0), found in the index and kept with their ids, so the
         // copy chosen is the copy played; the queue's entries carry no ids, so each is found in the
         // index by its content, and kept by content when it isn't there
-        const fromQueue = (): PlaylistItem[] =>
-          (s.queue?.items ?? [])
+        const fromQueue = (): PlaylistItem[] => {
+          const rows = (s.queue?.items ?? [])
             .map((i) => i.metadata)
-            .filter((m): m is NonNullable<typeof m> => m != null)
-            .map(
-              (m) =>
-                (m.title
-                  ? trackOfRef({
+            .filter((m): m is NonNullable<typeof m> => m != null);
+          const titled = rows.flatMap((m, i) =>
+            m.title
+              ? [
+                  {
+                    i,
+                    ref: {
                       title: m.title,
                       artist: m.artist ?? undefined,
                       album: m.album ?? undefined,
-                    })
-                  : null) ?? {
-                  title: m.title ?? "Unknown track",
-                  artist: m.artist ?? null,
-                  album: m.album ?? null,
-                  artUrl: m.art_url ?? null,
-                  serverUdn: null,
-                  serverName: null,
-                  objectId: null,
-                  durationSecs: m.duration ?? null,
-                },
-            );
-        const named = a.tracks != null ? tracksOfRefs(a.tracks) : null;
-        if (named && named.items.length === 0)
-          return err(
-            `None of those is a track in the library index (${someTitles(named.missed)}). Use list_tracks or search_library for their ids.`,
+                    },
+                  },
+                ]
+              : [],
           );
+          const found = readTrackRefs(titled.map((t) => t.ref));
+          const inIndex = new Map(found.at.map((at, k) => [titled[at].i, found.items[k]]));
+          return rows.map(
+            (m, i) =>
+              inIndex.get(i) ?? {
+                title: m.title ?? "Unknown track",
+                artist: m.artist ?? null,
+                album: m.album ?? null,
+                artUrl: m.art_url ?? null,
+                serverUdn: null,
+                serverName: null,
+                objectId: null,
+                durationSecs: m.duration ?? null,
+              },
+          );
+        };
+        const named = a.tracks != null ? readTrackRefs(a.tracks) : null;
+        if (named && named.items.length === 0) return noTrackFound(named);
         const items = named ? named.items : a.from_queue === true ? fromQueue() : [];
         // The returned playlist, not a lookup by name: on a name collision
         // the stored name is uniquified, and finding by the REQUESTED name
         // would report the old playlist's id — an agent would then edit
         // the wrong list.
         const made = dm.collections.playlistCreate(a.name, items);
-        const missed =
-          named && named.missed.length > 0 ? ` Not found: ${someTitles(named.missed)}.` : "";
-        return ok(
-          `Created "${made.name}" with ${made.items.length} tracks. id: ${made.id}${missed}`,
-        );
+        // an object, not a sentence with the id inside it (0.16.0), so every miss can be named
+        return ok({
+          id: made.id,
+          name: made.name,
+          added: made.items.length,
+          ...(named ? refsNote(named) : {}),
+        });
       },
     }),
     add_to_playlist: defineTool({
@@ -270,15 +280,16 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         const p = s.playlists.find((x) => x.id === a.id);
         if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
         if (a.tracks != null) {
-          const { items, missed } = tracksOfRefs(a.tracks);
-          if (items.length === 0)
-            return err(
-              `None of those is a track in the library index (${someTitles(missed)}). Use list_tracks or search_library for their ids.`,
-            );
-          dm.collections.playlistAppend(a.id, items);
-          return ok(
-            `Added ${items.length} ${items.length === 1 ? "track" : "tracks"} to "${p.name}".${missed.length > 0 ? ` Not found: ${someTitles(missed)}.` : ""}`,
-          );
+          const named = readTrackRefs(a.tracks);
+          if (named.items.length === 0) return noTrackFound(named);
+          const after = dm.collections.playlistAppend(a.id, named.items).find((x) => x.id === a.id);
+          return ok({
+            id: p.id,
+            name: p.name,
+            added: named.items.length,
+            tracks: after?.items.length ?? p.items.length + named.items.length,
+            ...refsNote(named),
+          });
         }
         const md = s.playState?.metadata;
         // A playlist is an ordered list of TRACKS; a stream has no position

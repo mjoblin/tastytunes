@@ -23,6 +23,14 @@ import { nameKey } from "@shared/keys";
  * station's announcement is a sighting, not a measured play; "heard" counts
  * both, which is honest enough at this altitude.
  */
+/** The most heard first, then the most recently heard: the Elsewhere view's "heard" order, and
+ *  history_elsewhere's (0.16.0: the tool had answered in the order the artists were first heard, so
+ *  its first twenty were the record's first day). */
+export const mostHeardFirst = (
+  a: { heard: number; lastAt: number },
+  b: { heard: number; lastAt: number },
+): number => b.heard - a.heard || b.lastAt - a.lastAt;
+
 export interface HeardTrack {
   key: string;
   title: string;
@@ -187,7 +195,7 @@ export function heardElsewhere(
     else byArtist.set(k, [t]);
   }
   const artists: HeardArtist[] = [...byArtist.entries()].map(([key, list]) => {
-    list.sort((a, b) => b.heard - a.heard || b.lastAt - a.lastAt);
+    list.sort(mostHeardFirst);
     const where = new Tally();
     for (const t of list) for (const [place, n] of t.places.entries()) where.add(place, n);
     const albums = albumsBy.get(key) ?? 0;
