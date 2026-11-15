@@ -19,6 +19,12 @@ export interface McpToolInfo {
   title: string;
   /** Written for the agent reading tools/list — precise beats promotional. */
   description: string;
+  /** What a client may assume (0.16.0, the MCP annotations per tool; they had been set per
+   *  cluster, and 24 reads were marked as writes): readOnly for a read in a cluster that also acts;
+   *  destructive for a tool that can remove or replace what the user has (the queue, a playlist,
+   *  a preset); idempotent for a call that, repeated, does nothing more; openWorld for a tool that
+   *  asks a service outside this network. */
+  hints?: { readOnly?: true; destructive?: true; idempotent?: true; openWorld?: true };
 }
 
 export interface McpClusterInfo {
@@ -96,6 +102,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "list_scenes",
         title: "List scenes",
+        hints: { readOnly: true },
         description:
           "Display mode's scenes in the picker's order: id, name, a one-line description, and which is chosen for display mode ('display') and the Now Playing tile ('tile'). 'sleeve' is the album art; 'shuffle' draws a different scene each track. Also whether display mode is on.",
       },
@@ -107,9 +114,24 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     title: "Transport",
     description: "Play, pause, skip, seek, queue jumps, shuffle and repeat.",
     tools: [
-      { name: "play", title: "Play", description: "Start or resume playback." },
-      { name: "pause", title: "Pause", description: "Pause playback." },
-      { name: "stop", title: "Stop", description: "Stop playback (mainly internet radio)." },
+      {
+        name: "play",
+        title: "Play",
+        description: "Start or resume playback.",
+        hints: { idempotent: true },
+      },
+      {
+        name: "pause",
+        title: "Pause",
+        description: "Pause playback.",
+        hints: { idempotent: true },
+      },
+      {
+        name: "stop",
+        title: "Stop",
+        description: "Stop playback (mainly internet radio).",
+        hints: { idempotent: true },
+      },
       { name: "next_track", title: "Next track", description: "Skip to the next track." },
       {
         name: "previous_track",
@@ -125,12 +147,19 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "play_queue_item",
         title: "Play queue item",
+        hints: { idempotent: true },
         description: "Jump to a specific track in the queue by its id (see list_queue).",
       },
-      { name: "set_shuffle", title: "Set shuffle", description: "Turn shuffle on or off." },
+      {
+        name: "set_shuffle",
+        title: "Set shuffle",
+        description: "Turn shuffle on or off.",
+        hints: { idempotent: true },
+      },
       {
         name: "set_repeat",
         title: "Set repeat",
+        hints: { idempotent: true },
         description: "Set repeat: off, all (the whole queue) or one (the current track).",
       },
     ],
@@ -144,6 +173,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "set_volume",
         title: "Set volume",
+        hints: { idempotent: true },
         description:
           "Set volume to an absolute percent (0–100). Respects the volume limit configured in the app.",
       },
@@ -152,7 +182,12 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Change volume",
         description: "Nudge volume up or down by a number of steps (positive or negative).",
       },
-      { name: "set_mute", title: "Set mute", description: "Mute or unmute." },
+      {
+        name: "set_mute",
+        title: "Set mute",
+        description: "Mute or unmute.",
+        hints: { idempotent: true },
+      },
     ],
   },
   {
@@ -164,6 +199,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "recall_preset",
         title: "Recall preset",
+        hints: { idempotent: true },
         description: "Recall a preset by its id (see list_presets for names).",
       },
     ],
@@ -177,6 +213,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "set_source",
         title: "Set source",
+        hints: { idempotent: true },
         description: "Switch to a source by its id (see list_sources).",
       },
     ],
@@ -190,6 +227,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "set_power",
         title: "Set power",
+        hints: { idempotent: true },
         description:
           "'on' wakes the streamer; 'standby' stops playback and puts it into network standby (it stays reachable).",
       },
@@ -204,6 +242,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "connect_device",
         title: "Connect device",
+        hints: { idempotent: true },
         description: "Connect to a different streamer by host/IP (see list_devices).",
       },
     ],
@@ -223,6 +262,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "cancel_sleep_timer",
         title: "Cancel sleep timer",
+        hints: { idempotent: true },
         description: "Clear any armed sleep timer.",
       },
     ],
@@ -236,6 +276,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "list_media_servers",
         title: "List media servers",
+        hints: { readOnly: true },
         description:
           'UPnP media servers the streamer can play from. Per server: `searchable` = answers LIVE UPnP searches, `index_ready` = TastyTunes holds a local index (search_library and list_albums work with either/the latter). Ready indexes include library counts — sum `index.albums` across servers for questions like "how many albums do I have".',
       },
@@ -248,12 +289,14 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "search_library",
         title: "Search library",
+        hints: { readOnly: true },
         description:
           'Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media, a TRUE total, and pages with limit/offset — page again rather than assuming the first page is everything. match: \'title\' scopes to items whose own title contains the query. Accents and punctuation are ignored ("motorhead" finds Motörhead), and when nothing matches the answer names the nearest artists and albums. Composers are searchable too ("bangalter" finds the tracks he wrote); indexed tracks carry album_artist, performers, composers and format when the server sends them.',
       },
       {
         name: "library_facets",
         title: "Library facets",
+        hints: { readOnly: true },
         description:
           "The library's shape in one answer: its genres with album and track counts (spellings joined), how many albums have no genre, the decades and formats, how many tracks are analyzed for dynamic range, loudness, tempo and key, and how many albums have an arrival date. Read it before choosing music by style or era.",
       },
@@ -266,42 +309,49 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "list_albums",
         title: "List albums",
+        hints: { readOnly: true },
         description:
           "Browse albums from the local library index — filter by title words, artist, genre (spellings joined; the nearest genre names when none matches), decade or year range, arrival since a date, kind (albums vs compilations), hires, format (e.g. '24/96', 'MP3') or composer; sort by title, artist, year, latest arrival, dynamic range, loudness, last played or most played (a measured filter or sort says how many albums are measured); played=true/false keeps the albums the listening record has or has not seen (played=false is the unplayed list); page with limit/offset. Each album comes with what its tracks add up to: track count, discs, runtime, format headline, hires and is_compilation when true; detail 'full' adds the server's name, the folder, size, how many tracks differ in format, and composers (when every track agrees). Returns object ids for play_media / get_media_info. Needs a ready index (see list_media_servers).",
       },
       {
         name: "list_artists",
         title: "List artists",
+        hints: { readOnly: true },
         description:
           "Artists from the local library index with album and track counts — filter by name, sort by name or album count, page with limit/offset (up to 1,000 at once, the whole list for most libraries). role 'performers' (default) counts album artists and every performer, featured guests included; role 'composers' lists who wrote the tracks. Needs a ready index (see list_media_servers).",
       },
       {
         name: "list_tracks",
         title: "List tracks",
+        hints: { readOnly: true },
         description:
           "Every indexed track as one list, filtered by title words, artist, album, genre, decade, played or never played, format, lossless, hi-res, minimum dynamic range (DR), a tempo range in beats per minute or a key (a measured filter or sort says how many of the tracks are measured), sorted by title, artist, album, year, duration, DR, loudness, tempo, plays or last played. Each row carries its DR, tempo and key when measured, and its play count and last-played time from the listening record when known. The app's Tracks view as a tool.",
       },
       {
         name: "get_track_analysis",
         title: "Get track analysis",
+        hints: { readOnly: true },
         description:
           "The audio analysis TastyTunes has for a track (the playing track by default, or one named by server_udn and object_id, or by title, where a title the library has on several tracks answers with the candidates): dynamic range (DR, the TT-DR procedure), peak, RMS and crest in dB, loudness (LUFS, loudness range, true peak), tempo in beats per minute and key with their confidences, plus the album's DR and loudness when the whole album has been analyzed. Says so when a track has not been analyzed yet.",
       },
       {
         name: "get_media_info",
         title: "Get media info",
+        hints: { readOnly: true },
         description:
           "Everything the local index knows about one album, track or artist by server_udn + object id — the app's Info panel as a tool: performers, album artist, composers, year, genres, track/disc numbers, duration, format (codec, bit depth, sample rate, bitrate, size), server and object ids, art URL. An album also gets its tracks summed (count, discs, runtime, size, format, composers, compilation) and its full track list; an artist gets their library page (albums with year/format, track count, guest appearances, composer credits, genres, active years). Read-only, index-backed.",
       },
       {
         name: "get_album_art",
         title: "Get album art",
+        hints: { readOnly: true },
         description:
           "An album's picture as an image, resized by TastyTunes to 480 px ('card', the default) or 320 px ('thumb'); a track answers with its album's picture. When the server has no art, the picture inside the audio file is used (off with Album art from audio files in Settings). Errors when neither has one.",
       },
       {
         name: "play_media",
         title: "Play media",
+        hints: { destructive: true },
         description: `Play an album or track by server_udn + object id (from search_library), or a list of tracks in one call with items (each {server_udn, object_id} or {title, artist?, album?}, queued in order, the answer counting what landed and naming what didn't). start_at plays an album from one of its tracks (1 = the first), replacing the queue. mode 'play_now' (default) keeps the queue, 'play_next'/'append' insert into it; 'replace' CLEARS the queue first — only use replace when asked to, and the answer says how long the replaced queue was. A container over ${LARGE_QUEUE_TRACKS} tracks is refused until the user agrees: ask, then call again with confirm_large: true.`,
       },
     ],
@@ -316,12 +366,14 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "search_radio",
         title: "Search radio",
+        hints: { readOnly: true, openWorld: true },
         description:
           "Find internet-radio stations by name (query) and/or style (genre — queried against the directory's tags, the right way to ask for 'some jazz'). Returns name, stream URL, country, codec, tags.",
       },
       {
         name: "play_radio",
         title: "Play radio",
+        hints: { idempotent: true },
         description:
           "Play an internet-radio stream by URL and display name (from search_radio or a station favorite).",
       },
@@ -337,6 +389,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "list_favorites",
         title: "List favorites",
+        hints: { readOnly: true },
         description:
           "The user's favorites with the keys play_favorite needs, and an album's or track's server_udn and object_id when known.",
       },
@@ -348,12 +401,14 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "add_favorite",
         title: "Add favorite",
+        hints: { idempotent: true },
         description:
           "With no arguments, favorite the currently playing track. For a library album or track, pass its server_udn + object_id from a listing (no streamer needed). For an internet-radio station, pass station_url + station_name (e.g. from search_radio).",
       },
       {
         name: "remove_favorite",
         title: "Remove favorite",
+        hints: { destructive: true, idempotent: true },
         description: "Remove a favorite by its key (see list_favorites).",
       },
     ],
@@ -368,18 +423,21 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "list_playlists",
         title: "List playlists",
+        hints: { readOnly: true },
         description:
           "Stored playlists with their id, track count, runtime, and when each was last played.",
       },
       {
         name: "get_playlist",
         title: "Get playlist",
+        hints: { readOnly: true },
         description:
           "The tracks in one playlist, in order, each with its position (edit_playlist's) and, when stored, its server_udn and object_id.",
       },
       {
         name: "play_playlist",
         title: "Play playlist",
+        hints: { destructive: true },
         description:
           "Replace the play queue with a playlist's tracks. Slow by nature — the streamer takes entries one at a time — and a track no longer on any media server is reported rather than failing the run.",
       },
@@ -389,6 +447,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     id: "history",
     title: "Listening history",
     group: "read",
+    readOnly: true,
     description:
       "Read the local listening record: what played, when, and for how long. What an agent can read is data that reaches that agent's model.",
     tools: [
@@ -414,7 +473,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "history_elsewhere",
         title: "Heard elsewhere",
         description:
-          "Artists heard through AirPlay, a cast, a streaming service or internet radio, with whether the library has them (the Library's rule for an artist page), how often and where they were heard, and the tracks heard, as History's Elsewhere view shows them.",
+          "Artists heard through AirPlay, a cast, a streaming service or internet radio, with whether the library has them (the Library's rule for an artist page), how often and where they were heard, and the tracks heard, as History's Elsewhere view shows them. With in_library 'no' it is the list of music heard elsewhere that the library lacks, the nearest thing to a wish list.",
       },
       {
         name: "history_shelves",
@@ -470,12 +529,14 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "edit_playlist",
         title: "Edit playlist",
+        hints: { destructive: true },
         description:
           "Rename a playlist, take rows out by position (get_playlist's), or move one row, in one call.",
       },
       {
         name: "delete_playlist",
         title: "Delete playlist",
+        hints: { destructive: true, idempotent: true },
         description: "Delete a playlist by id. No undo.",
       },
     ],
@@ -490,36 +551,42 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "get_audio_settings",
         title: "Get audio settings",
+        hints: { readOnly: true },
         description:
           "Current EQ band gains, tilt, and balance, plus the allowed ranges. Errors on streamers without tone controls.",
       },
       {
         name: "set_eq_band",
         title: "Set EQ band",
+        hints: { idempotent: true },
         description:
           "Set one EQ band gain in dB (band index 0–6, low to high frequency; gains clamp to −6..+3). Enables the user EQ when needed.",
       },
       {
         name: "set_tilt",
         title: "Set tone tilt",
+        hints: { idempotent: true },
         description:
           "Set the tone-tilt intensity (negative = warmer/darker, positive = brighter; range from get_audio_settings). Enables tilt when needed.",
       },
       {
         name: "set_balance",
         title: "Set balance",
+        hints: { idempotent: true },
         description:
           "Left/right balance (negative = left, positive = right; range from get_audio_settings).",
       },
       {
         name: "apply_eq_preset",
         title: "Apply EQ preset",
+        hints: { idempotent: true },
         description:
           "Apply one of the user's saved EQ presets by name (get_audio_settings lists them).",
       },
       {
         name: "reset_eq",
         title: "Reset EQ",
+        hints: { idempotent: true },
         description: "Set all 7 EQ bands back to 0 dB — the same as the Flat button in the app.",
       },
     ],
@@ -533,6 +600,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "set_display_brightness",
         title: "Set display brightness",
+        hints: { idempotent: true },
         description:
           "Front-panel brightness: 'off', 'dim', or 'bright'. Errors on headless models.",
       },
@@ -548,12 +616,14 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "set_scene",
         title: "Set scene",
+        hints: { idempotent: true },
         description:
           "Choose the scene for display mode (host 'display') or the Now Playing tile (host 'tile'): a scene id from list_scenes, 'sleeve' for the album art, or 'shuffle'. Takes effect at once; an abstract scene draws once the playing track has been analyzed, and shows the album art until then.",
       },
       {
         name: "set_display_mode",
         title: "Set display mode",
+        hints: { idempotent: true },
         description:
           "Turn display mode, the full-screen scene view of the TastyTunes window, on or off.",
       },
@@ -570,18 +640,21 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "get_lyrics",
         title: "Get lyrics",
+        hints: { openWorld: true },
         description:
           "Lyrics for the currently playing track via LRCLIB. Refuses when the user has lyrics disabled in Settings › Connections.",
       },
       {
         name: "get_artist_info",
         title: "Get artist info",
+        hints: { openWorld: true },
         description:
           "Artist bio via MusicBrainz + Wikipedia — the current artist by default, or a named one. Refuses when the user has Liner notes disabled in Settings › Connections.",
       },
       {
         name: "get_album_info",
         title: "Get album info",
+        hints: { openWorld: true },
         description:
           "Album facts via MusicBrainz + Wikipedia — year, label, genres, credits, summary. The playing album by default, or a named artist + album. Refuses when the user has Liner notes disabled in Settings › Connections.",
       },
@@ -598,6 +671,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "remove_queue_item",
         title: "Remove queue item",
+        hints: { destructive: true },
         description: "Remove one track from the queue by its id (see list_queue). No undo.",
       },
       {
@@ -608,11 +682,13 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "clear_queue",
         title: "Clear queue",
+        hints: { destructive: true, idempotent: true },
         description: "Remove every item from the play queue (the streamer's clear-all).",
       },
       {
         name: "resume_playback",
         title: "Resume where you left off",
+        hints: { destructive: true },
         description:
           "Play the album history_resume names from the track it names: the queue is replaced with that album from that track on (the app's Play from here). Refuses when nothing is left unfinished.",
       },
@@ -629,24 +705,28 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "save_queue_as_preset",
         title: "Save queue as preset",
+        hints: { destructive: true },
         description:
           "Snapshot the whole queue into a preset slot (1–99) with a name. If the slot is occupied the call fails unless overwrite is true — always check list_presets first.",
       },
       {
         name: "repair_preset",
         title: "Repair preset",
+        hints: { destructive: true },
         description:
           "Re-point a preset at content its media server no longer resolves. A preset whose stored object id has gone stale (the server re-mints ids on a rescan) is ACCEPTED by the streamer and then silently ignored — it simply will not play, with no error anywhere. The artwork survives that churn, so this matches the preset's art against the library index and writes the album's CURRENT id back into the same slot. Fails rather than guessing when the artwork matches no album, or more than one. Media presets only: radio presets have no index to match against.",
       },
       {
         name: "save_playing_to_preset",
         title: "Save playing to preset",
+        hints: { destructive: true },
         description:
           "Save the CURRENT playback (a station, or a single track) to a preset slot (1–99); optional name. Occupied slots need overwrite: true. For whole albums or queues use save_queue_as_preset.",
       },
       {
         name: "save_media_to_preset",
         title: "Save media to preset",
+        hints: { destructive: true },
         description:
           "Save a library album, track or other item to a preset slot by its server_udn and object_id, without playing it (for a wake schedule with that album, say). An occupied slot needs overwrite: true.",
       },
@@ -669,11 +749,13 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "set_schedule_enabled",
         title: "Enable/disable schedule",
+        hints: { idempotent: true },
         description: "Arm or disarm one schedule by id (see list_schedules) without deleting it.",
       },
       {
         name: "delete_schedule",
         title: "Delete schedule",
+        hints: { destructive: true, idempotent: true },
         description: "Delete one schedule by id (see list_schedules). No undo.",
       },
     ],

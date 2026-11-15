@@ -25,6 +25,7 @@ import { Segmented } from "@/components/controls/Segmented";
 export function McpSection({ settings, save }: SectionProps): React.JSX.Element {
   const mcp = settings.mcp;
   const lan = mcp.bind === "lan";
+  const localUrl = `http://127.0.0.1:${mcp.port}/mcp`;
   const status = useStore((s) => s.mcpStatus);
   const { copied, copy } = useCopied();
   const tokenConfirm = useConfirmPopover();
@@ -158,8 +159,20 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
                     {tokenConfirm.popover}
                   </div>
                 )}
+                {/* on the local network, Claude Code on THIS computer takes the loopback address:
+                    no token, and it keeps working when the computer's network address changes
+                    (0.16.0: a setup copied from the network line stopped reaching the server) */}
+                {lan && (
+                  <CopyRow
+                    label="This computer"
+                    text={claudeCommand(localUrl, null)}
+                    copied={copied === "claude-local"}
+                    onCopy={() => copy("claude-local", claudeCommand(localUrl, null))}
+                    hint="For Claude Code on this computer. Needs no token, and keeps working if this computer's address changes."
+                  />
+                )}
                 <CopyRow
-                  label="Claude Code"
+                  label={lan ? "Other computer" : "Claude Code"}
                   text={claudeCommand(status.url, lan ? masked : null)}
                   copied={copied === "claude"}
                   onCopy={() =>
@@ -167,6 +180,7 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
                       ? copyWithToken("claude", (token) => claudeCommand(status.url!, token))
                       : copy("claude", claudeCommand(status.url!, null))
                   }
+                  hint={lan ? "For Claude Code on another computer. Carries the token." : undefined}
                 />
                 <CopyRow
                   label="JSON config"

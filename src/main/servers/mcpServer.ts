@@ -22,7 +22,12 @@ import {
 } from "@shared/model";
 import { resumeRun, resumeTarget } from "@shared/model";
 import { playStatsFromRecord } from "../data/playStats";
-import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
+import {
+  MCP_CLUSTERS,
+  mcpClusterEnabled,
+  type McpClusterInfo,
+  type McpToolInfo,
+} from "@shared/mcpCatalog";
 import { app } from "electron";
 import type { MenuCommand } from "@shared/ipc";
 import type { DeviceManager } from "../device/deviceManager";
@@ -48,14 +53,38 @@ import { editTools } from "./mcp/editTools";
 import { sceneTools } from "./mcp/sceneTools";
 import { mediaType, nameKey } from "@shared/keys";
 
+/**
+ * The address another computer on the local network reaches: a private IPv4 on a physical
+ * interface first (0.16.0: the first external address found could be a VPN's, and the setup line
+ * Settings showed then reached nothing).
+ */
 function lanAddress(): string | null {
-  for (const addrs of Object.values(networkInterfaces())) {
-    for (const a of addrs ?? []) {
-      if (a.family === "IPv4" && !a.internal) return a.address;
-    }
-  }
-  return null;
+  const vpn = /^(utun|tun|tap|ppp|wg|ipsec|zt|tailscale|gpd)/i;
+  const privateRange = (ip: string): boolean =>
+    /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
+  const found: { name: string; address: string }[] = [];
+  for (const [name, addrs] of Object.entries(networkInterfaces()))
+    for (const a of addrs ?? [])
+      if (a.family === "IPv4" && !a.internal) found.push({ name, address: a.address });
+  const rank = (c: { name: string; address: string }): number =>
+    (vpn.test(c.name) ? 2 : 0) + (privateRange(c.address) ? 0 : 1);
+  return found.sort((x, y) => rank(x) - rank(y))[0]?.address ?? null;
 }
+
+/**
+ * WHAT A CLIENT SHOWS THE MODEL ONCE (0.16.0, the server's instructions): how to begin, how
+ * library items are addressed, why genres alone won't do, and what is off until the user says.
+ */
+const INSTRUCTIONS = [
+  "TastyTunes controls a Cambridge Audio StreamMagic streamer and knows the user's local music library, listening history, playlists, favorites and presets.",
+  "Call get_status first: it gives the local time and today's date, what is playing, and which tool groups are off.",
+  "Library items are addressed by server_udn and object_id, from search_library, list_albums or list_tracks; a tool that takes tracks takes those ids, or a title with an artist and album.",
+  "To find music by style or era, read library_facets and list_artists and use what you know about the artists, because genre tags are often missing.",
+  "Dynamic range, loudness, tempo and key exist only for analyzed tracks, and answers that use them say how many were measured.",
+  "Don't replace the queue unless the user asks.",
+  "The history tools take local days (YYYY-MM-DD) or a named period.",
+  "Some editing tools are off until the user turns them on in Settings › Integrations.",
+].join(" ");
 
 /** A JSON-RPC request is a few kilobytes; a megabyte is room for any of them. */
 const MAX_BODY_BYTES = 1_000_000;
@@ -81,6 +110,30 @@ function tokenMatches(header: string | undefined, token: string): boolean {
   const want = Buffer.from(`Bearer ${token}`);
   const got = Buffer.from(header.trim());
   return want.length === got.length && timingSafeEqual(want, got);
+}
+
+/** A tool's MCP annotations from the catalog (its own hints, its cluster's read-only flag): every
+ *  hint said outright, since a client assumes a tool may destroy and reach the world unless told. */
+function annotationsOf(
+  cluster: McpClusterInfo,
+  tool: McpToolInfo,
+): {
+  readOnlyHint: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint: boolean;
+} {
+  const readOnly = cluster.readOnly === true || tool.hints?.readOnly === true;
+  return {
+    readOnlyHint: readOnly,
+    ...(readOnly
+      ? {}
+      : {
+          destructiveHint: tool.hints?.destructive === true,
+          idempotentHint: tool.hints?.idempotent === true,
+        }),
+    openWorldHint: tool.hints?.openWorld === true,
+  };
 }
 
 export class McpBridge {
@@ -274,7 +327,10 @@ export class McpBridge {
 
   /** A fresh server per request, registering only the currently-enabled tools. */
   private buildServer(): McpServer {
-    const server = new McpServer({ name: "tastytunes", version: app.getVersion() });
+    const server = new McpServer(
+      { name: "tastytunes", version: app.getVersion() },
+      { instructions: INSTRUCTIONS },
+    );
     const impls = this.toolImpls();
     const mcp = getSettings().mcp;
     const { disabledTools } = mcp;
@@ -292,7 +348,7 @@ export class McpBridge {
             title: tool.title,
             description: tool.description,
             inputSchema: strictInput(tool.name, impl.inputSchema),
-            annotations: { readOnlyHint: cluster.readOnly === true, openWorldHint: false },
+            annotations: annotationsOf(cluster, tool),
           },
           (async (args: Record<string, unknown>) => {
             try {
@@ -304,6 +360,9 @@ export class McpBridge {
         );
       }
     }
+    // a fresh server per request can never tell a client its list changed: say so (0.16.0; the SDK
+    // claims listChanged as soon as a tool is registered)
+    server.server.registerCapabilities({ tools: { listChanged: false } });
     return server;
   }
 
