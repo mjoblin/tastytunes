@@ -5,7 +5,17 @@
 
 const STILL_OFF = "It may be off or in eco standby.";
 
-export function connectTrouble(reason: string | null | undefined): string | null {
+// A Mac that asks before an app reaches the local network (macOS 15 and later) fails a blocked
+// app's connect as no route to host, the error a streamer that is off gives too, so both are
+// offered. The setting can also show an app as allowed while still blocking it, which turning it
+// off and on clears.
+const LOCAL_NETWORK =
+  "If it's on, your Mac may be blocking TastyTunes from your local network. Check System Settings › Privacy & Security › Local Network, and if TastyTunes is already on there, turn it off and on.";
+
+export function connectTrouble(
+  reason: string | null | undefined,
+  opts: { localNetworkPrivacy?: boolean } = {},
+): string | null {
   if (!reason) return null;
   if (/ECONNREFUSED/.test(reason)) {
     return "Something at that address refused the connection, so it may not be the streamer.";
@@ -15,9 +25,11 @@ export function connectTrouble(reason: string | null | undefined): string | null
   }
   if (/ENOTFOUND|EAI_AGAIN/.test(reason)) return "That name isn't known on your network.";
   // unreachable and timed out read the same: either way, nothing there is answering
-  if (/EHOSTUNREACH|ENETUNREACH|EHOSTDOWN|ETIMEDOUT|timed out/i.test(reason)) {
-    return `Nothing answers at that address. ${STILL_OFF}`;
+  const nothing = `Nothing answers at that address. ${STILL_OFF}`;
+  if (/EHOSTUNREACH|ENETUNREACH|EHOSTDOWN/.test(reason)) {
+    return opts.localNetworkPrivacy ? `${nothing} ${LOCAL_NETWORK}` : nothing;
   }
+  if (/ETIMEDOUT|timed out/i.test(reason)) return nothing;
   return null;
 }
 

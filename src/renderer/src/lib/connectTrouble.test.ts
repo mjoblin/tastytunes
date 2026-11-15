@@ -17,6 +17,17 @@ describe("connectTrouble", () => {
     }
   });
 
+  it("offers the Mac's Local Network setting beside an off streamer, only for no route to host", () => {
+    const mac = { localNetworkPrivacy: true };
+    const blocked = connectTrouble("connect EHOSTUNREACH 192.168.1.20:80", mac);
+    expect(blocked).toBe(
+      "Nothing answers at that address. It may be off or in eco standby. If it's on, your Mac may be blocking TastyTunes from your local network. Check System Settings › Privacy & Security › Local Network, and if TastyTunes is already on there, turn it off and on.",
+    );
+    // a timeout reached the network and found nothing there; a Mac without the setting has no line
+    expect(connectTrouble("connect ETIMEDOUT 192.168.1.20:80", mac)).not.toContain("Local Network");
+    expect(connectTrouble("connect EHOSTUNREACH 192.168.1.20:80")).not.toContain("Local Network");
+  });
+
   it("has nothing to add for a reason that says nothing", () => {
     expect(connectTrouble("closed (code 1006)")).toBeNull();
     expect(connectTrouble(null)).toBeNull();

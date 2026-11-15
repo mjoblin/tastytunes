@@ -350,13 +350,24 @@ function ConnectGate(): React.JSX.Element {
   const busy =
     connection.phase === "connecting" ||
     (connection.phase === "disconnected" && connection.reconnecting);
+  // A Mac that asks before an app reaches the local network (macOS 15 and later) drops both the
+  // search and an IP typed by hand when the ask was declined, so the still-looking note names
+  // the setting there (main's app/localNetwork), and so does a reconnect's no route to host
+  const [localNetworkPrivacy, setLocalNetworkPrivacy] = useState(false);
+  useEffect(() => {
+    void tt
+      .localNetworkPrivacy()
+      .then(setLocalNetworkPrivacy)
+      .catch(() => {});
+  }, []);
   // What the last failed try said, in plain words, kept across the retries (the phase flips
   // between connecting and disconnected on each, and only the disconnected one carries a reason)
   const [trouble, setTrouble] = useState<string | null>(null);
   useEffect(() => {
     if (!busy) setTrouble(null);
-    else if (connection.phase === "disconnected") setTrouble(connectTrouble(connection.reason));
-  }, [busy, connection]);
+    else if (connection.phase === "disconnected")
+      setTrouble(connectTrouble(connection.reason, { localNetworkPrivacy }));
+  }, [busy, connection, localNetworkPrivacy]);
 
   // A failing reconnect gets RECONNECT_GRACE_MS of benefit of the doubt (a
   // blip should read as a blip), then the gate stops being a wall: the
@@ -389,16 +400,6 @@ function ConnectGate(): React.JSX.Element {
     prevDiscovering.current = discovering;
   }, [discovering]);
   const stillLooking = !busy && devices.length === 0 && sweeps >= 3;
-  // A Mac that asks before an app reaches the local network (macOS 15 and later) drops both the
-  // search and an IP typed by hand when the ask was declined, so the still-looking note names
-  // the setting there (main's app/localNetwork)
-  const [localNetworkPrivacy, setLocalNetworkPrivacy] = useState(false);
-  useEffect(() => {
-    void tt
-      .localNetworkPrivacy()
-      .then(setLocalNetworkPrivacy)
-      .catch(() => {});
-  }, []);
   // THE ADDRESS IN PLACE (0.10.0, the first five minutes): typing a streamer's IP opens a
   // field here rather than sending a new owner off to the Device screen
   const [ipOpen, setIpOpen] = useState(false);
