@@ -76,6 +76,11 @@ function eventRow(
         album: e.album,
         seconds_played: e.playedSeconds,
       };
+    default: {
+      // a kind a later version writes: readers pass it through untouched (the record's format)
+      const later: Record<string, unknown> = e;
+      return { ...later, at };
+    }
   }
 }
 
