@@ -51,18 +51,61 @@ export function defineTool(tool: ToolImpl): ToolImpl {
   return tool;
 }
 
+/** A tool's answer: a sentence as it is, anything else as compact JSON (0.16.0: an indent of two
+ *  was a quarter to two fifths of every answer, and an agent reads neither). */
 export const ok = (payload: unknown): ToolResult => ({
   content: [
-    {
-      type: "text",
-      text: typeof payload === "string" ? payload : JSON.stringify(payload, null, 2),
-    },
+    { type: "text", text: typeof payload === "string" ? payload : JSON.stringify(payload) },
   ],
 });
 export const err = (message: string): ToolResult => ({
   content: [{ type: "text", text: message }],
   isError: true,
 });
+
+/**
+ * ONE TIME FORMAT (0.16.0): a moment as every tool says it, local time with its offset
+ * ("2026-11-14T21:55:03-08:00"), in the offset it happened at when the record kept one (a line's
+ * tzOffsetMin, as Date's getTimezoneOffset: minutes west of UTC), else this machine's. Before, the
+ * record's times came back in UTC while the days an agent asks for are local, and two answers gave
+ * epoch milliseconds.
+ */
+export function localTime(ms: number, tzOffsetMin?: number | null): string {
+  const tz = tzOffsetMin ?? new Date(ms).getTimezoneOffset();
+  const shifted = new Date(ms - tz * 60_000).toISOString().slice(0, 19);
+  const off = Math.abs(tz);
+  const p = (n: number): string => String(n).padStart(2, "0");
+  return `${shifted}${tz <= 0 ? "+" : "-"}${p(Math.floor(off / 60))}:${p(off % 60)}`;
+}
+/** localTime for a moment that may be missing (0, null: never). */
+export const localTimeOrNull = (ms: number | null | undefined): string | null =>
+  ms != null && ms > 0 ? localTime(ms) : null;
+
+/** Brief rows by default, every field on request (0.16.0, the rows an agent reads most). */
+export const DETAIL_ARG = z
+  .enum(["brief", "full"])
+  .optional()
+  .describe("Default 'brief', the fields an answer needs; 'full' adds every stored field.");
+
+/**
+ * STRICT ARGUMENTS (0.16.0): a tool's arguments as a strict object, so an argument the tool does
+ * not take is an error naming the ones it does. Before, an unknown argument was dropped and the
+ * call answered as if it were absent: list_tracks with a query returned the whole library.
+ */
+export function strictInput(
+  name: string,
+  shape: ZodRawShape = {},
+): z.ZodObject<ZodRawShape, z.core.$strict> {
+  const names = Object.keys(shape);
+  return z.strictObject(shape, {
+    error: (iss) =>
+      iss.code === "unrecognized_keys"
+        ? `${name} doesn't take ${iss.keys.map((k) => `'${k}'`).join(" or ")}. ${
+            names.length > 0 ? `It takes ${names.join(", ")}.` : "It takes no arguments."
+          }`
+        : undefined,
+  });
+}
 
 /** Today as the history tools' days are written, local "YYYY-MM-DD" (an error names it, since an
  *  agent may not know the date). */
@@ -377,7 +420,7 @@ export const status = (ctx: ToolContext): unknown => {
     sleep_timer: s.sleep
       ? {
           action: s.sleep.action,
-          fires_at: s.sleep.firesAt,
+          fires_at: s.sleep.firesAt != null ? localTime(s.sleep.firesAt) : null,
           end_of_track: s.sleep.minutes == null,
         }
       : null,

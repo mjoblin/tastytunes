@@ -22,6 +22,7 @@ import {
   largeQueueAsk,
   freshObjectId,
   defineTool,
+  localTimeOrNull,
 } from "./toolkit";
 import { nameKey } from "@shared/keys";
 
@@ -104,7 +105,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
             name: p.name,
             tracks: p.items.length,
             seconds: p.items.reduce((n, i) => n + (i.durationSecs ?? 0), 0),
-            last_played: p.lastPlayedAt ?? null,
+            last_played: localTimeOrNull(p.lastPlayedAt),
             // surfaced because a run that skipped tracks is worth knowing
             // about before you play it again
             missing_last_time: p.lastMissing ?? [],

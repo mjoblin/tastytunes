@@ -37,6 +37,7 @@ import {
   type ToolContext,
   type ToolImpl,
   err,
+  strictInput,
 } from "./mcp/toolkit";
 import { deviceTools } from "./mcp/deviceTools";
 import { libraryTools } from "./mcp/libraryTools";
@@ -288,7 +289,7 @@ export class McpBridge {
           {
             title: tool.title,
             description: tool.description,
-            inputSchema: impl.inputSchema,
+            inputSchema: strictInput(tool.name, impl.inputSchema),
             annotations: { readOnlyHint: cluster.readOnly === true, openWorldHint: false },
           },
           (async (args: Record<string, unknown>) => {

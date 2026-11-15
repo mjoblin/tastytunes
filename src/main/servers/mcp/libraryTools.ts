@@ -56,7 +56,9 @@ import {
   largeQueueAsk,
   freshObjectId,
   defineTool,
+  localTime,
   DECADE_ARG,
+  DETAIL_ARG,
   decadeStart,
   decadeError,
   inDecade,
@@ -152,7 +154,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                       albums: st.albums,
                       artists: st.artists,
                       tracks: st.tracks,
-                      built_at: st.builtAt != null ? new Date(st.builtAt).toISOString() : null,
+                      built_at: st.builtAt != null ? localTime(st.builtAt) : null,
                       // how the index was built and every reconciliation that changed something —
                       // the SHAPE of the server's answers, so an agent can explain what it sees
                       ...(st.profile
@@ -332,6 +334,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           ),
         limit: z.number().int().min(1).max(100).optional().describe("Default 40."),
         offset: z.number().int().min(0).optional().describe("For paging; default 0."),
+        detail: DETAIL_ARG,
       },
       // Purely index-backed (the lenses' feedstock) — works even while the
       // streamer itself is off, so no connected() gate.
@@ -463,12 +466,15 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           returned: page.length,
           albums: page.map((n) => {
             const { sum } = summaryFor(n);
+            // brief by default (0.16.0): the server's name, the folder, the size, the odd formats,
+            // the composers and a false flag on every row were most of a page
+            const full = a.detail === "full";
             return {
               server_udn: n.serverUdn,
-              server: n.serverName,
+              ...(full ? { server: n.serverName } : {}),
               object_id: n.id,
               title: n.title,
-              ...(n.titlePath?.length ? { folder: n.titlePath } : {}),
+              ...(full && n.titlePath?.length ? { folder: n.titlePath } : {}),
               artist: n.artist,
               year: n.year,
               genres: n.genre ?? [],
@@ -477,18 +483,17 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               tracks: sum.tracks,
               ...(sum.discs > 1 ? { discs: sum.discs } : {}),
               runtime_seconds: sum.runtimeSecs,
-              ...(sum.sizeBytes > 0 ? { size_bytes: sum.sizeBytes } : {}),
+              ...(full && sum.sizeBytes > 0 ? { size_bytes: sum.sizeBytes } : {}),
               ...(sum.format ? { format: sum.format } : {}),
-              ...(sum.formatOdd > 0 ? { format_tracks_differ: sum.formatOdd } : {}),
-              hires: sum.hires,
+              ...(full && sum.formatOdd > 0 ? { format_tracks_differ: sum.formatOdd } : {}),
+              ...(full || sum.hires ? { hires: sum.hires } : {}),
               ...(albumDr(n) != null ? { dr: albumDr(n) } : {}),
-              ...(sum.composers.length > 0 ? { composers: sum.composers } : {}),
-              is_compilation: sum.isCompilation,
+              ...(full && sum.composers.length > 0 ? { composers: sum.composers } : {}),
+              ...(full || sum.isCompilation ? { is_compilation: sum.isCompilation } : {}),
               ...(stats
                 ? {
                     plays: tallyOf(n).plays,
-                    last_played:
-                      tallyOf(n).lastAt > 0 ? new Date(tallyOf(n).lastAt).toISOString() : null,
+                    last_played: tallyOf(n).lastAt > 0 ? localTime(tallyOf(n).lastAt) : null,
                   }
                 : {}),
             };
@@ -765,7 +770,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               ...(bpm != null ? { bpm } : {}),
               ...(key != null ? { key } : {}),
               plays: st?.plays ?? 0,
-              last_played: st ? new Date(st.lastAt).toISOString() : null,
+              last_played: st ? localTime(st.lastAt) : null,
             };
           }),
         });

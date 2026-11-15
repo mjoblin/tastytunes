@@ -19,9 +19,9 @@ import { nameKey } from "@shared/keys";
  *   run never reached the album's middle, and nothing since for a week.
  * - MORE FROM ARTISTS YOU PLAY: unplayed albums by your most-played artists.
  * - NOT HEARD IN A WHILE: played, then left for REDISCOVER_QUIET_DAYS (the
- *   MCP's history_rediscover rule, through the same albumTally).
- * - NEVER PLAYED: no recorded play since the record began (history_unplayed's
- *   rule and its order, artist then title).
+ *   MCP list_albums sorts by last played through the same albumTally).
+ * - NEVER PLAYED: no recorded play since the record began, in order of artist
+ *   then title (the MCP's list_albums with played false reads the same tally).
  */
 export interface ShelfAlbum {
   album: MediaNode;
