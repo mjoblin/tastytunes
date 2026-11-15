@@ -370,7 +370,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Search radio",
         hints: { readOnly: true, openWorld: true },
         description:
-          "Find internet-radio stations by name (query) and/or style (genre — queried against the directory's tags, the right way to ask for 'some jazz'). Returns name, stream URL, country, codec, tags.",
+          "Search the internet-radio directory by name and/or genre, narrowed by country, language and a lowest bitrate, sorted by listeners, votes or bitrate, a page at a time: each station's stream URL (for play_radio or add_favorite), country code, codec, bitrate in kbps and votes.",
       },
       {
         name: "play_radio",

@@ -16,4 +16,10 @@ export interface RadioStation {
   codec: string;
   /** kbps; 0 = unknown. */
   bitrate: number;
+  /** ISO 3166-1 alpha-2, as the directory gives it (0.16.0, for an agent's answer). */
+  countryCode?: string;
+  /** The directory's language names, comma-separated. */
+  language?: string;
+  /** Listeners' votes for the station in the directory. */
+  votes?: number;
 }
