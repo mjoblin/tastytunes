@@ -10,13 +10,13 @@ import {
   type Schedule,
   type SleepTimer,
 } from "@shared/model";
-import { type Favorite, heartOf, heartPeersFrom, resumeRun } from "@shared/model";
+import { type Favorite, heartOf, heartPeersFrom, resumeRun, trackArtists } from "@shared/model";
 import { audioCaps, type ZonePlayState } from "@shared/smoip";
 import type { DeviceManager } from "../../device/deviceManager";
 import { getSettings } from "../../data/persist";
 import { pools as indexPools, revalidate } from "../../media/mediaIndex";
-import { bestInIndexes, indexFinder } from "../../media/resolveContent";
-import { nameKey, searchFold } from "@shared/keys";
+import { indexFinder } from "../../media/resolveContent";
+import { matchesQuery, nameKey, searchFold } from "@shared/keys";
 import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
 
 // The MCP bridge's TOOLKIT (2026-09-13, the bridge split: 74 tool implementations
@@ -213,19 +213,34 @@ export const inDecade = (year: string | null | undefined, start: number): boolea
  *  while "Hip-Hop" found six albums). */
 export const genreKey = (g: string): string => searchFold(g).replace(/\s+/g, "");
 
-/** Edits from one string to another: an insert, a delete, a change, or two neighbors swapped. */
-function editDistance(a: string, b: string): number {
-  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
-    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
-  );
-  for (let i = 1; i <= a.length; i++)
+/**
+ * Edits from one string to another (an insert, a delete, a change, or two neighbors swapped), or
+ * more than `max` once it is sure to be: a miss's nearest names are compared against a whole
+ * library, and a full table for each name had taken a fifth of a second a miss on 12,000 titles.
+ * Two rows past `max` in a row settle it (a swap reaches back two rows).
+ */
+function editDistance(a: string, b: string, max: number): number {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let before: number[] = [];
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  let prevLow = 0;
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let low = i;
     for (let j = 1; j <= b.length; j++) {
       const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
       if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
-        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+        v = Math.min(v, before[j - 2] + 1);
+      cur.push(v);
+      if (v < low) low = v;
     }
-  return d[a.length][b.length];
+    if (low > max && prevLow >= max) return max + 1;
+    before = prev;
+    prev = cur;
+    prevLow = low;
+  }
+  return prev[b.length];
 }
 
 /**
@@ -244,10 +259,10 @@ export function nearestNames(query: string, names: Iterable<string>, max = 5): s
   for (const name of new Set(names)) {
     const f = searchFold(name).replace(/\s+/g, " ").trim();
     if (f === "") continue;
-    let best = f.includes(q) || q.includes(f) ? 0 : editDistance(q, f);
+    let best = f.includes(q) || q.includes(f) ? 0 : editDistance(q, f, allowed);
     const words = f.split(" ");
     for (let i = 0; best > 0 && i + qWords <= words.length; i++)
-      best = Math.min(best, editDistance(q, words.slice(i, i + qWords).join(" ")));
+      best = Math.min(best, editDistance(q, words.slice(i, i + qWords).join(" "), allowed));
     if (best <= allowed) scored.set(name, best);
   }
   return [...scored]
@@ -413,17 +428,25 @@ export async function freshObjectId(
  * its ids from a listing or its content. One shape for every tool, so a list an agent holds goes
  * straight into a playlist or the queue.
  */
-export const TRACK_REF = z.union([
-  z.strictObject({
-    server_udn: z.string().describe("From a listing (list_tracks, search_library)."),
-    object_id: z.string().describe("The track's id from the same listing."),
-  }),
-  z.strictObject({
-    title: z.string().min(1).describe("The track's title, as the library has it."),
-    artist: z.string().optional(),
-    album: z.string().optional().describe("Tells apart a title the library has more than once."),
-  }),
-]);
+export const TRACK_REF = z.union(
+  [
+    z.strictObject({
+      server_udn: z.string().describe("From a listing (list_tracks, search_library)."),
+      object_id: z.string().describe("The track's id from the same listing."),
+    }),
+    z.strictObject({
+      title: z
+        .string()
+        .min(1)
+        .describe(
+          "The track's title, case, accents and punctuation ignored; with artist, a trailing part in parentheses or brackets may be left off.",
+        ),
+      artist: z.string().optional(),
+      album: z.string().optional().describe("Tells apart a title the library has more than once."),
+    }),
+  ],
+  { error: "A track is {server_udn, object_id} from a listing, or {title, artist?, album?}." },
+);
 export type TrackRef = z.infer<typeof TRACK_REF>;
 export const tracksArg = (max: number) =>
   z
@@ -450,39 +473,231 @@ export const itemOfNode = (node: MediaNode, udn: string, serverName?: string): P
 export const refLabel = (ref: TrackRef): string =>
   "object_id" in ref ? ref.object_id : ref.artist ? `${ref.title} · ${ref.artist}` : ref.title;
 
-/**
- * A reference to the library track it names, read from the index: ids must name a track (an
- * album's id is not one), content is matched as a heal matches it (resolveContent's rule, the
- * album telling twins apart). Null when the index has no such track.
- */
-export function trackOfRef(ref: TrackRef): PlaylistItem | null {
-  if ("object_id" in ref) {
-    const pool = indexPools().find((p) => p.udn === ref.server_udn);
-    const node = pool?.tracks.find((n) => n.id === ref.object_id);
-    return pool && node ? itemOfNode(node, pool.udn, pool.serverName) : null;
+/** A title as an agent's reference compares it: folded as search folds it (case, accents and
+ *  punctuation set aside), its spaces collapsed, so "dont look back" is Don't Look Back. */
+export const titleFold = (s: string | null | undefined): string =>
+  searchFold(s).replace(/\s+/g, " ").trim();
+
+/** A title with its trailing parenthesized or bracketed parts set aside ("Harbour Lights (feat.
+ *  June Vale)" is "Harbour Lights"), or the title itself when that would leave nothing. */
+export function bareTitle(title: string): string {
+  let t = title.trim();
+  for (;;) {
+    const next = t.replace(/\s*(?:\([^()]*\)|\[[^[\]]*\])$/, "").trim();
+    if (next === t || next === "") return t;
+    t = next;
   }
-  const hit = bestInIndexes({
-    title: ref.title,
-    artist: ref.artist ?? null,
-    album: ref.album ?? null,
-  });
-  return hit ? itemOfNode(hit.node, hit.serverUdn, hit.serverName) : null;
 }
 
-/** Several references at once: the tracks found, in order, and the labels of those not found. */
-export function tracksOfRefs(refs: readonly TrackRef[]): {
-  items: PlaylistItem[];
-  missed: string[];
-} {
-  const items: PlaylistItem[] = [];
-  const missed: string[] = [];
-  for (const ref of refs) {
-    const item = trackOfRef(ref);
-    if (item) items.push(item);
-    else missed.push(refLabel(ref));
-  }
-  return { items, missed };
+/** What the title match reads of an item: its title and the names it is credited to. */
+export interface Titled {
+  title: string | null | undefined;
+  credits: ReadonlyArray<string | null | undefined>;
 }
+export interface TitleRef {
+  title: string;
+  artist?: string | null;
+}
+
+/**
+ * ONE TITLE MATCH FOR AN AGENT (0.16.0), asked by every tool that takes a title (a track
+ * reference, history_stats, history_first_listen), so a song named from memory is found. The
+ * title is folded as search folds it; failing that, with an artist named, a title matches once its
+ * trailing parenthesized or bracketed part is set aside ("Harbour Lights" by Dusk Parade is
+ * "Harbour Lights (feat. June Vale)"). A named artist is matched folded, each of its words among
+ * the item's credits, and an item crediting no one is not ruled out by it (resolveContent's
+ * asymmetry). Before, search folded while a track reference and the history tools matched the
+ * title exactly, so a playlist lost the songs an agent spelled without their apostrophe and
+ * history_stats answered zero plays for them. Built once for many references.
+ */
+export function titleMatcher<T>(
+  items: Iterable<T>,
+  read: (item: T) => Titled,
+): (ref: TitleRef) => T[] {
+  type Entry = { item: T; credits: Titled["credits"] };
+  const byTitle = new Map<string, Entry[]>();
+  const byBare = new Map<string, Entry[]>();
+  const add = (into: Map<string, Entry[]>, key: string, e: Entry): void => {
+    const list = into.get(key);
+    if (list) list.push(e);
+    else into.set(key, [e]);
+  };
+  for (const item of items) {
+    const { title, credits } = read(item);
+    const folded = titleFold(title);
+    if (!title || folded === "") continue;
+    const e = { item, credits };
+    add(byTitle, folded, e);
+    const bare = titleFold(bareTitle(title));
+    if (bare !== folded && bare !== "") add(byBare, bare, e);
+  }
+  return (ref) => {
+    const want = titleFold(ref.title);
+    if (want === "") return [];
+    const artist = ref.artist?.trim() ? ref.artist : null;
+    const credited = (e: Entry): boolean =>
+      artist == null || e.credits.every((c) => !c) || matchesQuery(artist, e.credits);
+    const folded = (byTitle.get(want) ?? []).filter(credited);
+    if (folded.length > 0 || artist == null) return folded.map((e) => e.item);
+    return (byBare.get(want) ?? []).filter(credited).map((e) => e.item);
+  };
+}
+
+/** The titles nearest a reference that matched nothing: among the named artist's own when any of
+ *  theirs is near, else among them all. */
+export function nearestTitles<T>(
+  ref: TitleRef,
+  items: Iterable<T>,
+  read: (item: T) => Titled,
+): string[] {
+  const all: string[] = [];
+  const theirs: string[] = [];
+  for (const item of items) {
+    const { title, credits } = read(item);
+    if (!title) continue;
+    all.push(title);
+    if (ref.artist && matchesQuery(ref.artist, credits)) theirs.push(title);
+  }
+  const near = theirs.length > 0 ? nearestNames(ref.title, theirs) : [];
+  return near.length > 0 ? near : nearestNames(ref.title, all);
+}
+
+/** A library track as an answer names it, ids included. */
+export interface TrackRow {
+  title: string;
+  artist: string | null;
+  album: string | null;
+  server_udn: string;
+  object_id: string;
+}
+/** A reference that named no one track: its place in the list sent, what it said, and why. */
+export interface RefMiss {
+  index: number;
+  ref: string;
+  note: string;
+  nearest_titles?: string[];
+  candidates?: TrackRow[];
+}
+/** A reference taken as a close match (folded, or a trailing part set aside), and what it became. */
+export interface RefClose {
+  index: number;
+  ref: string;
+  title: string;
+  artist: string | null;
+  album: string | null;
+}
+export interface RefsRead {
+  items: PlaylistItem[];
+  /** Each item's place in the list sent. */
+  at: number[];
+  close: RefClose[];
+  missed: RefMiss[];
+}
+
+/** Misses past this many are named without nearest titles (each is a pass over the library). */
+const NEAREST_FOR = 10;
+
+/**
+ * References to the library tracks they name, read from the index once for them all. Ids must
+ * name a track (an album's id is said to be one). Content is matched first as a heal matches it
+ * (resolveContent's rule, the album telling twins apart), then by the agent's title match: one
+ * track, or one title on several albums (the album given telling them apart), is taken and named
+ * among the close matches; titles that differ even once folded are different songs ("Paper Moons
+ * [Demo]" and "Paper Moons [Live Demo]"), so those come back as candidates. Every miss is named
+ * with its place in the list (0.16.0: four misses had answered with three names and "+1 more").
+ * `early` holds the places already known missed, with why (an id the drive has re-minted).
+ */
+export function readTrackRefs(
+  refs: readonly TrackRef[],
+  early: ReadonlyMap<number, string> = new Map(),
+): RefsRead {
+  const groups = indexPools();
+  const exact = indexFinder();
+  type Hit = { node: MediaNode; pool: MediaIndexPools };
+  let every: Hit[] | null = null;
+  const tracks = (): Hit[] =>
+    (every ??= groups.flatMap((pool) => pool.tracks.map((node) => ({ node, pool }))));
+  const read = (h: Hit): Titled => ({
+    title: h.node.title,
+    credits: [...trackArtists(h.node), h.node.albumArtist],
+  });
+  let loose: ((ref: TitleRef) => Hit[]) | null = null;
+  const row = (h: Hit): TrackRow => ({
+    title: h.node.title,
+    artist: h.node.artist,
+    album: h.node.album,
+    server_udn: h.node.serverUdn ?? h.pool.udn,
+    object_id: h.node.id,
+  });
+  const out: RefsRead = { items: [], at: [], close: [], missed: [] };
+  const take = (index: number, item: PlaylistItem): void => {
+    out.items.push(item);
+    out.at.push(index);
+  };
+  refs.forEach((ref, index) => {
+    const miss = (note: string, more: Partial<RefMiss> = {}): void => {
+      out.missed.push({ index, ref: refLabel(ref), note, ...more });
+    };
+    const already = early.get(index);
+    if (already != null) return miss(already);
+    if ("object_id" in ref) {
+      const pool = groups.find((p) => p.udn === ref.server_udn);
+      const node = pool?.tracks.find((n) => n.id === ref.object_id);
+      if (pool && node) return take(index, itemOfNode(node, pool.udn, pool.serverName));
+      if (pool?.albums.some((n) => n.id === ref.object_id))
+        return miss("An album's id, not a track's: get_media_info lists its tracks.");
+      return miss(
+        pool
+          ? "No track with that id in that server's index."
+          : "No indexed server with that server_udn.",
+      );
+    }
+    const hit = exact({ title: ref.title, artist: ref.artist ?? null, album: ref.album ?? null });
+    if (hit) return take(index, itemOfNode(hit.node, hit.serverUdn, hit.serverName));
+    loose ??= titleMatcher(tracks(), read);
+    const hits = loose(ref);
+    if (hits.length === 0)
+      return miss(
+        "Not in the library index.",
+        out.missed.length < NEAREST_FOR
+          ? { nearest_titles: nearestTitles(ref, tracks(), read) }
+          : {},
+      );
+    // the album given narrows them first, when any of them is on it
+    const onAlbum =
+      ref.album != null ? hits.filter((h) => titleFold(h.node.album) === titleFold(ref.album)) : [];
+    const kept = onAlbum.length > 0 ? onAlbum : hits;
+    const songs = new Map<string, Hit>();
+    for (const h of kept)
+      if (!songs.has(titleFold(h.node.title))) songs.set(titleFold(h.node.title), h);
+    if (songs.size > 1)
+      return miss("Names more than one track: give one's server_udn and object_id.", {
+        candidates: [...songs.values()].slice(0, 10).map(row),
+      });
+    const pick = kept[0];
+    take(index, itemOfNode(pick.node, pick.pool.udn, pick.pool.serverName));
+    out.close.push({
+      index,
+      ref: refLabel(ref),
+      title: pick.node.title,
+      artist: pick.node.artist,
+      album: pick.node.album,
+    });
+  });
+  return out;
+}
+
+/** What an answer adds about its references: the close matches and the misses, when any. */
+export const refsNote = (r: RefsRead): Record<string, unknown> => ({
+  ...(r.close.length > 0 ? { close_matches: r.close } : {}),
+  ...(r.missed.length > 0 ? { not_found: r.missed } : {}),
+});
+
+/** The answer when no reference named a track: each miss, with its place and why. */
+export const noTrackFound = (r: RefsRead): ToolResult =>
+  err(
+    `None of those names one track in the library index. Use list_tracks or search_library for their ids. ${JSON.stringify({ not_found: r.missed })}`,
+  );
 
 /**
  * IDS ON EVERY ROW (0.16.0): a row that names a library track or album, a history line, a queue
@@ -537,12 +752,6 @@ export function rowIds(): {
     },
   };
 }
-
-/** A few named and the rest counted: an answer about many tracks stays short. */
-export const someTitles = (titles: readonly string[], shown = 3): string => {
-  const more = titles.length - shown;
-  return `${titles.slice(0, shown).join(", ")}${more > 0 ? `, +${more} more` : ""}`;
-};
 
 export const kindOf = (n: MediaNode): "album" | "artist" | "track" | "folder" =>
   n.upnpClass.includes("musicAlbum")
@@ -746,6 +955,7 @@ export async function settle(
   before: Snapshot,
   done: string | ((now: Snapshot) => string),
   settled: (before: Snapshot, now: Snapshot) => boolean,
+  extra: Record<string, unknown> = {},
 ): Promise<ToolResult> {
   const until = Date.now() + 1500;
   let now: Snapshot = t.snapshot();
@@ -756,6 +966,7 @@ export async function settle(
   return ok({
     done: typeof done === "string" ? done : done(now),
     now: { ...nowState(now), ...(t.window ? {} : { streamer: t.name }) },
+    ...extra,
   });
 }
 

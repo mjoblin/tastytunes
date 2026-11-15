@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  bareTitle,
   dayRange,
   decadeStart,
   genreKey,
@@ -9,8 +10,11 @@ import {
   localDayStart,
   localTime,
   localToday,
+  nearestTitles,
   ok,
   strictInput,
+  titleMatcher,
+  type Titled,
 } from "./toolkit";
 
 describe("the history tools' days, read once", () => {
@@ -152,5 +156,64 @@ describe("the library's shape for an agent", () => {
       "Electro Swing",
       "Electronic",
     ]);
+  });
+});
+
+describe("one title match for an agent's reference", () => {
+  const library: Titled[] = [
+    { title: "Don't Look Back", credits: ["The Night Ferries"] },
+    { title: "Harbour Lights (feat. June Vale)", credits: ["Dusk Parade", "June Vale"] },
+    { title: "Paper Moons [Demo]", credits: ["Glass Orchard"] },
+    { title: "Paper Moons [Live Demo]", credits: ["Glass Orchard"] },
+    { title: "Ace of Spades", credits: ["Motörhead"] },
+    { title: "Intro", credits: [] },
+  ];
+  const read = (t: Titled): Titled => t;
+  const find = titleMatcher(library, read);
+  const titles = (ref: { title: string; artist?: string }): string[] =>
+    find(ref).map((t) => t.title ?? "");
+
+  it("folds the title as search does", () => {
+    expect(titles({ title: "dont look back" })).toEqual(["Don't Look Back"]);
+    expect(titles({ title: "DON'T  LOOK BACK", artist: "night ferries" })).toEqual([
+      "Don't Look Back",
+    ]);
+    expect(titles({ title: "ace of spades", artist: "motorhead" })).toEqual(["Ace of Spades"]);
+  });
+
+  it("sets a trailing part aside only with an artist named", () => {
+    expect(titles({ title: "Harbour Lights", artist: "Dusk Parade" })).toEqual([
+      "Harbour Lights (feat. June Vale)",
+    ]);
+    expect(titles({ title: "Harbour Lights" })).toEqual([]);
+    // two songs once their parts are set aside: both, for the caller to offer
+    expect(titles({ title: "Paper Moons", artist: "Glass Orchard" })).toEqual([
+      "Paper Moons [Demo]",
+      "Paper Moons [Live Demo]",
+    ]);
+  });
+
+  it("holds a named artist to the credits, but not against an item crediting no one", () => {
+    expect(titles({ title: "dont look back", artist: "Glass Orchard" })).toEqual([]);
+    expect(titles({ title: "Harbour Lights", artist: "The Night Ferries" })).toEqual([]);
+    expect(titles({ title: "intro", artist: "Anyone" })).toEqual(["Intro"]);
+  });
+
+  it("sets aside every trailing part, and keeps a title that is only one", () => {
+    expect(bareTitle("Song (feat. X) [Remastered 2011]")).toBe("Song");
+    expect(bareTitle("Harbour Lights (feat. June Vale)")).toBe("Harbour Lights");
+    expect(bareTitle("(Untitled)")).toBe("(Untitled)");
+    expect(bareTitle("Song (Part 1) Reprise")).toBe("Song (Part 1) Reprise");
+  });
+
+  it("offers the nearest titles for a miss, the named artist's first", () => {
+    expect(nearestTitles({ title: "ace of spadez", artist: "Motorhead" }, library, read)).toEqual([
+      "Ace of Spades",
+    ]);
+    // a wrong artist still finds the title among them all
+    expect(
+      nearestTitles({ title: "dont look bak", artist: "Glass Orchard" }, library, read),
+    ).toEqual(["Don't Look Back"]);
+    expect(nearestTitles({ title: "zzzz qqqq" }, library, read)).toEqual([]);
   });
 });

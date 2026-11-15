@@ -12,7 +12,12 @@ import { RowMenu } from "@/components/media/RowMenu";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { useWholeRecord } from "@/hooks/useWholeRecord";
-import { heardElsewhere, type HeardArtist, type HeardTrack } from "@shared/elsewhere";
+import {
+  heardElsewhere,
+  mostHeardFirst,
+  type HeardArtist,
+  type HeardTrack,
+} from "@shared/elsewhere";
 import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import type { MediaRef } from "@/lib/mediaRef";
 import { cx, fmtCount, fmtRelative, matchesFilter } from "@/lib/format";
@@ -235,9 +240,7 @@ export function HistoryElsewhere({
         ...a.where,
       ]),
     );
-    kept.sort((a, b) =>
-      sort === "heard" ? b.heard - a.heard || b.lastAt - a.lastAt : b.lastAt - a.lastAt,
-    );
+    kept.sort((a, b) => (sort === "heard" ? mostHeardFirst(a, b) : b.lastAt - a.lastAt));
     return reversed ? kept.reverse() : kept;
   }, [pool, filter, sort, reversed]);
   useEffect(() => onCounts(artists.length, pool.length), [onCounts, artists.length, pool.length]);

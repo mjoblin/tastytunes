@@ -10,6 +10,8 @@ import {
   type ToolImpl,
   ok,
   err,
+  acted,
+  queueGrew,
   guardSlot,
   scheduleOut,
   freshObjectId,
@@ -30,16 +32,28 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         const s = ctx.connected();
         const item = (s.queue?.items ?? []).find((i) => i.id === a.id);
         if (!item) return err(`No queue item ${String(a.id)}. Use list_queue.`);
-        await dm.command({ type: "queueDelete", id: a.id });
-        return ok(`Removed "${item.metadata?.title ?? `item ${String(a.id)}`}" from the queue.`);
+        // with the queue it left, once the streamer says so (0.16.0: a list_queue straight after
+        // two removals still counted one of them)
+        const t = await ctx.target();
+        return acted(
+          t,
+          () => t.command({ type: "queueDelete", id: a.id }),
+          `Removed "${item.metadata?.title ?? `item ${String(a.id)}`}" from the queue.`,
+          queueGrew,
+        );
       },
     }),
     clear_queue: defineTool({
       handler: async () => {
         const s = ctx.connected();
         const n = s.queue?.total ?? s.queue?.items?.length ?? 0;
-        await dm.command({ type: "queueClear" });
-        return ok(`Queue cleared (${n} items removed).`);
+        const t = await ctx.target();
+        return acted(
+          t,
+          () => t.command({ type: "queueClear" }),
+          `Queue cleared (${n} items removed).`,
+          queueGrew,
+        );
       },
     }),
     resume_playback: defineTool({

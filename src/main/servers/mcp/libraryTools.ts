@@ -72,8 +72,9 @@ import {
   trackMoved,
   queueGrew,
   DEVICE_ARG,
-  tracksOfRefs,
-  someTitles,
+  readTrackRefs,
+  refsNote,
+  noTrackFound,
   decadeStart,
   decadeError,
   inDecade,
@@ -743,7 +744,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         query: z
           .string()
           .optional()
-          .describe("Case-insensitive substring match on the artist name."),
+          .describe("Words in the artist's name, accents and punctuation ignored."),
         role: z
           .enum(["performers", "composers"])
           .optional()
@@ -801,9 +802,11 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             for (const t of p.tracks) for (const name of trackArtists(t)) bump(name, "tracks");
           }
         }
-        const needle = a.query?.toLowerCase();
+        const needle = a.query;
         let artists = [...byName.values()];
-        if (needle != null) artists = artists.filter((x) => x.name.toLowerCase().includes(needle));
+        // folded as the other name filters fold (0.16.0: "motorhead" found no Motörhead here while
+        // list_tracks found its tracks)
+        if (needle != null) artists = artists.filter((x) => matchesQuery(needle, [x.name]));
         const sort = (a.sort as string | undefined) ?? "name";
         artists.sort((x, y) =>
           sort === "albums"
@@ -831,7 +834,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           .string()
           .optional()
           .describe(
-            "A genre, matched ignoring case, spaces and hyphens (library_facets lists them).",
+            "A genre, matched ignoring case, spaces and hyphens (library_facets lists them). With none matching, the nearest genre names come back.",
           ),
         played: z
           .boolean()
@@ -931,6 +934,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             `"${a.key}" doesn't name a key. Try 'A minor', 'F# major', 'Bbm', 'Eb' or 'minor'.`,
           );
         let tracks = groups.flatMap((p) => p.tracks);
+        const everyTrack = tracks;
         if (titleQuery != null) tracks = tracks.filter((t) => matchesQuery(titleQuery, [t.title]));
         if (artistQuery != null)
           tracks = tracks.filter(
@@ -1022,10 +1026,23 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const offset = a.offset ?? 0;
         const limit = a.limit ?? 50;
         const page = tracks.slice(offset, offset + limit);
+        // a genre the library lacks names the nearest, as list_albums does
+        const genreUnknown =
+          genreWanted != null &&
+          !everyTrack.some((t) => (t.genre ?? []).some((g) => genreKey(g) === genreWanted));
         return ok({
           total: tracks.length,
           offset,
           returned: page.length,
+          ...(genreUnknown
+            ? {
+                genre_note: `The library has no genre "${a.genre}".`,
+                nearest_genres: nearestNames(
+                  a.genre ?? "",
+                  everyTrack.flatMap((t) => t.genre ?? []),
+                ),
+              }
+            : {}),
           ...(Object.keys(coverage).length > 0
             ? {
                 coverage: {
@@ -1077,6 +1094,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             })
           | null = null;
         if (a.server_udn != null || a.object_id != null) {
+          if (a.server_udn == null || a.object_id == null)
+            return err("Give server_udn and object_id together, from a listing.");
           // by its ids (0.16.0), the one way that names a copy exactly
           const node = indexPools()
             .find((p) => p.udn === a.server_udn)
@@ -1136,18 +1155,21 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const beats = features?.beats ?? null;
         const key = keyFromStored(features);
         const round2 = (v: number): number => Math.round(v * 100) / 100;
+        const hundredth = (v: number | null | undefined): number | null =>
+          v != null ? round2(v) : null;
         return ok({
           track: { title: t.title, artist: t.artist, album: t.album },
           analyzed: an != null,
           ...(an
             ? {
                 dr: an.dr > 0 ? an.dr : null,
-                peak_db: an.peakDb,
-                rms_db: an.rmsDb,
-                crest_db: an.crestDb,
-                lufs: an.lufs ?? null,
-                loudness_range_lu: an.lra ?? null,
-                true_peak_dbtp: an.truePeakDb ?? null,
+                // to a hundredth, the precision a reading means (fifteen decimals had come back)
+                peak_db: hundredth(an.peakDb),
+                rms_db: hundredth(an.rmsDb),
+                crest_db: hundredth(an.crestDb),
+                lufs: hundredth(an.lufs),
+                loudness_range_lu: hundredth(an.lra),
+                true_peak_dbtp: hundredth(an.truePeakDb),
                 tempo_bpm: tempoBpm(beats),
                 tempo_confidence: beats ? round2(beats.confidence) : null,
                 key: keyName(key),
@@ -1163,7 +1185,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                 note: "Not analyzed yet. It is analyzed the first time it plays in TastyTunes, or with “Analyze audio” on its album.",
               }),
           album_dr: albumDr,
-          album_lufs: albumEntry?.lufs ?? null,
+          album_lufs: hundredth(albumEntry?.lufs),
           dr_definition:
             "TT-DR, the DR database's procedure; the album value needs every track analyzed.",
           loudness_definition:
@@ -1455,28 +1477,38 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             return err("Give items, or server_udn and object_id, not both.");
           // a Browse-built (USB) index is revalidated first: an id in hand may have rotted
           const refs: TrackRef[] = [];
-          const rotted: string[] = [];
-          for (const ref of a.items) {
+          const rotted = new Map<number, string>();
+          for (const [i, ref] of a.items.entries()) {
             if (!("object_id" in ref)) refs.push(ref);
             else {
               const fresh = await freshObjectId(host, ref.server_udn, ref.object_id);
-              if ("error" in fresh) rotted.push(ref.object_id);
-              else refs.push({ server_udn: ref.server_udn, object_id: fresh.id });
+              if ("error" in fresh) rotted.set(i, fresh.error);
+              refs.push(
+                "error" in fresh ? ref : { server_udn: ref.server_udn, object_id: fresh.id },
+              );
             }
           }
-          const { items, missed } = tracksOfRefs(refs);
-          const notFound = [...rotted, ...missed];
-          if (items.length === 0)
-            return err(
-              `None of those is a track in the library index (${someTitles(notFound)}). Use list_tracks or search_library for their ids.`,
-            );
+          const named = readTrackRefs(refs, rotted);
+          if (named.items.length === 0) return noTrackFound(named);
           let res;
           try {
-            res = await t.queueTracks(items, mode);
+            res = await t.queueTracks(named.items, mode);
           } catch (e) {
             return err((e as Error).message);
           }
-          const gone = [...notFound, ...res.missed];
+          // a track the streamer would not take is named at its place too
+          const left = new Set<number>();
+          for (const title of res.missed) {
+            const k = named.items.findIndex((it, j) => it.title === title && !left.has(j));
+            if (k < 0) continue;
+            left.add(k);
+            named.missed.push({
+              index: named.at[k],
+              ref: title,
+              note: "The streamer didn't take it.",
+            });
+          }
+          named.missed.sort((x, y) => x.index - y.index);
           const how =
             mode === "replace"
               ? "playing from the first"
@@ -1488,8 +1520,9 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           return settle(
             t,
             s,
-            `Queued ${res.added} of ${a.items.length} ${a.items.length === 1 ? "track" : "tracks"}, ${how}.${replacedNote(res.replaced)}${gone.length > 0 ? ` Not found: ${someTitles(gone)}.` : ""}`,
+            `Queued ${res.added} of ${a.items.length} ${a.items.length === 1 ? "track" : "tracks"}, ${how}.${replacedNote(res.replaced)}`,
             settled,
+            refsNote(named),
           );
         }
 

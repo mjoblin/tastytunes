@@ -5,12 +5,13 @@ import {
   type ListeningPlayEvent,
   playKey,
   REDISCOVER_QUIET_DAYS,
+  trackArtists,
 } from "@shared/model";
 import { playStatsFromRecord } from "../../data/playStats";
 import { listeningRecord } from "../../data/listeningRecord";
 import { pools as indexPools } from "../../media/mediaIndex";
 import { statsFor, type TopEntry } from "@shared/historyStats";
-import { heardElsewhere } from "@shared/elsewhere";
+import { heardElsewhere, mostHeardFirst } from "@shared/elsewhere";
 import { shelvesFor, UNFINISHED_QUIET_DAYS } from "@shared/rediscover";
 import {
   type ToolContext,
@@ -25,8 +26,14 @@ import {
   DETAIL_ARG,
   PERIOD_ARG,
   rowIds,
+  titleMatcher,
+  titleFold,
+  nearestTitles,
+  type TitleRef,
+  type Titled,
+  type ToolResult,
 } from "./toolkit";
-import { nameKey } from "@shared/keys";
+import { matchesQuery, nameKey } from "@shared/keys";
 
 // The MCP bridge's history tools (the listening record: recents, stats, the unplayed and the
 // resume offer), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and
@@ -83,6 +90,33 @@ function eventRow(
     }
   }
 }
+
+/** The library's tracks as the title match reads them. */
+const indexTitled = (): Titled[] =>
+  indexPools().flatMap((p) =>
+    p.tracks.map((n) => ({ title: n.title, credits: [...trackArtists(n), n.albumArtist] })),
+  );
+const titled = (t: Titled): Titled => t;
+const playTitled = (e: ListeningPlayEvent): Titled => ({ title: e.title, credits: [e.artist] });
+
+/** Whether the library has the track a title names (a track it has and never played has a true
+ *  answer of no plays; one it lacks too is a miss to say). */
+const inLibrary = (ref: TitleRef): boolean => titleMatcher(indexTitled(), titled)(ref).length > 0;
+
+/** A title neither the record nor the library has, with the nearest either holds (0.16.0: it had
+ *  answered zero plays, as a success). */
+function unknownTitle(ref: TitleRef, plays: readonly ListeningPlayEvent[]): ToolResult {
+  const near = nearestTitles(ref, [...plays.map(playTitled), ...indexTitled()], titled);
+  return err(
+    `No track titled "${ref.title}"${ref.artist ? ` by ${ref.artist}` : ""} in the library or the listening record.${near.length > 0 ? ` The nearest: ${near.map((t) => `"${t}"`).join(", ")}.` : ""}`,
+  );
+}
+
+/** A title that set aside its trailing part and so met several songs: they are named to choose. */
+const severalTitles = (ref: TitleRef, titles: Iterable<string>): ToolResult =>
+  err(
+    `"${ref.title}" names more than one track: ${[...new Set(titles)].map((t) => `"${t}"`).join(", ")}. Give the whole title.`,
+  );
 
 export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
   const { dm } = ctx;
@@ -286,7 +320,11 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         for (let day = 0; day < 7; day++)
           grid.push(st.byWeekdayHour.slice(day * 24, day * 24 + 24));
         return ok({
-          period: { from: a.from ?? null, to: a.to ?? null },
+          // the days asked about, as resolved (0.16.0: a named period had echoed two nulls)
+          period: {
+            from: fromMs != null ? localDay(fromMs) : null,
+            to: toMs != null ? localDay(toMs) : null,
+          },
           listen_definition: "half the track or four minutes of real play time",
           plays: st.plays,
           listens: st.listens,
@@ -348,9 +386,9 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const events = keep ? everyLine.filter(keep) : everyLine;
         const heard = heardElsewhere(events, indexPools());
         const want = (a.in_library as string | undefined) ?? "all";
-        const artists = heard.artists.filter((x) =>
-          want === "yes" ? x.inLibrary : want === "no" ? !x.inLibrary : true,
-        );
+        const artists = heard.artists
+          .filter((x) => (want === "yes" ? x.inLibrary : want === "no" ? !x.inLibrary : true))
+          .sort(mostHeardFirst);
         const limit = a.limit ?? 20;
         const perArtist = a.tracks_per_artist ?? 3;
         return ok({
@@ -459,28 +497,35 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
     history_first_listen: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
-        title: z.string().describe("Track title, case-insensitive exact match."),
+        title: z
+          .string()
+          .describe(
+            "Track title, case, accents and punctuation ignored; with artist, a trailing part in parentheses or brackets may be left off.",
+          ),
         artist: z
           .string()
           .optional()
-          .describe("Narrow by artist, case-insensitive substring of the recorded artist."),
+          .describe("Narrow by artist: its words in the recorded artist."),
       },
       handler: async (a) => {
         const { events: everyLine } = await listeningRecord.readAll();
         const keep = streamerKeep(a.streamer, dm.snapshot().devices);
         const events = keep ? everyLine.filter(keep) : everyLine;
-        const plays = events
-          .filter(
-            (e): e is ListeningPlayEvent =>
-              e.kind === "play" &&
-              nameKey(e.title) === nameKey(a.title) &&
-              (a.artist == null || nameKey(e.artist).includes(nameKey(a.artist))),
-          )
-          .sort((x, y) => x.at - y.at);
-        if (plays.length === 0) return ok({ found: false });
+        const every = events.filter((e): e is ListeningPlayEvent => e.kind === "play");
+        // the agent's title match (toolkit's titleMatcher), as a track reference is matched
+        const ref = { title: a.title, artist: a.artist };
+        const plays = titleMatcher(every, playTitled)(ref).sort((x, y) => x.at - y.at);
+        if (new Set(plays.map((e) => titleFold(e.title))).size > 1)
+          return severalTitles(
+            ref,
+            plays.map((e) => e.title),
+          );
+        if (plays.length === 0)
+          return inLibrary(ref) ? ok({ found: false }) : unknownTitle(ref, every);
         const listens = plays.filter((e) => isListen(e.playedSeconds, e.duration));
         return ok({
           found: true,
+          title: plays[0].title,
           first_played: localTime(plays[0].at),
           first_listen: listens.length > 0 ? localTime(listens[0].at) : null,
           plays: plays.length,
@@ -511,6 +556,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         // by its ids (0.16.0): a track's or an album's names as the index has them
         let named = { title: a.title, artist: a.artist, album: a.album };
         if (a.server_udn != null || a.object_id != null) {
+          if (a.server_udn == null || a.object_id == null)
+            return err("Give server_udn and object_id together, from a listing.");
           const pool = indexPools().find((p) => p.udn === a.server_udn);
           const node =
             pool?.tracks.find((n) => n.id === a.object_id) ??
@@ -533,15 +580,32 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         const since = stats.since != null ? localTime(stats.since) : null;
         if (title) {
           const exact = stats.tracks[playKey(title, artist ?? null, album ?? null)];
-          const loose = exact
-            ? [exact]
-            : Object.entries(stats.tracks)
-                .filter(
-                  ([k]) =>
-                    k.startsWith(`${nameKey(title)}|`) &&
-                    (!artist || k.includes(`|${nameKey(artist)}|`)),
-                )
-                .map(([, v]) => v);
+          let loose = exact ? [exact] : [];
+          if (!exact) {
+            // the agent's title match over the record's keys (title|artist|album)
+            const keyed = Object.entries(stats.tracks).map(([k, v]) => {
+              const [t, ar] = k.split("|");
+              return { t, ar, v };
+            });
+            const hits = titleMatcher(keyed, (x) => ({ title: x.t, credits: [x.ar] }))({
+              title,
+              artist,
+            });
+            if (new Set(hits.map((x) => titleFold(x.t))).size > 1)
+              return severalTitles(
+                { title, artist },
+                hits.map((x) => x.t),
+              );
+            loose = hits.map((x) => x.v);
+          }
+          // a title the agent named that the library lacks too is a miss, not zero plays
+          if (loose.length === 0 && a.title != null && !inLibrary({ title, artist })) {
+            const { events: everyLine } = await listeningRecord.readAll();
+            return unknownTitle(
+              { title, artist },
+              everyLine.filter((e): e is ListeningPlayEvent => e.kind === "play"),
+            );
+          }
           if (loose.length === 0)
             return ok({
               track: { title, artist: artist ?? null, album: album ?? null },
@@ -572,8 +636,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           const titles = new Set<string>();
           for (const [k, v] of Object.entries(stats.tracks)) {
             const [t, ar, al] = k.split("|");
-            if (al !== nameKey(album)) continue;
-            if (artist && ar !== nameKey(artist)) continue;
+            if (titleFold(al) !== titleFold(album)) continue;
+            if (artist && !matchesQuery(artist, [ar])) continue;
             plays += v.plays;
             listens += v.listens;
             seconds += v.seconds;
