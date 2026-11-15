@@ -202,6 +202,15 @@ export class RemoteStreamer {
     await queueAdd(this.host, serverUdn, objectId, action, playFromId, opts);
   }
 
+  /** The pre-amp level a fade starts from, as the window's connection reads it. */
+  preAmpVolume(): number | null {
+    return this.cache.zoneState?.volume_percent ?? null;
+  }
+
+  fadeInTo(target: number): Promise<void> {
+    return this.fader.fadeInTo(target);
+  }
+
   setSleep(sleep: SleepTimer | null): void {
     this.lastUsed = Date.now();
     this.sleeper.setSleep(sleep);
@@ -222,7 +231,8 @@ export class RemoteStreamers {
   private readonly open = new Map<string, RemoteStreamer>();
   private sweeper: NodeJS.Timeout | null = null;
 
-  constructor(private readonly log: (text: string) => void) {}
+  /** Where the pool's notes go (the bridge points it at the app's log). */
+  log: (text: string) => void = () => {};
 
   /** The connection to `host`, opened if need be. */
   get(host: string): RemoteStreamer {
@@ -274,3 +284,6 @@ export class RemoteStreamers {
     this.sweeper = null;
   }
 }
+
+/** The one pool, which the MCP bridge and the scheduler both reach: one connection per streamer. */
+export const remoteStreamers = new RemoteStreamers();

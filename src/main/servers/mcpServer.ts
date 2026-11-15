@@ -45,7 +45,7 @@ import {
   err,
   strictInput,
 } from "./mcp/toolkit";
-import { RemoteStreamers } from "../device/remoteStreamer";
+import { remoteStreamers } from "../device/remoteStreamer";
 import { deviceTools } from "./mcp/deviceTools";
 import { libraryTools } from "./mcp/libraryTools";
 import { historyTools } from "./mcp/historyTools";
@@ -156,11 +156,11 @@ export class McpBridge {
    *  renderer state main would not otherwise know. */
   private displayModeOn = false;
 
-  /** The agent's connections to streamers the window isn't showing (0.16.0). */
-  private readonly remotes: RemoteStreamers;
+  /** The agent's connections to streamers the window isn't showing (0.16.0), the one pool. */
+  private readonly remotes = remoteStreamers;
 
   constructor(private dm: DeviceManager) {
-    this.remotes = new RemoteStreamers((text) => this.dm.log("info", "agents", text));
+    remoteStreamers.log = (text) => this.dm.log("info", "agents", text);
   }
 
   reportDisplayMode(on: boolean): void {

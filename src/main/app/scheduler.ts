@@ -26,6 +26,8 @@ import { Notification } from "electron";
 import { errorMessage } from "@shared/guards";
 import type { Schedule } from "@shared/model";
 import type { DeviceManager } from "../device/deviceManager";
+import { remoteStreamers } from "../device/remoteStreamer";
+import type { StreamerCommand } from "@shared/ipc";
 import { getSettings } from "../data/persist";
 
 const TICK_MS = 15_000;
@@ -52,7 +54,41 @@ function hhmm(d: Date): string {
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 }
 
+/** What a schedule acts on: the window's connection, or a background one to the streamer it
+ *  names (both take a command, read the pre-amp level and fade). */
+interface Fireable {
+  command(cmd: StreamerCommand): Promise<void>;
+  preAmpVolume(): number | null;
+  fadeInTo(target: number): Promise<void>;
+}
+
+/**
+ * THE STREAMER A SCHEDULE ACTS ON (0.16.0): the one the window shows when it names none or that
+ * one, while connected; another it names through the agents' pool of background connections
+ * (device/remoteStreamer), found by its udn in the device book or on the network. Null when it
+ * can't be reached now: a missed schedule is a log line.
+ */
+async function targetOf(dm: DeviceManager, s: Schedule): Promise<Fireable | null> {
+  const snap = dm.snapshot();
+  const named = s.streamer?.udn ?? null;
+  if (named == null || named === snap.systemInfo?.udn)
+    return snap.connection.phase === "connected" ? dm : null;
+  const known = [...snap.devices, ...getSettings().knownDevices].find((d) => d.udn === named);
+  if (!known) return null;
+  const remote = remoteStreamers.get(known.host);
+  return (await remote.ready(8000)) ? remote : null;
+}
+
 async function fire(dm: DeviceManager, s: Schedule): Promise<void> {
+  const target = await targetOf(dm, s);
+  if (!target) {
+    console.warn(`schedule ${s.id}: ${s.streamer?.name ?? "the streamer"} couldn't be reached`);
+    return;
+  }
+  return fireOn(target, s);
+}
+
+async function fireOn(dm: Fireable, s: Schedule): Promise<void> {
   const settle = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
   if (s.action === "standby") {
     await dm.command({ type: "power", power: "NETWORK" });
@@ -235,7 +271,10 @@ export function startScheduler(dm: DeviceManager): void {
       if (!s.enabled || s.time !== time || !s.days.includes(day)) continue;
       const instance = instanceKey(now, time);
       if (lastFired.get(s.id) === instance) continue;
-      if (dm.snapshot().connection.phase !== "connected") continue;
+      // one that names no other streamer waits for the window's connection, as always; one that
+      // does is reached on its own (targetOf)
+      const another = s.streamer != null && s.streamer.udn !== dm.snapshot().systemInfo?.udn;
+      if (!another && dm.snapshot().connection.phase !== "connected") continue;
       lastFired.set(s.id, instance);
       // commands throw on a half-dead socket — a missed schedule is a log
       // line, never an unhandled rejection
