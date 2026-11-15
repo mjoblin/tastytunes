@@ -3,7 +3,7 @@
 // the album that was playing).
 
 import type { MediaNode } from "./media";
-import { albumTracksOf, trackArtists } from "./media";
+import { albumTracksOf, creditNames, trackArtists } from "./media";
 import {
   type CopyFacts,
   type CopyRow,
@@ -264,13 +264,7 @@ export function inLibraryIndex(
   const candidates = index.get(editionless(title));
   if (!candidates || candidates.length === 0) return false;
   if (!artist) return true;
-  const names = new Set(
-    artist
-      .toLowerCase()
-      .split(/\s*(?:,|;|&|\band\b|\bfeat\.?|\bft\.?|\bwith\b)\s*/)
-      .map((s) => s.trim())
-      .filter(Boolean),
-  );
+  const names = new Set(creditNames(artist).map(nameKey));
   names.add(nameKey(artist));
   return candidates.some((n) =>
     [...trackArtists(n), n.albumArtist].some((a) => a != null && names.has(nameKey(a))),

@@ -23,6 +23,7 @@ import {
   localTime,
   dayRange,
   DETAIL_ARG,
+  rowIds,
 } from "./toolkit";
 import { nameKey } from "@shared/keys";
 
@@ -39,10 +40,13 @@ import { nameKey } from "@shared/keys";
 function eventRow(
   e: ListeningEvent,
   detail: "brief" | "full" | undefined,
+  ids: ReturnType<typeof rowIds>,
 ): Record<string, unknown> {
   const at = localTime(e.at, e.tzOffsetMin);
+  // a library play carries its track's ids when the index has it (0.16.0), to play it again by
+  const played = e.kind === "play" ? ids.track(e) : {};
   const listen = e.kind === "play" ? { listen: isListen(e.playedSeconds, e.duration) } : {};
-  if (detail === "full") return { ...e, at, ...listen };
+  if (detail === "full") return { ...e, at, ...listen, ...played };
   switch (e.kind) {
     case "play":
       return {
@@ -55,6 +59,7 @@ function eventRow(
         seconds_played: e.playedSeconds,
         duration_seconds: e.duration,
         ...listen,
+        ...played,
       };
     case "radio-session":
       return { at, kind: e.kind, station: e.station, seconds_played: e.playedSeconds };
@@ -115,7 +120,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           .sort((x, y) => y.at - x.at);
         const offset = a.offset ?? 0;
         const limit = a.limit ?? 50;
-        const page = filtered.slice(offset, offset + limit).map((e) => eventRow(e, a.detail));
+        const ids = rowIds();
+        const page = filtered.slice(offset, offset + limit).map((e) => eventRow(e, a.detail, ids));
         return ok({
           total: filtered.length,
           offset,
@@ -163,33 +169,57 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
               a.by === "stations"
                 ? "plays are tuning sessions, seconds the time tuned"
                 : "plays are library plays started from it, seconds their play time",
+            // the name and what qualifies it apart, never one joined label (0.16.0)
             results: rows.slice(0, limit).map((r) => ({
-              label: `${r.name}${r.sub ? ` · ${r.sub}` : ""}`,
+              name: r.name,
+              ...(r.sub ? { sub: r.sub } : {}),
               plays: r.plays,
               seconds: r.seconds,
             })),
           });
         }
-        const counts = new Map<string, { label: string; plays: number; listens: number }>();
+        // each rank's fields apart (0.16.0: one joined "title · artist" label an agent had to split
+        // before it could search), and the album's or track's ids when the index has it
+        const counts = new Map<string, { e: ListeningPlayEvent; plays: number; listens: number }>();
         for (const e of events) {
           // Library plays only: a count means "played from the library".
           if (e.kind !== "play") continue;
           if ((fromMs != null && e.at < fromMs) || (toMs != null && e.at > toMs)) continue;
-          const label =
+          const key =
             a.by === "artists"
-              ? (e.artist ?? "Unknown artist")
+              ? nameKey(e.artist ?? "")
               : a.by === "albums"
-                ? `${e.album ?? "Unknown album"}${e.artist ? ` · ${e.artist}` : ""}`
-                : `${e.title}${e.artist ? ` · ${e.artist}` : ""}`;
-          const key = label.toLowerCase();
-          const row = counts.get(key) ?? { label, plays: 0, listens: 0 };
+                ? `${nameKey(e.album ?? "")}|${nameKey(e.artist ?? "")}`
+                : `${nameKey(e.title)}|${nameKey(e.artist ?? "")}`;
+          const row = counts.get(key) ?? { e, plays: 0, listens: 0 };
           row.plays += 1;
           if (isListen(e.playedSeconds, e.duration)) row.listens += 1;
           counts.set(key, row);
         }
+        const ids = rowIds();
         const results = [...counts.values()]
           .sort((x, y) => y.listens - x.listens || y.plays - x.plays)
-          .slice(0, limit);
+          .slice(0, limit)
+          .map(({ e, plays, listens }) =>
+            a.by === "artists"
+              ? { artist: e.artist ?? "Unknown artist", plays, listens }
+              : a.by === "albums"
+                ? {
+                    album: e.album ?? "Unknown album",
+                    artist: e.artist,
+                    plays,
+                    listens,
+                    ...ids.album(e.album, e.artist),
+                  }
+                : {
+                    title: e.title,
+                    artist: e.artist,
+                    album: e.album,
+                    plays,
+                    listens,
+                    ...ids.track(e),
+                  },
+          );
         return ok({
           by: a.by,
           listen_definition: "half the track or four minutes of real play time",
@@ -412,7 +442,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
         // bounded (0.16.0: a busy day across the years was 150 events, every one in full)
         const offset = a.offset ?? 0;
         const limit = a.limit ?? 50;
-        const page = hits.slice(offset, offset + limit).map((e) => eventRow(e, a.detail));
+        const ids = rowIds();
+        const page = hits.slice(offset, offset + limit).map((e) => eventRow(e, a.detail, ids));
         return ok({ month, day, total: hits.length, offset, returned: page.length, events: page });
       },
     }),
@@ -452,6 +483,11 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
     history_stats: defineTool({
       inputSchema: {
         streamer: STREAMER_ARG,
+        server_udn: z
+          .string()
+          .optional()
+          .describe("With object_id: a library track or album, from a listing, instead of names."),
+        object_id: z.string().optional().describe("The track's or album's id."),
         title: z
           .string()
           .optional()
@@ -463,10 +499,28 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
       handler: async (a) => {
         const stats = await playStatsFromRecord(streamerKeep(a.streamer, dm.snapshot().devices));
+        // by its ids (0.16.0): a track's or an album's names as the index has them
+        let named = { title: a.title, artist: a.artist, album: a.album };
+        if (a.server_udn != null || a.object_id != null) {
+          const pool = indexPools().find((p) => p.udn === a.server_udn);
+          const node =
+            pool?.tracks.find((n) => n.id === a.object_id) ??
+            pool?.albums.find((n) => n.id === a.object_id);
+          if (!node)
+            return err(`No track or album '${String(a.object_id)}' in that server's index.`);
+          named = node.isContainer
+            ? { title: undefined, artist: node.artist ?? undefined, album: node.title }
+            : {
+                title: node.title,
+                artist: node.artist ?? undefined,
+                album: node.album ?? undefined,
+              };
+        }
         const md = dm.snapshot().playState?.metadata;
-        const title = a.title ?? (a.album ? undefined : (md?.title ?? undefined));
-        const artist = a.artist ?? (a.title || a.album ? undefined : (md?.artist ?? undefined));
-        const album = a.album ?? (a.title ? undefined : (md?.album ?? undefined));
+        const title = named.title ?? (named.album ? undefined : (md?.title ?? undefined));
+        const artist =
+          named.artist ?? (named.title || named.album ? undefined : (md?.artist ?? undefined));
+        const album = named.album ?? (named.title ? undefined : (md?.album ?? undefined));
         const since = stats.since != null ? localTime(stats.since) : null;
         if (title) {
           const exact = stats.tracks[playKey(title, artist ?? null, album ?? null)];

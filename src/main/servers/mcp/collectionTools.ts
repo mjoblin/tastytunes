@@ -28,6 +28,7 @@ import {
   tracksOfRefs,
   trackOfRef,
   someTitles,
+  rowIds,
 } from "./toolkit";
 import { nameKey } from "@shared/keys";
 
@@ -331,6 +332,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
     list_favorites: defineTool({
       handler: () => {
         const s = dm.snapshot();
+        const ids = rowIds();
         return ok(
           s.favorites.map((f) =>
             f.kind === "station"
@@ -341,6 +343,12 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
                   title: f.title,
                   artist: f.artist,
                   album: f.album,
+                  // the copy's ids, as stored at heart time, else found by content (0.16.0)
+                  ...(f.serverUdn && f.objectId
+                    ? { server_udn: f.serverUdn, object_id: f.objectId }
+                    : f.kind === "album"
+                      ? ids.album(f.title, f.artist)
+                      : ids.track(f)),
                 },
           ),
         );
@@ -415,10 +423,51 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
     }),
     add_favorite: defineTool({
       inputSchema: {
+        server_udn: z
+          .string()
+          .optional()
+          .describe("With object_id: favorite a library album or track, from a listing."),
+        object_id: z.string().optional().describe("The album's or track's id."),
         station_url: z.string().url().optional().describe("Favorite a station: its stream URL…"),
         station_name: z.string().optional().describe("…and its display name (both or neither)."),
       },
       handler: (a) => {
+        // A LIBRARY ITEM BY REFERENCE (0.16.0): an album or a track from a listing, as the
+        // Library's heart makes it (this copy's own, beside any other copy's); favorites are the
+        // app's own, so no streamer is needed
+        if (a.server_udn != null || a.object_id != null) {
+          if (a.server_udn == null || a.object_id == null)
+            return err("Pass both server_udn and object_id (from a listing).");
+          const pool = indexPools().find((p) => p.udn === a.server_udn);
+          const node =
+            pool?.albums.find((n) => n.id === a.object_id) ??
+            pool?.tracks.find((n) => n.id === a.object_id);
+          if (!pool || !node)
+            return err(
+              `No album or track '${a.object_id}' in that server's index. Use list_albums or list_tracks.`,
+            );
+          const media: Favorite = {
+            kind: node.isContainer ? "album" : "track",
+            addedAt: Date.now(),
+            title: node.title,
+            artist: node.artist,
+            album: node.isContainer ? null : node.album,
+            artUrl: node.artUrl,
+            serverUdn: pool.udn,
+            serverName: pool.serverName,
+            objectId: node.id,
+            titlePath: node.titlePath ?? null,
+            durationSecs: node.isContainer ? null : node.durationSecs,
+            rate: node.format?.rate ?? null,
+            bits: node.format?.bits ?? null,
+          };
+          const favorites = dm.snapshot().favorites;
+          if (heartOf(media, favorites, heartPeersFrom(indexPools())(media)))
+            return ok("Already a favorite.");
+          media.copy = copyMarkOf(media, media.addedAt);
+          dm.collections.favoriteAdd(media);
+          return ok(`Favorited the ${media.kind} "${media.title}".`);
+        }
         const s = ctx.connected();
         let fav: Favorite;
         if (a.station_url != null || a.station_name != null) {
@@ -473,8 +522,9 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
     }),
     remove_favorite: defineTool({
       inputSchema: { key: z.string().describe("Favorite key from list_favorites.") },
+      // favorites are the app's own: no streamer needed (0.16.0)
       handler: (a) => {
-        const s = ctx.connected();
+        const s = dm.snapshot();
         const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
         if (!fav) return err(`No favorite with key '${String(a.key)}'. Use list_favorites.`);
         dm.collections.favoriteRemove(a.key);

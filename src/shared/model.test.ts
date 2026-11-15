@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from "vitest";
 import {
+  creditNames,
   albumFormat,
   albumTracksOf,
   albumVolume,
@@ -119,6 +120,24 @@ function play(
 }
 
 // ---------------------------------------------------------- who is on a track
+
+describe("creditNames: the names a credit packs", () => {
+  it("splits the ways a credit joins names, in order, whatever their case", () => {
+    expect(creditNames("Tinlicker feat. Nathan Nicholson")).toEqual([
+      "Tinlicker",
+      "Nathan Nicholson",
+    ]);
+    expect(creditNames("A ft B")).toEqual(["A", "B"]);
+    expect(creditNames("A FEAT. B")).toEqual(["A", "B"]);
+    expect(creditNames("A & B, C; D")).toEqual(["A", "B", "C", "D"]);
+    expect(creditNames("A with B and C")).toEqual(["A", "B", "C"]);
+    expect(creditNames("Keane")).toEqual(["Keane"]);
+  });
+
+  it("splits a duo's name too, which is why a lookup tries the whole credit first", () => {
+    expect(creditNames("Simon & Garfunkel")).toEqual(["Simon", "Garfunkel"]);
+  });
+});
 
 describe("trackArtists: the only way to ask who is on a track", () => {
   it("is the split performers when the server packed several", () => {

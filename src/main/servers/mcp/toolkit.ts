@@ -14,7 +14,7 @@ import { audioCaps, type ZonePlayState } from "@shared/smoip";
 import type { DeviceManager } from "../../device/deviceManager";
 import { getSettings } from "../../data/persist";
 import { pools as indexPools, revalidate } from "../../media/mediaIndex";
-import { bestInIndexes } from "../../media/resolveContent";
+import { bestInIndexes, indexFinder } from "../../media/resolveContent";
 import { nameKey, searchFold } from "@shared/keys";
 
 // The MCP bridge's TOOLKIT (2026-09-13, the bridge split: 74 tool implementations
@@ -412,6 +412,60 @@ export function tracksOfRefs(refs: readonly TrackRef[]): {
     else missed.push(refLabel(ref));
   }
   return { items, missed };
+}
+
+/**
+ * IDS ON EVERY ROW (0.16.0): a row that names a library track or album, a history line, a queue
+ * entry, a ranked album, carries its server_udn and object_id when the index has its content, so
+ * "play my most played album" is one call after the ranking, not a search on a label. Made once
+ * per answer (the index read once).
+ */
+export type RowIds = { server_udn?: string; object_id?: string };
+export function rowIds(): {
+  track(ref: {
+    title: string | null;
+    artist?: string | null;
+    album?: string | null;
+    artUrl?: string | null;
+  }): RowIds;
+  album(title: string | null, artist: string | null): RowIds;
+} {
+  const find = indexFinder();
+  let albums: Map<string, { udn: string; node: MediaNode }[]> | null = null;
+  return {
+    track: (ref) => {
+      if (!ref.title) return {};
+      const hit = find({
+        title: ref.title,
+        artist: ref.artist ?? null,
+        album: ref.album ?? null,
+        artUrl: ref.artUrl ?? null,
+      });
+      return hit ? { server_udn: hit.serverUdn, object_id: hit.node.id } : {};
+    },
+    album: (title, artist) => {
+      if (!title) return {};
+      if (!albums) {
+        albums = new Map();
+        for (const p of indexPools())
+          for (const node of p.albums) {
+            const key = nameKey(node.title);
+            const list = albums.get(key) ?? [];
+            list.push({ udn: p.udn, node });
+            albums.set(key, list);
+          }
+      }
+      const hits = albums.get(nameKey(title)) ?? [];
+      const hit =
+        hits.find(
+          (h) =>
+            artist == null ||
+            nameKey(h.node.artist) === nameKey(artist) ||
+            nameKey(h.node.albumArtist) === nameKey(artist),
+        ) ?? (artist == null ? hits[0] : undefined);
+      return hit ? { server_udn: hit.udn, object_id: hit.node.id } : {};
+    },
+  };
 }
 
 /** A few named and the rest counted: an answer about many tracks stays short. */

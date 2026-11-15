@@ -9,6 +9,7 @@ import {
   status,
   scheduleOut,
   defineTool,
+  rowIds,
 } from "./toolkit";
 
 // The MCP bridge's device tools (the streamer itself: status and the lists, transport, volume,
@@ -41,12 +42,15 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
         const offset = a.offset ?? Math.max(0, playing - 5);
         const limit = a.limit ?? 50;
         const page = items.slice(offset, offset + limit);
+        const ids = rowIds();
         return ok({
           current_id: s.queue?.play_id ?? null,
           current_position: playing >= 0 ? playing : null,
           total: s.queue?.total ?? 0,
           offset,
           returned: page.length,
+          // each entry's library ids when the index has its content (0.16.0): a queue entry
+          // carries none of its own
           items: page.map((i) => ({
             id: i.id,
             position: i.position,
@@ -54,6 +58,12 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
             artist: i.metadata?.artist ?? null,
             album: i.metadata?.album ?? null,
             duration_seconds: i.metadata?.duration ?? null,
+            ...ids.track({
+              title: i.metadata?.title ?? null,
+              artist: i.metadata?.artist,
+              album: i.metadata?.album,
+              artUrl: i.metadata?.art_url,
+            }),
           })),
         });
       },

@@ -284,7 +284,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "get_track_analysis",
         title: "Get track analysis",
         description:
-          "The audio analysis TastyTunes has for a track (the playing track by default): dynamic range (DR, the TT-DR procedure), peak, RMS and crest in dB, loudness (LUFS, loudness range, true peak), tempo in beats per minute and key with their confidences, plus the album's DR and loudness when the whole album has been analyzed. Says so when a track has not been analyzed yet.",
+          "The audio analysis TastyTunes has for a track (the playing track by default, or one named by server_udn and object_id, or by title, where a title the library has on several tracks answers with the candidates): dynamic range (DR, the TT-DR procedure), peak, RMS and crest in dB, loudness (LUFS, loudness range, true peak), tempo in beats per minute and key with their confidences, plus the album's DR and loudness when the whole album has been analyzed. Says so when a track has not been analyzed yet.",
       },
       {
         name: "get_media_info",
@@ -336,7 +336,8 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "list_favorites",
         title: "List favorites",
-        description: "The user's favorites with the keys play_favorite needs.",
+        description:
+          "The user's favorites with the keys play_favorite needs, and an album's or track's server_udn and object_id when known.",
       },
       {
         name: "play_favorite",
@@ -347,7 +348,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "add_favorite",
         title: "Add favorite",
         description:
-          "With no arguments, favorite the currently playing track. For an internet-radio station, pass station_url + station_name (e.g. from search_radio).",
+          "With no arguments, favorite the currently playing track. For a library album or track, pass its server_udn + object_id from a listing (no streamer needed). For an internet-radio station, pass station_url + station_name (e.g. from search_radio).",
       },
       {
         name: "remove_favorite",
@@ -400,7 +401,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "history_top",
         title: "Top played",
         description:
-          "Most-listened artists, albums or tracks over a date range, counting library plays that reached half the track or four minutes of real play time; or the stations most tuned, and the presets and playlists most started from.",
+          "Most-listened artists, albums or tracks over a date range, counting library plays that reached half the track or four minutes of real play time, each row with its title, artist and album apart and an album's or track's server_udn and object_id when the library has it; or the stations most tuned, and the presets and playlists most started from.",
       },
       {
         name: "history_summary",
@@ -435,7 +436,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "history_stats",
         title: "History stats",
         description:
-          "Plays, listens, last played and time heard for one track (the playing track by default) or, given only an album, for the whole album — from the listening record, library plays only.",
+          "Plays, listens, last played and time heard for one track (the playing track by default, or one named by server_udn and object_id) or, given only an album, for the whole album — from the listening record, library plays only.",
       },
       {
         name: "history_resume",
