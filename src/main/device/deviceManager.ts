@@ -21,6 +21,7 @@ import {
   type ContentRef,
   type KnownDevice,
   type PlaylistActivation,
+  type PlaylistItem,
   type QueueRestoreResult,
   KNOWN_DEVICES_MAX,
   RECONNECT_GRACE_MS,
@@ -994,6 +995,14 @@ export class DeviceManager {
   /** See QueueOps.playlistActivate — one run at a time, batched, self-healing. */
   async playlistActivate(id: string): Promise<PlaylistActivation> {
     return this.queueOps.playlistActivate(id);
+  }
+
+  /** See QueueOps.queueTracks — a list of tracks in one batched write, in the order given. */
+  async queueTracks(
+    items: readonly PlaylistItem[],
+    mode: "play_now" | "play_next" | "append" | "replace",
+  ): Promise<{ added: number; missed: string[]; total: number; replaced: number | null }> {
+    return this.queueOps.queueTracks(items, mode);
   }
 
   /** See QueueOps.queueRestore — the undo behind the queue's ×. */

@@ -289,7 +289,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "play_media",
         title: "Play media",
-        description: `Play an album or track by server_udn + object id (from search_library). mode 'play_now' (default) keeps the queue, 'play_next'/'append' insert into it; 'replace' CLEARS the queue first — only use replace when asked to. A container over ${LARGE_QUEUE_TRACKS} tracks is refused until the user agrees: ask, then call again with confirm_large: true.`,
+        description: `Play an album or track by server_udn + object id (from search_library), or a list of tracks in one call with items (each {server_udn, object_id} or {title, artist?, album?}, queued in order, the answer counting what landed and naming what didn't). start_at plays an album from one of its tracks (1 = the first), replacing the queue. mode 'play_now' (default) keeps the queue, 'play_next'/'append' insert into it; 'replace' CLEARS the queue first — only use replace when asked to, and the answer says how long the replaced queue was. A container over ${LARGE_QUEUE_TRACKS} tracks is refused until the user agrees: ask, then call again with confirm_large: true.`,
       },
     ],
   },
@@ -360,7 +360,8 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       {
         name: "get_playlist",
         title: "Get playlist",
-        description: "The tracks in one playlist, in order.",
+        description:
+          "The tracks in one playlist, in order, each with its position (edit_playlist's) and, when stored, its server_udn and object_id.",
       },
       {
         name: "play_playlist",
@@ -438,19 +439,25 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     group: "write",
     optIn: true,
     description:
-      "Create playlists, add the playing track to one, and delete them. These change the playlists TastyTunes stores on your computer.",
+      "Create, edit and delete playlists, and add tracks to them. These change the playlists TastyTunes stores on your computer.",
     tools: [
       {
         name: "create_playlist",
         title: "Create playlist",
         description:
-          "Create a playlist, optionally seeded with the current play queue (from_queue: true).",
+          "Create a playlist from a list of tracks (each {server_udn, object_id} from a listing or {title, artist?, album?}, stored with their ids, the play queue untouched), or seeded with the current play queue (from_queue: true), or empty.",
       },
       {
         name: "add_to_playlist",
         title: "Add to playlist",
         description:
-          "Add the currently playing track to a playlist by id (see list_playlists). Tracks only — a radio stream can't hold a position in an ordered list.",
+          "Add tracks to the end of a playlist by id (see list_playlists): a list (each {server_udn, object_id} or {title, artist?, album?}), or by default the currently playing track. Tracks only — a radio stream can't hold a position in an ordered list.",
+      },
+      {
+        name: "edit_playlist",
+        title: "Edit playlist",
+        description:
+          "Rename a playlist, take rows out by position (get_playlist's), or move one row, in one call.",
       },
       {
         name: "delete_playlist",

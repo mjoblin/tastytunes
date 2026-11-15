@@ -17,6 +17,7 @@ import {
   HIRES_RATE_ABOVE,
   describeProfileNote,
   nameSortKey,
+  orderTracks,
 } from "@shared/model";
 import {
   audioAnalysisKey,
@@ -38,7 +39,7 @@ import {
 } from "@shared/model";
 import { audioAnalysisGet, albumDrMap } from "../../lookups/audioAnalysis";
 import { playStatsFromRecord } from "../../data/playStats";
-import { LargeQueueError, refreshServers } from "../../media/upnpBrowser";
+import { browseChildrenOf, LargeQueueError, refreshServers } from "../../media/upnpBrowser";
 import {
   searchServer as librarySearch,
   status as indexStatus,
@@ -59,6 +60,10 @@ import {
   localTime,
   DECADE_ARG,
   DETAIL_ARG,
+  type TrackRef,
+  tracksArg,
+  tracksOfRefs,
+  someTitles,
   decadeStart,
   decadeError,
   inDecade,
@@ -1089,8 +1094,27 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
     }),
     play_media: defineTool({
       inputSchema: {
-        server_udn: z.string().describe("From search_library / list_media_servers."),
-        object_id: z.string().describe("From search_library."),
+        server_udn: z
+          .string()
+          .optional()
+          .describe("With object_id: the item's server, from search_library / list_media_servers."),
+        object_id: z
+          .string()
+          .optional()
+          .describe("An album, track or other item, from search_library or a listing."),
+        items: tracksArg(LARGE_QUEUE_TRACKS)
+          .optional()
+          .describe(
+            `Instead of server_udn and object_id: up to ${LARGE_QUEUE_TRACKS} tracks queued in one write, in the order given, each {server_udn, object_id} from a listing or {title, artist?, album?}.`,
+          ),
+        start_at: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(
+            "With an album: play it from this track, by its place on the album (1 = the first). Replaces the queue.",
+          ),
         mode: z
           .enum(["play_now", "play_next", "append", "replace"])
           .optional()
@@ -1106,10 +1130,88 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
       handler: async (a) => {
         const s = ctx.connected();
-        const mode = (a.mode as string | undefined) ?? "play_now";
+        const host = s.connection.host;
+        const mode = a.mode ?? "play_now";
+        // what a replace threw away, said so the agent can tell the user (0.16.0)
+        const before = s.queue?.total ?? 0;
+        const replacedNote = (n: number | null): string =>
+          n != null && n > 0 ? ` Replaced a queue of ${n} ${n === 1 ? "track" : "tracks"}.` : "";
+
+        // A LIST OF TRACKS (0.16.0): one write on the batch the playlists run on, in order
+        if (a.items != null) {
+          if (a.server_udn != null || a.object_id != null || a.start_at != null)
+            return err("Give items, or server_udn and object_id, not both.");
+          // a Browse-built (USB) index is revalidated first: an id in hand may have rotted
+          const refs: TrackRef[] = [];
+          const rotted: string[] = [];
+          for (const ref of a.items) {
+            if (!("object_id" in ref)) refs.push(ref);
+            else {
+              const fresh = await freshObjectId(host, ref.server_udn, ref.object_id);
+              if ("error" in fresh) rotted.push(ref.object_id);
+              else refs.push({ server_udn: ref.server_udn, object_id: fresh.id });
+            }
+          }
+          const { items, missed } = tracksOfRefs(refs);
+          const notFound = [...rotted, ...missed];
+          if (items.length === 0)
+            return err(
+              `None of those is a track in the library index (${someTitles(notFound)}). Use list_tracks or search_library for their ids.`,
+            );
+          let res;
+          try {
+            res = await ctx.dm.queueTracks(items, mode);
+          } catch (e) {
+            return err((e as Error).message);
+          }
+          const gone = [...notFound, ...res.missed];
+          const how =
+            mode === "replace"
+              ? "playing from the first"
+              : mode === "play_now"
+                ? "the first playing now, the rest after it"
+                : mode === "play_next"
+                  ? "to play next"
+                  : "at the end of the queue";
+          return ok(
+            `Queued ${res.added} of ${a.items.length} ${a.items.length === 1 ? "track" : "tracks"}, ${how}.${replacedNote(res.replaced)}${gone.length > 0 ? ` Not found: ${someTitles(gone)}.` : ""}`,
+          );
+        }
+
+        if (a.server_udn == null || a.object_id == null)
+          return err("Give server_udn and object_id (from search_library or a listing), or items.");
         // a Browse-built (USB) index is revalidated first: the id in hand may have rotted
         const fresh = await freshObjectId(s.connection.host, a.server_udn, a.object_id);
         if ("error" in fresh) return err(fresh.error);
+
+        // AN ALBUM FROM ONE OF ITS TRACKS (0.16.0): the album's OWN browse supplies the ids, the
+        // Library's Play album from here (a pooled track's parent is the search scope)
+        if (a.start_at != null) {
+          if (a.mode != null && a.mode !== "replace")
+            return err(
+              "start_at plays the album from that track and replaces the queue: leave mode out.",
+            );
+          await ctx.dm.ensureAwake();
+          const listed = await browseChildrenOf(host, a.server_udn, fresh.id);
+          const tracks = orderTracks(
+            (typeof listed === "string" ? [] : listed).filter((k) => !k.isContainer),
+          );
+          if (tracks.length === 0)
+            return err("That item has no tracks to start from: start_at needs an album.");
+          const target = tracks[a.start_at - 1];
+          if (!target)
+            return err(`The album has ${tracks.length} tracks: start_at is 1 to ${tracks.length}.`);
+          try {
+            await ctx.dm.queueAdd(a.server_udn, fresh.id, "PLAY_FROM_HERE", target.id, {
+              confirmLarge: a.confirm_large === true,
+            });
+          } catch (e) {
+            if (e instanceof LargeQueueError) return err(largeQueueAsk(e.tracks, "play_media"));
+            return err(`Couldn't queue the album. (${(e as Error).message})`);
+          }
+          return ok(`Playing from track ${a.start_at}, "${target.title}".${replacedNote(before)}`);
+        }
+
         try {
           await ctx.dm.queueAdd(a.server_udn, fresh.id, QUEUE_MODES[mode], undefined, {
             confirmLarge: a.confirm_large === true,
@@ -1122,7 +1224,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         }
         return ok(
           mode === "replace"
-            ? "Playing — the previous queue was replaced."
+            ? `Playing.${replacedNote(before) || " The queue was empty."}`
             : mode === "play_now"
               ? "Playing now (the queue is kept)."
               : mode === "play_next"
