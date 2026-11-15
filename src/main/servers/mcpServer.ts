@@ -94,6 +94,8 @@ export class McpBridge {
   /** A menu command to the main window (set_display_mode); index.ts wires this to
    *  sendMenuCommand, which raises the window if there is none. */
   sendCommand: ((command: MenuCommand) => void) | null = null;
+  /** Whether the main window exists; index.ts wires it to app/windows. */
+  windowOpen: (() => boolean) | null = null;
   /** Display mode as the renderer last reported it (store.setDisplayMode → IPC.displayModeReport):
    *  renderer state main would not otherwise know. */
   private displayModeOn = false;
@@ -378,6 +380,7 @@ export class McpBridge {
       },
       sendCommand: (command) => this.sendCommand?.(command),
       displayModeOn: () => this.displayModeOn,
+      windowOpen: () => this.windowOpen?.() ?? false,
     };
     return {
       ...deviceTools(ctx),

@@ -248,25 +248,37 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "search_library",
         title: "Search library",
         description:
-          "Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media, a TRUE total, and pages with limit/offset — page again rather than assuming the first page is everything. match: 'title' scopes to items whose own title contains the query. Composers are searchable too (\"bangalter\" finds the tracks he wrote); indexed tracks carry album_artist, performers, composers and format when the server sends them.",
+          'Search for albums, artists, and tracks across every searchable or index-ready media server at once (or one server_udn). Returns object ids for play_media, a TRUE total, and pages with limit/offset — page again rather than assuming the first page is everything. match: \'title\' scopes to items whose own title contains the query. Accents and punctuation are ignored ("motorhead" finds Motörhead), and when nothing matches the answer names the nearest artists and albums. Composers are searchable too ("bangalter" finds the tracks he wrote); indexed tracks carry album_artist, performers, composers and format when the server sends them.',
+      },
+      {
+        name: "library_facets",
+        title: "Library facets",
+        description:
+          "The library's shape in one answer: its genres with album and track counts (spellings joined), how many albums have no genre, the decades and formats, how many tracks are analyzed for dynamic range, loudness, tempo and key, and how many albums have an arrival date. Read it before choosing music by style or era.",
+      },
+      {
+        name: "analyze_album",
+        title: "Analyze album",
+        description:
+          "Measure an album's tracks for dynamic range, loudness, tempo and key in the background, the Library's Analyze audio. Needs the TastyTunes window open and Audio analysis on; the streamer's USB drive can't be read.",
       },
       {
         name: "list_albums",
         title: "List albums",
         description:
-          "Browse albums from the local library index — filter by artist, genre, decade, kind (albums vs compilations), hires, format (e.g. '24/96', 'MP3') or composer; sort by title, artist, year, dynamic range, loudness, last played or most played; played=true/false keeps the albums the listening record has or has not seen (played=false is the unplayed list); page with limit/offset. Each album comes with what its tracks add up to: track count, discs, runtime, format headline, hires and is_compilation when true; detail 'full' adds the server's name, the folder, size, how many tracks differ in format, and composers (when every track agrees). Returns object ids for play_media / get_media_info. Needs a ready index (see list_media_servers).",
+          "Browse albums from the local library index — filter by title words, artist, genre (spellings joined; the nearest genre names when none matches), decade or year range, arrival since a date, kind (albums vs compilations), hires, format (e.g. '24/96', 'MP3') or composer; sort by title, artist, year, latest arrival, dynamic range, loudness, last played or most played (a measured filter or sort says how many albums are measured); played=true/false keeps the albums the listening record has or has not seen (played=false is the unplayed list); page with limit/offset. Each album comes with what its tracks add up to: track count, discs, runtime, format headline, hires and is_compilation when true; detail 'full' adds the server's name, the folder, size, how many tracks differ in format, and composers (when every track agrees). Returns object ids for play_media / get_media_info. Needs a ready index (see list_media_servers).",
       },
       {
         name: "list_artists",
         title: "List artists",
         description:
-          "Artists from the local library index with album and track counts — filter by name, sort by name or album count, page with limit/offset. role 'performers' (default) counts album artists and every performer, featured guests included; role 'composers' lists who wrote the tracks. Needs a ready index (see list_media_servers).",
+          "Artists from the local library index with album and track counts — filter by name, sort by name or album count, page with limit/offset (up to 1,000 at once, the whole list for most libraries). role 'performers' (default) counts album artists and every performer, featured guests included; role 'composers' lists who wrote the tracks. Needs a ready index (see list_media_servers).",
       },
       {
         name: "list_tracks",
         title: "List tracks",
         description:
-          "Every indexed track as one list, filtered by artist, album, genre, decade, format, lossless, hi-res, minimum dynamic range (DR), a tempo range in beats per minute or a key, sorted by title, artist, album, year, duration, DR, loudness, tempo, plays or last played. Each row carries its DR, tempo and key when measured, and its play count and last-played time from the listening record when known. The app's Tracks view as a tool.",
+          "Every indexed track as one list, filtered by title words, artist, album, genre, decade, played or never played, format, lossless, hi-res, minimum dynamic range (DR), a tempo range in beats per minute or a key (a measured filter or sort says how many of the tracks are measured), sorted by title, artist, album, year, duration, DR, loudness, tempo, plays or last played. Each row carries its DR, tempo and key when measured, and its play count and last-played time from the listening record when known. The app's Tracks view as a tool.",
       },
       {
         name: "get_track_analysis",

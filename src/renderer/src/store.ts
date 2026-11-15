@@ -1205,6 +1205,18 @@ export const useStore = create<TTState>((set, get) => ({
         s.jumpToSettingsTab("updates");
         if (command.check) set({ updateCheckAsk: true });
         break;
+      // an agent's analyze_album: the album's Analyze audio (its sweep queue and busy guard, so a
+      // repeated delivery is one run), the album found in the index main named it from
+      case "analyzeAlbum":
+        void Promise.all([import("@/lib/audioAnalysis"), tt.mediaIndexPools()]).then(
+          ([m, pools]) => {
+            const album = pools
+              .find((p) => p.udn === command.serverUdn)
+              ?.albums.find((n) => n.id === command.albumId);
+            if (album) void m.analyzeAlbum(album, command.serverUdn, []);
+          },
+        );
+        break;
       // View › Back/Forward (⌘[ ⌘]): the Info window's own pages while it is open, nothing
       // behind another modal, else the app's (lib/keyboardOwner, lib/infoSteps)
       case "navBack":

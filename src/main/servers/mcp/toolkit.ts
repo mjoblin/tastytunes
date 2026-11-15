@@ -15,7 +15,7 @@ import type { DeviceManager } from "../../device/deviceManager";
 import { getSettings } from "../../data/persist";
 import { pools as indexPools, revalidate } from "../../media/mediaIndex";
 import { bestInIndexes } from "../../media/resolveContent";
-import { nameKey } from "@shared/keys";
+import { nameKey, searchFold } from "@shared/keys";
 
 // The MCP bridge's TOOLKIT (2026-09-13, the bridge split: 74 tool implementations
 // had sat in one 2,400-line member): the tool result and implementation shapes,
@@ -177,6 +177,54 @@ export const inDecade = (year: string | null | undefined, start: number): boolea
   return Number.isFinite(y) && y >= start && y < start + 10;
 };
 
+/** A genre as a filter compares it: folded and without its spaces, so "Hip Hop", "Hip-Hop" and
+ *  "hiphop" are one genre (0.16.0: the filter was an exact match, and "Hip Hop" found nothing
+ *  while "Hip-Hop" found six albums). */
+export const genreKey = (g: string): string => searchFold(g).replace(/\s+/g, "");
+
+/** Edits from one string to another: an insert, a delete, a change, or two neighbors swapped. */
+function editDistance(a: string, b: string): number {
+  const d: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+  );
+  for (let i = 1; i <= a.length; i++)
+    for (let j = 1; j <= b.length; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1])
+        d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1);
+    }
+  return d[a.length][b.length];
+}
+
+/**
+ * THE NAMES CLOSEST TO WHAT WAS ASKED, for an answer that found nothing (0.16.0: "beatls" found
+ * nothing and offered nothing). Compared folded, against the whole name and against each run of
+ * its words as long as the query ("beatls" meets "Beatles" inside "The Beatles"), within a third
+ * of the query's length; a name that contains the query, or is contained in it, comes first.
+ * Closest first, then A to Z, at most `max`.
+ */
+export function nearestNames(query: string, names: Iterable<string>, max = 5): string[] {
+  const q = searchFold(query).replace(/\s+/g, " ").trim();
+  if (q === "") return [];
+  const qWords = q.split(" ").length;
+  const allowed = Math.max(1, Math.floor(q.length / 3));
+  const scored = new Map<string, number>();
+  for (const name of new Set(names)) {
+    const f = searchFold(name).replace(/\s+/g, " ").trim();
+    if (f === "") continue;
+    let best = f.includes(q) || q.includes(f) ? 0 : editDistance(q, f);
+    const words = f.split(" ");
+    for (let i = 0; best > 0 && i + qWords <= words.length; i++)
+      best = Math.min(best, editDistance(q, words.slice(i, i + qWords).join(" ")));
+    if (best <= allowed) scored.set(name, best);
+  }
+  return [...scored]
+    .sort((x, y) => x[1] - y[1] || x[0].localeCompare(y[0]))
+    .slice(0, max)
+    .map(([name]) => name);
+}
+
 /** What resume_album finds: the run left unfinished and where it stands, or why not. */
 export type ResumeOffer =
   | {
@@ -208,6 +256,8 @@ export interface ToolContext {
   sendCommand(command: MenuCommand): void;
   /** Whether display mode is on, as the renderer last reported. */
   displayModeOn(): boolean;
+  /** Whether the main window exists, for a command that should not open one (analyze_album). */
+  windowOpen(): boolean;
 }
 
 /** The app's own state an agent can ask about beside the streamer's (2026-09-14): display

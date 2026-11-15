@@ -18,6 +18,7 @@ import {
   describeProfileNote,
   nameSortKey,
   orderTracks,
+  usbServer,
 } from "@shared/model";
 import {
   audioAnalysisKey,
@@ -37,8 +38,9 @@ import {
   copyStat,
   peersByPlayKey,
 } from "@shared/model";
-import { audioAnalysisGet, albumDrMap } from "../../lookups/audioAnalysis";
+import { audioAnalysisGet, albumDrMap, audioStatsMany } from "../../lookups/audioAnalysis";
 import { playStatsFromRecord } from "../../data/playStats";
+import { getSettings } from "../../data/persist";
 import { browseChildrenOf, LargeQueueError, refreshServers } from "../../media/upnpBrowser";
 import {
   searchServer as librarySearch,
@@ -62,6 +64,10 @@ import {
   DETAIL_ARG,
   type TrackRef,
   tracksArg,
+  genreKey,
+  nearestNames,
+  localDayStart,
+  localToday,
   tracksOfRefs,
   someTitles,
   decadeStart,
@@ -69,6 +75,7 @@ import {
   inDecade,
 } from "./toolkit";
 import { matchesQuery, nameKey, searchFold } from "@shared/keys";
+import { compareRecentlyAdded } from "@shared/recentlyAdded";
 
 // The MCP bridge's library tools (the library: servers, browsing, the lenses' lists, search and
 // the index), one of six tool modules split out of mcpServer.ts 2026-09-13; the shapes and helpers
@@ -228,7 +235,6 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           ...servers.filter((x) => ready.has(x.udn)),
           ...servers.filter((x) => !ready.has(x.udn)).slice(0, 3),
         ];
-        const tokens = a.query.toLowerCase().split(/\s+/).filter(Boolean);
         const collected: unknown[] = [];
         let sourceCapped = false;
         for (const server of fleet) {
@@ -238,10 +244,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             const kind = kindOf(n);
             if (kind === "folder") continue;
             if (a.kind != null && kind !== a.kind) continue;
-            if (a.match === "title") {
-              const title = n.title.toLowerCase();
-              if (!tokens.every((t) => title.includes(t))) continue;
-            }
+            if (a.match === "title" && !matchesQuery(a.query, [n.title])) continue;
             collected.push({
               server_udn: server.udn,
               server: server.name,
@@ -274,12 +277,159 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                 note: "A source hit its internal retrieval cap — total covers only what it returned.",
               }
             : {}),
+          // nothing found: the closest artist and album names the index holds (0.16.0)
+          ...(collected.length === 0
+            ? {
+                nearest: nearestNames(
+                  a.query,
+                  indexPools()
+                    .filter((p) => a.server_udn == null || p.udn === a.server_udn)
+                    .flatMap((p) => [
+                      ...p.artists.map((n) => n.title),
+                      ...p.albums.map((n) => n.title),
+                    ]),
+                ),
+              }
+            : {}),
           results: page,
         });
       },
     }),
+    // THE LIBRARY'S SHAPE IN ONE ANSWER (0.16.0): an agent maps a style, a mood or an era onto this
+    // library, and learning its genres had taken four calls and 180,000 characters
+    library_facets: defineTool({
+      inputSchema: {
+        server_udn: z.string().optional().describe("Limit to one server (see list_media_servers)."),
+      },
+      handler: (a) => {
+        const groups = indexPools().filter((p) => a.server_udn == null || p.udn === a.server_udn);
+        if (groups.length === 0)
+          return err(
+            a.server_udn != null
+              ? `No ready index for server '${String(a.server_udn)}'. Use list_media_servers.`
+              : ctx.kickIndex(),
+          );
+        const albums = groups.flatMap((p) => p.albums);
+        const tracks = groups.flatMap((p) => p.tracks);
+        // a genre's spellings are one genre (genreKey), named by the spelling most albums use
+        const genres = new Map<
+          string,
+          { names: Map<string, number>; albums: number; tracks: number }
+        >();
+        const genreOf = (g: string) => {
+          const key = genreKey(g);
+          let hit = genres.get(key);
+          if (!hit) genres.set(key, (hit = { names: new Map(), albums: 0, tracks: 0 }));
+          hit.names.set(g, (hit.names.get(g) ?? 0) + 1);
+          return hit;
+        };
+        const untagged = (gs: string[] | undefined): boolean =>
+          (gs ?? []).every((g) => genreKey(g) === "" || genreKey(g) === "unknown");
+        // each of an item's genres once, however many spellings of it the tags carry
+        const eachGenre = (
+          gs: string[] | undefined,
+          count: (g: { albums: number; tracks: number }) => void,
+        ) => {
+          const seen = new Set<string>();
+          for (const g of gs ?? []) {
+            const key = genreKey(g);
+            if (key === "" || seen.has(key)) continue;
+            seen.add(key);
+            count(genreOf(g));
+          }
+        };
+        for (const n of albums) eachGenre(n.genre, (g) => (g.albums += 1));
+        for (const t of tracks) eachGenre(t.genre, (g) => (g.tracks += 1));
+        const decades = new Map<number, number>();
+        let noYear = 0;
+        for (const n of albums) {
+          const d = n.year != null ? decadeStart(String(n.year).slice(0, 4)) : null;
+          if (d == null) noYear += 1;
+          else decades.set(d, (decades.get(d) ?? 0) + 1);
+        }
+        const formats = new Map<string, number>();
+        for (const t of tracks) {
+          const f = formatLabel(t.format);
+          if (f) formats.set(f, (formats.get(f) ?? 0) + 1);
+        }
+        const known = audioStatsMany(tracks.map((t) => audioAnalysisKey(t)));
+        const stats = Object.values(known);
+        return ok({
+          albums: albums.length,
+          tracks: tracks.length,
+          artists: groups.reduce((n, p) => n + p.artists.length, 0),
+          genres: [...genres.values()]
+            .map((g) => ({
+              name: [...g.names].sort((x, y) => y[1] - x[1])[0][0],
+              albums: g.albums,
+              tracks: g.tracks,
+            }))
+            .sort((x, y) => y.albums - x.albums || y.tracks - x.tracks),
+          albums_without_genre: albums.filter((n) => untagged(n.genre)).length,
+          genre_note:
+            "Genre tags are often missing or broad: choose by the artists too (list_artists).",
+          decades: [...decades]
+            .sort((x, y) => x[0] - y[0])
+            .map(([d, n]) => ({ decade: `${d}s`, albums: n })),
+          albums_without_year: noYear,
+          formats: [...formats]
+            .sort((x, y) => y[1] - x[1])
+            .map(([format, n]) => ({ format, tracks: n })),
+          analysis: {
+            tracks_measured: stats.length,
+            with_dr: stats.filter((x) => x.dr != null).length,
+            with_loudness: stats.filter((x) => x.lufs != null).length,
+            with_tempo: stats.filter((x) => x.bpm != null).length,
+            with_key: stats.filter((x) => x.key != null).length,
+            of: tracks.length,
+            note: "Tracks are measured when they play in TastyTunes, or with analyze_album.",
+          },
+          arrivals_known: albums.filter((n) => (n.addedAt ?? 0) > 0).length,
+        });
+      },
+    }),
+    // ANALYZE AUDIO FOR AN AGENT (0.16.0): the album's Analyze audio, run where analysis decodes,
+    // in the window, so an agent can measure an album the user asks about; it never opens a
+    // window, and the streamer's own drive can't be read
+    analyze_album: defineTool({
+      inputSchema: {
+        server_udn: z.string().describe("From list_albums or search_library."),
+        object_id: z.string().describe("The album's id."),
+      },
+      handler: async (a) => {
+        if (!getSettings().waveforms)
+          return err("Audio analysis is off. The user can turn it on in Settings › Appearance.");
+        const pool = indexPools().find((p) => p.udn === a.server_udn);
+        const album = pool?.albums.find((n) => n.id === a.object_id);
+        if (!pool || !album)
+          return err(
+            `No album '${a.object_id}' in that server's index. Use list_albums for its id.`,
+          );
+        const s = ctx.connected();
+        const server = (await refreshServers(s.connection.host)).find(
+          (x) => x.udn === a.server_udn,
+        );
+        if (server && usbServer(server))
+          return err(
+            "Tracks on the streamer's USB drive can't be read, so they can't be analyzed.",
+          );
+        if (!ctx.windowOpen())
+          return err(
+            "Audio is analyzed in the TastyTunes window, which is closed. Ask the user to open TastyTunes, then call again.",
+          );
+        ctx.sendCommand({ id: "analyzeAlbum", serverUdn: a.server_udn, albumId: a.object_id });
+        const tracks = albumTracksOf(album, pool).length;
+        return ok(
+          `Analyzing "${album.title}" (${tracks} ${tracks === 1 ? "track" : "tracks"}) in the background, one track at a time. get_track_analysis and list_tracks show each track's results once it is measured, list_albums the album's when every track is.`,
+        );
+      },
+    }),
     list_albums: defineTool({
       inputSchema: {
+        query: z
+          .string()
+          .optional()
+          .describe("Words in the album's title, accents and punctuation ignored."),
         artist: z
           .string()
           .optional()
@@ -287,7 +437,17 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         genre: z
           .string()
           .optional()
-          .describe("Case-insensitive genre, e.g. 'Rock' (results list each album's genres)."),
+          .describe(
+            "A genre, matched ignoring case, spaces and hyphens ('hip hop' is Hip-Hop); library_facets lists them. With none matching, the nearest genre names come back.",
+          ),
+        year_from: z.number().int().optional().describe("Albums from this year on."),
+        year_to: z.number().int().optional().describe("Albums up to this year."),
+        added_since: z
+          .string()
+          .optional()
+          .describe(
+            "A local date, YYYY-MM-DD: albums that arrived in the library since then (the Library's Recently added).",
+          ),
         decade: DECADE_ARG,
         kind: z
           .enum(["all", "albums", "compilations"])
@@ -332,10 +492,19 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             "true: only albums the listening record has a play for; false: only albums never played (the Library's Played filter).",
           ),
         sort: z
-          .enum(["title", "artist", "year", "dr", "loudness", "last_played", "most_played"])
+          .enum([
+            "title",
+            "artist",
+            "year",
+            "added",
+            "dr",
+            "loudness",
+            "last_played",
+            "most_played",
+          ])
           .optional()
           .describe(
-            "Default 'title'; 'year' sorts newest first; 'dr' most dynamic first, unanalyzed last; 'last_played' most recently played first and 'most_played' most plays first, from the listening record, unplayed last; 'loudness' loudest first (integrated LUFS), unmeasured last.",
+            "Default 'title'; 'year' sorts newest first; 'added' the latest arrivals first (the Library's Recently added); 'dr' most dynamic first, unanalyzed last; 'last_played' most recently played first and 'most_played' most plays first, from the listening record, unplayed last; 'loudness' loudest first (integrated LUFS), unmeasured last.",
           ),
         limit: z.number().int().min(1).max(100).optional().describe("Default 40."),
         offset: z.number().int().min(0).optional().describe("For paging; default 0."),
@@ -355,17 +524,40 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         // the text filters fold accents and punctuation (shared/keys' matchesQuery): "motorhead"
         // finds Motörhead
         const artistQuery = a.artist;
-        const genreNeedle = a.genre?.toLowerCase();
+        const titleQuery = a.query;
+        const genreWanted = a.genre != null ? genreKey(a.genre) : null;
         const decade = a.decade != null ? decadeStart(a.decade) : null;
         if (a.decade != null && decade == null) return err(decadeError(a.decade));
-        let albums = groups.flatMap((p) => p.albums);
+        const addedSince = a.added_since != null ? localDayStart(a.added_since) : null;
+        if (a.added_since != null && addedSince == null)
+          return err(
+            `"${a.added_since}" isn't a day: added_since takes a local date, YYYY-MM-DD (today is ${localToday()}).`,
+          );
+        const everyAlbum = groups.flatMap((p) => p.albums);
+        let albums = everyAlbum;
+        if (titleQuery != null) albums = albums.filter((n) => matchesQuery(titleQuery, [n.title]));
         if (artistQuery != null)
           albums = albums.filter((n) => matchesQuery(artistQuery, [n.artist]));
-        if (genreNeedle != null)
-          albums = albums.filter((n) =>
-            (n.genre ?? []).some((g) => g.toLowerCase() === genreNeedle),
-          );
+        // a genre ignoring case, spaces and hyphens (0.16.0), and when the library has none by
+        // that name, the nearest ones it has
+        const genreUnknown =
+          genreWanted != null &&
+          !everyAlbum.some((n) => (n.genre ?? []).some((g) => genreKey(g) === genreWanted));
+        if (genreWanted != null)
+          albums = albums.filter((n) => (n.genre ?? []).some((g) => genreKey(g) === genreWanted));
         if (decade != null) albums = albums.filter((n) => inDecade(n.year, decade));
+        const yearOf = (n: MediaNode): number =>
+          Number.parseInt(String(n.year ?? "").slice(0, 4), 10);
+        if (a.year_from != null) {
+          const from = a.year_from;
+          albums = albums.filter((n) => yearOf(n) >= from);
+        }
+        if (a.year_to != null) {
+          const to = a.year_to;
+          albums = albums.filter((n) => yearOf(n) <= to);
+        }
+        // the app's arrival dates (shared/recentlyAdded): an album with none is not claimed new
+        if (addedSince != null) albums = albums.filter((n) => (n.addedAt ?? 0) >= addedSince);
         // Each album's tracks, summed once (the same derivations the album
         // leaf, the lens and the Info modal use — albumTracksOf/albumSummary):
         // the filters below and the per-album fields both read this map.
@@ -443,6 +635,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         if (a.played === true) albums = albums.filter((n) => tallyOf(n).plays > 0);
         if (a.played === false) albums = albums.filter((n) => tallyOf(n).plays === 0);
         albums.sort((x, y) => {
+          if (sort === "added") return compareRecentlyAdded(x, y);
           if (sort === "last_played")
             return tallyOf(y).lastAt - tallyOf(x).lastAt || x.title.localeCompare(y.title);
           if (sort === "most_played")
@@ -465,10 +658,42 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const offset = a.offset ?? 0;
         const limit = a.limit ?? 40;
         const page = albums.slice(offset, offset + limit);
+        // how much of the answer rests on measured albums (0.16.0): an analysis filter or sort
+        // reads only the albums analyzed whole, and an agent should say so
+        const measuring = a.min_dr != null || sort === "dr" || sort === "loudness";
+        const datesKnown = sort === "added" || addedSince != null;
         return ok({
           total: albums.length,
           offset,
           returned: page.length,
+          ...(measuring
+            ? {
+                coverage: {
+                  albums_measured: everyAlbum.filter((n) => albumDr(n) != null).length,
+                  of: everyAlbum.length,
+                  note: "Dynamic range and loudness are known only for albums analyzed whole.",
+                },
+              }
+            : {}),
+          ...(datesKnown
+            ? {
+                arrivals_known: everyAlbum.filter((n) => (n.addedAt ?? 0) > 0).length,
+                ...(everyAlbum.some((n) => (n.addedAt ?? 0) > 0)
+                  ? {}
+                  : {
+                      note: "No arrival dates yet: the app notes the day each album first appears.",
+                    }),
+              }
+            : {}),
+          ...(genreUnknown
+            ? {
+                genre_note: `The library has no genre "${a.genre}".`,
+                nearest_genres: nearestNames(
+                  a.genre ?? "",
+                  everyAlbum.flatMap((n) => n.genre ?? []),
+                ),
+              }
+            : {}),
           albums: page.map((n) => {
             const { sum } = summaryFor(n);
             // brief by default (0.16.0): the server's name, the folder, the size, the odd formats,
@@ -495,6 +720,9 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               ...(albumDr(n) != null ? { dr: albumDr(n) } : {}),
               ...(full && sum.composers.length > 0 ? { composers: sum.composers } : {}),
               ...(full || sum.isCompilation ? { is_compilation: sum.isCompilation } : {}),
+              ...((full || datesKnown) && (n.addedAt ?? 0) > 0
+                ? { added: localTime(n.addedAt ?? 0) }
+                : {}),
               ...(stats
                 ? {
                     plays: tallyOf(n).plays,
@@ -523,7 +751,9 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           .enum(["name", "albums"])
           .optional()
           .describe("Default 'name' (A–Z); 'albums' sorts by album count, most first."),
-        limit: z.number().int().min(1).max(200).optional().describe("Default 100."),
+        // the whole artist list in one call (0.16.0, with compact answers): an agent reads it to
+        // choose by style, since genre tags are thin
+        limit: z.number().int().min(1).max(1000).optional().describe("Default 100, up to 1,000."),
         offset: z.number().int().min(0).optional().describe("For paging; default 0."),
       },
       // index-backed like list_albums — no connected() gate
@@ -584,12 +814,25 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
     }),
     list_tracks: defineTool({
       inputSchema: {
+        query: z
+          .string()
+          .optional()
+          .describe("Words in the track's title, accents and punctuation ignored."),
         artist: z
           .string()
           .optional()
           .describe("Case-insensitive substring on the track's performers."),
         album: z.string().optional().describe("Case-insensitive substring on the album title."),
-        genre: z.string().optional().describe("Case-insensitive genre."),
+        genre: z
+          .string()
+          .optional()
+          .describe(
+            "A genre, matched ignoring case, spaces and hyphens (library_facets lists them).",
+          ),
+        played: z
+          .boolean()
+          .optional()
+          .describe("true: only tracks the listening record has a play for; false: never played."),
         decade: DECADE_ARG,
         format: z
           .string()
@@ -663,7 +906,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const lc = (v: string | null | undefined): string => (v ?? "").toLowerCase();
         const artistQuery = a.artist;
         const albumQuery = a.album;
-        const genreNeedle = a.genre?.toLowerCase();
+        const titleQuery = a.query;
+        const genreWanted = a.genre != null ? genreKey(a.genre) : null;
         const decade = a.decade != null ? decadeStart(a.decade) : null;
         if (a.decade != null && decade == null) return err(decadeError(a.decade));
         const formatNeedle = a.format?.toLowerCase();
@@ -683,6 +927,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             `"${a.key}" doesn't name a key. Try 'A minor', 'F# major', 'Bbm', 'Eb' or 'minor'.`,
           );
         let tracks = groups.flatMap((p) => p.tracks);
+        if (titleQuery != null) tracks = tracks.filter((t) => matchesQuery(titleQuery, [t.title]));
         if (artistQuery != null)
           tracks = tracks.filter(
             (t) =>
@@ -690,10 +935,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
               matchesQuery(artistQuery, [t.artist]),
           );
         if (albumQuery != null) tracks = tracks.filter((t) => matchesQuery(albumQuery, [t.album]));
-        if (genreNeedle != null)
-          tracks = tracks.filter((t) =>
-            (t.genre ?? []).some((g) => g.toLowerCase() === genreNeedle),
-          );
+        if (genreWanted != null)
+          tracks = tracks.filter((t) => (t.genre ?? []).some((g) => genreKey(g) === genreWanted));
         if (decade != null) tracks = tracks.filter((t) => inDecade(t.year, decade));
         if (formatNeedle != null)
           tracks = tracks.filter(
@@ -704,6 +947,27 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         if (a.lossless === true)
           tracks = tracks.filter((t) => LOSSLESS_CODECS.has((t.format?.codec ?? "").toUpperCase()));
         if (a.hires === true) tracks = tracks.filter((t) => (t.format ? isHiRes(t.format) : false));
+        // HOW MUCH OF THE ANSWER IS MEASURED (0.16.0): an analysis filter or sort reads only the
+        // analyzed tracks, so the answer says how many of the tracks it chose from were (a tempo
+        // filter over 6% of a library had answered as if it were the whole)
+        const pool = tracks;
+        const coverageOf = (has: (t: MediaNode) => boolean) => ({
+          measured: pool.filter(has).length,
+          of: pool.length,
+        });
+        const sortName = a.sort ?? "title";
+        const coverage = {
+          ...(a.min_dr != null || sortName === "dr"
+            ? { dr: coverageOf((t) => drOf(t) != null) }
+            : {}),
+          ...(sortName === "loudness" ? { loudness: coverageOf((t) => lufsOf(t) != null) } : {}),
+          ...(a.min_bpm != null || a.max_bpm != null || sortName === "tempo"
+            ? { tempo: coverageOf((t) => bpmOf(t) != null) }
+            : {}),
+          ...(wantKey != null
+            ? { key: coverageOf((t) => keyName(keyFromStored(featuresOf(t))) != null) }
+            : {}),
+        };
         if (a.min_dr != null) {
           const min = a.min_dr;
           tracks = tracks.filter((t) => (drOf(t) ?? -1) >= min);
@@ -722,6 +986,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         const peersOf = peersByPlayKey(indexPools());
         const statOf = (t: MediaNode) =>
           copyStat(stats, t, peersOf(playKey(t.title, t.artist, t.album)));
+        if (a.played === true) tracks = tracks.filter((t) => (statOf(t)?.plays ?? 0) > 0);
+        if (a.played === false) tracks = tracks.filter((t) => (statOf(t)?.plays ?? 0) === 0);
         const sort = (a.sort as string | undefined) ?? "title";
         const byTitle = (x: MediaNode, y: MediaNode): number =>
           x.title.localeCompare(y.title) || lc(x.artist).localeCompare(lc(y.artist));
@@ -756,6 +1022,14 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           total: tracks.length,
           offset,
           returned: page.length,
+          ...(Object.keys(coverage).length > 0
+            ? {
+                coverage: {
+                  ...coverage,
+                  note: "Measured facts exist only for analyzed tracks: say how many were measured.",
+                },
+              }
+            : {}),
           tracks: page.map((t) => {
             const st = statOf(t);
             const dr = drOf(t);

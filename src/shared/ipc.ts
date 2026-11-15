@@ -133,7 +133,10 @@ export type MenuCommand =
   | { id: "navForward" }
   | { id: "screen"; screen: string }
   /** Settings › Updates, from the menus and the tray; check: and ask the feed now. */
-  | { id: "updates"; check?: boolean };
+  | { id: "updates"; check?: boolean }
+  /** An agent's analyze_album: the album's Analyze audio, run in the window (analysis decodes
+   *  there), never raising one. */
+  | { id: "analyzeAlbum"; serverUdn: string; albumId: string };
 
 export type PushMessage =
   | { kind: "connection"; state: ConnectionState }
