@@ -2,7 +2,7 @@ import { z } from "zod";
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, brightnessOptions } from "@shared/smoip";
 import { creditNames } from "@shared/model";
 import { getSettings } from "../../data/persist";
-import { fetchArtistInfo } from "../../lookups/artistInfo";
+import { fetchArtistInfoForCredit } from "../../lookups/artistInfo";
 import { fetchAlbumInfo } from "../../lookups/albumInfo";
 import { fetchLyrics } from "../../lookups/lyrics";
 import { type ToolContext, type ToolImpl, ok, err, toneCaps, defineTool } from "./toolkit";
@@ -153,12 +153,8 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
         const s = ctx.connected();
         const name = a.artist ?? s.playState?.metadata?.artist ?? null;
         if (!name) return err("No artist playing — pass artist explicitly.");
-        // the whole credit first ("Simon & Garfunkel" is one artist), then its lead name: a credit
-        // like "Tinlicker feat. Nathan Nicholson" matched no artist (0.16.0)
-        const lead = creditNames(name)[0];
-        const info =
-          (await fetchArtistInfo(name)) ??
-          (lead && lead !== name ? await fetchArtistInfo(lead) : null);
+        // the whole credit, then its lead name (artistInfo's fetchArtistInfoForCredit)
+        const info = await fetchArtistInfoForCredit(name);
         if (!info)
           return err(`No artist found for "${name}". Pass artist with the artist's name alone.`);
         return ok({

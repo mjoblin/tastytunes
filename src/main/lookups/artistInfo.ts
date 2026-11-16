@@ -6,7 +6,7 @@
 // 5xx) return the best partial answer for the moment but are never cached, so
 // the next request retries. `force` bypasses the cache read for a
 // user-driven refresh.
-import type { ArtistInfo } from "@shared/model";
+import { creditNames, type ArtistInfo } from "@shared/model";
 import { DiskCache } from "./diskCache";
 import { MB, WIKI, getJson, mbFetch, wikipediaFromRels, type Fetched, type MbRelation } from "./mb";
 import { nameKey } from "@shared/keys";
@@ -94,6 +94,22 @@ export function knownArtistImage(artist: string): string | null {
   const key = nameKey(artist);
   if (!key || !cache.has(key)) return null;
   return cache.get(key)?.image ?? null;
+}
+
+/**
+ * AN ARTIST BY A CREDIT, as a track or a service writes it (0.16.0): the whole credit first, since
+ * "Simon & Garfunkel" is one artist, then its lead name, so "Dusk Parade feat. June Vale" finds
+ * Dusk Parade. Liner notes' Artist tab and an agent's get_artist_info both ask it; before, the tab
+ * asked the whole credit alone and found no one for a featured credit.
+ */
+export async function fetchArtistInfoForCredit(
+  credit: string,
+  force = false,
+): Promise<ArtistInfo | null> {
+  const whole = await fetchArtistInfo(credit, force);
+  if (whole) return whole;
+  const lead = creditNames(credit)[0];
+  return lead && nameKey(lead) !== nameKey(credit) ? fetchArtistInfo(lead, force) : null;
 }
 
 /** Whether another artist fits without the cache dropping one: the photos fetched ahead stop at
