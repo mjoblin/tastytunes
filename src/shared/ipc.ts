@@ -332,7 +332,9 @@ export interface LoginItemState {
 export interface TastyTunesApi {
   getSnapshot(): Promise<Snapshot>;
   /** Cover Art Archive fallback for an album the server has no art for (null when off or unknown). */
-  albumArt(artist: string, album: string): Promise<string | null>;
+  /** An album's cover from another library or the Cover Art Archive; `failed`, the album's own
+   *  address that failed, is never offered back. */
+  albumArt(artist: string, album: string, failed?: string | null): Promise<string | null>;
   discover(): Promise<DiscoveredDevice[]>;
   connect(host: string): Promise<void>;
   disconnect(): Promise<void>;

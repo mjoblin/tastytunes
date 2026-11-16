@@ -96,18 +96,24 @@ export function knownArtistImage(artist: string): string | null {
   return cache.get(key)?.image ?? null;
 }
 
+/** A credit that names a featured guest ("A feat. B", "A ft. B", "A featuring B"). */
+const FEATURED = /\s(?:feat\.?|ft\.?|featuring)\s/i;
+
 /**
- * AN ARTIST BY A CREDIT, as a track or a service writes it (0.16.0): the whole credit first, since
- * "Simon & Garfunkel" is one artist, then its lead name, so "Dusk Parade feat. June Vale" finds
- * Dusk Parade. Liner notes' Artist tab and an agent's get_artist_info both ask it; before, the tab
- * asked the whole credit alone and found no one for a featured credit.
+ * AN ARTIST BY A CREDIT, as a track or a service writes it (0.16.0): the whole credit first, then,
+ * for a credit naming a featured guest, its lead name, so "Dusk Parade feat. June Vale" finds Dusk
+ * Parade. Liner notes' Artist tab and an agent's get_artist_info both ask it; before, the tab asked
+ * the whole credit alone and found no one for a featured credit. The lead name is asked only after
+ * the whole credit is a settled miss (the service answered and knows no such artist), and only for
+ * a featured credit: a band named "A and B" or "A & B" is one artist, and a request that failed
+ * once is no answer, so neither ever shows A in its place.
  */
 export async function fetchArtistInfoForCredit(
   credit: string,
   force = false,
 ): Promise<ArtistInfo | null> {
   const whole = await fetchArtistInfo(credit, force);
-  if (whole) return whole;
+  if (whole || !FEATURED.test(credit) || !knowsArtist(credit)) return whole;
   const lead = creditNames(credit)[0];
   return lead && nameKey(lead) !== nameKey(credit) ? fetchArtistInfo(lead, force) : null;
 }

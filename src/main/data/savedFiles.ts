@@ -100,7 +100,8 @@ export function readSaved(path: string, now = new Date()): SavedRead {
     return { state: "unreadable" };
   }
   try {
-    return { state: "read", parsed: JSON.parse(text) as unknown };
+    // a byte-order mark first (an editor's save, 0.16.0) is no reason to set the file aside
+    return { state: "read", parsed: JSON.parse(text.replace(/^\uFEFF/, "")) as unknown };
   } catch {
     const aside = asideName(path, "unreadable", now);
     try {
@@ -140,8 +141,10 @@ export function keepAsFound(path: string, setAside: readonly string[], now = new
 
 /**
  * The files as the last version left them, copied into backups/<when> from <version>/ the first time a
- * different version runs, before it writes anything; the last KEEP versions' backups kept. The
- * version is remembered in backups/last-version. Never a throw: a backup that fails is noted.
+ * different version runs, before it writes anything; the last KEEP versions' backups kept, and the
+ * newest from a release beside them (0.16.0: four release candidates in a row had pruned the copy
+ * the release before them left). The version is remembered in backups/last-version. Never a throw:
+ * a backup that fails is noted.
  */
 export function keepVersionCopy(
   dir: string,
@@ -166,8 +169,14 @@ export function keepVersionCopy(
         .filter((f) => statSync(join(backups, f)).isDirectory())
         .sort()
         .reverse();
+      // a release's own version has no suffix; one from before the backups was a release
+      const fromRelease = (name: string): boolean => {
+        const from = / from (.+)$/.exec(name)?.[1] ?? "";
+        return from === "an earlier version" || (from !== "" && !from.includes("-"));
+      };
+      const newestRelease = kept.find(fromRelease);
       for (const old of kept.slice(KEEP))
-        rmSync(join(backups, old), { recursive: true, force: true });
+        if (old !== newestRelease) rmSync(join(backups, old), { recursive: true, force: true });
       noteSaved(
         "info",
         `${present.join(", ")} from ${last ?? "an earlier version"} kept in backups/${basename(into)}`,

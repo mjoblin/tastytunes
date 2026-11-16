@@ -1,5 +1,16 @@
 import { nameKey } from "@shared/keys";
+
 import type { MediaIndexPools, MediaNode } from "@shared/model";
+
+/** A picture's server: its scheme, host and port; null for no address or one that isn't a URL. */
+const serverOf = (url: string | null | undefined): string | null => {
+  if (!url) return null;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+};
 
 /**
  * AN ALBUM'S COVER FROM ANOTHER LIBRARY (0.16.0). The streamer's USB drive serves its pictures at
@@ -9,18 +20,24 @@ import type { MediaIndexPools, MediaNode } from "@shared/model";
  * looked up across the ready indexes for a cover at a lasting address: never one on the
  * streamer's own address (`volatileHost`), which dies the same way. An album first, then any of
  * its tracks; null when no library holds a lasting one. Pure: the pools and the host are given.
+ * `failed` is the address that just failed, the album's own: nothing on its server (its scheme,
+ * host and port) is offered back, since the album's other copies there fail alike (0.16.0: an
+ * album on a media server found its own dead picture first, then a track's beside it, so the Cover
+ * Art Archive was never asked).
  */
 export function albumArtElsewhere(
   pools: readonly MediaIndexPools[],
   artist: string,
   album: string,
   volatileHost: string | null,
+  failed: string | null = null,
 ): string | null {
   const wantAlbum = nameKey(album);
   const wantArtist = nameKey(artist);
   if (!wantAlbum || !wantArtist) return null;
+  const failedServer = serverOf(failed);
   const lasting = (url: string | null | undefined): url is string => {
-    if (!url) return false;
+    if (!url || (failedServer != null && serverOf(url) === failedServer)) return false;
     try {
       const host = new URL(url).hostname.replace(/^\[|\]$/g, "");
       return volatileHost == null || host !== volatileHost;

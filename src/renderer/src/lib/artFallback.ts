@@ -12,14 +12,26 @@ import { artSrc } from "@/lib/artSrc";
  */
 const memo = new Lru<string, Promise<string | null>>(500);
 
-function lookup(artist: string, album: string): Promise<string | null> {
-  const key = `${artist.toLowerCase()}|${album.toLowerCase()}`;
+/** The address behind a drawn picture: a thumbnail's own (tt-art's `u`), else as it is. */
+const addressOf = (src: string | null | undefined): string | null => {
+  if (!src) return null;
+  if (!src.startsWith("tt-art://")) return src;
+  try {
+    return new URL(src).searchParams.get("u");
+  } catch {
+    return null;
+  }
+};
+
+function lookup(artist: string, album: string, failed: string | null): Promise<string | null> {
+  const key = `${artist.toLowerCase()}|${album.toLowerCase()}|${failed ?? ""}`;
   let p = memo.get(key);
   if (!p) {
     // another library's cover is an address: drawn through the thumbnail cache, as the
-    // album's own would be (the Cover Art Archive's answer is already a data URL)
+    // album's own would be (the Cover Art Archive's answer is already a data URL); the
+    // album's own failed address is named, so it is never offered back
     p = tt
-      .albumArt(artist, album)
+      .albumArt(artist, album, failed)
       .then((u) => (u && /^https?:/i.test(u) ? artSrc(u, 240) : u))
       .catch(() => null);
     memo.set(key, p);
@@ -31,20 +43,22 @@ function lookup(artist: string, album: string): Promise<string | null> {
 export function useArtFallback(
   ask: { artist: string | null | undefined; album: string | null | undefined } | undefined,
   enabled: boolean,
+  failedSrc: string | null = null,
 ): string | null {
   const [url, setUrl] = useState<string | null>(null);
   const artist = ask?.artist ?? null;
   const album = ask?.album ?? null;
+  const failed = addressOf(failedSrc);
   useEffect(() => {
     setUrl(null);
     if (!enabled || !artist || !album) return;
     let live = true;
-    void lookup(artist, album).then((u) => {
+    void lookup(artist, album, failed).then((u) => {
       if (live && u) setUrl(u);
     });
     return () => {
       live = false;
     };
-  }, [artist, album, enabled]);
+  }, [artist, album, enabled, failed]);
   return url;
 }

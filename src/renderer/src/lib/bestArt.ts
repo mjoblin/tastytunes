@@ -5,6 +5,10 @@ import { useStore } from "@/store";
 import { artSrc } from "@/lib/artSrc";
 import { Lru } from "@/lib/lru";
 
+/** The album a lookup names, for telling the next track of one album from another album's. */
+const albumOf = (q: EmbeddedArtQuery | null): string | null =>
+  q && "album" in q && q.album ? `${q.artist ?? ""}|${q.album}` : null;
+
 /**
  * The best artwork for a BIG surface (the Now Playing hero, Display mode, the
  * ambient wash, the album header): the server's art unless it is missing or
@@ -58,12 +62,19 @@ export function useBestArt(
   const [best, setBest] = useState<string | null>(serverUrl ?? null);
   const queryKey = query ? JSON.stringify(query) : null;
   const lastServer = useRef(serverUrl);
+  const lastAlbum = useRef(albumOf(query));
   const findBest = useEffectEvent(() => {
     // A NEW SERVER PICTURE SHOWS AT ONCE; THE SAME ONE (the next track of an album) keeps what is
     // shown while the file is asked (0.16.0: every track stepped back to the server's small cover
-    // and forward to the file's again a moment later, and the wash behind the window flickered)
-    if (serverUrl !== lastServer.current || !query) setBest(serverUrl ?? null);
+    // and forward to the file's again a moment later, and the wash behind the window flickered).
+    // No server picture on either track is the same only within one album: a server that sends no
+    // addresses had kept the last album's cover from its file until the next one's arrived
+    const album = albumOf(query);
+    const sameAlbumWithout = serverUrl == null && album != null && album === lastAlbum.current;
+    if (serverUrl !== lastServer.current || !query || (serverUrl == null && !sameAlbumWithout))
+      setBest(serverUrl ?? null);
     lastServer.current = serverUrl;
+    lastAlbum.current = album;
     if (!query) return;
     let live = true;
     void (async () => {

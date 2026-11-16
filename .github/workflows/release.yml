@@ -31,6 +31,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        # no token left in .git/config for the steps after it (gh and the packaging read GH_TOKEN)
+        with:
+          persist-credentials: false
         if: startsWith(github.ref, 'refs/tags/v')
 
       - name: Verify tag matches package.json version
@@ -81,6 +84,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        # no token left in .git/config for the steps after it (gh and the packaging read GH_TOKEN)
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:
@@ -192,6 +198,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        # no token left in .git/config for the steps after it (gh and the packaging read GH_TOKEN)
+        with:
+          persist-credentials: false
 
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
         with:

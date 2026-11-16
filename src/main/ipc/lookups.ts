@@ -233,9 +233,15 @@ export function registerLookupsIpc(): void {
   // an album's cover when its own is missing or failed: the same album in another library first
   // (never on the streamer's own address, re-minted on every wake; no request leaves the
   // network), then the Cover Art Archive with the lookups on
-  handle(IPC.albumArt, (_e, artist: string, album: string) => {
+  handle(IPC.albumArt, (_e, artist: string, album: string, failed?: string | null) => {
     if (typeof artist !== "string" || typeof album !== "string") return null;
-    const elsewhere = albumArtElsewhere(mediaIndex.pools(), artist, album, connectedHost());
+    const elsewhere = albumArtElsewhere(
+      mediaIndex.pools(),
+      artist,
+      album,
+      connectedHost(),
+      typeof failed === "string" ? failed : null,
+    );
     if (elsewhere) return elsewhere;
     return getSettings().albumArtLookup ? fetchCoverArt(artist, album) : null;
   });

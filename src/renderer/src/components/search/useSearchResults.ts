@@ -52,14 +52,15 @@ export function useSearchResults(
     return (presets ?? []).filter((p) => p.name && matchesFilter(q, [p.name]));
   }, [q, presets]);
 
+  // THE MEMORY THIS MOUNT IS SEEDED FROM: the session's last results when they answered this very
+  // query (0.16.0: the seed compared the memory with Search's own query, not this hook's, so the
+  // Library's Everything opened on another query's rows for a moment)
+  const seed = useRef(q && searchMemory.results?.query === q ? searchMemory.results : null);
+
   // ---- library: index-backed, so also instant, but it crosses the IPC bridge
 
-  const [libResults, setLibResults] = useState<MediaNode[]>(() =>
-    searchMemory.results?.query === searchMemory.query ? searchMemory.results.lib : [],
-  );
-  const [libTotal, setLibTotal] = useState(() =>
-    searchMemory.results?.query === searchMemory.query ? searchMemory.results.libTotal : 0,
-  );
+  const [libResults, setLibResults] = useState<MediaNode[]>(() => seed.current?.lib ?? []);
+  const [libTotal, setLibTotal] = useState(() => seed.current?.libTotal ?? 0);
   const libSeq = useRef(0);
   useEffect(() => {
     if (!q) {
@@ -87,9 +88,7 @@ export function useSearchResults(
   // ---- radio: the one network call. Debounced, superseded, and allowed to
   // ---- fail without taking the local groups down with it.
 
-  const [radio, setRadio] = useState<RadioStation[] | null>(() =>
-    searchMemory.results?.query === searchMemory.query ? searchMemory.results.radio : null,
-  );
+  const [radio, setRadio] = useState<RadioStation[] | null>(() => seed.current?.radio ?? null);
   // The query this mount was SEEDED for: its library and radio effects skip the
   // fetch while q is still that query (the rows are already the answer; the
   // radio lookup is a network call and showed as a fresh search on every
@@ -97,11 +96,7 @@ export function useSearchResults(
   // cleanup: StrictMode's simulated unmount runs every cleanup and re-runs
   // every effect, and a cleanup that nulled this ref made every history return
   // refetch under `npm run dev` while the built app was fine.
-  const seededQuery = useRef<string | null>(
-    searchMemory.results?.query === searchMemory.query && searchMemory.query
-      ? searchMemory.query
-      : null,
-  );
+  const seededQuery = useRef<string | null>(seed.current ? q : null);
   useEffect(() => {
     if (q) searchMemory.results = { query: q, lib: libResults, libTotal, radio };
   }, [q, libResults, libTotal, radio]);
@@ -116,13 +111,18 @@ export function useSearchResults(
     // chip is it, and it persists for the session like the rest of the rail.
     if (!radioDirectory || hidden.has("radio") || q.length < MIN_RADIO_CHARS) {
       radioSeq.current++;
+      // the stations shown are gone, so the memory this mount was seeded from no longer answers:
+      // radio shown again asks again (0.16.0: a return narrowed and widened read 0 stations)
+      seed.current = null;
       setRadio(null);
       setRadioPending(false);
       setRadioFailed(false);
       return;
     }
     if (seededQuery.current != null && seededQuery.current !== q) seededQuery.current = null; // a different query lifts the skip
-    if (seededQuery.current === q) return; // seeded from memory: no lookup, no spinner
+    // seeded from memory: no lookup, no spinner, unless the memory never asked (radio was hidden,
+    // "+N more" narrowing for now, so its stations read 0 on the return until the query changed)
+    if (seededQuery.current === q && seed.current?.radio != null) return;
     const seq = ++radioSeq.current;
     setRadioPending(true);
     setRadioFailed(false);

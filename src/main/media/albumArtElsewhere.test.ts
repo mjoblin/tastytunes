@@ -27,37 +27,71 @@ const pool = (udn: string, albums: MediaNode[], tracks: MediaNode[] = []): Media
 const EVO = "192.168.0.45";
 const drive = pool("usb", [
   node({
-    title: "Frozen Charlotte",
-    artist: "Jack White",
+    title: "Paper Moons",
+    artist: "Glass Orchard",
     artUrl: `http://${EVO}:80/album-art-ea21?id=4:2`,
   }),
 ]);
 const server = pool("nas", [
   node({
-    title: "Frozen Charlotte",
-    artist: "Jack White",
+    title: "Paper Moons",
+    artist: "Glass Orchard",
     artUrl: "http://192.168.0.101:26125/aa/5391/cover.jpg",
   }),
 ]);
 
 describe("albumArtElsewhere", () => {
+  it("offers nothing on the failed picture's server, a track's beside it included", () => {
+    const own = "http://192.168.0.101:26125/aa/5391/cover.jpg";
+    const sameServerTrack = pool(
+      "nas-tracks",
+      [],
+      [
+        node({
+          title: "Harbour Lights",
+          album: "Paper Moons",
+          artist: "Glass Orchard",
+          isContainer: false,
+          upnpClass: "object.item.audioItem.musicTrack",
+          artUrl: "http://192.168.0.101:26125/aa/5392/cover.jpg",
+        }),
+      ],
+    );
+    expect(
+      albumArtElsewhere([server, sameServerTrack], "Glass Orchard", "Paper Moons", EVO, own),
+    ).toBeNull();
+    expect(
+      albumArtElsewhere([server], "Glass Orchard", "Paper Moons", EVO, `${own}?size=480`),
+    ).toBeNull();
+    // another server's copy is offered
+    const other = pool("other", [
+      node({ title: "Paper Moons", artist: "Glass Orchard", artUrl: "http://192.168.0.102/p.jpg" }),
+    ]);
+    expect(albumArtElsewhere([server, other], "Glass Orchard", "Paper Moons", EVO, own)).toBe(
+      "http://192.168.0.102/p.jpg",
+    );
+    expect(
+      albumArtElsewhere([server], "Glass Orchard", "Paper Moons", EVO, "http://elsewhere/x.jpg"),
+    ).toBe(own);
+  });
+
   it("finds the same album's cover in another library, never on the streamer's address", () => {
-    expect(albumArtElsewhere([drive, server], "Jack White", "Frozen Charlotte", EVO)).toBe(
+    expect(albumArtElsewhere([drive, server], "Glass Orchard", "Paper Moons", EVO)).toBe(
       "http://192.168.0.101:26125/aa/5391/cover.jpg",
     );
-    expect(albumArtElsewhere([drive], "Jack White", "Frozen Charlotte", EVO)).toBeNull();
+    expect(albumArtElsewhere([drive], "Glass Orchard", "Paper Moons", EVO)).toBeNull();
   });
 
   it("matches names as the library does (case and spacing), and by album artist", () => {
     const comp = pool("nas", [
       node({
-        title: "frozen charlotte ",
-        albumArtist: "JACK WHITE",
+        title: "paper moons ",
+        albumArtist: "GLASS ORCHARD",
         artist: "Someone Else",
         artUrl: "http://192.168.0.101/c.jpg",
       }),
     ]);
-    expect(albumArtElsewhere([comp], "Jack White", "Frozen Charlotte", EVO)).toBe(
+    expect(albumArtElsewhere([comp], "Glass Orchard", "Paper Moons", EVO)).toBe(
       "http://192.168.0.101/c.jpg",
     );
   });
@@ -68,18 +102,18 @@ describe("albumArtElsewhere", () => {
       [],
       [
         node({
-          title: "Derecho Demonico",
-          album: "Frozen Charlotte",
-          artist: "Jack White",
+          title: "Harbour Lights",
+          album: "Paper Moons",
+          artist: "Glass Orchard",
           isContainer: false,
           upnpClass: "object.item.audioItem.musicTrack",
           artUrl: "http://192.168.0.101/t.jpg",
         }),
       ],
     );
-    expect(albumArtElsewhere([tracksOnly], "Jack White", "Frozen Charlotte", EVO)).toBe(
+    expect(albumArtElsewhere([tracksOnly], "Glass Orchard", "Paper Moons", EVO)).toBe(
       "http://192.168.0.101/t.jpg",
     );
-    expect(albumArtElsewhere([server], "Meg White", "Frozen Charlotte", EVO)).toBeNull();
+    expect(albumArtElsewhere([server], "Dusk Parade", "Paper Moons", EVO)).toBeNull();
   });
 });

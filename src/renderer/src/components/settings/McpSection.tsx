@@ -84,7 +84,7 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
       <SettingsCard>
         <Toggle
           label="MCP server"
-          hint="Let AI agents and other MCP clients see and control the streamer over the Model Context Protocol."
+          hint="Let AI agents and other MCP clients see and control your streamers over the Model Context Protocol."
           checked={mcp.enabled}
           onChange={(enabled) => saveMcp({ enabled })}
         />

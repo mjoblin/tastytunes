@@ -1310,27 +1310,38 @@ export function LibraryScreen(): React.JSX.Element {
           />
         )}
 
-        {searchMode && !atRoot && !searchState && !searching && (
+        {/* the Library's own lines, only while its own results are the ones shown (0.16.0: they
+            sat over Everything's results, "No results" above the favorites it found) */}
+        {searchScope === "library" && searchMode && !atRoot && !searchState && !searching && (
           <div className="text-[15px] text-faint pt-4 px-1">
             Search all the media on {server?.name ?? "this library"}.
           </div>
         )}
-        {searchMode && !atRoot && searchState && !searching && shown.length === 0 && (
-          <div className="text-[15px] text-faint pt-4 px-1">
-            No results for “{searchState.query}”
-          </div>
-        )}
-        {crossMode && !crossState && !searching && (
+        {searchScope === "library" &&
+          searchMode &&
+          !atRoot &&
+          searchState &&
+          !searching &&
+          shown.length === 0 && (
+            <div className="text-[15px] text-faint pt-4 px-1">
+              No results for “{searchState.query}”
+            </div>
+          )}
+        {searchScope === "library" && crossMode && !crossState && !searching && (
           <div className="text-[15px] text-faint pt-4 px-1">
             Search every built library index at once:{" "}
             {readyIndexes.map((x) => x.serverName).join(", ")}.
           </div>
         )}
-        {crossMode && crossState && !searching && crossGroups.length === 0 && (
-          <div className="text-[15px] text-faint pt-4 px-1">
-            No results for “{crossState.query}”
-          </div>
-        )}
+        {searchScope === "library" &&
+          crossMode &&
+          crossState &&
+          !searching &&
+          crossGroups.length === 0 && (
+            <div className="text-[15px] text-faint pt-4 px-1">
+              No results for “{crossState.query}”
+            </div>
+          )}
         {!searchMode && !atRoot && state === "ready" && shown.length === 0 && (
           <div className="text-[15px] text-faint pt-4 px-1">
             {effFilter ? `No matches for “${effFilter}”` : "Nothing here"}
