@@ -18,6 +18,19 @@ async function load(file: Record<string, unknown>) {
   return { settings: persist.getSettings(), persist, path };
 }
 
+describe("the Library's views keep their own Rows or Cards", () => {
+  it("gives an older file's Artists view the albums' choice, as it showed before", async () => {
+    expect((await load({ libraryLayout: "rows" })).settings.lensArtistsLayout).toBe("rows");
+    expect((await load({ libraryLayout: "cards" })).settings.lensArtistsLayout).toBe("cards");
+  });
+
+  it("keeps the Artists view's own choice apart from the albums'", async () => {
+    const { settings } = await load({ libraryLayout: "cards", lensArtistsLayout: "rows" });
+    expect(settings.libraryLayout).toBe("cards");
+    expect(settings.lensArtistsLayout).toBe("rows");
+  });
+});
+
 describe("the accent read from a stored file", () => {
   it("keeps the album's color for a file that had Accent follows album art on", async () => {
     const { settings } = await load({ accentFollowsArt: true });

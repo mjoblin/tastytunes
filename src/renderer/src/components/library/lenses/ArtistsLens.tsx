@@ -132,8 +132,8 @@ export function ArtistsLens({
    *  one step in from the selected artist (the Albums heading's link, a double-click), and
    *  the cards' click. */
   onOpenArtistPage?(name: string): void;
-  /** The Library's one Rows or Cards choice (libraryLayout): rows are the
-   *  three columns, cards the grid (ArtistCards). */
+  /** The Artists view's own Rows or Cards (lensArtistsLayout, 0.16.0): rows are the three
+   *  columns, cards the grid (ArtistCards). */
   cards: boolean;
   cardSize: number;
   cardGap: number;
