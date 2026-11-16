@@ -24,6 +24,12 @@ describe("the Library's views keep their own Rows or Cards", () => {
     expect((await load({ libraryLayout: "cards" })).settings.lensArtistsLayout).toBe("cards");
   });
 
+  it("gives an older file's artist page the albums' choice too", async () => {
+    expect((await load({ libraryLayout: "rows" })).settings.artistPageLayout).toBe("rows");
+    const { settings } = await load({ libraryLayout: "rows", artistPageLayout: "cards" });
+    expect(settings.artistPageLayout).toBe("cards");
+  });
+
   it("keeps the Artists view's own choice apart from the albums'", async () => {
     const { settings } = await load({ libraryLayout: "cards", lensArtistsLayout: "rows" });
     expect(settings.libraryLayout).toBe("cards");

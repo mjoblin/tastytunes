@@ -129,6 +129,7 @@ export function LibraryScreen(): React.JSX.Element {
     libraryLayout,
     lensTracksLayout,
     lensArtistsLayout,
+    artistPageLayout,
     librarySort,
     librarySortReversed,
     presetCardSize,
@@ -143,6 +144,8 @@ export function LibraryScreen(): React.JSX.Element {
   const tracksCards = lensTracksLayout === "cards";
   // the Artists view's own Rows or Cards (0.16.0): the columns or a grid of artists
   const artistsCards = lensArtistsLayout === "cards";
+  // an artist's page's own, for every artist's page (0.16.0)
+  const artistPageCards = artistPageLayout === "cards";
 
   const [servers, setServers] = useState<MediaServerInfo[] | null>(null);
   const [serverUdn, setServerUdn] = useState<string | null>(null);
@@ -1222,7 +1225,7 @@ export function LibraryScreen(): React.JSX.Element {
               name={artistPage}
               pools={lensPools}
               actions={lensActions}
-              cards={cards}
+              cards={artistPageCards}
               cardSize={presetCardSize}
               cardGap={presetGap}
               fillRows={presetFillRows}

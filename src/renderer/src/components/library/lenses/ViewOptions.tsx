@@ -16,15 +16,17 @@ import { Segmented } from "@/components/controls/Segmented";
 import { Slider, useSliderDraft } from "@/components/controls/Slider";
 import { Switch } from "@/components/controls/Switch";
 
-/** The view a menu dresses: albums (the Albums view and the artist page), artists, tracks, a
- *  server's folders, the Queue or Presets (the last three since 0.14.0: the menu wherever a
- *  Rows or Cards button was). */
-export type ViewKind = "albums" | "artists" | "tracks" | "folders" | "queue" | "presets";
+/** The view a menu dresses: the Albums view, artists, tracks, a server's folders, the Queue or
+ *  Presets (the last three since 0.14.0: the menu wherever a Rows or Cards button was), or an
+ *  artist's page (its own since 0.16.0; it had dressed as the Albums view). */
+export type ViewKind =
+  "albums" | "artists" | "tracks" | "folders" | "queue" | "presets" | "artistPage";
 
 // Each kind's own Rows or Cards and Format and DR (albums and tracks keep separate display
 // settings). The Artists view has its own Rows or Cards since 0.16.0 (the columns or a grid; it
-// had followed the albums') and no format line; a server's folders share the albums' both (the one
-// Library choice they always followed), as the artist page's albums do; the Queue has Rows, Cards
+// had followed the albums') and no format line; an artist's page has its own Rows or Cards since
+// 0.16.0 and the albums' format line; a server's folders share the albums' both (the one Library
+// choice they always followed); the Queue has Rows, Cards
 // or Albums and Presets Rows or Cards, neither a format line (0.14.0). Card size, gap and Fill
 // rows are every card grid's.
 const layoutOf = (s: AppSettings, kind: ViewKind): QueueLayout =>
@@ -32,13 +34,15 @@ const layoutOf = (s: AppSettings, kind: ViewKind): QueueLayout =>
     ? s.lensTracksLayout
     : kind === "artists"
       ? s.lensArtistsLayout
-      : kind === "queue"
-        ? s.queueLayout
-        : kind === "presets"
-          ? s.presetsLayout
-          : s.libraryLayout;
+      : kind === "artistPage"
+        ? s.artistPageLayout
+        : kind === "queue"
+          ? s.queueLayout
+          : kind === "presets"
+            ? s.presetsLayout
+            : s.libraryLayout;
 const formatOf = (s: AppSettings, kind: ViewKind): boolean | null =>
-  kind === "albums" || kind === "folders"
+  kind === "albums" || kind === "folders" || kind === "artistPage"
     ? s.albumCardFormat
     : kind === "tracks"
       ? s.trackCardFormat
@@ -48,11 +52,13 @@ const layoutPatch = (kind: ViewKind, v: QueueLayout): Partial<AppSettings> =>
     ? { lensTracksLayout: v === "rows" ? "rows" : "cards" }
     : kind === "artists"
       ? { lensArtistsLayout: v === "rows" ? "rows" : "cards" }
-      : kind === "queue"
-        ? { queueLayout: v }
-        : kind === "presets"
-          ? { presetsLayout: v === "rows" ? "rows" : "cards" }
-          : { libraryLayout: v === "rows" ? "rows" : "cards" };
+      : kind === "artistPage"
+        ? { artistPageLayout: v === "rows" ? "rows" : "cards" }
+        : kind === "queue"
+          ? { queueLayout: v }
+          : kind === "presets"
+            ? { presetsLayout: v === "rows" ? "rows" : "cards" }
+            : { libraryLayout: v === "rows" ? "rows" : "cards" };
 const formatPatch = (kind: ViewKind, v: boolean): Partial<AppSettings> =>
   kind === "tracks" ? { trackCardFormat: v } : { albumCardFormat: v };
 const NAME: Record<ViewKind, string> = {
@@ -62,8 +68,10 @@ const NAME: Record<ViewKind, string> = {
   folders: "Folders",
   queue: "Queue",
   presets: "Presets",
+  artistPage: "Artist Page",
 };
-/** The view whose settings a Match button copies: albums and tracks match each other. */
+/** The view whose settings a Match button copies: albums and tracks match each other, and an
+ *  artist's page matches the albums. */
 const OTHER: Record<ViewKind, ViewKind | null> = {
   albums: "tracks",
   artists: null,
@@ -71,6 +79,7 @@ const OTHER: Record<ViewKind, ViewKind | null> = {
   folders: null,
   queue: null,
   presets: null,
+  artistPage: "albums",
 };
 /** A layout's name, as the menu's buttons and an undo's label say it. */
 const LAYOUT_NAME: Record<QueueLayout, string> = { rows: "Rows", cards: "Cards", albums: "Albums" };

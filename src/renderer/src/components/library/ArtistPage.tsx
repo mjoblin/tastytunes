@@ -111,7 +111,7 @@ export function ArtistPage({
           <div className="flex items-end justify-between gap-3 px-1 pt-2" data-artist-albums-head>
             <div className="microlabel pb-0.5">Albums</div>
             <div className={`flex items-center ${GAP_WITHIN}`}>
-              <ViewOptions kind="albums" />
+              <ViewOptions kind="artistPage" />
               <SortChip
                 sorts={ALBUM_SORTS}
                 neutral="year"
