@@ -48,7 +48,11 @@ import { SearchResults } from "@/components/search/SearchResults";
 export function SearchScreen(): React.JSX.Element {
   const { query, setQuery, inputRef, narrowTo } = useSearchQuery();
   const saveSettings = useStore((s) => s.saveSettings);
-  const stored = sanitizeScope(useStore((s) => s.settings.searchScope));
+  const radioDirectory = useStore((s) => s.settings.radioDirectory);
+  const remembered = sanitizeScope(useStore((s) => s.settings.searchScope));
+  // a remembered Internet radio scope with the directory off is Everything (0.16.0: it hid the four
+  // categories there are, across restarts, until Everything was clicked)
+  const stored: SearchScope = remembered === "radio" && !radioDirectory ? "everything" : remembered;
   // A CHIP CHOSEN IS REMEMBERED; a group's "+N more", or an ask that names a scope (a pivot's
   // Everything, a link's one category), narrows the view for now and leaves the remembered scope
   // as it was, as the "+N more" isolate always did

@@ -57,11 +57,15 @@ export function useUnifiedSearch(q: string, scope: SearchScope): UnifiedSearch {
   } = useSearchResults(q, hidden, radioDirectory);
   const { playNode, openFavorite } = useSearchActions();
 
-  // the library's partition, offered once the library is the scope
+  // the library's partition, offered once the library is the scope, and applied only there (0.16.0:
+  // a kind chosen under the Library chip still filtered the Library group in Everything, with no
+  // control to show it and the all-kinds total beside it)
   const libShown = useMemo(
     () =>
-      libKind === "all" ? libResults : libResults.filter((n) => `${nodeKind(n)}s` === libKind),
-    [libResults, libKind],
+      libKind === "all" || scope !== "library"
+        ? libResults
+        : libResults.filter((n) => `${nodeKind(n)}s` === libKind),
+    [libResults, libKind, scope],
   );
 
   const { openNodeMenu, openFavMenu, setRowMenu, overlays } = useSearchMenus(

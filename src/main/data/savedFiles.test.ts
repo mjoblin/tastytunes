@@ -33,6 +33,14 @@ beforeEach(() => {
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
 describe("readSaved", () => {
+  it("reads a file saved with a byte-order mark as it reads one without", () => {
+    writeFileSync(join(dir, "settings.json"), '\uFEFF{"theme":"light"}');
+    expect(readSaved(join(dir, "settings.json"))).toEqual({
+      state: "read",
+      parsed: { theme: "light" },
+    });
+  });
+
   it("reads a missing file as missing, saying nothing", () => {
     expect(readSaved(join(dir, "favorites.json"))).toEqual({ state: "missing" });
     expect(notes).toEqual([]);
@@ -168,6 +176,16 @@ describe("keepVersionCopy", () => {
     expect(notes.at(-1)?.text).toBe(
       "settings.json, favorites.json from 1.1.0 kept in backups/2026-12-04T12-00-00 from 1.1.0",
     );
+  });
+
+  it("keeps the newest copy from a release beside the last few, through a run of candidates", () => {
+    writeFileSync(join(dir, "settings.json"), '{"theme":"light"}');
+    keepVersionCopy(dir, "0.15.0", FILES, at(0));
+    for (const [i, v] of ["0.16.0-rc.1", "0.16.0-rc.2", "0.16.0-rc.3", "0.16.0-rc.4"].entries())
+      keepVersionCopy(dir, v, FILES, new Date(2026, 11, 1 + i, 12));
+    const kept = readdirSync(join(dir, "backups")).filter((f) => f !== "last-version");
+    expect(kept).toHaveLength(KEEP + 1);
+    expect(kept).toContain("2026-12-01T12-00-00 from 0.15.0");
   });
 
   it("on a first run with no files, only remembers the version", () => {

@@ -274,7 +274,10 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           const t = await ctx.target(a.device);
           const udn = t.snapshot().systemInfo?.udn;
           if (!udn) return err(`${t.name} didn't say who it is. Try again in a moment.`);
-          if (!t.window) streamer = { udn, name: t.name };
+          // named whenever it was asked for, the window's own streamer too (0.16.0: one named while
+          // the window showed it was saved with none, and later fired on whatever the window showed;
+          // the scheduler takes the window's udn as the window)
+          streamer = { udn, name: t.name };
         }
         const sched: Schedule = {
           id: randomUUID(),

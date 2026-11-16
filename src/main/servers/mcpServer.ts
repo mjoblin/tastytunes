@@ -425,8 +425,12 @@ export class McpBridge {
     if (device != null && host == null)
       throw new Error(`No streamer called '${device}'. Use list_devices for their names.`);
     if (host == null || host === windowHost) {
-      // the window's streamer: an agent's own connection to it, if it had one, gives way
-      if (host != null) this.remotes.drop(host);
+      // the window's streamer: an agent's own connection to it, if it had one, gives way, and a
+      // sleep timer armed there goes over to the window's connection unless it has its own
+      if (host != null) {
+        const sleep = this.remotes.drop(host);
+        if (sleep && this.dm.snapshot().sleep == null) this.dm.setSleep(sleep);
+      }
       const s = this.connected();
       return {
         window: true,

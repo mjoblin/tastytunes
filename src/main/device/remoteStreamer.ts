@@ -269,19 +269,30 @@ export class RemoteStreamers {
     }
   }
 
-  /** The window moved to a streamer an agent had open: the window's connection serves it now. */
-  drop(host: string): void {
+  /** The window moved to a streamer an agent had open: the window's connection serves it now. The
+   *  sleep timer an agent armed on it is handed back, for the window's connection to take over
+   *  (0.16.0: it closed with the connection, unsaid). */
+  drop(host: string): SleepTimer | null {
     const remote = this.open.get(host);
-    if (!remote) return;
+    if (!remote) return null;
+    const sleep = remote.sleeper.current;
     remote.close();
     this.open.delete(host);
+    return sleep;
   }
 
+  /** The agent server off: every connection closes but one with a sleep timer armed, which the
+   *  sweep closes once its timer has fired and it sits idle (0.16.0: the timer died with it). */
   closeAll(): void {
-    for (const remote of this.open.values()) remote.close();
-    this.open.clear();
-    if (this.sweeper) clearInterval(this.sweeper);
-    this.sweeper = null;
+    for (const [host, remote] of this.open) {
+      if (remote.sleeper.current != null) continue;
+      remote.close();
+      this.open.delete(host);
+    }
+    if (this.open.size === 0 && this.sweeper) {
+      clearInterval(this.sweeper);
+      this.sweeper = null;
+    }
   }
 }
 

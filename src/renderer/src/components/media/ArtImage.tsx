@@ -201,6 +201,9 @@ export function ArtImage({
     };
   }, [shimmer, src, loaded]);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  // a fallback that failed too is remembered apart (0.16.0): with one remembered failure, a failed
+  // fallback handed back to the failed picture, which failed again, round and round
+  const [failedFallback, setFailedFallback] = useState<string | null>(null);
   const [retry, setRetry] = useState<{ src: string; n: number; waiting: boolean }>({
     src: "",
     n: 0,
@@ -216,9 +219,10 @@ export function ArtImage({
   const attempt = src != null && retry.src === src ? retry.n : 0;
   const waiting = src != null && retry.src === src && retry.waiting;
   const missing = !src || failedSrc === src;
-  const caa = useArtFallback(fallbackArt, missing && fallbackArt != null);
+  const caa = useArtFallback(fallbackArt, missing && fallbackArt != null, src);
   const base = missing ? caa : src;
-  const drawn = !!base && failedSrc !== base && !(waiting && base === src);
+  const drawn =
+    !!base && failedSrc !== base && failedFallback !== base && !(waiting && base === src);
   useEffect(() => {
     const el = imgRef.current;
     if (!lazy || near || !drawn || !el || typeof IntersectionObserver === "undefined") return;
@@ -267,8 +271,8 @@ export function ArtImage({
           if (base === src) {
             console.warn("[art] gave up on", base);
             onGiveUp?.();
-          }
-          setFailedSrc(base);
+            setFailedSrc(base);
+          } else setFailedFallback(base);
         }}
       />
       {shimmer && slow && loaded !== src && <span className="art-shimmer" aria-hidden />}
