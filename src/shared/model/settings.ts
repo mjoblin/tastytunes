@@ -203,6 +203,10 @@ export interface AppSettings {
    *  artists. Before, it followed the albums' choice, so turning one turned the other. An older
    *  file without it takes libraryLayout, the choice the Artists view followed (main's load). */
   lensArtistsLayout: ScreenLayout;
+  /** An artist's page's own Rows or Cards for its albums (0.16.0), one choice for every artist's
+   *  page: a few albums read well as cards where the Albums view's hundreds may want rows. An
+   *  older file without it takes libraryLayout, the choice the page followed (main's load). */
+  artistPageLayout: ScreenLayout;
   /** Album-grid sort in the Library (tracks always sort by track number). */
   librarySort: "server" | "title" | "artist" | "year";
   librarySortReversed: boolean;
@@ -533,6 +537,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   libraryLayout: "cards",
   lensTracksLayout: "cards",
   lensArtistsLayout: "cards",
+  artistPageLayout: "cards",
   librarySort: "server",
   librarySortReversed: false,
   lensAlbumsSort: "title",

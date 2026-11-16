@@ -63,8 +63,9 @@ export function getSettings(): AppSettings {
     // The Tracks view had no Rows or Cards of its own before 0.13.0-rc.4 (it followed the
     // Library's one choice): an older file keeps what it showed
     if (!("lensTracksLayout" in file)) loaded.lensTracksLayout = loaded.libraryLayout;
-    // nor the Artists view before 0.16.0: an older file keeps the columns or the cards it showed
+    // nor the Artists view and an artist's page before 0.16.0: an older file keeps what it showed
     if (!("lensArtistsLayout" in file)) loaded.lensArtistsLayout = loaded.libraryLayout;
+    if (!("artistPageLayout" in file)) loaded.artistPageLayout = loaded.libraryLayout;
     // Heal a display font that was retired (e.g. an older file naming a face no
     // longer in the curated set) back to the default so the picker stays in sync.
     if (!DISPLAY_FONT_IDS.includes(loaded.displayFont)) {
