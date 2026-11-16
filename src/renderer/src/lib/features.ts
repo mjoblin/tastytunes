@@ -992,8 +992,8 @@ export function findDrops(strip: Strip, onsets: Onsets, beats: Beats | null): Dr
       .slice(0, 16)
       .sort((a, c) => a.r - c.r);
   // THE INSTANT: the return frame, placed on the moment the listener calls the drop. A
-  // pickup bar often precedes the drop proper (MitiS, By My Side: the bass slams at 1:30.4,
-  // gaps for a fill at 1:31.2, the drop lands on the downbeat at 1:31.4): when the beat grid
+  // pickup bar often precedes the drop proper (the bass slams, gaps for a fill for a few tenths,
+  // and the drop lands on the next downbeat): when the beat grid
   // is confident and knows its downbeat, the first downbeat within a bar and a half that is
   // SLAMMED (a strong non-hat onset within a tenth and the bass up after it) AND preceded by a
   // bass gap is the drop; else the first beat at or just after the return (a slammed one if
@@ -1073,8 +1073,8 @@ export function findDrops(strip: Strip, onsets: Onsets, beats: Beats | null): Dr
 
 /** How much lull a drop needs, by the display's taste: seconds of chill, OR seconds of
  *  breath, OR a brief total CUT right before the slam after at least `cutChill` seconds of
- *  reduced beat (the gasp: MitiS, Reconnect, two tenths of silence at 1:31.2 after two
- *  seconds without the bass, then the kick on the one). */
+ *  reduced beat (the gasp: two tenths of silence after two seconds without the bass, then the
+ *  kick on the one). */
 export const DROP_TIERS = {
   loose: { chill: 2, breath: 1, cut: 0.1, cutChill: 1 },
   normal: { chill: 3, breath: 1, cut: 0.15, cutChill: 1.5 },
