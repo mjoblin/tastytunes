@@ -123,10 +123,7 @@ function play(
 
 describe("creditNames: the names a credit packs", () => {
   it("splits the ways a credit joins names, in order, whatever their case", () => {
-    expect(creditNames("Tinlicker feat. Nathan Nicholson")).toEqual([
-      "Tinlicker",
-      "Nathan Nicholson",
-    ]);
+    expect(creditNames("Dusk Parade feat. June Vale")).toEqual(["Dusk Parade", "June Vale"]);
     expect(creditNames("A ft B")).toEqual(["A", "B"]);
     expect(creditNames("A FEAT. B")).toEqual(["A", "B"]);
     expect(creditNames("A & B, C; D")).toEqual(["A", "B", "C", "D"]);

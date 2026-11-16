@@ -22,7 +22,11 @@ import {
   resolveChoice,
   setChoice,
 } from "../data/artistChoices";
-import { fetchArtistImages, fetchArtistInfo, knownArtistImage } from "../lookups/artistInfo";
+import {
+  fetchArtistImages,
+  fetchArtistInfoForCredit,
+  knownArtistImage,
+} from "../lookups/artistInfo";
 import { checkFanartKey, fetchFanartPhotos } from "../lookups/fanart";
 import { keepChoiceCopy } from "../lookups/choiceCopies";
 import { fetchCommonsPhotos, fetchWikimediaSizes, wikimediaFile } from "../lookups/commons";
@@ -201,7 +205,7 @@ export function registerLookupsIpc(): void {
   handle(IPC.mcpTokenReveal, async () => (await getSecret("mcpToken")) ?? "");
   handle(IPC.mcpTokenNew, () => newMcpToken());
   handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
-    getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null,
+    getSettings().artistInfo ? fetchArtistInfoForCredit(artist, !!force) : null,
   );
   handle(IPC.fetchAlbumInfo, (_e, artist: string, album: string, force?: boolean) =>
     getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force, true) : null,
