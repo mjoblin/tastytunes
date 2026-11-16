@@ -72,7 +72,7 @@ const playState = (
   metadata: over.metadata ? metadata(over.metadata) : null,
 });
 const input = (sourceId: string, ps: ZonePlayState, extra: Partial<HeldInput> = {}): HeldInput => ({
-  streamer: "evo",
+  streamer: "lounge",
   power: "ON",
   playState: ps,
   nowPlaying: null,
@@ -96,7 +96,7 @@ const input = (sourceId: string, ps: ZonePlayState, extra: Partial<HeldInput> = 
 const at = (sourceId: string, ps: ZonePlayState, extra: Partial<HeldInput> = {}) =>
   heldFrom(input(sourceId, ps, extra));
 
-const preset = { kind: "preset", id: 3, name: "Hopes And Fears", streamer: "evo" } as const;
+const preset = { kind: "preset", id: 3, name: "Harbour Lights", streamer: "lounge" } as const;
 const queueTrack = (): HeldState | null =>
   at(
     "MEDIA_PLAYER",
@@ -105,9 +105,9 @@ const queueTrack = (): HeldState | null =>
       position: 50,
       metadata: {
         class: "md.track.library",
-        title: "Somewhere Only We Know",
-        artist: "Keane",
-        album: "Hopes And Fears",
+        title: "Paper Moons",
+        artist: "Glass Orchard",
+        album: "Harbour Lights",
         duration: 235,
       },
     }),
@@ -123,7 +123,7 @@ describe("heldFrom", () => {
     expect(q?.queueId).toBe(4646736);
     expect(q?.position).toBe(57);
     expect(q?.duration).toBe(235);
-    expect(q?.via?.name).toBe("Hopes And Fears");
+    expect(q?.via?.name).toBe("Harbour Lights");
     expect(q?.sourceId).toBe("MEDIA_PLAYER");
   });
 
@@ -175,9 +175,9 @@ describe("saveHeld and heldFor", () => {
     const file = JSON.parse(
       readFileSync(join(app.getPath("userData"), "held.json"), "utf8"),
     ) as Record<string, HeldState>;
-    expect(file.evo?.queueId).toBe(4646736);
+    expect(file.lounge?.queueId).toBe(4646736);
     expect(file.demo).toBeUndefined();
     expect(heldFor("demo")?.kind).toBe("input");
-    expect(heldFor("evo")?.position).toBe(57);
+    expect(heldFor("lounge")?.position).toBe(57);
   });
 });
