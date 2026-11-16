@@ -26,15 +26,16 @@ import { SchedulesSection } from "@/components/settings/SchedulesSection";
 import { IntegrationsSection } from "@/components/settings/IntegrationsSection";
 import { type SectionProps } from "@/components/settings/SettingsKit";
 
+// Updates last, where an app's updates are looked for, right above the version line that opens it
 const TABS = [
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "behavior", label: "Behavior", icon: SlidersHorizontal },
   { id: "connections", label: "Connections", icon: Globe },
   { id: "libraries", label: "Libraries", icon: Library },
   { id: "history", label: "History", icon: History },
-  { id: "updates", label: "Updates", icon: ArrowUpCircle },
   { id: "schedules", label: "Schedules", icon: AlarmClock },
   { id: "integrations", label: "Integrations", icon: Plug },
+  { id: "updates", label: "Updates", icon: ArrowUpCircle },
 ] as const;
 type SettingsTab = (typeof TABS)[number]["id"];
 /** Tabs kept under an older id (0.16.0's settings diet: AI agents became Integrations). */
@@ -49,9 +50,9 @@ const PANELS: Record<SettingsTab, (props: SectionProps) => React.JSX.Element> = 
   connections: ConnectionsSection,
   libraries: LibrariesSection,
   history: HistorySection,
-  updates: UpdatesSection,
   schedules: SchedulesSection,
   integrations: IntegrationsSection,
+  updates: UpdatesSection,
 };
 
 export function SettingsScreen(): React.JSX.Element {
