@@ -128,6 +128,7 @@ export function LibraryScreen(): React.JSX.Element {
   const {
     libraryLayout,
     lensTracksLayout,
+    lensArtistsLayout,
     librarySort,
     librarySortReversed,
     presetCardSize,
@@ -140,6 +141,8 @@ export function LibraryScreen(): React.JSX.Element {
   const setScreenFilter = useStore((s) => s.setScreenFilter);
   const cards = libraryLayout === "cards";
   const tracksCards = lensTracksLayout === "cards";
+  // the Artists view's own Rows or Cards (0.16.0): the columns or a grid of artists
+  const artistsCards = lensArtistsLayout === "cards";
 
   const [servers, setServers] = useState<MediaServerInfo[] | null>(null);
   const [serverUdn, setServerUdn] = useState<string | null>(null);
@@ -1229,11 +1232,11 @@ export function LibraryScreen(): React.JSX.Element {
             <ArtistsLens
               // a switch of layout is a fresh mount: the columns' windowing and spots attach to
               // their scrollers as the lens mounts (its memory is module scope, so nothing is lost)
-              key={cards ? "cards" : "rows"}
+              key={artistsCards ? "cards" : "rows"}
               pools={lensPools}
               actions={lensActions}
               onOpenArtistPage={openArtistPage}
-              cards={cards}
+              cards={artistsCards}
               cardSize={presetCardSize}
               cardGap={presetGap}
               fillRows={presetFillRows}

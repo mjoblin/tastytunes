@@ -22,19 +22,21 @@ import { Switch } from "@/components/controls/Switch";
 export type ViewKind = "albums" | "artists" | "tracks" | "folders" | "queue" | "presets";
 
 // Each kind's own Rows or Cards and Format and DR (albums and tracks keep separate display
-// settings). The Artists view shares the albums' Rows or Cards, the
-// Library's one choice before tracks had their own, and has no format line; a server's folders
-// share the albums' both (the one Library choice they always followed); the Queue has Rows, Cards
+// settings). The Artists view has its own Rows or Cards since 0.16.0 (the columns or a grid; it
+// had followed the albums') and no format line; a server's folders share the albums' both (the one
+// Library choice they always followed), as the artist page's albums do; the Queue has Rows, Cards
 // or Albums and Presets Rows or Cards, neither a format line (0.14.0). Card size, gap and Fill
 // rows are every card grid's.
 const layoutOf = (s: AppSettings, kind: ViewKind): QueueLayout =>
   kind === "tracks"
     ? s.lensTracksLayout
-    : kind === "queue"
-      ? s.queueLayout
-      : kind === "presets"
-        ? s.presetsLayout
-        : s.libraryLayout;
+    : kind === "artists"
+      ? s.lensArtistsLayout
+      : kind === "queue"
+        ? s.queueLayout
+        : kind === "presets"
+          ? s.presetsLayout
+          : s.libraryLayout;
 const formatOf = (s: AppSettings, kind: ViewKind): boolean | null =>
   kind === "albums" || kind === "folders"
     ? s.albumCardFormat
@@ -44,11 +46,13 @@ const formatOf = (s: AppSettings, kind: ViewKind): boolean | null =>
 const layoutPatch = (kind: ViewKind, v: QueueLayout): Partial<AppSettings> =>
   kind === "tracks"
     ? { lensTracksLayout: v === "rows" ? "rows" : "cards" }
-    : kind === "queue"
-      ? { queueLayout: v }
-      : kind === "presets"
-        ? { presetsLayout: v === "rows" ? "rows" : "cards" }
-        : { libraryLayout: v === "rows" ? "rows" : "cards" };
+    : kind === "artists"
+      ? { lensArtistsLayout: v === "rows" ? "rows" : "cards" }
+      : kind === "queue"
+        ? { queueLayout: v }
+        : kind === "presets"
+          ? { presetsLayout: v === "rows" ? "rows" : "cards" }
+          : { libraryLayout: v === "rows" ? "rows" : "cards" };
 const formatPatch = (kind: ViewKind, v: boolean): Partial<AppSettings> =>
   kind === "tracks" ? { trackCardFormat: v } : { albumCardFormat: v };
 const NAME: Record<ViewKind, string> = {
@@ -83,7 +87,7 @@ const defaultsOf = (kind: ViewKind): Partial<AppSettings> => ({
 const sameAs = (s: AppSettings, patch: Partial<AppSettings>): boolean =>
   Object.entries(patch).every(([k, v]) => s[k as keyof AppSettings] === v);
 
-// THE OPEN MENU'S SESSION, held across a remount: the Tracks view mounts afresh when it turns
+// THE OPEN MENU'S SESSION, held across a remount: the Tracks and Artists views mount afresh when they turn
 // between rows and cards (each its own top and spot), and the menu that turned it stays open
 // with its changes still undoable. `reopen` is set by that change alone, so a menu closed any
 // other way never reopens by itself.
@@ -138,13 +142,11 @@ export function ViewOptions({ kind }: { kind: ViewKind }): React.JSX.Element {
     const prior: Partial<AppSettings> =
       before ?? Object.fromEntries(Object.keys(patch).map((k) => [k, s[k as keyof AppSettings]]));
     if (sameAs({ ...s, ...prior }, patch)) return;
-    // the Tracks view remounts as it turns between rows and cards: its menu comes back open
-    if (
-      kind === "tracks" &&
-      patch.lensTracksLayout &&
-      patch.lensTracksLayout !== s.lensTracksLayout
-    )
-      session.reopen = kind;
+    // the Tracks and Artists views remount as they turn between rows and cards: the menu comes
+    // back open
+    const own =
+      kind === "tracks" ? "lensTracksLayout" : kind === "artists" ? "lensArtistsLayout" : null;
+    if (own && patch[own] && patch[own] !== s[own]) session.reopen = kind;
     void saveSettings(patch);
     const id = useStore.getState().pushUndo(label, () => {
       void useStore.getState().saveSettings(prior);

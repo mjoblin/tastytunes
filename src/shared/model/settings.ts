@@ -199,6 +199,10 @@ export interface AppSettings {
    *  tracks keep separate display settings, with a button to match the other). An older file
    *  without it takes libraryLayout, the choice the Tracks view followed before (main's load). */
   lensTracksLayout: ScreenLayout;
+  /** The Artists view's own Rows or Cards (0.16.0): rows are its three columns, cards a grid of
+   *  artists. Before, it followed the albums' choice, so turning one turned the other. An older
+   *  file without it takes libraryLayout, the choice the Artists view followed (main's load). */
+  lensArtistsLayout: ScreenLayout;
   /** Album-grid sort in the Library (tracks always sort by track number). */
   librarySort: "server" | "title" | "artist" | "year";
   librarySortReversed: boolean;
@@ -528,6 +532,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presetsLayout: "cards",
   libraryLayout: "cards",
   lensTracksLayout: "cards",
+  lensArtistsLayout: "cards",
   librarySort: "server",
   librarySortReversed: false,
   lensAlbumsSort: "title",
