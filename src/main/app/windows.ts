@@ -281,26 +281,30 @@ export const trayDeps = {
 // (closed on macOS while the app lives on), recreate it and send after load —
 // the renderer subscribes to pushes at module scope, so did-finish-load is late
 // enough. Menu commands never go to the mini player.
+let menuDeliveries = 0;
+
 export function sendMenuCommand(command: MenuCommand): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow();
     const target = mainWindow;
+    // both copies carry one delivery mark, so the window applies the click once: a toggle
+    // (the palette, Get Info) sent twice would open and close again
+    const delivery = ++menuDeliveries;
     target?.webContents.once("did-finish-load", () => {
       if (!target || target.isDestroyed()) return;
-      target.webContents.send(IPC.push, { kind: "menu", command });
+      target.webContents.send(IPC.push, { kind: "menu", command, delivery });
       // AND ONCE MORE, a beat later. `did-finish-load` says the PAGE loaded,
       // not that the renderer is listening — the app wires its push handler
       // during module execution, and on a slow machine anything that delays
       // that (an emulated CPU, a cold disk) drops the only delivery on the
-      // floor and the window opens on the wrong screen. Menu commands are
-      // idempotent — 'go to Device' twice is 'go to Device' — so the cheap
-      // repeat is strictly better than the race. Reported from a Windows VM
-      // where the panel's "Connect a streamer" opened the app but not the
-      // Device screen; unreproducible on faster hardware, which is itself
-      // the tell.
+      // floor and the window opens on the wrong screen. The window applies a
+      // delivery once, so the cheap repeat is strictly better than the race,
+      // toggles included. Seen on a Windows VM where the panel's "Connect a
+      // streamer" opened the app but not the Device screen; unreproducible on
+      // faster hardware, which is itself the tell.
       setTimeout(() => {
         if (target && !target.isDestroyed()) {
-          target.webContents.send(IPC.push, { kind: "menu", command });
+          target.webContents.send(IPC.push, { kind: "menu", command, delivery });
         }
       }, 400);
     });

@@ -47,12 +47,23 @@ declare global {
   }
 }
 
+// A menu click sent to a window still loading comes twice with one delivery mark (main/app/windows):
+// the second copy is the first again, never a second click.
+let lastDelivery: number | null = null;
+const seenDelivery = (delivery: number | undefined): boolean => {
+  if (delivery == null) return false;
+  if (delivery === lastDelivery) return true;
+  lastDelivery = delivery;
+  return false;
+};
+
 // Subscribe to pushes before fetching the snapshot so nothing slips between them.
 // Menu clicks carry side effects (settings round-trips) that don't fit
 // applyPush's pure state merge, so they route to their own action.
 window.__ttUnwirePush?.();
 window.__ttUnwirePush = tt.onPush((msg) => {
-  if (msg.kind === "menu") useStore.getState().applyMenu(msg.command);
+  if (msg.kind === "menu" && !seenDelivery(msg.delivery))
+    useStore.getState().applyMenu(msg.command);
   else useStore.getState().applyPush(msg);
 });
 void tt.getSnapshot().then((snapshot) => useStore.getState().init(snapshot));

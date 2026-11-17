@@ -10,6 +10,11 @@ import { raisePace } from "@/lib/volumePace";
 
 /** The volume arrows' pace (lib/volumePace): a held Up is paced, a held Down never. */
 const volumePace = raisePace();
+/** The seek keys' pace: a held J or L scrubs at the volume's pace, never at the key's repeat. */
+const seekPace = raisePace();
+
+/** The transport keys that repeat while held, each paced; every other held key acts once. */
+const REPEATS = new Set(["ArrowUp", "ArrowDown", "j", "l"]);
 
 // Derived from the shared registry — the screen lookup runs before the
 // transport switch, so a registry key can shadow a transport shortcut (the
@@ -255,6 +260,10 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
 
       if (s.connection.phase !== "connected") return;
 
+      // A HELD KEY ACTS ONCE: its repeat, about 30 a second, would skip 30 tracks, recall a preset
+      // (and its level) 30 times, or flutter play and pause; only the paced keys repeat.
+      if (e.repeat && !REPEATS.has(e.key)) return;
+
       if (!transportOnly && e.key === "f") {
         s.setDisplayMode(!s.displayMode);
         return;
@@ -301,10 +310,9 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
           break;
         }
         case "j":
-          seekTo(-10);
-          break;
         case "l":
-          seekTo(10);
+          if (!seekPace(e.repeat, true)) break;
+          seekTo(e.key === "j" ? -10 : 10);
           break;
         case "m":
           void tt.command({ type: "setMute", mute: !(s.zoneState?.mute ?? false) });

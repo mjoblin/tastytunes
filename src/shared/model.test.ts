@@ -65,6 +65,7 @@ import {
   KEY_VERSION,
   parseKeyName,
   tempoBpm,
+  withoutAppended,
 } from "./model";
 
 // ------------------------------------------------------------------ fixtures
@@ -979,5 +980,29 @@ describe("measured facts: tempo and key, said once (0.12.0)", () => {
     expect(keyName(keyFromStored(made))).toBe("G major");
     expect(keyFromStored({ key: older.key, chroma: null })).toBeNull();
     expect(keyFromStored(null)).toBeNull();
+  });
+});
+
+describe("withoutAppended: an undo of an add takes out only what it added", () => {
+  const t = (title: string) => ({
+    title,
+    artist: "Glass Orchard",
+    album: "Paper Moons",
+    artUrl: null,
+    serverUdn: null,
+    serverName: null,
+    objectId: null,
+    durationSecs: null,
+  });
+  it("keeps a reorder and a later add made since", () => {
+    // [A, B] then the add of [C, D], then D moved to the front and E added
+    const now = [t("D"), t("A"), t("B"), t("C"), t("E")];
+    expect(withoutAppended(now, [t("C"), t("D")]).map((i) => i.title)).toEqual(["A", "B", "E"]);
+  });
+  it("takes the last copy of a track the playlist already had, once per copy added", () => {
+    const now = [t("A"), t("B"), t("A")];
+    expect(withoutAppended(now, [t("A")]).map((i) => i.title)).toEqual(["A", "B"]);
+    // a track removed since is simply not there to take
+    expect(withoutAppended([t("B")], [t("A")]).map((i) => i.title)).toEqual(["B"]);
   });
 });

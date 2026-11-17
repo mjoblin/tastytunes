@@ -152,6 +152,19 @@ describe("checkSettingsKinds", () => {
     expect(nullDefaults.every((k) => NULLABLE_KEYS.includes(k))).toBe(true);
   });
 
+  it("keeps every kind a mixed setting may hold, and still drops one it may not", () => {
+    for (const every of [1, 2, 3, "album"]) {
+      const notes: string[] = [];
+      expect(checkSettingsKinds({ displayShuffleEvery: every }, notes)).toEqual({
+        displayShuffleEvery: every,
+      });
+      expect(notes).toEqual([]);
+    }
+    const notes: string[] = [];
+    expect(checkSettingsKinds({ displayShuffleEvery: true }, notes)).toEqual({});
+    expect(notes).toEqual(["displayShuffleEvery was a yes/no, so its default stands"]);
+  });
+
   it("passes the defaults themselves untouched", () => {
     const notes: string[] = [];
     const defaults = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as Record<string, unknown>;

@@ -344,6 +344,23 @@ export const MAX_PLAYLISTS = 100;
 export const MAX_PLAYLIST_ITEMS = 500;
 
 /**
+ * A write past a bound is refused, never trimmed: the store once kept the newest 100 and the first
+ * 500 by slicing, so a 101st playlist silently deleted the least recently edited one and tracks
+ * past 500 were dropped while the add reported them added. The refusal crosses IPC as this token
+ * and its sentence, which the window and an agent both show.
+ */
+export const PLAYLIST_FULL_TOKEN = "TT_PLAYLIST_FULL";
+export const PLAYLISTS_FULL = `You have ${MAX_PLAYLISTS} playlists, the most TastyTunes keeps. Delete one to make room for another.`;
+export const playlistTooLong = (tracks: number): string =>
+  `A playlist holds up to ${MAX_PLAYLIST_ITEMS} tracks, and this would make ${tracks}.`;
+/** The sentence of a refusal at a bound, read from an error that crossed IPC; null for any other. */
+export function playlistFullSentence(e: unknown): string | null {
+  const message = e instanceof Error ? e.message : "";
+  const at = message.indexOf(`${PLAYLIST_FULL_TOKEN}:`);
+  return at < 0 ? null : message.slice(at + PLAYLIST_FULL_TOKEN.length + 1);
+}
+
+/**
  * A playlist's content hash in the SAME shape queueContentHash produces for a
  * live queue, so the two can be compared directly. That comparison is how a
  * playlist knows it's the thing currently queued — content-based, so it also
@@ -363,6 +380,27 @@ export function playlistContentHash(items: PlaylistItem[]): string {
  */
 export function playlistItemKey(i: PlaylistItem): string {
   return `track:${nameKey(i.title)}:${nameKey(i.artist)}:${nameKey(i.album)}`;
+}
+
+/**
+ * A playlist's items without what one add appended: for each appended item, from the last, its
+ * last occurrence by content key is taken out. An undo of an add removes what it added and keeps
+ * every edit made since (a reorder, a removal, a later add), never writing back the list as it was.
+ */
+export function withoutAppended(
+  items: readonly PlaylistItem[],
+  appended: readonly PlaylistItem[],
+): PlaylistItem[] {
+  const out = [...items];
+  for (let i = appended.length - 1; i >= 0; i--) {
+    const key = playlistItemKey(appended[i]);
+    for (let j = out.length - 1; j >= 0; j--) {
+      if (playlistItemKey(out[j]) !== key) continue;
+      out.splice(j, 1);
+      break;
+    }
+  }
+  return out;
 }
 
 /**

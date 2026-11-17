@@ -298,7 +298,7 @@ export function useQueueDrag(d: {
       for (const m of moves)
         await tt.command({ type: "queueMove", id: m.id, from: m.from, to: m.to });
     })();
-    useStore.getState().pushUndo(undoLabel, () => restoreQueueOrder(order));
+    useStore.getState().pushUndo(undoLabel, () => restoreQueueOrder(order), { queue: true });
     return true;
   };
 
@@ -381,8 +381,10 @@ export function useQueueDrag(d: {
     const movedTitle = moved.metadata?.title;
     useStore
       .getState()
-      .pushUndo(movedTitle ? `Move “${movedTitle}”` : "Move Track", () =>
-        restoreQueueOrder(prevOrder),
+      .pushUndo(
+        movedTitle ? `Move “${movedTitle}”` : "Move Track",
+        () => restoreQueueOrder(prevOrder),
+        { queue: true },
       );
   };
 

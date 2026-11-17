@@ -24,6 +24,7 @@ import {
   KNOWN_DEVICES_MAX,
   RECONNECT_GRACE_MS,
   type HeldState,
+  presetVolumeKey,
 } from "@shared/model";
 import type {
   Presets,
@@ -48,7 +49,7 @@ import {
   applyFrame,
   emptyCache,
   presetVolumeFor,
-  PRESET_VOLUME_DELAY_MS,
+  PresetVolumeAfterRecall,
   type StreamerCache,
   WAKE_COMMANDS,
 } from "./streamerCache";
@@ -73,6 +74,13 @@ import { errorMessage } from "@shared/guards";
 import { queueAdd } from "../media/upnpBrowser";
 import { demoHost, stopDemoStreamer } from "../servers/demoStreamer";
 import type { MediaQueueAction } from "@shared/model";
+import {
+  type SlotMaps,
+  dropSlotFacts,
+  healPresetVolumes,
+  moveSlotFacts,
+  slotsAfterMove,
+} from "./presetSlots";
 import { RecallWatch, recallSignature } from "./recallWatch";
 import { checkFrame } from "./frameCheck";
 import { appLog } from "../app/appLog";
@@ -234,9 +242,15 @@ export class DeviceManager {
       this.push({ kind: "presetRecallDead", id });
     },
   });
+  // a recall's own level, sent once the recall lands (device/streamerCache)
+  private readonly presetLevel = new PresetVolumeAfterRecall({
+    signature: () => recallSignature(this.cache.playState),
+    apply: (percent) => this.fire({ type: "setVolumePercent", percent }),
+  });
 
   connect(host: string, opts?: { remember?: boolean; demo?: boolean }): void {
     this.recallWatch.cancel();
+    this.presetLevel.cancel();
     // Leaving the demo for a real device shuts the demo server down (0.15.0: here, so no caller
     // has to remember it; an agent's connect_device left it running)
     if (demoHost() && host !== demoHost()) stopDemoStreamer();
@@ -306,6 +320,7 @@ export class DeviceManager {
   disconnect(): void {
     this.remembering = null;
     this.recallWatch.cancel();
+    this.presetLevel.cancel();
     if (this.sleeper.current) this.setSleep(null);
     this.socket?.close();
     this.socket = null;
@@ -330,6 +345,8 @@ export class DeviceManager {
     playFromId?: string,
     opts?: { confirmLarge?: boolean },
   ): Promise<void> {
+    // something else asked to play: a recall's level no longer belongs (device/streamerCache)
+    if (action !== "APPEND" && action !== "PLAY_NEXT") this.presetLevel.cancel();
     await this.ensureAwake();
     const conn = this.snapshot().connection;
     if (conn.phase !== "connected") throw new Error("not connected to a streamer");
@@ -546,6 +563,7 @@ export class DeviceManager {
   }
 
   async command(cmd: StreamerCommand): Promise<void> {
+    this.presetLevel.onCommand(cmd.type);
     // A user touching volume, power or transport takes over from a running
     // fade — cancel it without restoring (their level wins). The fade engine's
     // own writes are flagged and pass through.
@@ -621,27 +639,18 @@ export class DeviceManager {
           cmd.alreadyPlaying === true ||
           (this.lastRecalledPresetId === cmd.presetId && this.cache.playState?.state === "play");
         this.setRecalledPreset(cmd.presetId);
-        listeningRecord.openContext({
-          kind: "preset",
-          id: cmd.presetId,
-          name: this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name ?? null,
-          streamer: this.cache.systemInfo?.udn ?? null,
-        });
+        const udn = this.cache.systemInfo?.udn ?? null;
+        const name = this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name ?? null;
+        listeningRecord.openContext({ kind: "preset", id: cmd.presetId, name, streamer: udn });
         socket.send("/zone/recall_preset", { preset: cmd.presetId });
         this.recallWatch.recalled(cmd.presetId, already);
-        // Feature 10: the preset's local volume override rides along on every
-        // recall through the app — after a beat for the source switch — unless
-        // the caller (a schedule with its own volume) opts out.
-        if (!cmd.skipVolume) {
-          const level = presetVolumeFor(this.cache.systemInfo?.udn, cmd.presetId);
-          if (level != null) {
-            // the streamer may have changed in the second since, and a timer armed
-            // for one device never acts on another
-            setTimeout(() => {
-              if (this.socket === socket) this.fire({ type: "setVolumePercent", percent: level });
-            }, PRESET_VOLUME_DELAY_MS);
-          }
-        }
+        // Feature 10: the preset's local volume override rides along on every recall through the
+        // app, once the recall lands, unless the caller (a schedule with its own volume) opts out.
+        // A new connection lets it go, so a level never reaches another streamer.
+        this.presetLevel.recalled(
+          cmd.skipVolume ? null : presetVolumeFor(udn, cmd.presetId, name),
+          already,
+        );
         // The device updates is_playing internally but doesn't reliably push
         // /presets/list (vibin's observation, esp. for UPnP presets). Refetch
         // once quickly (radio) and once late (album recalls switch source and
@@ -660,10 +669,16 @@ export class DeviceManager {
         return smoipHttp.queueMove(host, cmd.id, cmd.from, cmd.to);
       case "presetDelete":
         await smoipHttp.presetDelete(host, cmd.presetId);
+        this.saveSlotFacts(dropSlotFacts(this.cache.systemInfo?.udn, cmd.presetId, getSettings()));
         return this.refreshPresets(socket);
-      case "presetRename":
+      case "presetRename": {
         await smoipHttp.presetRename(host, cmd.slot, cmd.name);
+        // a level set for this preset keeps holding under its new name
+        const key = presetVolumeKey(this.cache.systemInfo?.udn, cmd.slot);
+        const names = getSettings().presetVolumeNames;
+        if (key in names) this.saveSlotFacts({ presetVolumeNames: { ...names, [key]: cmd.name } });
         return this.refreshPresets(socket);
+      }
       case "queueSavePreset":
         await smoipHttp.queueSavePreset(host, cmd.slot, cmd.name);
         return this.refreshPresets(socket);
@@ -672,9 +687,13 @@ export class DeviceManager {
       case "zoneSavePreset":
         await smoipHttp.zoneSavePreset(host, cmd.slot);
         return this.refreshPresets(socket);
-      case "presetMove":
+      case "presetMove": {
+        const moved = slotsAfterMove(this.cache.presets?.presets ?? [], cmd.from, cmd.to);
         await smoipHttp.presetMove(host, cmd.from, cmd.to);
+        if (moved.size > 0)
+          this.saveSlotFacts(moveSlotFacts(this.cache.systemInfo?.udn, moved, getSettings()));
         return this.refreshPresets(socket);
+      }
     }
   }
 
@@ -748,6 +767,7 @@ export class DeviceManager {
         });
         this.sleeper.boundaryCheck(playState);
         this.recallWatch.onPlayback();
+        this.presetLevel.onPlayback();
         scrobbler.onPlayState(playState);
         listeningRecord.onPlayState(
           playState,
@@ -788,6 +808,7 @@ export class DeviceManager {
       }
       case "/presets/list": {
         const presets = data as Presets;
+        this.presetsArrived(presets);
         return this.push({ kind: "presets", data: presets });
       }
       case "/system/info": {
@@ -872,12 +893,28 @@ export class DeviceManager {
    * doesn't push /presets/list for local-media (UPnP) recalls, and a bare WS
    * request for it isn't proven against real hardware; HTTP GET is.
    */
+  /** A presets list arrived: each preset's level follows its preset (device/presetSlots). */
+  private presetsArrived(presets: Presets): void {
+    const healed = healPresetVolumes(
+      this.cache.systemInfo?.udn,
+      presets.presets ?? [],
+      getSettings(),
+    );
+    if (healed) this.saveSlotFacts(healed);
+  }
+
+  /** The slot-keyed settings, written and pushed to the windows. */
+  private saveSlotFacts(patch: Partial<SlotMaps>): void {
+    this.push({ kind: "settings", settings: updateSettings(patch) });
+  }
+
   private async refreshPresets(socket: SmoipSocket | null): Promise<void> {
     if (!socket || this.socket !== socket) return;
     try {
       const data = await smoipHttp.getPresets(socket.host);
       if (data == null || this.socket !== socket) return;
       this.cache.presets = data as Presets;
+      this.presetsArrived(this.cache.presets);
       this.push({ kind: "presets", data: this.cache.presets });
     } catch (err) {
       this.log("warn", "presets", `refresh failed: ${(err as Error).message}`);

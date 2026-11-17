@@ -20,6 +20,7 @@ import {
   type ListeningVia,
   artAddress,
   artHostOf,
+  boundedPlayedSeconds,
 } from "@shared/model";
 import { isRadioMetadata, radioTrackTitle, trackTitle, type ZonePlayState } from "@shared/smoip";
 import { getSettings } from "./persist";
@@ -63,6 +64,9 @@ interface OpenPlay {
   playedMs: number;
   playingSince: number | null;
   payload: Record<string, unknown>;
+  /** A station or another source playing when the computer went to sleep: when it slept, until
+   *  a play push after the wake says whether it played through (see noteSleep). */
+  sleptAt?: number;
 }
 
 let current: OpenPlay | null = null;
@@ -232,7 +236,16 @@ function parseLines(raw: string): { events: ListeningEvent[]; unreadable: number
     try {
       const parsed: unknown = JSON.parse(line);
       if (isRecord(parsed) && typeof parsed.at === "number" && typeof parsed.kind === "string") {
-        events.push(parsed as unknown as ListeningEvent);
+        const played = parsed.playedSeconds;
+        const bounded =
+          typeof played === "number"
+            ? boundedPlayedSeconds(parsed.kind, played, parsed.duration)
+            : played;
+        events.push(
+          (bounded === played
+            ? parsed
+            : { ...parsed, playedSeconds: bounded }) as unknown as ListeningEvent,
+        );
       } else {
         unreadable++;
       }
@@ -351,10 +364,11 @@ function closeCurrent(): void {
   const p = current;
   current = null;
   if (p.playingSince != null) {
-    p.playedMs += Date.now() - p.playingSince;
+    // a session the computer slept through, never seen playing after the wake, ends at the sleep
+    p.playedMs += (p.sleptAt ?? Date.now()) - p.playingSince;
     p.playingSince = null;
   }
-  const played = Math.round(p.playedMs / 1000);
+  const played = boundedPlayedSeconds(p.kind, Math.round(p.playedMs / 1000), p.payload.duration);
   if (played < LISTEN_FLOOR_SECS) {
     // Nothing written, but the pending play is gone — the row must hear.
     notify?.();
@@ -483,6 +497,12 @@ export const listeningRecord = {
       };
     }
 
+    // the first word after a sleep: the session played through it, or ended where it began
+    if (current?.sleptAt != null) {
+      if (current.key === key && ps.state === "play") delete current.sleptAt;
+      else closeCurrent();
+    }
+
     if (kind == null) {
       closeCurrent();
       lastRadioTrackKey = null;
@@ -596,9 +616,24 @@ export const listeningRecord = {
     if (set && !ids.some((id) => set.has(id))) clearContext();
   },
 
+  /**
+   * THE COMPUTER IS GOING TO SLEEP. The streamer plays on, unheard: the app sees no push until the
+   * wake. A library play needs nothing here: it closes bounded at its track's length (it most likely
+   * played to its end). A station or another source has no length to bound it by, so the wake
+   * decides: the first play push after it, the same thing still playing, counts the sleep (it played
+   * through); anything else ends the session where the sleep began. A connection lost on the wake
+   * holds the session for that push rather than closing it (flush).
+   */
+  noteSleep(): void {
+    if (current && current.kind !== "play" && current.playingSince != null)
+      current.sleptAt = Date.now();
+  },
+
   /** Connection lost, device switched, or the app is quitting: close out the
-   *  open play so its time is not lost (quit is why this is synchronous). */
-  flush(): void {
+   *  open play so its time is not lost (quit is why this is synchronous). A session the computer
+   *  slept through waits for the first play push after the wake (noteSleep), unless quitting. */
+  flush(opts?: { quitting?: boolean }): void {
+    if (current?.sleptAt != null && opts?.quitting !== true) return;
     closeCurrent();
     lastRadioTrackKey = null;
   },
@@ -671,7 +706,9 @@ export const listeningRecord = {
       : null;
     const pendingSecs = current
       ? (current.playedMs +
-          (current.playingSince != null ? Date.now() - current.playingSince : 0)) /
+          (current.playingSince != null
+            ? (current.sleptAt ?? Date.now()) - current.playingSince
+            : 0)) /
         1000
       : 0;
     return {

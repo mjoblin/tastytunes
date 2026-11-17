@@ -216,6 +216,8 @@ export type ToastAction =
   | { label: string; undo: () => void; screen?: never };
 let toastNonce = 0;
 let playStatsLoading = false;
+/** An undo's closure: it undoes, or refuses with the sentence the toast shows instead. */
+export type UndoRun = () => void | Promise<void> | { refused: string };
 let undoNonce = 0;
 /** Monotonic id for search asks — see librarySearchTarget. */
 let librarySearchSeq = 0;
@@ -373,7 +375,9 @@ interface TTState {
    *  redo doubles the closure engineering; the shape allows adding it later.
    *  Entries are exact-inverse closures; the toast Undo buttons and Cmd-Z
    *  consume the SAME entries, so they can never double-restore. */
-  undoStack: Array<{ id: number; label: string; run(): void | Promise<void> }>;
+  /** `queue`: the entry acts on the streamer's queue, so it goes when another streamer is chosen
+   *  (its ids and order mean nothing there). `run` may refuse, with the sentence shown instead. */
+  undoStack: Array<{ id: number; label: string; run: UndoRun; queue?: boolean }>;
   /** The nav-rail row a live drag is hovering (drag-to-rail) — the Nav
    *  reads it for the drop highlight; null outside a drag. */
   navDropTarget: Screen | null;
@@ -477,7 +481,7 @@ interface TTState {
   /** Push an undoable action; returns the entry id for a toast button to
    *  target. `label` names the ORIGINAL action, Title Case ("Move 3
    *  Tracks") — the menu shows "Undo <label>", the toast "Undid <label>". */
-  pushUndo: (label: string, run: () => void | Promise<void>) => number;
+  pushUndo: (label: string, run: UndoRun, opts?: { queue?: boolean }) => number;
   /** Run and consume one undo entry — the top for Cmd-Z, a specific id for
    *  a toast button. False when there is nothing (left) to undo. */
   runUndo: (id?: number) => boolean;
@@ -792,10 +796,10 @@ export const useStore = create<TTState>((set, get) => ({
   setNavDragActive: (active) => {
     if (get().navDragActive !== active) set({ navDragActive: active });
   },
-  pushUndo: (label, run) => {
+  pushUndo: (label, run, opts) => {
     const id = ++undoNonce;
     // Cap ~20: an undo stack is a pocket, not an archive.
-    const undoStack = [...get().undoStack, { id, label, run }].slice(-20);
+    const undoStack = [...get().undoStack, { id, label, run, queue: opts?.queue }].slice(-20);
     set({ undoStack });
     void tt.undoLabelSet(label);
     return id;
@@ -807,7 +811,12 @@ export const useStore = create<TTState>((set, get) => ({
     const undoStack = stack.filter((e) => e !== entry);
     set({ undoStack });
     void tt.undoLabelSet(undoStack[undoStack.length - 1]?.label ?? null);
-    void entry.run();
+    const ran = entry.run();
+    if (ran != null && "refused" in ran) {
+      get().showToast({ kind: "error", text: ran.refused });
+      return true;
+    }
+    void ran;
     get().showToast({ kind: "success", text: `Undid ${entry.label}` });
     return true;
   },
@@ -964,7 +973,12 @@ export const useStore = create<TTState>((set, get) => ({
           const prevHost = "host" in s.connection ? s.connection.host : null;
           const nextHost = "host" in msg.state ? msg.state.host : null;
           if (msg.state.phase === "connecting" && prevHost != null && nextHost !== prevHost) {
+            // the queue's undo entries were the other streamer's
+            const undoStack = s.undoStack.filter((e) => !e.queue);
+            if (undoStack.length !== s.undoStack.length)
+              void tt.undoLabelSet(undoStack[undoStack.length - 1]?.label ?? null);
             return {
+              undoStack,
               connection: msg.state,
               playState: null,
               stationTunedAt: null,

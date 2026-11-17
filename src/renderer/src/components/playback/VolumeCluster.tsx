@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Minus, Plus, Volume2, VolumeX } from "lucide-react";
-import { isCbusMode, isPreAmpMode } from "@shared/smoip";
+import { VOLUME_STEP_SCALE, isCbusMode, isPreAmpMode } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { cx } from "@/lib/format";
+import { raisePace } from "@/lib/volumePace";
 import { Slider } from "../controls/Slider";
 
-/** Accumulate trackpad/wheel deltas into discrete volume nudges. */
+/** Accumulate trackpad/wheel deltas into discrete volume nudges. A raise is paced as a held key's
+ *  is (lib/volumePace): a wheel or a trackpad flick keeps delivering long after the hand stops, so
+ *  each raise after the first counts as a repeat. A lowering keeps the wheel's own pace. */
 export function useWheelVolume(): (e: React.WheelEvent) => void {
   const acc = useRef(0);
   const lastSend = useRef(0);
+  const pace = useRef(raisePace());
   return (e) => {
     acc.current += e.deltaY;
     if (Math.abs(acc.current) < 40) return;
@@ -17,6 +21,7 @@ export function useWheelVolume(): (e: React.WheelEvent) => void {
     acc.current = 0;
     const now = Date.now();
     if (now - lastSend.current < 80) return;
+    if (!pace.current(true, direction > 0, now)) return;
     lastSend.current = now;
     void tt.command({ type: "volumeStepChange", delta: direction * (e.shiftKey ? 5 : 1) });
   };
@@ -76,9 +81,9 @@ export function useVolumeSlider(): VolumeSliderControl {
   }, [hold, deviceLevel]);
 
   const levelNow = hold ?? deviceLevel ?? null;
-  const shown = levelNow != null ? levelNow / (usingPercent ? 100 : 30) : 0;
+  const shown = levelNow != null ? levelNow / (usingPercent ? 100 : VOLUME_STEP_SCALE) : 0;
 
-  const toLevel = (v: number): number => Math.round(v * (usingPercent ? max : 30));
+  const toLevel = (v: number): number => Math.round(v * (usingPercent ? max : VOLUME_STEP_SCALE));
   const send = (level: number): void => {
     if (usingPercent) void tt.command({ type: "setVolumePercent", percent: level });
     else void tt.command({ type: "setVolumeStep", step: level });
@@ -112,7 +117,7 @@ export function useVolumeSlider(): VolumeSliderControl {
     onScrub,
     onCommit,
     onCancel,
-    raiseBy: 5 / (usingPercent ? max : 30),
+    raiseBy: 5 / (usingPercent ? max : VOLUME_STEP_SCALE),
   };
 }
 

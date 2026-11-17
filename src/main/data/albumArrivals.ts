@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { app } from "electron";
-import { isRecord } from "@shared/guards";
+import { isRecord, kindOf } from "@shared/guards";
 import type { MediaNode } from "@shared/model";
 import { arrivalKey } from "@shared/recentlyAdded";
 import { jsonFileStore } from "./jsonStore";
@@ -26,11 +26,18 @@ const CHURN_FLOOR = 20;
 const store = jsonFileStore<Record<string, ServerArrivals>>({
   pathOf: () => join(app.getPath("userData"), "album-arrivals.json"),
   scope: "album-arrivals",
-  load: (parsed) => {
+  load: (parsed, setAside) => {
     const out: Record<string, ServerArrivals> = {};
-    if (!isRecord(parsed)) return out;
+    if (parsed === undefined) return out;
+    if (!isRecord(parsed)) {
+      setAside.push(`the file was ${kindOf(parsed)}, not a set of servers, so none were read`);
+      return out;
+    }
     for (const [udn, v] of Object.entries(parsed)) {
-      if (!isRecord(v) || typeof v.since !== "number" || !isRecord(v.keys)) continue;
+      if (!isRecord(v) || typeof v.since !== "number" || !isRecord(v.keys)) {
+        setAside.push(`the server ${udn} wasn't one this version reads, left out`);
+        continue;
+      }
       const keys: Record<string, number> = {};
       for (const [k, at] of Object.entries(v.keys)) if (typeof at === "number") keys[k] = at;
       out[udn] = { since: v.since, keys };

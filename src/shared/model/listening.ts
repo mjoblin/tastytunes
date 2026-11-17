@@ -29,6 +29,20 @@ export const LISTEN_CAP_SECS = 240;
 export function listenThresholdSecs(durationSecs: number | null): number {
   return durationSecs != null ? Math.min(durationSecs / 2, LISTEN_CAP_SECS) : LISTEN_CAP_SECS;
 }
+/**
+ * How far a library play may run past its track's length before the excess is the clock's, not the
+ * music's. A play's time is wall-clock time while the state is play, so a play left open across a
+ * gap the app can't see (the computer asleep while the streamer plays on, a socket that died
+ * quietly) would carry the whole gap. Past its length plus this slack, a library play counts as
+ * its length, as it most likely played to its end: bounded when the play closes, and on read for
+ * lines already written (the file itself is never rewritten).
+ */
+export const PLAY_OVERRUN_SECS = 30;
+export function boundedPlayedSeconds(kind: string, played: number, duration: unknown): number {
+  if (kind !== "play" || typeof duration !== "number" || !(duration > 0)) return played;
+  return played > duration + PLAY_OVERRUN_SECS ? Math.round(duration) : played;
+}
+
 /** The house definition in words — the Listens only chip, the Plays tile,
  *  anywhere a "listen" needs explaining, so no two surfaces phrase it apart. */
 export const LISTEN_DEFINITION = `A listen is a play that ran for at least half its track, or ${LISTEN_CAP_SECS / 60} minutes, whichever is shorter.`;

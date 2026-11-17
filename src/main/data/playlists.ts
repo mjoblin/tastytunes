@@ -6,7 +6,10 @@ import { checkPlaylists } from "./savedChecks";
 import {
   MAX_PLAYLISTS,
   MAX_PLAYLIST_ITEMS,
+  PLAYLISTS_FULL,
+  PLAYLIST_FULL_TOKEN,
   playlistItemKey,
+  playlistTooLong,
   type Playlist,
   type PlaylistItem,
 } from "@shared/model";
@@ -33,13 +36,23 @@ export function getPlaylists(): Playlist[] {
   return store.get();
 }
 
+/** Every write, whole: nothing loaded or written is ever trimmed (the bounds refuse instead). */
 function save(list: Playlist[]): Playlist[] {
-  return store.set(sortNewest(list).slice(0, MAX_PLAYLISTS));
+  return store.set(sortNewest(list));
 }
 
-/** Trim to the item ceiling — applied on every write path, not just create. */
+/** A write past a bound, refused with the sentence the window and an agent show (the model's
+ *  PLAYLIST_FULL_TOKEN). */
+export class PlaylistFullError extends Error {
+  constructor(readonly sentence: string) {
+    super(`${PLAYLIST_FULL_TOKEN}:${sentence}`);
+  }
+}
+
+/** The item ceiling, held on every write path that can grow a playlist, not just create. */
 function boundItems(items: PlaylistItem[]): PlaylistItem[] {
-  return items.slice(0, MAX_PLAYLIST_ITEMS);
+  if (items.length > MAX_PLAYLIST_ITEMS) throw new PlaylistFullError(playlistTooLong(items.length));
+  return items;
 }
 
 /**
@@ -68,6 +81,7 @@ export function createPlaylist(
   name: string,
   items: PlaylistItem[],
 ): { list: Playlist[]; created: Playlist } {
+  if (getPlaylists().length >= MAX_PLAYLISTS) throw new PlaylistFullError(PLAYLISTS_FULL);
   const now = Date.now();
   const playlist: Playlist = {
     id: randomUUID(),

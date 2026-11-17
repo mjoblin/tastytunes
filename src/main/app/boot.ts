@@ -41,6 +41,10 @@ keepVersionCopy(app.getPath("userData"), appVersion, [
   "settings.json",
   "favorites.json",
   "playlists.json",
+  // the user's own, which nothing can recompute: the artist pictures chosen, and when each album
+  // arrived
+  "artist-choices.json",
+  "album-arrivals.json",
 ]);
 
 // every web contents the app creates is held to its own page (app/guard)

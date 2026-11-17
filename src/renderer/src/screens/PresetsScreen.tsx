@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { Crosshair, Footprints, Library, Radio, RadioTower } from "lucide-react";
 import { isPreAmpMode, type PresetItem } from "@shared/smoip";
-import { presetVolumeKey } from "@shared/model";
+import { presetVolumeHolds, presetVolumeKey } from "@shared/model";
 import { ViewOptions } from "@/components/library/lenses/ViewOptions";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -49,6 +49,7 @@ export function PresetsScreen(): React.JSX.Element {
   );
   const systemInfo = useStore((s) => s.systemInfo);
   const presetVolumes = useStore((s) => s.settings.presetVolumes);
+  const presetVolumeNames = useStore((s) => s.settings.presetVolumeNames);
   const presetArtists = useStore((s) => s.settings.presetArtists);
   const cards = presetsLayout === "cards";
   const filter = useStore((s) => s.screenFilters.presets);
@@ -72,14 +73,24 @@ export function PresetsScreen(): React.JSX.Element {
   // Feature 10: per-preset volume overrides. Absolute volume needs pre-amp
   // mode — control-bus devices only nudge, so the affordance hides there.
   const canSetVolume = isPreAmpMode(zoneState);
-  const volumeFor = (id: number): number | null =>
-    presetVolumes[presetVolumeKey(systemInfo?.udn, id)] ?? null;
+  // A level holds only for the preset it was set for (main/device/presetSlots), so it carries the
+  // preset's name: one moved, replaced or deleted in any app never lends its level to other music.
+  const nameOf = (id: number): string | null => allItems.find((p) => p.id === id)?.name ?? null;
+  const volumeFor = (id: number): number | null => {
+    const key = presetVolumeKey(systemInfo?.udn, id);
+    const level = presetVolumes[key];
+    return level != null && presetVolumeHolds(presetVolumeNames, key, nameOf(id)) ? level : null;
+  };
   const saveVolume = async (id: number, level: number | null): Promise<void> => {
     const key = presetVolumeKey(systemInfo?.udn, id);
     const next = { ...presetVolumes };
+    const names = { ...presetVolumeNames };
+    const name = nameOf(id);
     if (level == null) delete next[key];
     else next[key] = level;
-    await saveSettings({ presetVolumes: next });
+    if (level == null || name == null) delete names[key];
+    else names[key] = name;
+    await saveSettings({ presetVolumes: next, presetVolumeNames: names });
   };
   // Pointer AND keyboard (the playlists pattern): device presets deserve the
   // same reorderability without a mouse as everything else that sorts.

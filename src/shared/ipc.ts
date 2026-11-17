@@ -193,7 +193,9 @@ export type PushMessage =
   | { kind: "mcpStatus"; status: McpStatus }
   | { kind: "scheduleMissed"; missed: MissedSchedule | null }
   | { kind: "mediaIndex"; statuses: MediaIndexStatus[] }
-  | { kind: "menu"; command: MenuCommand }
+  /** A menu command; `delivery` marks the copies of one click sent to a window still loading
+   *  (main/app/windows), which applies it once. */
+  | { kind: "menu"; command: MenuCommand; delivery?: number }
   | { kind: "updateState"; state: UpdateState }
   /** Sent when a request starts (pending) and again when it settles — upsert by id. */
   | { kind: "netRequest"; entry: NetRequestEntry };

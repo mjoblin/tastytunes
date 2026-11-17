@@ -134,8 +134,22 @@ export async function openRefInLibrary(ref: MediaRef): Promise<boolean> {
   return true;
 }
 
-/** Play a track now. True if the command landed; failures are toasted. */
-export async function playRefNow(ref: MediaRef): Promise<boolean> {
+/** A play on its way, by the track it plays: a double click (its first click and the double) or a
+ *  second ask before the first landed would insert the track once per ask. */
+const playingNow = new Map<string, Promise<boolean>>();
+
+/** Play a track now. True if the command landed; failures are toasted. A second ask for the same
+ *  track while the first is on its way is the first (playingNow). */
+export function playRefNow(ref: MediaRef): Promise<boolean> {
+  const key = JSON.stringify([ref.serverUdn, ref.objectId, ref.title, ref.artist, ref.album]);
+  const inFlight = playingNow.get(key);
+  if (inFlight) return inFlight;
+  const play = playRefNowOnce(ref).finally(() => playingNow.delete(key));
+  playingNow.set(key, play);
+  return play;
+}
+
+async function playRefNowOnce(ref: MediaRef): Promise<boolean> {
   const showToast = useStore.getState().showToast;
   const { serverUdn: hintUdn, objectId: hintId } = ref;
   if (hintUdn && hintId) {

@@ -157,7 +157,11 @@ if (!gotLock) {
       // Node timers stall during system sleep. The sleep timer fires what came
       // due; the SCHEDULER offers it instead (an alarm minutes late is a
       // question, not an instruction) — see scheduler.ts for the three rules.
-      powerMonitor.on("suspend", () => noteSuspend());
+      powerMonitor.on("suspend", () => {
+        noteSuspend();
+        // a station's session waits for the wake to say whether it played through (data/listeningRecord)
+        listeningRecord.noteSleep();
+      });
       powerMonitor.on("resume", () => {
         deviceManager.healthCheck();
         deviceManager.checkSleepTimer();
@@ -198,7 +202,7 @@ if (!gotLock) {
     flushArtThumbs();
     // Quitting mid-track: the open play's accumulated time reaches the
     // record (synchronous append; see listeningRecord).
-    listeningRecord.flush();
+    listeningRecord.flush({ quitting: true });
   });
   // A TERMINATION SIGNAL IS A QUIT (2026-09-15): a dev restart or a kill ends the process
   // without will-quit, and whatever the caches had not yet written was lost — an AirPlay

@@ -9,12 +9,13 @@ import {
   type MediaNode,
   type MediaServerInfo,
 } from "@shared/model";
-import { usbServer } from "@shared/model";
+import { playlistFullSentence, usbServer } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { analyzeAlbum, analyzeTracks, USB_ANALYSIS_HINT } from "@/lib/audioAnalysis";
 import { fmtCount } from "@/lib/format";
 import { openInfoInList } from "@/lib/infoSteps";
+import { pushCreatePlaylistUndo } from "@/lib/playlists";
 import { isAlbumClass, isArtistClass } from "@/lib/media";
 import type { MediaMenuItem } from "@/lib/mediaMenus";
 import { itemFromNode } from "@/components/overlays/AddToPlaylistPanel";
@@ -267,16 +268,14 @@ export function useLibraryMenus(d: {
     if (items.length === 0) return;
     try {
       const created = await tt.playlistCreate(name, items);
-      useStore
-        .getState()
-        .pushUndo(`Create Playlist “${created.name}”`, () => void tt.playlistDelete(created.id));
+      pushCreatePlaylistUndo(created);
       showToast({
         kind: "success",
         text: `Saved ${fmtCount(items.length)} tracks as “${created.name}”`,
         action: { label: "Open Playlists", screen: "playlists" },
       });
-    } catch {
-      showNotice("Couldn't create the playlist.");
+    } catch (e) {
+      showNotice(playlistFullSentence(e) ?? "Couldn't create the playlist.");
     }
   };
   // an album's, and since 0.12.0 a track's (one track measured again, as an album's sweep

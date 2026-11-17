@@ -179,6 +179,35 @@ const NULLABLE: Partial<Record<keyof AppSettings, Kind>> = {
   updateNotified: "string",
 };
 
+/** The kind a setting's type holds, by its values (a literal union collapses to its one kind). */
+type KindOfValue<T> = T extends string
+  ? "string"
+  : T extends number
+    ? "number"
+    : T extends boolean
+      ? "boolean"
+      : T extends readonly unknown[]
+        ? "list"
+        : T extends object
+          ? "object"
+          : never;
+type SettingKind<K extends keyof AppSettings> = KindOfValue<NonNullable<AppSettings[K]>>;
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never;
+/** The settings whose type mixes kinds (1 | 2 | 3 | "album"), which a default's one kind can't hold. */
+type MixedKey = {
+  [K in keyof AppSettings]: true extends IsUnion<SettingKind<K>> ? K : never;
+}[keyof AppSettings];
+
+/**
+ * Every kind each mixed setting may hold. The type requires an entry for every setting whose type
+ * mixes kinds, so a new one can't be checked against its default's kind alone and reset at each
+ * launch. A setting never widens its kind in place: one that must hold a new kind takes a new key,
+ * or a version that knows only the old kind would set the file aside.
+ */
+const MIXED: { readonly [K in MixedKey]: readonly SettingKind<K>[] } = {
+  displayShuffleEvery: ["number", "string"],
+};
+
 function kindOfDefault(v: unknown): Kind | null {
   if (Array.isArray(v)) return "list";
   if (isRecord(v)) return "object";
@@ -190,7 +219,8 @@ function kindOfDefault(v: unknown): Kind | null {
 
 /**
  * settings.json's values, each held to the kind of its default (DEFAULT_SETTINGS is the one
- * schema: a new setting is checked with no second list to keep). A value of the wrong kind is left
+ * schema: a new setting is checked with no second list to keep), or to MIXED's kinds for a setting
+ * whose type mixes them. A value of the wrong kind is left
  * out, so the default stands; a key this version doesn't know is kept. The nested mcp object's own
  * values are held the same way.
  */
@@ -203,22 +233,24 @@ export function checkSettingsKinds(
     into: Record<string, unknown>,
     defaults: Record<string, unknown>,
     nullable: Partial<Record<string, Kind>>,
+    mixed: Partial<Record<string, readonly Kind[]>>,
     at: string,
   ): void => {
     for (const [key, def] of Object.entries(defaults)) {
       if (!(key in into)) continue;
       const v = into[key];
-      const kind = kindOfDefault(def) ?? nullable[key];
-      if (kind == null) continue;
-      if ((v === null && (def === null || key in nullable)) || isKind(v, kind)) continue;
+      const kinds = mixed[key] ?? [kindOfDefault(def) ?? nullable[key]];
+      if (kinds.some((k) => k == null)) continue;
+      if (v === null && (def === null || key in nullable)) continue;
+      if (kinds.some((k) => k != null && isKind(v, k))) continue;
       notes.push(`${at}${key} was ${kindOf(v)}, so its default stands`);
       delete into[key];
     }
   };
-  hold(out, DEFAULT_SETTINGS as unknown as Record<string, unknown>, NULLABLE, "");
+  hold(out, DEFAULT_SETTINGS as unknown as Record<string, unknown>, NULLABLE, MIXED, "");
   if (isRecord(out.mcp)) {
     const mcp = { ...out.mcp };
-    hold(mcp, DEFAULT_SETTINGS.mcp as unknown as Record<string, unknown>, {}, "mcp.");
+    hold(mcp, DEFAULT_SETTINGS.mcp as unknown as Record<string, unknown>, {}, {}, "mcp.");
     out.mcp = mcp;
   }
   return out;
