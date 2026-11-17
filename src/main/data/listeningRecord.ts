@@ -625,8 +625,10 @@ export const listeningRecord = {
    * holds the session for that push rather than closing it (flush).
    */
   noteSleep(): void {
+    // the first sleep stands: a session still waiting on its wake keeps the time it began (a lid
+    // closed again, or a short wake in the night, before the play push came)
     if (current && current.kind !== "play" && current.playingSince != null)
-      current.sleptAt = Date.now();
+      current.sleptAt ??= Date.now();
   },
 
   /** Connection lost, device switched, or the app is quitting: close out the

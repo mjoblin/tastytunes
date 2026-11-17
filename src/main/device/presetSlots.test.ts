@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { presetVolumeHolds } from "@shared/model";
-import { dropSlotFacts, healPresetVolumes, moveSlotFacts, slotsAfterMove } from "./presetSlots";
+import {
+  dropSlotFacts,
+  healPresetVolumes,
+  moveSlotFacts,
+  renamedSlotFacts,
+  slotsAfterMove,
+} from "./presetSlots";
 
 const U = "evo-1";
 const OTHER = "evo-2";
@@ -128,5 +134,24 @@ describe("a move or a delete made here carries every slot-keyed fact", () => {
       presetArtists: { [k(5)]: "Paper Moons" },
       queueSignatures: {},
     });
+  });
+});
+
+describe("a rename made here keeps the level, whatever name the streamer keeps", () => {
+  it("lets the slot's recorded name go, so the list read next names the level", () => {
+    const maps = {
+      presetVolumes: { [k(3)]: 40, [k(3, OTHER)]: 22 },
+      presetVolumeNames: { [k(3)]: "Paper Moons", [k(3, OTHER)]: "Paper Moons" },
+    };
+    const renamed = renamedSlotFacts(U, 3, maps);
+    expect(renamed).toEqual({ presetVolumeNames: { [k(3, OTHER)]: "Paper Moons" } });
+    // the streamer kept the new name shortened
+    expect(
+      healPresetVolumes(U, list([3, "Glass Orchard Live at the Ha"]), { ...maps, ...renamed }),
+    ).toEqual({
+      presetVolumes: { [k(3)]: 40, [k(3, OTHER)]: 22 },
+      presetVolumeNames: { [k(3)]: "Glass Orchard Live at the Ha", [k(3, OTHER)]: "Paper Moons" },
+    });
+    expect(renamedSlotFacts(U, 4, maps)).toBeNull();
   });
 });

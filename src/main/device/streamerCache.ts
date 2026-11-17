@@ -1,6 +1,7 @@
 import type { StreamerCommand } from "@shared/ipc";
 import { presetVolumeHolds, presetVolumeKey, type FirmwareStatus } from "@shared/model";
 import { getSettings } from "../data/persist";
+import { DEAD_RECALL_MS } from "./recallWatch";
 import type {
   Presets,
   QueueList,
@@ -119,9 +120,11 @@ export function presetVolumeFor(
   return level != null && presetVolumeHolds(presetVolumeNames, key, presetName) ? level : null;
 }
 
-/** How long a recall's level waits for what plays to change before it is let go: a wake from
- *  standby (a recall wakes the streamer, ~10 s) and then the recall watch's own wait. */
-export const PRESET_VOLUME_GIVE_UP_MS = 20_000;
+/** How long a recall's level waits for what plays to change before it is let go: the recall
+ *  watch's own verdict, one clock for both. The recall is sent once the streamer is awake (both
+ *  connections wait out a wake first), so the wait starts there; past it, a change is the next
+ *  track or something started elsewhere, never this recall landing. */
+export const PRESET_VOLUME_GIVE_UP_MS = DEAD_RECALL_MS;
 
 /** The commands after which a recall's level no longer belongs: something else was asked to play,
  *  or the volume was set by hand. */

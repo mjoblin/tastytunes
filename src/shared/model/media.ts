@@ -34,6 +34,8 @@ export interface MediaIndexStatus {
   serverName: string;
   /** 'failed': the last build produced nothing (the server refused Search AND Browse — offline, or mid-scan); `failure` says why. */
   state: "none" | "building" | "ready" | "failed";
+  /** Why the last build failed: with 'failed', why there is no index; with 'ready', why the last
+   *  rebuild didn't finish, the index being the one from before (cleared by the next success). */
   failure?: string;
   /** While building: the app started this build on its own to keep an index it already
    *  had honest (the server's counter moved, the TTL passed, the schema changed, a stale id

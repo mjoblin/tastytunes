@@ -262,8 +262,20 @@ export function toggleMiniPlayer(): void {
   }
 }
 
+/**
+ * START-UP'S WINDOW STEP (0.16.0, toward 1.0). A Dock click or a second launch can arrive while
+ * start-up is still moving the tokens and serving the window's handlers (index.ts); a window made
+ * then would load ahead of them, and start-up would make a second. Until start-up reaches the
+ * step that makes the window, there is nothing for either to do.
+ */
+let windowStep = false;
+export function markWindowStep(): void {
+  windowStep = true;
+}
+
 /** Show and focus the main window, recreating it if it's been closed. */
 export function showMainWindow(): void {
+  if (!windowStep) return;
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow();
     return;

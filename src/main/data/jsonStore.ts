@@ -7,7 +7,7 @@ import {
   renameSync,
   rmSync,
   unlinkSync,
-  writeSync,
+  writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
 import { keepAsFound, readSaved } from "./savedFiles";
@@ -43,7 +43,9 @@ export function atomicWriteFileSync(path: string, data: string, mode?: number): 
     if (mode != null) rmSync(tmp, { force: true });
     const fd = openSync(tmp, "w", mode);
     try {
-      writeSync(fd, data);
+      // writeFileSync, never one writeSync: a disk filling midway answers a single write short,
+      // without an error, and the short file would be renamed over the whole one
+      writeFileSync(fd, data);
       fsyncSync(fd);
     } finally {
       closeSync(fd);

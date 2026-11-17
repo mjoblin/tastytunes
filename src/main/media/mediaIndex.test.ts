@@ -13,7 +13,15 @@ import {
   type FakeStreamer,
   type FakeStreamerOptions,
 } from "./__fixtures__/fakeStreamer";
-import { currentIdFor, ensureFresh, pools, rebuild, revalidate, sameNode } from "./mediaIndex";
+import {
+  currentIdFor,
+  ensureFresh,
+  pools,
+  rebuild,
+  revalidate,
+  sameNode,
+  status,
+} from "./mediaIndex";
 import { refreshServers } from "./upnpBrowser";
 
 describe("rebuild: the drive's folder albums", () => {
@@ -198,6 +206,14 @@ describe("a crawl the server stops answering partway, and one that can't count",
       await rebuild(server.host, listed);
       expect(own()?.artists.length).toBe(400);
       expect(own()?.profile?.notes ?? []).not.toContainEqual({ kind: "crawl-interrupted" });
+      // and the Libraries card and an agent hear that the rebuild didn't finish, until one does
+      const kept = (): ReturnType<typeof status>[number] | undefined =>
+        status().find((x) => x.udn === "mock-udn-1");
+      expect(kept()).toMatchObject({ state: "ready", artists: 400 });
+      expect(kept()?.failure).toMatch(/stopped answering partway/);
+      server.failSearchFrom(null);
+      await rebuild(server.host, listed);
+      expect(kept()?.failure).toBeUndefined();
     } finally {
       await server.stop();
     }
@@ -220,6 +236,14 @@ describe("a crawl the server stops answering partway, and one that can't count",
       const first = fresh.pools().find((p) => p.udn === "mock-udn-1");
       expect(first?.artists.length).toBe(150);
       expect(first?.profile?.notes).toContainEqual({ kind: "crawl-interrupted" });
+      // the server stops at the same place again: as much read as before, so the index refreshes
+      const firstAt = fresh.status().find((x) => x.udn === "mock-udn-1")?.builtAt ?? 0;
+      await new Promise((r) => setTimeout(r, 5));
+      await fresh.rebuild(server.host, listed);
+      const again = fresh.status().find((x) => x.udn === "mock-udn-1");
+      expect(again).toMatchObject({ state: "ready", artists: 150 });
+      expect(again?.builtAt ?? 0).toBeGreaterThan(firstAt);
+      expect(again?.failure).toBeUndefined();
     } finally {
       await server.stop();
     }

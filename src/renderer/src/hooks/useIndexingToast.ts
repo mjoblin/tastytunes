@@ -16,7 +16,7 @@ const BURST_MS = 2500;
  * already announce it in place (their count line fades from "Indexing…" to
  * the count), and a toast there would be the double feedback the toast rule
  * forbids. Failures stay on the door and in Settings: the failure-toast rule
- * is for writes.
+ * is for writes, and a rebuild that didn't finish, the index from before kept, is no success.
  *
  * Only TRANSITIONS toast. The map of last-seen states is seeded from the
  * store at subscribe time, so an index that was already ready when the app
@@ -63,6 +63,7 @@ export function useIndexingToast(): void {
           was?.state === "building" &&
           !was.quiet &&
           s.state === "ready" &&
+          !s.failure &&
           state.screen !== "library"
         ) {
           pending.push(s);

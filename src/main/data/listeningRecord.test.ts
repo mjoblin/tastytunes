@@ -162,6 +162,22 @@ describe("a play's time is the music's, never the clock's", () => {
     });
   });
 
+  it("ends it at the first sleep when the computer slept again before the streamer said", () => {
+    const seen = appended(() => {
+      listeningRecord.onPlayState(station("Harbor FM"), "Internet Radio", EVO);
+      vi.advanceTimersByTime(600_000);
+      listeningRecord.noteSleep();
+      vi.advanceTimersByTime(3600_000);
+      // a short wake with no play push, then asleep again until the morning
+      listeningRecord.noteSleep();
+      vi.advanceTimersByTime(6 * 3600_000);
+      listeningRecord.onPlayState(station("Harbor FM", "stop"), "Internet Radio", EVO);
+    });
+    expect(seen.filter((e) => e.kind === "radio-session").at(-1)).toMatchObject({
+      playedSeconds: 600,
+    });
+  });
+
   it("ends it at the sleep when the app quits before the streamer says", () => {
     const seen = appended(() => {
       listeningRecord.onPlayState(station("Tide Radio"), "Internet Radio", EVO);
