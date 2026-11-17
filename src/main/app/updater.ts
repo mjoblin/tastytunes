@@ -23,11 +23,12 @@ import {
   isNewer,
   startUpdateCheck as startLegacyCheck,
 } from "./updateCheck";
+import { devOverride } from "./devOverride";
 
 const { autoUpdater } = electronUpdater;
 
 const RELEASES_PAGE = `${REPO_URL}/releases/latest`;
-const FEED = process.env["TASTYTUNES_UPDATE_FEED"];
+const FEED = devOverride("TASTYTUNES_UPDATE_FEED");
 const CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
 
 let state: UpdateState = {

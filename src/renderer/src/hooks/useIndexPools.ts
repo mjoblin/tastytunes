@@ -21,6 +21,30 @@ import { useStore } from "@/store";
  * the device's strings until then. That is the index's law, not this hook's.
  */
 let poolsCache: { sig: string; pools: MediaIndexPools[] } | null = null;
+/** The one fetch on its way for a signature: every caller mounted while it is out waits on it.
+ *  Without it each queue row (each a caller) fetched and kept its own copy of the whole index, a
+ *  long queue opened first after a launch freezing the window for seconds and holding hundreds of
+ *  megabytes, past the window's heap at the index's bound. */
+let poolsFetch: { sig: string; promise: Promise<MediaIndexPools[]> } | null = null;
+
+/** The pools for `sig`: the snapshot held, the fetch on its way, or one fetch for every caller. */
+function poolsFor(sig: string): Promise<MediaIndexPools[]> {
+  if (poolsCache?.sig === sig) return Promise.resolve(poolsCache.pools);
+  if (poolsFetch?.sig === sig) return poolsFetch.promise;
+  const promise = tt.mediaIndexPools().then(
+    (pools) => {
+      if (poolsFetch?.promise === promise) poolsFetch = null;
+      poolsCache = { sig, pools };
+      return pools;
+    },
+    (e: unknown) => {
+      if (poolsFetch?.promise === promise) poolsFetch = null;
+      throw e;
+    },
+  );
+  poolsFetch = { sig, promise };
+  return promise;
+}
 
 /** The ready indexes and when each was built, as one string: it changes when an index finishes
  *  building or starts a rebuild, or its server's Recently added list is read again (0.13.0). The
@@ -55,11 +79,11 @@ export function useIndexPools(enabled = true): MediaIndexPools[] | null {
       return;
     }
     let stale = false;
-    void tt.mediaIndexPools().then((fetched) => {
-      if (stale) return;
-      poolsCache = { sig, pools: fetched };
-      setPools(fetched);
-    });
+    poolsFor(sig)
+      .then((fetched) => {
+        if (!stale) setPools(fetched);
+      })
+      .catch(() => {});
     return () => {
       stale = true;
     };

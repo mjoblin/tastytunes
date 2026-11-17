@@ -12,6 +12,7 @@ import {
   rowIds,
   acted,
   trackMoved,
+  streamerHostOf,
   DEVICE_ARG,
 } from "./toolkit";
 
@@ -398,8 +399,13 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
     connect_device: defineTool({
       inputSchema: { host: z.string().describe("Host or IP from list_devices.") },
       handler: (a) => {
-        dm.connect(a.host);
-        return ok(`Connecting to ${String(a.host)}. Call get_status to confirm.`);
+        // the window's streamer becomes trusted (its pictures, its media servers): on this
+        // network only, by the rule a tool's device argument follows (mcp/toolkit)
+        const s = dm.snapshot();
+        const named = streamerHostOf(a.host, [...s.devices, ...getSettings().knownDevices]);
+        if ("error" in named) return err(named.error);
+        dm.connect(named.host);
+        return ok(`Connecting to ${named.host}. Call get_status to confirm.`);
       },
     }),
     // ---- sleep timer

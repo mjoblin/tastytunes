@@ -46,6 +46,8 @@ export interface FakeStreamerOptions {
   artists?: number;
   holdUpnp?: boolean;
   assetIds?: boolean;
+  /** A server that can't count: Search answers the page asked for with a total of 0. */
+  uncounted?: boolean;
 }
 
 export interface FakeStreamer {
@@ -61,6 +63,8 @@ export interface FakeStreamer {
   remint(): void;
   /** Answers the server listing held by holdUpnp. */
   releaseUpnp(): void;
+  /** From this item on, every Search page faults (a server restart mid-crawl); null: none. */
+  failSearchFrom(start: number | null): void;
   stop(): Promise<void>;
 }
 
@@ -133,6 +137,7 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
   let mount = 26;
   let updateId = 3;
   let searchCalls = 0;
+  let failFrom: number | null = null;
   let queueAdds = 0;
   const assetIds = opts.assetIds === true;
   let generation = 1;
@@ -522,12 +527,16 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
         searchCalls++;
         const { parts } = search(body);
         const asked = Number(/<RequestedCount>(\d+)<\/RequestedCount>/.exec(body)?.[1] ?? 0);
+        if (failFrom != null && start >= failFrom) return xml(500, "search failed");
         const page = opts.searchPaged
           ? parts.slice(start, start + Math.min(150, asked || parts.length))
-          : parts;
+          : opts.uncounted
+            ? parts.slice(start, start + (asked || parts.length))
+            : parts;
+        const total = opts.uncounted ? 0 : parts.length;
         return xml(
           200,
-          soap(cd.search(generationIds(didlWrap(page.join(""))), page.length, parts.length, 1)),
+          soap(cd.search(generationIds(didlWrap(page.join(""))), page.length, total, 1)),
         );
       }
       let objectId = /<ObjectID>(.*?)<\/ObjectID>/.exec(body)?.[1] ?? "0";
@@ -573,6 +582,9 @@ export async function startFakeStreamer(opts: FakeStreamerOptions = {}): Promise
       generation++;
     },
     releaseUpnp: () => releaseUpnp(),
+    failSearchFrom(start) {
+      failFrom = start;
+    },
     stop: () =>
       new Promise<void>((resolve) => {
         server.closeAllConnections();

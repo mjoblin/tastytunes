@@ -354,7 +354,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "play_media",
         title: "Play media",
         hints: { destructive: true },
-        description: `Play an album or track by server_udn + object id (from search_library), or a list of tracks in one call with items (each {server_udn, object_id} or {title, artist?, album?}, queued in order, the answer counting what landed and naming what didn't). start_at plays an album from one of its tracks (1 = the first), replacing the queue. mode 'play_now' (default) keeps the queue, 'play_next'/'append' insert into it; 'replace' CLEARS the queue first — only use replace when asked to, and the answer says how long the replaced queue was. A container over ${LARGE_QUEUE_TRACKS} tracks is refused until the user agrees: ask, then call again with confirm_large: true.`,
+        description: `Play an album or track by server_udn + object id (from search_library), or a list of tracks in one call with tracks (each {server_udn, object_id} or {title, artist?, album?}, queued in order, the answer counting what landed and naming what didn't). from_track plays an album from one of its tracks (1 = the first), replacing the queue. mode 'play_now' (default) keeps the queue, 'play_next'/'append' insert into it; 'replace' CLEARS the queue first — only use replace when asked to, and the answer says how long the replaced queue was. A container over ${LARGE_QUEUE_TRACKS} tracks is refused until the user agrees: ask, then call again with confirm_large: true.`,
       },
     ],
   },

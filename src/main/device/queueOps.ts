@@ -255,7 +255,7 @@ export class QueueOps {
   }
 
   /**
-   * A list of tracks into the queue in one write (0.16.0, play_media's items), on the batch the
+   * A list of tracks into the queue in one write (0.16.0, play_media's tracks), on the batch the
    * playlists run on, in the order given whatever the verb: replace and append go in as listed;
    * play_next inserts each right after the playing track, so the list goes in reversed; play_now
    * plays the first and the rest follow it, so the rest go in reversed as next and the first goes

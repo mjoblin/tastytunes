@@ -10,9 +10,10 @@ import { isListen } from "@shared/model";
 import { getSettings } from "../data/persist";
 import { getSecret, hasSecret } from "../data/secrets";
 import { loggedFetch } from "../netlog";
+import { devOverride } from "../app/devOverride";
 
 // TASTYTUNES_LB_URL lets test harnesses point submissions at a local server.
-const BASE = process.env["TASTYTUNES_LB_URL"] ?? "https://api.listenbrainz.org";
+const BASE = devOverride("TASTYTUNES_LB_URL") ?? "https://api.listenbrainz.org";
 const PENDING_MAX = 100;
 
 interface TrackMeta {

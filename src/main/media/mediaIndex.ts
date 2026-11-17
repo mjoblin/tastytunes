@@ -307,15 +307,19 @@ interface Crawled {
   tracks: MediaNode[];
   profile: MediaServerProfile;
   parentsOf?: Map<string, Set<string>>;
+  /** A class's pages stopped answering partway (a server restart, the network, the computer
+   *  asleep): what was read is not the library (buildNow keeps the index there was). */
+  interrupted?: boolean;
 }
 
 async function collectClass(
   host: string,
   server: MediaServerInfo,
   cls: string,
+  what: "albums" | "artists" | "tracks",
   cap: number,
   note: (s: ProfileNote) => void,
-): Promise<MediaNode[] | null> {
+): Promise<{ nodes: MediaNode[]; interrupted: boolean } | null> {
   const seen = new Map<string, MediaNode>();
   let start = 0;
   let pageSize = PAGE;
@@ -335,13 +339,24 @@ async function collectClass(
         note({ kind: "search-paged-smaller" });
         continue;
       }
-      return start === 0 ? null : [...seen.values()];
+      // a class refused from its first page is the server's answer; one that stops partway is not
+      return start === 0 ? null : { nodes: [...seen.values()], interrupted: true };
     }
     for (const n of page.items) seen.set(n.id, n);
     start += page.items.length;
-    if (page.items.length === 0 || start >= page.total || seen.size >= cap) {
-      if (seen.size >= cap) console.log(`[mediaIndex] ${server.name}: ${cls} capped at ${cap}`);
-      return [...seen.values()];
+    // a server that can't count says 0: then only a short page ends the class (the live search's
+    // rule, upnpBrowser searchScope); it used to end after the first page
+    const known = page.total > 0 ? page.total : null;
+    const done = known != null ? start >= known : page.items.length < pageSize;
+    if (page.items.length === 0 || done || seen.size >= cap) {
+      // a library past the bound is said, with the server's own total: the Libraries card and
+      // the server's notes (Info, an agent) name what the index leaves out
+      if (seen.size >= cap) {
+        console.log(`[mediaIndex] ${server.name}: ${cls} capped at ${cap}`);
+        if (page.total > seen.size)
+          note({ kind: "index-capped", what, kept: seen.size, total: page.total });
+      }
+      return { nodes: [...seen.values()], interrupted: false };
     }
   }
 }
@@ -351,13 +366,15 @@ async function crawlSearch(host: string, server: MediaServerInfo): Promise<Crawl
   const note = (s: ProfileNote): void => {
     if (!profile.notes.some((x) => JSON.stringify(x) === JSON.stringify(s))) profile.notes.push(s);
   };
-  const rawAlbums = await collectClass(host, server, ALBUM_BASE, MAX_CONTAINERS, note);
-  const rawArtists = await collectClass(host, server, ARTIST_BASE, MAX_CONTAINERS, note);
-  const rawTracks = await collectClass(host, server, TRACK_BASE, MAX_TRACKS, note);
+  const rawAlbums = await collectClass(host, server, ALBUM_BASE, "albums", MAX_CONTAINERS, note);
+  const rawArtists = await collectClass(host, server, ARTIST_BASE, "artists", MAX_CONTAINERS, note);
+  const rawTracks = await collectClass(host, server, TRACK_BASE, "tracks", MAX_TRACKS, note);
   if (rawTracks == null && rawAlbums == null) return null; // server refused the crawl entirely
-  const albumsSettled = settleClasses(rawAlbums ?? [], ALBUM_BASE, ALBUM_LEAF);
-  const artistsSettled = settleClasses(rawArtists ?? [], ARTIST_BASE, ARTIST_LEAF);
-  const tracksSettled = audioItemsOnly(rawTracks ?? []);
+  const interrupted = [rawAlbums, rawArtists, rawTracks].some((r) => r?.interrupted === true);
+  if (interrupted) note({ kind: "crawl-interrupted" });
+  const albumsSettled = settleClasses(rawAlbums?.nodes ?? [], ALBUM_BASE, ALBUM_LEAF);
+  const artistsSettled = settleClasses(rawArtists?.nodes ?? [], ARTIST_BASE, ARTIST_LEAF);
+  const tracksSettled = audioItemsOnly(rawTracks?.nodes ?? []);
   profile.classSearch =
     albumsSettled.mode === "empty"
       ? artistsSettled.mode === "empty"
@@ -378,6 +395,7 @@ async function crawlSearch(host: string, server: MediaServerInfo): Promise<Crawl
     artists: artistsSettled.kept,
     tracks: tracksSettled.kept,
     profile,
+    ...(interrupted ? { interrupted } : {}),
   };
 }
 
@@ -486,6 +504,13 @@ function reconcilePools(c: Crawled, serverName: string): Crawled {
   return { ...c, albums: yf.albums, tracks: fd.tracks };
 }
 
+/** A crawl that stopped partway while there is an index already: the index there was stands. */
+class CrawlInterrupted extends Error {
+  constructor() {
+    super("the server stopped answering partway through, so the index it had stays");
+  }
+}
+
 async function crawl(
   host: string,
   server: MediaServerInfo,
@@ -517,6 +542,9 @@ async function crawl(
       c.profile.notes.push({ kind: "albums-found-by-browsing", count: b.albums.length });
     }
   }
+  // a crawl that stopped partway never replaces a whole index (buildNow); a first one stands,
+  // its note saying it may be incomplete
+  if (c.interrupted && indexes.has(server.udn)) throw new CrawlInterrupted();
   const r = reconcilePools(c, server.name);
   const updateId = await getSystemUpdateID(host, server.udn);
   const recent = await readRecentList(host, server);

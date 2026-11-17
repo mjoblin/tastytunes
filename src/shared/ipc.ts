@@ -440,11 +440,17 @@ export interface TastyTunesApi {
    *  a Uint8Array (main sends a Buffer): the contract said ArrayBuffer until the typed
    *  handle held main's answer to it (0.11.0 sweep). */
   /** A track's bytes for the analysis decode; `tooLarge` when the file is past the size the
-   *  decode can hold (main/ipc/audio), refused before it is downloaded. */
+   *  decode can hold, `tooLong` when its samples would be (main/ipc/audio), each refused before
+   *  it is downloaded. */
   expTrackAudio(
     serverUdn: string,
     objectId: string,
-  ): Promise<Uint8Array | { tooLarge: { bytes: number; maxBytes: number } } | null>;
+  ): Promise<
+    | Uint8Array
+    | { tooLarge: { bytes: number; maxBytes: number } }
+    | { tooLong: { secs: number; maxSecs: number } }
+    | null
+  >;
   /** A track's file opened to be read in pieces for the analysis (0.14.0, no size limit): its
    *  stream's id and declared length, or null when the server wouldn't give it. */
   audioStreamOpen(

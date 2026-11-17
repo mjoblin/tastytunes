@@ -43,6 +43,7 @@ import {
   type ToolImpl,
   type Target,
   err,
+  streamerHostOf,
   strictInput,
 } from "./mcp/toolkit";
 import { remoteStreamers } from "../device/remoteStreamer";
@@ -404,27 +405,17 @@ export class McpBridge {
     return { run, node, target, position: tracks.indexOf(target) + 1, total: tracks.length };
   }
 
-  /**
-   * A device argument to a streamer's host: a name, a udn or a host from the streamers seen on
-   * the network and the device book, else the argument itself when it reads as an address.
-   */
-  private hostOf(device: string): string | null {
-    const snap = this.dm.snapshot();
-    const key = nameKey(device);
-    const known = [...snap.devices, ...getSettings().knownDevices].find(
-      (d) => nameKey(d.friendlyName) === key || nameKey(d.udn) === key || nameKey(d.host) === key,
-    );
-    if (known) return known.host;
-    return /^[\w.-]+(:\d+)?$/.test(device.trim()) && /[.:]/.test(device) ? device.trim() : null;
-  }
-
-  /** The streamer a call acts on (ToolContext.target). */
+  /** The streamer a call acts on (ToolContext.target): by device, on this network only
+   *  (mcp/toolkit streamerHostOf). */
   private async target(device?: string): Promise<Target> {
     const snap = this.dm.snapshot();
     const windowHost = snap.connection.phase === "connected" ? snap.connection.host : null;
-    const host = device != null ? this.hostOf(device) : null;
-    if (device != null && host == null)
-      throw new Error(`No streamer called '${device}'. Use list_devices for their names.`);
+    let host: string | null = null;
+    if (device != null) {
+      const named = streamerHostOf(device, [...snap.devices, ...getSettings().knownDevices]);
+      if ("error" in named) throw new Error(named.error);
+      host = named.host;
+    }
     if (host == null || host === windowHost) {
       // the window's streamer: an agent's own connection to it, if it had one, gives way, and a
       // sleep timer armed there goes over to the window's connection unless it has its own

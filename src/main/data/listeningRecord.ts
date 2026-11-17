@@ -679,7 +679,8 @@ export const listeningRecord = {
     let unreadable = 0;
     for (const year of await listYears()) {
       const r = this.readYear(year);
-      events.push(...r.events);
+      // a loop, never a spread: a year past ~105,000 lines would throw (shared/model eventsOfYears)
+      for (const e of r.events) events.push(e);
       unreadable += r.unreadable;
     }
     return { events, unreadable };

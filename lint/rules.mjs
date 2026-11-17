@@ -188,6 +188,19 @@ export const ONE_HOME = [
     },
   },
   {
+    id: "dev-overrides",
+    selector:
+      "MemberExpression[object.object.name='process'][object.property.name='env']:matches([property.value=/^(ELECTRON_RENDERER_URL|TASTYTUNES_(LB_URL|FANART_URL|SECRETS_PLAIN|UPDATE_FEED))$/], [property.name=/^(ELECTRON_RENDERER_URL|TASTYTUNES_(LB_URL|FANART_URL|SECRETS_PLAIN|UPDATE_FEED))$/])",
+    files: ["^src/main/"],
+    allow: ["^src/main/app/devOverride\\.ts$"],
+    message:
+      "The overrides that could redirect a window, a token, a secret's encryption or the update feed are read through app/devOverride, which an installed build ignores",
+    bad: {
+      file: "src/main/lookups/scrobbler.ts",
+      code: "const u = process.env['TASTYTUNES_LB_URL'];",
+    },
+  },
+  {
     id: "void-command",
     was: "S96",
     selector:

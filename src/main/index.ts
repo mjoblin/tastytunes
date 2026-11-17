@@ -4,7 +4,8 @@ import "./app/boot";
 import { app, globalShortcut, powerMonitor } from "electron";
 import { IPC } from "@shared/ipc";
 import { serveArtProtocol } from "./app/artProtocol";
-import { denyPermissionsByDefault } from "./app/permissions";
+import { denyPermissionsByDefault, keepNoCookies } from "./app/permissions";
+import { startupFailed } from "./app/bootFailure";
 import { broadcastSettings, wireListeningPushes } from "./app/broadcast";
 import { syncMediaKeys } from "./app/mediaKeys";
 import { installAppMenu } from "./app/menu";
@@ -73,9 +74,30 @@ if (!gotLock) {
   app
     .whenReady()
     .then(async () => {
+      // THE UPDATE CHECK FIRST, in its own try (app/bootFailure): a build that fails further on
+      // can still be offered the next one
+      try {
+        startUpdater((state) => {
+          getMainWindow()?.webContents.send(IPC.push, { kind: "updateState", state });
+          // the menu bar or tray menu offers it too
+          if (hasTray()) refreshTrayMenu();
+          // and someone running from the menu bar or tray, the window out of view, hears it once
+          const main = getMainWindow();
+          const inView = !!main && !main.isDestroyed() && main.isVisible() && !main.isMinimized();
+          if (state.version && shouldAnnounce(state, getSettings(), inView)) {
+            const version = state.version;
+            if (announceUpdate(version, () => sendMenuCommand({ id: "updates" }))) {
+              updateSettings({ updateNotified: version });
+            }
+          }
+        });
+      } catch (e) {
+        console.error("the update check couldn't start:", e);
+      }
       // the tokens into the secrets store before any window opens, so none ever receives one
       await moveSecrets();
       denyPermissionsByDefault();
+      keepNoCookies();
       serveArtProtocol();
       registerIpc();
       installAppMenu(menuDeps);
@@ -139,20 +161,6 @@ if (!gotLock) {
         deviceManager.setMediaIndex(statuses);
         artistPrefetchAfterIndex();
       });
-      startUpdater((state) => {
-        getMainWindow()?.webContents.send(IPC.push, { kind: "updateState", state });
-        // the menu bar or tray menu offers it too
-        if (hasTray()) refreshTrayMenu();
-        // and someone running from the menu bar or tray, the window out of view, hears it once
-        const main = getMainWindow();
-        const inView = !!main && !main.isDestroyed() && main.isVisible() && !main.isMinimized();
-        if (state.version && shouldAnnounce(state, getSettings(), inView)) {
-          const version = state.version;
-          if (announceUpdate(version, () => sendMenuCommand({ id: "updates" }))) {
-            updateSettings({ updateNotified: version });
-          }
-        }
-      });
 
       // Node timers stall during system sleep. The sleep timer fires what came
       // due; the SCHEDULER offers it instead (an alarm minutes late is a
@@ -167,16 +175,15 @@ if (!gotLock) {
         deviceManager.checkSleepTimer();
         catchUpOnResume(deviceManager);
       });
-
-      // Dock-icon click. Asking for the MAIN window rather than "are there zero
-      // windows" matters now that a hidden tray panel can be the only window
-      // there is — counting windows would make the dock icon do nothing.
-      app.on("activate", () => showMainWindow());
     })
-    .catch((e: unknown) => {
-      // a failure anywhere in startup used to vanish (floating promise)
-      console.error("startup failed:", e);
-    });
+    // a failure anywhere in start-up says so, and points at the latest version (app/bootFailure)
+    .catch((e: unknown) => startupFailed(e));
+
+  // Dock-icon click, outside the start-up chain so a failure in it leaves the icon working.
+  // Asking for the MAIN window rather than "are there zero windows" matters now that a hidden
+  // tray panel can be the only window there is: counting windows would make the dock icon do
+  // nothing.
+  app.on("activate", () => showMainWindow());
 
   app.on("before-quit", () => {
     markQuitting();

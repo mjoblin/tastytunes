@@ -8,6 +8,7 @@ import { currentUpdateState } from "./updater";
 import { homeWorkArea, isOnScreen } from "./windowPlacement";
 import { deviceManager } from "./runtime";
 import { reloadOnCrash } from "./crashReload";
+import { devOverride } from "./devOverride";
 
 // The main window and the mini player, and the callbacks the app menu and the tray use to
 // reach them (split out of index.ts in the 0.11.0 sweep).
@@ -158,8 +159,9 @@ export function createWindow(): void {
     }
   });
 
-  if (process.env["ELECTRON_RENDERER_URL"]) {
-    void mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
+  const devPage = devOverride("ELECTRON_RENDERER_URL");
+  if (devPage) {
+    void mainWindow.loadURL(devPage);
   } else {
     void mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
@@ -252,8 +254,9 @@ export function toggleMiniPlayer(): void {
     miniWindow = null;
   });
 
-  if (process.env["ELECTRON_RENDERER_URL"]) {
-    void miniWindow.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}?mini=1`);
+  const devPage = devOverride("ELECTRON_RENDERER_URL");
+  if (devPage) {
+    void miniWindow.loadURL(`${devPage}?mini=1`);
   } else {
     void miniWindow.loadFile(join(__dirname, "../renderer/index.html"), { query: { mini: "1" } });
   }

@@ -2,6 +2,7 @@ import { DiskCache } from "./diskCache";
 import { getSecret } from "../data/secrets";
 import { fetchArtistInfo } from "./artistInfo";
 import { getJson } from "./mb";
+import { devOverride } from "../app/devOverride";
 
 /**
  * FANART.TV'S ARTIST PHOTOS (0.13.0 round 11; Plex's picture editor's 1000 x 1000 artist photos
@@ -12,7 +13,7 @@ import { getJson } from "./mb";
  * (ArtistPictureDialog), most liked first.
  * Settled answers cached per artist; a refused key or an unreachable service is not.
  */
-export const FANART = process.env["TASTYTUNES_FANART_URL"] ?? "https://webservice.fanart.tv";
+export const FANART = devOverride("TASTYTUNES_FANART_URL") ?? "https://webservice.fanart.tv";
 
 const cache = new DiskCache<string[]>("fanart", 1000);
 

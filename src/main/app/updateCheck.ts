@@ -47,7 +47,10 @@ async function fetchLatest(): Promise<UpdateInfo | null> {
   if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
   const body = (await res.json()) as { tag_name?: string; html_url?: string };
   if (!body.tag_name || !isNewer(body.tag_name, appVersion)) return null;
-  return { version: body.tag_name.replace(/^v/, ""), url: body.html_url ?? RELEASES_PAGE };
+  // the link is the project's own releases page, whatever the answer names (an overridden check
+  // address may point the check elsewhere, never the page it opens)
+  const url = body.html_url?.startsWith(`${REPO_URL}/releases/`) ? body.html_url : RELEASES_PAGE;
+  return { version: body.tag_name.replace(/^v/, ""), url };
 }
 
 export async function checkNow(): Promise<void> {

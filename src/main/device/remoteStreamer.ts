@@ -232,6 +232,8 @@ export class RemoteStreamer {
 
 /** How long an agent's connection to another streamer stays open with nothing asked of it. */
 export const REMOTE_IDLE_MS = 5 * 60_000;
+/** How many other streamers an agent's connections reach at once (a home has a few). */
+export const REMOTE_MAX = 4;
 
 /** The agent's connections to other streamers, one per host, opened when asked for and closed
  *  when idle (a sleep timer armed on one keeps it open until it fires). */
@@ -242,10 +244,23 @@ export class RemoteStreamers {
   /** Where the pool's notes go (the bridge points it at the app's log). */
   log: (text: string) => void = () => {};
 
-  /** The connection to `host`, opened if need be. */
+  /** The connection to `host`, opened if need be. At most REMOTE_MAX are open: a new one closes
+   *  the least recently used without a sleep timer armed, and is refused when every one has one. */
   get(host: string): RemoteStreamer {
     let remote = this.open.get(host);
     if (!remote) {
+      if (this.open.size >= REMOTE_MAX) {
+        const idle = [...this.open.entries()]
+          .filter(([, r]) => r.sleeper.current == null)
+          .sort(([, a], [, b]) => a.lastUsed - b.lastUsed)[0];
+        if (!idle)
+          throw new Error(
+            `An agent has ${REMOTE_MAX} other streamers open, each with a sleep timer set, the most at once.`,
+          );
+        idle[1].close();
+        this.open.delete(idle[0]);
+        this.log(`closed the connection to ${idle[0]}, the least recently used, for ${host}`);
+      }
       remote = new RemoteStreamer(host, (text) => this.log(`${host}: ${text}`));
       this.open.set(host, remote);
       this.log(`opened a connection to ${host} for an agent`);

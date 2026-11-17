@@ -226,3 +226,19 @@ describe("a play's time is the music's, never the clock's", () => {
     ).toEqual([376, 400, 900, 5000]);
   });
 });
+
+describe("a year past the argument limit reads whole", () => {
+  it("reads 150,000 lines of one year, as the record and an agent read them", async () => {
+    const dir = join(app.getPath("userData"), "history");
+    mkdirSync(dir, { recursive: true });
+    const at = Date.UTC(2043, 0, 1);
+    const line = (i: number): string =>
+      `{"v":1,"at":${at + i},"tzOffsetMin":0,"kind":"radio-track","station":"Harbor FM","title":"T${i}"}`;
+    writeFileSync(
+      join(dir, "2043.jsonl"),
+      Array.from({ length: 150_000 }, (_, i) => line(i)).join("\n") + "\n",
+    );
+    const { events } = await listeningRecord.readAll();
+    expect(events.filter((e) => e.at >= at && e.at < at + 150_000)).toHaveLength(150_000);
+  });
+});

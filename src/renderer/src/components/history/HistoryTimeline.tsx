@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { ChevronRight, Clock, MoreHorizontal, Play } from "lucide-react";
 import {
+  eventsOfYears,
   groupSessions,
   type ListeningEvent,
   type ListeningPlayEvent,
@@ -249,11 +250,10 @@ export function HistoryTimeline({
     return () => clearInterval(t);
   }, []);
 
-  const all = useMemo(() => {
-    const out: ListeningEvent[] = [];
-    for (const y of loadedYears) out.push(...(loaded[y] ?? []));
-    return narrowToStreamer(out, streamer);
-  }, [loaded, loadedYears, streamer]);
+  const all = useMemo(
+    () => narrowToStreamer(eventsOfYears(loaded, loadedYears), streamer),
+    [loaded, loadedYears, streamer],
+  );
   const textShown = useMemo(() => (filter ? filterEvents(all, filter) : all), [all, filter]);
   // the facets' options, count-carrying, from the text-narrowed pool
   const sourceOptions = useMemo(() => {

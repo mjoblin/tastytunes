@@ -913,8 +913,43 @@ export async function audioResUrl(
   host: string,
   serverUdn: string,
   objectId: string,
-  { analysis = false }: { analysis?: boolean } = {},
+  opts: { analysis?: boolean } = {},
 ): Promise<string | null> {
+  return (await audioRes(host, serverUdn, objectId, opts))?.url ?? null;
+}
+
+/** What a res element's attributes say of its audio: the length in seconds (duration
+ *  H:MM:SS.fff), the sample rate and the channels, each null when the server leaves it out. */
+export function resAudioFacts(attrs: string): {
+  secs: number | null;
+  rate: number | null;
+  channels: number | null;
+} {
+  const num = (name: string): number | null => {
+    const v = Number(new RegExp(`\\b${name}="(\\d+)"`).exec(attrs)?.[1]);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  };
+  const d = /\bduration="(\d+):(\d{2}):(\d{2}(?:\.\d+)?)"/.exec(attrs);
+  return {
+    secs: d ? Number(d[1]) * 3600 + Number(d[2]) * 60 + Number(d[3]) : null,
+    rate: num("sampleFrequency"),
+    channels: num("nrAudioChannels"),
+  };
+}
+
+/** A track's audio resource: its address, and what its DIDL says of the audio (the length in
+ *  seconds, the sample rate, the channels), each null when the server leaves it out. */
+export async function audioRes(
+  host: string,
+  serverUdn: string,
+  objectId: string,
+  { analysis = false }: { analysis?: boolean } = {},
+): Promise<{
+  url: string;
+  secs: number | null;
+  rate: number | null;
+  channels: number | null;
+} | null> {
   try {
     const entry = await entryFor(host, serverUdn);
     const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
@@ -924,15 +959,16 @@ export async function audioResUrl(
     );
     const first = audio[0];
     if (!first) return null;
+    const info = resAudioFacts(first.attrs);
     // APPLE LOSSLESS THROUGH THE SERVER'S WAV COPY (0.14.0): nothing here decodes an MP4's
     // Apple Lossless (Chromium has no decoder for it), and AAC in one only whole; a server that
     // also offers the file as WAV (Asset decodes it as it sends) is read that way, in pieces,
     // with every measure. The analysis only: embedded art is read from the file itself.
     if (analysis && /audio\/(mp4|x-m4a|m4a|aac)/i.test(first.attrs)) {
       const wav = audio.find((x) => /audio\/(x-)?wav/i.test(x.attrs));
-      if (wav) return wav.url;
+      if (wav) return { url: wav.url, ...info };
     }
-    return first.url;
+    return { url: first.url, ...info };
   } catch {
     return null;
   }

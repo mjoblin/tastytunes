@@ -111,8 +111,16 @@ describe("parseUrlAction", () => {
     expect(action("TASTYTUNES://Toggle-Play")).toEqual(toggle);
     expect(action("tastytunes://toggle-play/")).toEqual(toggle);
     expect(action("tastytunes:toggle-play")).toEqual(toggle);
-    expect(action("tastytunes://toggle-play?from=deck#x")).toEqual(toggle);
+    expect(action("tastytunes://toggle-play?#x")).toEqual(toggle);
+    expect(action("tastytunes://toggle-play#x")).toEqual(toggle);
     expect(action("  tastytunes://toggle-play  ")).toEqual(toggle);
+  });
+
+  it("refuses a link with options rather than act on it without them", () => {
+    expect(action("tastytunes://volume/30?device=Kitchen")).toBe(
+      "TastyTunes links take no options, and this one has “device=Kitchen”.",
+    );
+    expect(parse("tastytunes://toggle-play?from=deck#x").ok).toBe(false);
   });
 
   it("refuses what is not one of its links, and names an unknown verb", () => {

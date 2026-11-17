@@ -595,3 +595,24 @@ export interface ListeningRecordStats {
    *  write an event; false while a change would still discard it. */
   pendingEligible: boolean;
 }
+
+/**
+ * The years' events as one list, in the years' order given (each year in append order). A loop,
+ * never push(...year): a spread passes every line as an argument, and past about 105,000 lines in
+ * a year (a station left on adds one per announced title) the call throws, the whole record
+ * unreadable to the stats, the History screen and an agent while the file itself is whole.
+ */
+export function eventsOfYears<T>(
+  loaded: Readonly<Record<number, readonly T[] | undefined>>,
+  years: readonly number[],
+): T[] {
+  const out: T[] = [];
+  for (const y of years) for (const e of loaded[y] ?? []) out.push(e);
+  return out;
+}
+
+/** The years of a loaded record, oldest first. */
+export const yearsOldestFirst = (loaded: Readonly<Record<number, unknown>>): number[] =>
+  Object.keys(loaded)
+    .map(Number)
+    .sort((a, b) => a - b);

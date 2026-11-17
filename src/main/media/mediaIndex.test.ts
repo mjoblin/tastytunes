@@ -1,3 +1,6 @@
+import { rmSync } from "node:fs";
+import { join } from "node:path";
+import { app } from "electron";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   describeProfileNote,
@@ -173,5 +176,62 @@ describe("sameNode: the node in a rebuilt index", () => {
     expect(sameNode({ albums: [], tracks: [t("new3", 3), t("new4", 4)] }, t("old3", 3))?.id).toBe(
       "new3",
     );
+  });
+});
+
+describe("a crawl the server stops answering partway, and one that can't count", () => {
+  const own = (): MediaIndexPools | undefined => pools().find((p) => p.udn === "mock-udn-1");
+  const built = async (server: FakeStreamer): Promise<MediaServerInfo> => {
+    const listed = (await refreshServers(server.host)).find((x) => x.udn === "mock-udn-1");
+    if (!listed) throw new Error("the fake streamer lists no server");
+    return listed;
+  };
+
+  it("keeps the index there was when a rebuild stops partway", async () => {
+    // 400 artists in pages of 150: the second page is where the server stops answering
+    const server = await startFakeStreamer({ searchPaged: true, artists: 400 });
+    try {
+      const listed = await built(server);
+      await rebuild(server.host, listed);
+      expect(own()?.artists.length).toBe(400);
+      server.failSearchFrom(150);
+      await rebuild(server.host, listed);
+      expect(own()?.artists.length).toBe(400);
+      expect(own()?.profile?.notes ?? []).not.toContainEqual({ kind: "crawl-interrupted" });
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("keeps a first index that stopped partway, saying it may be incomplete", async () => {
+    // a first build: no index held, none saved
+    rmSync(join(app.getPath("userData"), "cache", "media-index.json"), { force: true });
+    vi.resetModules();
+    const fresh = await import("./mediaIndex");
+    const browser = await import("./upnpBrowser");
+    const server = await startFakeStreamer({ searchPaged: true, artists: 400 });
+    try {
+      const listed = (await browser.refreshServers(server.host)).find(
+        (x) => x.udn === "mock-udn-1",
+      );
+      if (!listed) throw new Error("the fake streamer lists no server");
+      server.failSearchFrom(150);
+      await fresh.rebuild(server.host, listed);
+      const first = fresh.pools().find((p) => p.udn === "mock-udn-1");
+      expect(first?.artists.length).toBe(150);
+      expect(first?.profile?.notes).toContainEqual({ kind: "crawl-interrupted" });
+    } finally {
+      await server.stop();
+    }
+  });
+
+  it("reads a server that answers a total of 0 to its last short page", async () => {
+    const server = await startFakeStreamer({ uncounted: true, artists: 1200 });
+    try {
+      await rebuild(server.host, await built(server));
+      expect(own()?.artists.length).toBe(1200);
+    } finally {
+      await server.stop();
+    }
   });
 });
