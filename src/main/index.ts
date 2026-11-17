@@ -21,6 +21,7 @@ import {
   focusMain,
   getMainWindow,
   markQuitting,
+  markWindowStep,
   menuDeps,
   quitting,
   sendMenuCommand,
@@ -64,9 +65,9 @@ if (!gotLock) {
     // the login item launching an app already running asks for nothing to be shown
     if (argv.includes(LOGIN_ARG)) return;
     // A second launch means "show me the app" — recreate the window if the
-    // first instance is running window-less (macOS after close).
+    // first instance is running window-less (macOS after close), once start-up has made one.
     const mainWindow = getMainWindow();
-    if (!mainWindow) return createWindow();
+    if (!mainWindow) return showMainWindow();
     if (mainWindow.isMinimized()) mainWindow.restore();
     focusMain();
   });
@@ -103,7 +104,9 @@ if (!gotLock) {
       installAppMenu(menuDeps);
       // OPEN AT LOGIN (app/loginItem): with the menu bar icon on, a launch at login starts in
       // the tray, no window, as closing the window leaves it; the window opens on demand from the
-      // tray or the Dock. An icon that could not appear opens the window after all.
+      // tray or the Dock. An icon that could not appear opens the window after all. From here a Dock
+      // click or a second launch opens the window too (app/windows).
+      markWindowStep();
       const inTray = startsInTray(openedAtLogin(), getSettings().tray);
       if (!inTray) createWindow();
       syncMediaKeys();
@@ -176,10 +179,12 @@ if (!gotLock) {
         catchUpOnResume(deviceManager);
       });
     })
-    // a failure anywhere in start-up says so, and points at the latest version (app/bootFailure)
-    .catch((e: unknown) => startupFailed(e));
+    // a failure anywhere in start-up says so, and points at the latest version; with the window or
+    // the tray up, the app stays (app/bootFailure)
+    .catch((e: unknown) => startupFailed(e, getMainWindow() != null || hasTray()));
 
-  // Dock-icon click, outside the start-up chain so a failure in it leaves the icon working.
+  // Dock-icon click, outside the start-up chain so a failure in it leaves the icon working; before
+  // start-up reaches its window step it does nothing (app/windows).
   // Asking for the MAIN window rather than "are there zero windows" matters now that a hidden
   // tray panel can be the only window there is: counting windows would make the dock icon do
   // nothing.

@@ -24,7 +24,6 @@ import {
   KNOWN_DEVICES_MAX,
   RECONNECT_GRACE_MS,
   type HeldState,
-  presetVolumeKey,
 } from "@shared/model";
 import type {
   Presets,
@@ -79,6 +78,7 @@ import {
   dropSlotFacts,
   healPresetVolumes,
   moveSlotFacts,
+  renamedSlotFacts,
   slotsAfterMove,
 } from "./presetSlots";
 import { RecallWatch, recallSignature } from "./recallWatch";
@@ -96,6 +96,8 @@ export class DeviceManager {
   private lastHealthCheckAt = 0;
   private lastSourceId: string | null = null;
   private queuePresetsTimer: NodeJS.Timeout | null = null;
+  /** The app's own preset writes still out (presetWrite). */
+  private presetWrites = 0;
   /** The host connect() was asked to remember, stamped as lastHost once it connects. */
   private remembering: string | null = null;
   /** The wire's notes already logged on this connection (wireNote). */
@@ -668,31 +670,41 @@ export class DeviceManager {
       case "queueMove":
         return smoipHttp.queueMove(host, cmd.id, cmd.from, cmd.to);
       case "presetDelete":
-        await smoipHttp.presetDelete(host, cmd.presetId);
-        this.saveSlotFacts(dropSlotFacts(this.cache.systemInfo?.udn, cmd.presetId, getSettings()));
-        return this.refreshPresets(socket);
-      case "presetRename": {
-        await smoipHttp.presetRename(host, cmd.slot, cmd.name);
-        // a level set for this preset keeps holding under its new name
-        const key = presetVolumeKey(this.cache.systemInfo?.udn, cmd.slot);
-        const names = getSettings().presetVolumeNames;
-        if (key in names) this.saveSlotFacts({ presetVolumeNames: { ...names, [key]: cmd.name } });
-        return this.refreshPresets(socket);
-      }
+        return this.presetWrite(
+          socket,
+          () => smoipHttp.presetDelete(host, cmd.presetId),
+          () => {
+            this.saveSlotFacts(
+              dropSlotFacts(this.cache.systemInfo?.udn, cmd.presetId, getSettings()),
+            );
+          },
+        );
+      case "presetRename":
+        return this.presetWrite(
+          socket,
+          () => smoipHttp.presetRename(host, cmd.slot, cmd.name),
+          () => {
+            // a level set for this preset keeps holding, under the name the streamer kept
+            const renamed = renamedSlotFacts(this.cache.systemInfo?.udn, cmd.slot, getSettings());
+            if (renamed) this.saveSlotFacts(renamed);
+          },
+        );
       case "queueSavePreset":
-        await smoipHttp.queueSavePreset(host, cmd.slot, cmd.name);
-        return this.refreshPresets(socket);
+        return this.presetWrite(socket, () => smoipHttp.queueSavePreset(host, cmd.slot, cmd.name));
       case "streamRadio":
         return smoipHttp.streamRadio(host, cmd.url, cmd.name);
       case "zoneSavePreset":
-        await smoipHttp.zoneSavePreset(host, cmd.slot);
-        return this.refreshPresets(socket);
+        return this.presetWrite(socket, () => smoipHttp.zoneSavePreset(host, cmd.slot));
       case "presetMove": {
         const moved = slotsAfterMove(this.cache.presets?.presets ?? [], cmd.from, cmd.to);
-        await smoipHttp.presetMove(host, cmd.from, cmd.to);
-        if (moved.size > 0)
-          this.saveSlotFacts(moveSlotFacts(this.cache.systemInfo?.udn, moved, getSettings()));
-        return this.refreshPresets(socket);
+        return this.presetWrite(
+          socket,
+          () => smoipHttp.presetMove(host, cmd.from, cmd.to),
+          () => {
+            if (moved.size > 0)
+              this.saveSlotFacts(moveSlotFacts(this.cache.systemInfo?.udn, moved, getSettings()));
+          },
+        );
       }
     }
   }
@@ -828,6 +840,8 @@ export class DeviceManager {
         }
         // the streamer is known: what it held when it last slept (the standby face's offer)
         this.push({ kind: "held", held: heldFor(info.udn ?? null) });
+        // and the presets list that arrived ahead of it heals now (presetsArrived)
+        if (this.cache.presets) this.presetsArrived(this.cache.presets);
         return this.push({ kind: "systemInfo", data: systemInfo });
       }
       case "/system/power": {
@@ -893,14 +907,37 @@ export class DeviceManager {
    * doesn't push /presets/list for local-media (UPnP) recalls, and a bare WS
    * request for it isn't proven against real hardware; HTTP GET is.
    */
-  /** A presets list arrived: each preset's level follows its preset (device/presetSlots). */
+  /** A presets list arrived: each preset's level follows its preset (device/presetSlots). Not
+   *  while one of the app's own preset writes is out (presetWrite), nor before the streamer has
+   *  said who it is (the socket subscribes to the list first): the refresh after the write, or
+   *  the streamer's identity, heals from the list then. */
   private presetsArrived(presets: Presets): void {
-    const healed = healPresetVolumes(
-      this.cache.systemInfo?.udn,
-      presets.presets ?? [],
-      getSettings(),
-    );
+    const udn = this.cache.systemInfo?.udn;
+    if (this.presetWrites > 0 || !udn) return;
+    const healed = healPresetVolumes(udn, presets.presets ?? [], getSettings());
     if (healed) this.saveSlotFacts(healed);
+  }
+
+  /**
+   * ONE OF THE APP'S OWN PRESET WRITES (a save, a rename, a move, a delete), its slot facts
+   * updated once the streamer answers, then the presets read again. The streamer pushes its new
+   * list before it answers, and a heal from that list would read a rename as a preset gone (its
+   * level dropped) and a move as made twice; so no list heals while a write is out, and the
+   * re-read heals from what the list and the facts then agree on.
+   */
+  private async presetWrite(
+    socket: SmoipSocket | null,
+    write: () => Promise<unknown>,
+    then?: () => void,
+  ): Promise<void> {
+    this.presetWrites++;
+    try {
+      await write();
+      then?.();
+    } finally {
+      this.presetWrites--;
+    }
+    return this.refreshPresets(socket);
   }
 
   /** The slot-keyed settings, written and pushed to the windows. */

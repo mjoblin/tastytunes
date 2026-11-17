@@ -79,6 +79,11 @@ export function LibrariesSection({ settings, save }: SectionProps): React.JSX.El
                         ? `not indexed${FACT_SEP}search asks the server live`
                         : `${heldOf(st, "tracks")}${FACT_SEP}${heldOf(st, "albums")}${FACT_SEP}updated ${age(st.builtAt)}`}
                 </span>
+                {st.state === "ready" && st.failure && (
+                  <span className="block font-mono text-[10.5px] text-faint">
+                    {`couldn't rebuild${FACT_SEP}${st.failure}`}
+                  </span>
+                )}
               </span>
               <HeaderChip
                 onClick={() => void tt.mediaIndexRebuild(st.udn)}

@@ -151,6 +151,23 @@ export function moveSlotFacts(
   };
 }
 
+/**
+ * The levels' names after a rename made here: the slot's recorded name is let go, so the list
+ * read next adopts the name the streamer kept (the heal's rule for a level with no name).
+ * Recording the name sent instead would drop the level if the streamer ever stored it
+ * differently, shortened, say. Null when the slot has no recorded name.
+ */
+export function renamedSlotFacts(
+  udn: string | null | undefined,
+  slot: number,
+  maps: Pick<SlotMaps, "presetVolumeNames">,
+): Pick<SlotMaps, "presetVolumeNames"> | null {
+  const key = presetVolumeKey(udn, slot);
+  if (!(key in maps.presetVolumeNames)) return null;
+  const { [key]: _sent, ...presetVolumeNames } = maps.presetVolumeNames;
+  return { presetVolumeNames };
+}
+
 /** Every slot-keyed map without this streamer's slot: the preset there was deleted. */
 export function dropSlotFacts(
   udn: string | null | undefined,

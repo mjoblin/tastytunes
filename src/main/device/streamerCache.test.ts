@@ -6,6 +6,7 @@ import {
   applyFrame,
   emptyCache,
 } from "./streamerCache";
+import { DEAD_RECALL_MS } from "./recallWatch";
 
 // The one rule for which frame fills which part of a connection's cache: the window's connection
 // and an agent's connection to another streamer both read the wire through it.
@@ -96,6 +97,16 @@ describe("a recall's level waits for the recall to land", () => {
     r.level.recalled(35, false);
     r.advance(PRESET_VOLUME_GIVE_UP_MS);
     r.play("later");
+    r.advance(5_000);
+    expect(r.applied).toEqual([]);
+  });
+
+  it("waits as long as the recall watch does, so the next track after a dead recall gets nothing", () => {
+    expect(PRESET_VOLUME_GIVE_UP_MS).toBe(DEAD_RECALL_MS);
+    const r = rig();
+    r.level.recalled(35, false);
+    r.advance(DEAD_RECALL_MS + 1_000);
+    r.play("the album's next track");
     r.advance(5_000);
     expect(r.applied).toEqual([]);
   });

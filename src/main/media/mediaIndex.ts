@@ -218,6 +218,8 @@ export function status(): MediaIndexStatus[] {
       ...(buildingWhy.get(idx.udn) === "refresh" ? { quiet: true } : {}),
       ...(staleIds.has(idx.udn) && !building.has(idx.udn) ? { stale: true } : {}),
       ...(waiters.has(idx.udn) ? { waiting: true } : {}),
+      // the last rebuild didn't finish: the index is the one from before, and the card says so
+      ...(failed.has(idx.udn) && !building.has(idx.udn) ? { failure: failed.get(idx.udn) } : {}),
       strategy: idx.strategy,
       tracks: idx.tracks.length,
       albums: idx.albums.length,
@@ -542,10 +544,19 @@ async function crawl(
       c.profile.notes.push({ kind: "albums-found-by-browsing", count: b.albums.length });
     }
   }
-  // a crawl that stopped partway never replaces a whole index (buildNow); a first one stands,
-  // its note saying it may be incomplete
-  if (c.interrupted && indexes.has(server.udn)) throw new CrawlInterrupted();
   const r = reconcilePools(c, server.name);
+  // a crawl that stopped partway never replaces an index holding more (buildNow); a first one
+  // stands, and so does one that read as many of each kind, its note saying it may be incomplete
+  // (a server that stops at the same place every time still refreshes what comes before it)
+  const had = indexes.get(server.udn);
+  const less = (now: readonly unknown[], before: readonly unknown[]): boolean =>
+    now.length < before.length;
+  if (
+    c.interrupted &&
+    had &&
+    (less(r.tracks, had.tracks) || less(r.albums, had.albums) || less(r.artists, had.artists))
+  )
+    throw new CrawlInterrupted();
   const updateId = await getSystemUpdateID(host, server.udn);
   const recent = await readRecentList(host, server);
   return {

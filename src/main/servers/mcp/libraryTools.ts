@@ -111,7 +111,8 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
         // mid-crawl. Wait for it to settle, and if it is still going, SAY so
         // instead of reporting zeros as though they were the answer.
         const statusOf = ():
-          { state: string; albums: number; artists: number; tracks: number } | undefined => {
+          | { state: string; albums: number; artists: number; tracks: number; failure?: string }
+          | undefined => {
           const x = indexStatus().find((y) => y.udn === a.server_udn);
           return x
             ? {
@@ -119,6 +120,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
                 albums: x.albums ?? 0,
                 artists: x.artists ?? 0,
                 tracks: x.tracks ?? 0,
+                ...(x.failure ? { failure: x.failure } : {}),
               }
             : undefined;
         };
@@ -140,6 +142,13 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           albums: st?.albums ?? 0,
           artists: st?.artists ?? 0,
           tracks: st?.tracks ?? 0,
+          // a rebuild that didn't finish says why, the counts being the index from before
+          ...(st?.state === "ready" && st.failure
+            ? {
+                failure: st.failure,
+                note: "The rebuild didn't finish, so the index from before stays.",
+              }
+            : {}),
         });
       },
     }),
