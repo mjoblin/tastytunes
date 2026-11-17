@@ -40,6 +40,11 @@ export function takeReload(times: number[], now: number): boolean {
   return true;
 }
 
+let gone = 0;
+/** How many times a window's page has stopped unasked this session (a crash, the memory gone): a
+ *  whole-file decode handed out before one is not handed out again (main/ipc/audio). */
+export const windowsGone = (): number => gone;
+
 export function reloadOnCrash(win: BrowserWindow, name: string, log: (text: string) => void): void {
   const times: number[] = [];
   // the app's quit, watched once for every window
@@ -50,6 +55,7 @@ export function reloadOnCrash(win: BrowserWindow, name: string, log: (text: stri
     });
   }
   win.webContents.on("render-process-gone", (_e, details) => {
+    if (details.reason !== "clean-exit") gone++;
     if (win.isDestroyed() || !reloads(details.reason, quitting)) {
       if (details.reason !== "clean-exit") log(`The ${name} window stopped (${details.reason})`);
       return;

@@ -73,14 +73,24 @@ function wholeIn(s: string | undefined, min: number, max: number): number | null
 }
 
 /**
- * Reads a tastytunes:// URL. The verb is case-insensitive; a trailing slash, a query and a
- * fragment are ignored (launchers and Windows' argv add them); the parts are %-decoded, so a
+ * Reads a tastytunes:// URL. The verb is case-insensitive; a trailing slash, an empty query and
+ * a fragment are ignored (launchers and Windows' argv add them); the parts are %-decoded, so a
  * source's name may carry spaces. `screens` maps the names a URL may use to the app's screen
  * keys (main builds it from the Go menu's list).
+ *
+ * A LINK WITH OPTIONS IS REFUSED, never acted on without them: a later version may give its links
+ * options (which streamer, say), and a version that ignored them would act on the window's
+ * streamer instead, "volume/30?device=Kitchen" turning up another room.
  */
 export function parseUrlAction(raw: string, screens: Readonly<Record<string, string>>): UrlParse {
-  const m = /^tastytunes:(?:\/\/)?([^?#]*)/i.exec(raw.trim());
+  const m = /^tastytunes:(?:\/\/)?([^?#]*)(?:\?([^#]*))?/i.exec(raw.trim());
   if (!m) return { ok: false, reason: "That isn't a TastyTunes link." };
+  const options = (m[2] ?? "").trim();
+  if (options !== "")
+    return {
+      ok: false,
+      reason: `TastyTunes links take no options, and this one has “${options}”.`,
+    };
   let parts: string[];
   try {
     parts = m[1]

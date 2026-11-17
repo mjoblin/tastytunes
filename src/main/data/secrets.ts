@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { app, safeStorage } from "electron";
 import { isRecord } from "@shared/guards";
 import { atomicWriteFileSync } from "./jsonStore";
+import { devOverride } from "../app/devOverride";
 
 // THE SECRETS STORE (0.13.0 round 10). The
 // tokens the app holds, the ListenBrainz token a person pastes in and the MCP server's own, were
@@ -45,7 +46,7 @@ const unreadable = new Set<string>();
 
 /** Whether this system can encrypt a secret. */
 export async function canEncrypt(): Promise<boolean> {
-  if (process.env["TASTYTUNES_SECRETS_PLAIN"] === "1") return false;
+  if (devOverride("TASTYTUNES_SECRETS_PLAIN") === "1") return false;
   try {
     if (!(await safeStorage?.isAsyncEncryptionAvailable())) return false;
     // Linux's last resort is a fixed key, which is no encryption at all
@@ -164,7 +165,7 @@ export async function secretHint(
  *  be told otherwise: from what is stored, else macOS's Keychain and Windows' DPAPI are always
  *  there; only Linux has to ask whether a keyring is. */
 export async function encryptsHere(): Promise<boolean> {
-  if (process.env["TASTYTUNES_SECRETS_PLAIN"] === "1") return false;
+  if (devOverride("TASTYTUNES_SECRETS_PLAIN") === "1") return false;
   const saved = [...load().values()];
   if (saved.length > 0) return saved.every((e) => e.enc);
   if (process.platform === "darwin" || process.platform === "win32") return true;

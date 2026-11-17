@@ -23,6 +23,7 @@ import trayTemplateIcon2x from "../../../resources/trayTemplate@2x.png?asset";
 import trayTileIcon from "../../../resources/tray.png?asset";
 import { FACT_SEP } from "@shared/model";
 import type { UpdateState } from "@shared/model";
+import { devOverride } from "./devOverride";
 
 /**
  * The system-tray / menu-bar companion. Phase 1: an icon and a native context
@@ -595,8 +596,9 @@ function ensurePanel(): BrowserWindow {
   });
   reloadOnCrash(panel, "menu bar panel", (text) => deviceManager.log("warn", "app", text));
 
-  if (process.env["ELECTRON_RENDERER_URL"]) {
-    void panel.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}?tray=1`);
+  const devPage = devOverride("ELECTRON_RENDERER_URL");
+  if (devPage) {
+    void panel.loadURL(`${devPage}?tray=1`);
   } else {
     void panel.loadFile(join(__dirname, "../renderer/index.html"), { query: { tray: "1" } });
   }

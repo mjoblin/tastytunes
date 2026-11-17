@@ -1430,12 +1430,12 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           .string()
           .optional()
           .describe("An album, track or other item, from search_library or a listing."),
-        items: tracksArg(LARGE_QUEUE_TRACKS)
+        tracks: tracksArg(LARGE_QUEUE_TRACKS)
           .optional()
           .describe(
             `Instead of server_udn and object_id: up to ${LARGE_QUEUE_TRACKS} tracks queued in one write, in the order given, each {server_udn, object_id} from a listing or {title, artist?, album?}.`,
           ),
-        start_at: z
+        from_track: z
           .number()
           .int()
           .min(1)
@@ -1472,13 +1472,13 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           n != null && n > 0 ? ` Replaced a queue of ${n} ${n === 1 ? "track" : "tracks"}.` : "";
 
         // A LIST OF TRACKS (0.16.0): one write on the batch the playlists run on, in order
-        if (a.items != null) {
-          if (a.server_udn != null || a.object_id != null || a.start_at != null)
-            return err("Give items, or server_udn and object_id, not both.");
+        if (a.tracks != null) {
+          if (a.server_udn != null || a.object_id != null || a.from_track != null)
+            return err("Give tracks, or server_udn and object_id, not both.");
           // a Browse-built (USB) index is revalidated first: an id in hand may have rotted
           const refs: TrackRef[] = [];
           const rotted = new Map<number, string>();
-          for (const [i, ref] of a.items.entries()) {
+          for (const [i, ref] of a.tracks.entries()) {
             if (!("object_id" in ref)) refs.push(ref);
             else {
               const fresh = await freshObjectId(host, ref.server_udn, ref.object_id);
@@ -1520,24 +1520,26 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           return settle(
             t,
             s,
-            `Queued ${res.added} of ${a.items.length} ${a.items.length === 1 ? "track" : "tracks"}, ${how}.${replacedNote(res.replaced)}`,
+            `Queued ${res.added} of ${a.tracks.length} ${a.tracks.length === 1 ? "track" : "tracks"}, ${how}.${replacedNote(res.replaced)}`,
             settled,
             refsNote(named),
           );
         }
 
         if (a.server_udn == null || a.object_id == null)
-          return err("Give server_udn and object_id (from search_library or a listing), or items.");
+          return err(
+            "Give server_udn and object_id (from search_library or a listing), or tracks.",
+          );
         // a Browse-built (USB) index is revalidated first: the id in hand may have rotted
         const fresh = await freshObjectId(s.connection.host, a.server_udn, a.object_id);
         if ("error" in fresh) return err(fresh.error);
 
         // AN ALBUM FROM ONE OF ITS TRACKS (0.16.0): the album's OWN browse supplies the ids, the
         // Library's Play album from here (a pooled track's parent is the search scope)
-        if (a.start_at != null) {
+        if (a.from_track != null) {
           if (a.mode != null && a.mode !== "replace")
             return err(
-              "start_at plays the album from that track and replaces the queue: leave mode out.",
+              "from_track plays the album from that track and replaces the queue: leave mode out.",
             );
           await t.ensureAwake();
           const listed = await browseChildrenOf(host, a.server_udn, fresh.id);
@@ -1545,10 +1547,12 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
             (typeof listed === "string" ? [] : listed).filter((k) => !k.isContainer),
           );
           if (tracks.length === 0)
-            return err("That item has no tracks to start from: start_at needs an album.");
-          const target = tracks[a.start_at - 1];
+            return err("That item has no tracks to start from: from_track needs an album.");
+          const target = tracks[a.from_track - 1];
           if (!target)
-            return err(`The album has ${tracks.length} tracks: start_at is 1 to ${tracks.length}.`);
+            return err(
+              `The album has ${tracks.length} tracks: from_track is 1 to ${tracks.length}.`,
+            );
           try {
             await t.queueAdd(a.server_udn, fresh.id, "PLAY_FROM_HERE", target.id, {
               confirmLarge: a.confirm_large === true,
@@ -1560,7 +1564,7 @@ export function libraryTools(ctx: ToolContext): Record<string, ToolImpl> {
           return settle(
             t,
             s,
-            `Playing from track ${a.start_at}, "${target.title}".${replacedNote(before)}`,
+            `Playing from track ${a.from_track}, "${target.title}".${replacedNote(before)}`,
             trackMoved,
           );
         }

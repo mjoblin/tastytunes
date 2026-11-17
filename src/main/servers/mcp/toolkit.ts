@@ -23,6 +23,7 @@ import type { DeviceManager } from "../../device/deviceManager";
 import { getSettings } from "../../data/persist";
 import { pools as indexPools, revalidate } from "../../media/mediaIndex";
 import { indexFinder } from "../../media/resolveContent";
+import { localOnly } from "../../lookups/fetchGuard";
 import { matchesQuery, nameKey, searchFold } from "@shared/keys";
 import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
 
@@ -1042,4 +1043,33 @@ export function scheduleOut(s: Schedule): Record<string, unknown> {
     // the streamer it acts on, when not the window's (0.16.0)
     streamer: s.streamer?.name ?? null,
   };
+}
+
+/**
+ * THE STREAMER AN AGENT NAMES, ON THIS NETWORK ONLY (0.16.0, toward 1.0). One seen on the network
+ * or kept in the device book, by its name, udn or host; else the argument itself, when it is an
+ * address only the local network has (a private or link-local address, a .local name). Never a
+ * host on the internet: a device argument made the app resolve the name, open a socket to it and
+ * keep asking, and connect_device made it "the streamer" (its pictures trusted, its media servers
+ * called), an agent that had read a hostile station name or lyric being the path. One rule for a
+ * tool's device argument and connect_device's host.
+ */
+export function streamerHostOf(
+  arg: string,
+  devices: ReadonlyArray<{ friendlyName: string; udn: string; host: string }>,
+): { host: string } | { error: string } {
+  const key = nameKey(arg);
+  const known = devices.find(
+    (d) => nameKey(d.friendlyName) === key || nameKey(d.udn) === key || nameKey(d.host) === key,
+  );
+  if (known) return { host: known.host };
+  const raw = arg.trim();
+  const address = /^([\w.-]+)(?::\d+)?$/.exec(raw);
+  if (address && /[.:]/.test(raw)) {
+    if (localOnly(address[1])) return { host: raw };
+    return {
+      error: `'${raw}' isn't on this network. TastyTunes reaches only the streamers on it: list_devices names them.`,
+    };
+  }
+  return { error: `No streamer called '${arg}'. Use list_devices for their names.` };
 }

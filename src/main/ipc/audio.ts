@@ -13,7 +13,8 @@ import {
   recordAlbumDrsFromTracks,
 } from "../lookups/audioAnalysis";
 import { pools } from "../media/mediaIndex";
-import { audioResUrl } from "../media/upnpBrowser";
+import { audioRes, audioResUrl } from "../media/upnpBrowser";
+import { windowsGone } from "../app/crashReload";
 import { loggedFetch } from "../netlog";
 import { closeAudioStream, openAudioStream, readAudioStream } from "../media/audioStream";
 import { handle } from "../app/guard";
@@ -31,6 +32,19 @@ import { handle } from "../app/guard";
  */
 const ANALYSIS_MAX_BYTES =
   Number(process.env["TASTYTUNES_ANALYSIS_MAX_BYTES"]) || 512 * 1024 * 1024;
+
+/**
+ * THE LONGEST FILE A WHOLE DECODE TAKES (0.16.0). The file's size bounds a lossless file's
+ * samples (about its own size again), never a lossy one's: an MP3 is a tenth of its samples, so a
+ * one-hour MP3 under the size cap decodes to about 1.3 GB of them and a two-hour mix to 2.5 GB,
+ * and the window holds about twice that while it decodes, as soon as the track plays. If the
+ * window dies it reloads onto the same track and starts again. The samples a decode would make
+ * (32-bit, at the file's own rate, every channel) are estimated from what the server says of the
+ * track before a byte is fetched, and past this the file is refused by its length; one handed
+ * out before a window stopped is not handed out again this session.
+ */
+const DECODED_MAX_BYTES = 1024 * 1024 * 1024;
+const handedOut = new Map<string, number>();
 
 // whether this session has asked for the summaries made before tempo and key to be remade
 let summariesRefreshed = false;
@@ -53,8 +67,22 @@ export function registerAudioIpc(): void {
   handle(IPC.expTrackAudio, async (_e, serverUdn: string, objectId: string) => {
     const host = streamerHost();
     if (!host || typeof serverUdn !== "string" || typeof objectId !== "string") return null;
-    const url = await audioResUrl(host, serverUdn, objectId);
-    if (!url) return null;
+    const res0 = await audioRes(host, serverUdn, objectId);
+    if (!res0) return null;
+    const { url } = res0;
+    if (res0.secs != null) {
+      const perSec = (res0.rate ?? 48_000) * (res0.channels ?? 2) * 4;
+      if (res0.secs * perSec > DECODED_MAX_BYTES)
+        return { tooLong: { secs: res0.secs, maxSecs: Math.floor(DECODED_MAX_BYTES / perSec) } };
+    }
+    // a file whose decode a window stopped during is not tried again this session (a reload lands
+    // on the same playing track, and would decode it again)
+    const key = `${serverUdn}|${objectId}`;
+    const at = handedOut.get(key);
+    if (at != null && windowsGone() > at) return null;
+    handedOut.delete(key);
+    handedOut.set(key, windowsGone());
+    if (handedOut.size > 500) handedOut.delete(handedOut.keys().next().value as string);
     try {
       const res = await loggedFetch("media-audio", url, { signal: AbortSignal.timeout(120_000) });
       if (!res.ok || !res.body) return null;

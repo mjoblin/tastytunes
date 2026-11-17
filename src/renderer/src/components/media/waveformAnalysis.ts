@@ -7,6 +7,7 @@ import { useStore } from "@/store";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
 import { useReadyIndexSig } from "@/hooks/useIndexPools";
 import { sniffSampleRate } from "@/lib/audioHeader";
+import { fmtDuration } from "@/lib/format";
 import { stripFromStored, stripToStored } from "@/lib/featureStrip";
 import { onsetsFromStored, onsetsToStored } from "@/lib/onsets";
 import { FEATURES_VERSION, featuresFromStored, featuresToStored } from "@/lib/features";
@@ -75,6 +76,7 @@ const failedAt = new Lru<string, number>(500);
 const FAILED_MEMO_MS = 60_000;
 // files main refused for their size (main/ipc/audio), so the absent line can say so
 const tooLarge = new Lru<string, { bytes: number; maxBytes: number }>(500);
+const tooLong = new Lru<string, { secs: number; maxSecs: number }>(500);
 // files whose server stopped sending (0.14.0: a stall is a silence, caught on its own),
 // so the absent line can say so and offer to try again
 export const stalled = new Lru<string, true>(500);
@@ -208,9 +210,12 @@ export function absentLine(serverUdn: string | null, objectId: string | null): s
   const key = serverUdn && objectId ? `${serverUdn}|${objectId}` : null;
   if (key && stalled.get(key)) return "No waveform for this file. The server stopped sending it.";
   const big = key ? tooLarge.get(key) : undefined;
+  const long = key ? tooLong.get(key) : undefined;
   return big
     ? `No waveform for this file. At ${fmtBytes(big.bytes)} it's larger than TastyTunes can analyze (${fmtBytes(big.maxBytes)}).`
-    : "No waveform for this file. It couldn't be read or decoded.";
+    : long
+      ? `No waveform for this file. At ${fmtDuration(long.secs)} it's longer than TastyTunes can analyze in its format (${fmtDuration(long.maxSecs)}).`
+      : "No waveform for this file. It couldn't be read or decoded.";
 }
 
 // Disk shape round trip: envelopes quantized to thousandths (the JSON
@@ -332,7 +337,8 @@ export function analyzeTrack(
     const got = await tt.expTrackAudio(serverUdn, objectId);
     if (!got) return null;
     if (!ArrayBuffer.isView(got)) {
-      tooLarge.set(key, got.tooLarge);
+      if ("tooLarge" in got) tooLarge.set(key, got.tooLarge);
+      else tooLong.set(key, got.tooLong);
       return null;
     }
     // the bytes as they came: no copy (a 24/192 file is hundreds of MB, and its samples as

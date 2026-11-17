@@ -919,7 +919,11 @@ export type ProfileNote =
   | { kind: "discs-from-file-names"; count: number }
   | { kind: "search-failed-browsed-instead" }
   | { kind: "search-paged-smaller" }
-  | { kind: "browse-capped"; count: number };
+  | { kind: "browse-capped"; count: number }
+  /** A first crawl the server stopped answering partway through (a later one keeps the index). */
+  | { kind: "crawl-interrupted" }
+  /** The server lists more than the index holds (MAX_TRACKS, MAX_CONTAINERS): its own total. */
+  | { kind: "index-capped"; what: "albums" | "artists" | "tracks"; kept: number; total: number };
 
 /**
  * The words for a ProfileNote — user-facing (Info › Source, MCP), plain, no
@@ -961,6 +965,10 @@ export function describeProfileNote(note: ProfileNote): string {
       return "the server's search failed on large pages, so it was read in smaller pages instead";
     case "browse-capped":
       return `browsing stopped after ${note.count} folders, so a very large library may be only partly indexed`;
+    case "crawl-interrupted":
+      return "the server stopped answering partway through, so this index may be incomplete (Rebuild reads it again)";
+    case "index-capped":
+      return `the server lists ${note.total.toLocaleString("en-US")} ${note.what} and the index holds the first ${note.kept.toLocaleString("en-US")}, so the rest aren't in the Library, search or an agent's answers`;
   }
 }
 

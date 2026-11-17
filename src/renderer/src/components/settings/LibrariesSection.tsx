@@ -19,6 +19,16 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 // The Libraries section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
 
+/** "50,000 of 120,000 tracks" for a library past the index's bound (the server's own total, its
+ *  index-capped note), else the count the index holds. */
+function heldOf(st: MediaIndexStatus, what: "tracks" | "albums"): string {
+  const held = what === "tracks" ? st.tracks : st.albums;
+  const capped = st.profile?.notes.find((n) => n.kind === "index-capped" && n.what === what);
+  return capped?.kind === "index-capped"
+    ? `${fmtCount(held)} of ${fmtCount(capped.total)} ${what}`
+    : `${fmtCount(held)} ${what}`;
+}
+
 export function LibrariesSection({ settings, save }: SectionProps): React.JSX.Element {
   const statuses = useStore((s) => s.mediaIndex);
 
@@ -67,7 +77,7 @@ export function LibrariesSection({ settings, save }: SectionProps): React.JSX.El
                       ? `couldn't index${FACT_SEP}${st.failure ?? "no index"}`
                       : st.state === "none"
                         ? `not indexed${FACT_SEP}search asks the server live`
-                        : `${fmtCount(st.tracks)} tracks${FACT_SEP}${fmtCount(st.albums)} albums${FACT_SEP}updated ${age(st.builtAt)}`}
+                        : `${heldOf(st, "tracks")}${FACT_SEP}${heldOf(st, "albums")}${FACT_SEP}updated ${age(st.builtAt)}`}
                 </span>
               </span>
               <HeaderChip

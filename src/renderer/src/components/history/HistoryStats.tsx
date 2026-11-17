@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BarChart3, ChevronLeft, ChevronRight, ImageDown } from "lucide-react";
-import { LISTEN_DEFINITION, type ListeningEvent } from "@shared/model";
+import { LISTEN_DEFINITION, eventsOfYears, yearsOldestFirst } from "@shared/model";
 import { useStore } from "@/store";
 import { EmptyState } from "@/components/chrome/EmptyState";
 import { Segmented } from "@/components/controls/Segmented";
@@ -156,14 +156,10 @@ export function HistoryStats({
     return () => clearInterval(t);
   }, []);
 
-  const all = useMemo(() => {
-    const out: ListeningEvent[] = [];
-    for (const y of Object.keys(loaded)
-      .map(Number)
-      .sort((a, b) => a - b))
-      out.push(...(loaded[y] ?? []));
-    return narrowToStreamer(out, streamer);
-  }, [loaded, streamer]);
+  const all = useMemo(
+    () => narrowToStreamer(eventsOfYears(loaded, yearsOldestFirst(loaded)), streamer),
+    [loaded, streamer],
+  );
   const inst = useMemo(
     () => (unit === "all" ? null : instanceOf(unit, now, back)),
     [unit, now, back],

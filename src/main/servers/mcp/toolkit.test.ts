@@ -14,6 +14,7 @@ import {
   nearestTitles,
   ok,
   strictInput,
+  streamerHostOf,
   titleMatcher,
   type Titled,
 } from "./toolkit";
@@ -237,5 +238,26 @@ describe("one title match for an agent's reference", () => {
     expect(nearestNames("paper moons demo live", ["Paper Moons Demo", "Moon"])).toEqual([
       "Paper Moons Demo",
     ]);
+  });
+});
+
+describe("the streamer an agent names, on this network only", () => {
+  const devices = [{ friendlyName: "Living Room", udn: "uuid:evo-1", host: "10.0.0.20" }];
+  it("finds a known streamer by its name, udn or host", () => {
+    for (const arg of ["living room", "uuid:evo-1", "10.0.0.20"])
+      expect(streamerHostOf(arg, devices)).toEqual({ host: "10.0.0.20" });
+  });
+  it("takes an address only the local network has, port and all", () => {
+    for (const arg of ["192.168.1.40", "10.0.0.31:80", "169.254.3.4", "evo.local"])
+      expect(streamerHostOf(arg, devices)).toEqual({ host: arg });
+  });
+  it("refuses a host on the internet, and says why", () => {
+    for (const arg of ["anything.example.com", "8.8.8.8", "evil.example:8080"]) {
+      const out = streamerHostOf(arg, devices);
+      expect("error" in out && out.error).toMatch(/isn't on this network/);
+    }
+    expect(streamerHostOf("Kitchen", devices)).toEqual({
+      error: "No streamer called 'Kitchen'. Use list_devices for their names.",
+    });
   });
 });

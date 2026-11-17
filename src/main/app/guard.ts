@@ -2,6 +2,7 @@ import { app, ipcMain, shell, type IpcMainEvent, type IpcMainInvokeEvent } from 
 import { join, normalize } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { IPC, InvokeMethod, MethodOf, TastyTunesApi } from "@shared/ipc";
+import { devOverride } from "./devOverride";
 
 /**
  * THE APP'S OWN PAGES ARE THE ONLY ONES THAT REACH MAIN (0.10.0, the whole-app review).
@@ -14,7 +15,7 @@ import type { IPC, InvokeMethod, MethodOf, TastyTunesApi } from "@shared/ipc";
  * (?mini=1, ?tray=1).
  */
 const devOrigin = ((): string | null => {
-  const url = process.env["ELECTRON_RENDERER_URL"];
+  const url = devOverride("ELECTRON_RENDERER_URL");
   if (!url) return null;
   try {
     return new URL(url).origin;
