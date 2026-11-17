@@ -7,7 +7,7 @@ import type {
   ZonePlayState,
   ZoneState,
 } from "@shared/smoip";
-import { EQ_GAIN_MAX, EQ_GAIN_MIN } from "@shared/smoip";
+import { EQ_GAIN_MAX, EQ_GAIN_MIN, VOLUME_STEP_SCALE } from "@shared/smoip";
 
 /** One frame for the socket: a path and its params. */
 export type SocketFrame = { path: string; params: Record<string, unknown> };
@@ -33,6 +33,9 @@ const bandString = (bands: [number, number][]): string =>
   bands
     .map(([i, g]) => `${i},,,${Math.max(EQ_GAIN_MIN, Math.min(EQ_GAIN_MAX, g)).toFixed(1)},`)
     .join("|");
+
+/** The limit on a model read in steps alone: the same share of its step scale, whole. */
+const stepLimit = (limit: number): number => Math.floor((limit / 100) * VOLUME_STEP_SCALE);
 
 /** The volume a write may ask for: under the limit, 0 to 100, whole. */
 export function clampVolume(percent: number, limit: number | null): number {
@@ -111,16 +114,37 @@ export function commandFrames(cmd: StreamerCommand, s: CommandState): SocketFram
       return frame("/zone/state", { mute: cmd.mute });
     case "setSource":
       return frame("/zone/state", { source: cmd.sourceId });
-    case "setVolumeStep":
-      return frame("/zone/state", { volume_step: cmd.step });
+    case "setVolumeStep": {
+      const limit = s.volumeLimitPercent;
+      const step = Math.max(0, Math.round(cmd.step));
+      return frame("/zone/state", {
+        volume_step: limit != null ? Math.min(step, stepLimit(limit)) : step,
+      });
+    }
     case "setVolumePercent":
       return frame("/zone/state", {
         volume_percent: clampVolume(cmd.percent, s.volumeLimitPercent),
       });
     case "volumeStepChange": {
+      // THE LIMIT IS A CEILING: a raise that would reach it is sent as the level it stops at, never
+      // as a step change that crosses it (a step is one percent on the models seen; the firmware
+      // applies a step change whole). Below the limit a raise stays a step change, the firmware's
+      // own step. Without a known level (Control Bus, a model not yet heard from) there is nothing
+      // to hold it to, so the step goes as sent.
       const limit = s.volumeLimitPercent;
-      const current = s.zoneState?.volume_percent;
-      if (cmd.delta > 0 && limit != null && current != null && current >= limit) return [];
+      const percent = s.zoneState?.volume_percent;
+      const step = s.zoneState?.volume_step;
+      if (cmd.delta > 0 && limit != null) {
+        if (percent != null) {
+          if (percent >= limit) return [];
+          if (percent + cmd.delta >= limit)
+            return frame("/zone/state", { volume_percent: clampVolume(limit, limit) });
+        } else if (step != null) {
+          const top = stepLimit(limit);
+          if (step >= top) return [];
+          if (step + cmd.delta >= top) return frame("/zone/state", { volume_step: top });
+        }
+      }
       return frame("/zone/state", { volume_step_change: cmd.delta });
     }
     // ---- /zone/audio tone controls. One frame per logical control: writes

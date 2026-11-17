@@ -5,6 +5,7 @@ import { getSettings } from "../data/persist";
 import { commandFrames } from "./commandFrames";
 import { checkFrame } from "./frameCheck";
 import { QueueOps } from "./queueOps";
+import { recallSignature } from "./recallWatch";
 import { SleepCountdown } from "./sleepCountdown";
 import { SmoipSocket } from "./smoipSocket";
 import * as smoipHttp from "./smoipHttp";
@@ -12,7 +13,7 @@ import {
   applyFrame,
   emptyCache,
   presetVolumeFor,
-  PRESET_VOLUME_DELAY_MS,
+  PresetVolumeAfterRecall,
   type StreamerCache,
   WAKE_COMMANDS,
 } from "./streamerCache";
@@ -48,6 +49,11 @@ export class RemoteStreamer {
     push: () => {},
     log: (text) => this.log(`sleep: ${text}`),
   });
+  // a recall's own level, sent once the recall lands, as the window's connection sends it
+  private readonly presetLevel = new PresetVolumeAfterRecall({
+    signature: () => recallSignature(this.cache.playState),
+    apply: (percent) => void this.command({ type: "setVolumePercent", percent }).catch(() => {}),
+  });
   readonly queueOps = new QueueOps({
     host: () => (this.socket.isOpen() ? this.host : null),
     socket: () => this.socket,
@@ -67,8 +73,10 @@ export class RemoteStreamer {
         const checked = checkFrame(frame.path, raw);
         if (!checked.ok) return;
         applyFrame(this.cache, frame.path, checked.data);
-        if (frame.path === "/zone/play_state" && this.cache.playState)
+        if (frame.path === "/zone/play_state" && this.cache.playState) {
           this.sleeper.boundaryCheck(this.cache.playState);
+          this.presetLevel.onPlayback();
+        }
       },
       onOutgoing: () => {},
       onConnecting: () => {},
@@ -140,6 +148,7 @@ export class RemoteStreamer {
   async command(cmd: StreamerCommand): Promise<void> {
     this.lastUsed = Date.now();
     if (!this.socket.isOpen()) throw new Error(`${this.name} isn't connected right now.`);
+    this.presetLevel.onCommand(cmd.type);
     if (
       WAKE_COMMANDS.has(cmd.type) &&
       this.cache.systemPower != null &&
@@ -162,14 +171,11 @@ export class RemoteStreamer {
     switch (cmd.type) {
       case "recallPreset": {
         this.socket.send("/zone/recall_preset", { preset: cmd.presetId });
-        const level = cmd.skipVolume
-          ? null
-          : presetVolumeFor(this.cache.systemInfo?.udn, cmd.presetId);
-        if (level != null)
-          setTimeout(() => {
-            if (this.socket.isOpen())
-              void this.command({ type: "setVolumePercent", percent: level }).catch(() => {});
-          }, PRESET_VOLUME_DELAY_MS);
+        const name = this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name;
+        this.presetLevel.recalled(
+          cmd.skipVolume ? null : presetVolumeFor(this.cache.systemInfo?.udn, cmd.presetId, name),
+          cmd.alreadyPlaying === true,
+        );
         return;
       }
       case "streamRadio":
@@ -197,6 +203,7 @@ export class RemoteStreamer {
     playFromId?: string,
     opts?: { confirmLarge?: boolean },
   ): Promise<void> {
+    if (action !== "APPEND" && action !== "PLAY_NEXT") this.presetLevel.cancel();
     await this.ensureAwake();
     this.lastUsed = Date.now();
     await queueAdd(this.host, serverUdn, objectId, action, playFromId, opts);
@@ -218,6 +225,7 @@ export class RemoteStreamer {
 
   close(): void {
     this.sleeper.stop();
+    this.presetLevel.cancel();
     this.socket.close();
   }
 }

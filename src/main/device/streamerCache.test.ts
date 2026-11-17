@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { applyFrame, emptyCache, WAKE_COMMANDS } from "./streamerCache";
+import {
+  PRESET_VOLUME_GIVE_UP_MS,
+  PresetVolumeAfterRecall,
+  WAKE_COMMANDS,
+  applyFrame,
+  emptyCache,
+} from "./streamerCache";
 
 // The one rule for which frame fills which part of a connection's cache: the window's connection
 // and an agent's connection to another streamer both read the wire through it.
@@ -37,5 +43,85 @@ describe("a streamer's cache, filled by its frames", () => {
     expect(WAKE_COMMANDS.has("recallPreset")).toBe(true);
     expect(WAKE_COMMANDS.has("pause")).toBe(false);
     expect(WAKE_COMMANDS.has("setVolumePercent")).toBe(false);
+  });
+});
+
+describe("a recall's level waits for the recall to land", () => {
+  const rig = () => {
+    let now = 0;
+    let what = "before";
+    const timers: Array<{ at: number; fn: () => void; live: boolean }> = [];
+    const applied: number[] = [];
+    const level = new PresetVolumeAfterRecall({
+      signature: () => what,
+      apply: (l) => applied.push(l),
+      now: () => now,
+      setTimer: (fn, ms) => {
+        const t = { at: now + ms, fn, live: true };
+        timers.push(t);
+        return t;
+      },
+      clearTimer: (t) => {
+        if (t) (t as { live: boolean }).live = false;
+      },
+    });
+    const advance = (ms: number): void => {
+      now += ms;
+      for (const t of timers) {
+        if (!t.live || t.at > now) continue;
+        t.live = false;
+        t.fn();
+      }
+    };
+    const play = (s: string): void => {
+      what = s;
+      level.onPlayback();
+    };
+    return { level, applied, advance, play };
+  };
+
+  it("sends the level a beat after the recall once what plays changed", () => {
+    const r = rig();
+    r.level.recalled(35, false);
+    r.advance(300);
+    r.play("album");
+    r.advance(800);
+    expect(r.applied).toEqual([]);
+    r.advance(100);
+    expect(r.applied).toEqual([35]);
+  });
+
+  it("never sends it for a recall that changed nothing", () => {
+    const r = rig();
+    r.level.recalled(35, false);
+    r.advance(PRESET_VOLUME_GIVE_UP_MS);
+    r.play("later");
+    r.advance(5_000);
+    expect(r.applied).toEqual([]);
+  });
+
+  it("sends it after the beat for a recall of what already plays", () => {
+    const r = rig();
+    r.level.recalled(35, true);
+    r.advance(1_200);
+    expect(r.applied).toEqual([35]);
+  });
+
+  it("lets it go for a newer recall, a play or a volume set by hand", () => {
+    const r = rig();
+    r.level.recalled(35, false);
+    r.level.recalled(50, false);
+    r.play("second");
+    r.advance(2_000);
+    expect(r.applied).toEqual([50]);
+    r.level.recalled(35, false);
+    r.level.onCommand("volumeStepChange");
+    r.play("third");
+    r.advance(2_000);
+    r.level.recalled(35, false);
+    r.level.onCommand("playQueueId");
+    r.play("fourth");
+    r.advance(2_000);
+    expect(r.applied).toEqual([50]);
   });
 });

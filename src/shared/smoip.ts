@@ -280,6 +280,10 @@ export interface AudioCaps {
 export const EQ_GAIN_MIN = -6;
 export const EQ_GAIN_MAX = 3;
 
+/** The absolute step scale a model that reports volume_step without volume_percent is read on
+ *  (0 to 30): the sliders map it, and the volume limit is held on it there. */
+export const VOLUME_STEP_SCALE = 30;
+
 export function audioCaps(spec: ZoneAudioSpec | null | undefined): AudioCaps | null {
   if (spec == null) return null;
   const range = (r: AudioSpecRange | undefined, fallbackMin: number, fallbackMax: number) => ({

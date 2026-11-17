@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app } from "electron";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import type { ListeningEvent } from "@shared/model";
 import type { ZonePlayState } from "@shared/smoip";
 import { listeningRecord } from "./listeningRecord";
 
@@ -83,5 +84,145 @@ describe("presetLastAlbum: what a preset slot last played", () => {
     });
     expect(await listeningRecord.presetLastAlbum(EVO, 25)).toBeNull();
     expect(await listeningRecord.presetLastAlbum("another-streamer", 24)).toBeNull();
+  });
+});
+
+describe("a play's time is the music's, never the clock's", () => {
+  const track = (queueId: number, title: string, duration: number): ZonePlayState =>
+    ({
+      state: "play",
+      queue_id: queueId,
+      metadata: {
+        class: "md.track.library",
+        source: "MEDIA_PLAYER",
+        title,
+        artist: "Glass Orchard",
+        album: "Paper Moons",
+        duration,
+      },
+    }) as ZonePlayState;
+  const appended = (run: () => void): ListeningEvent[] => {
+    const seen: ListeningEvent[] = [];
+    listeningRecord.setEventNotifier((e) => seen.push(e));
+    vi.useFakeTimers();
+    try {
+      run();
+    } finally {
+      vi.useRealTimers();
+    }
+    return seen;
+  };
+
+  const station = (name: string, state = "play"): ZonePlayState =>
+    ({
+      state,
+      queue_id: null,
+      metadata: { class: "md.radio", source: "IR", station: name, title: null },
+    }) as unknown as ZonePlayState;
+
+  it("counts a library track the computer slept through as its length, the album playing on", () => {
+    const seen = appended(() => {
+      listeningRecord.onPlayState(track(8100001, "Lantern Hours", 300), "Media Library", EVO);
+      vi.advanceTimersByTime(120_000);
+      listeningRecord.noteSleep();
+      vi.advanceTimersByTime(10 * 3600_000);
+      listeningRecord.flush();
+    });
+    expect(seen.at(-1)).toMatchObject({ title: "Lantern Hours", playedSeconds: 300 });
+  });
+
+  it("counts the sleep for a station still playing after the wake, a lost connection between", () => {
+    const seen = appended(() => {
+      listeningRecord.onPlayState(station("Harbor FM"), "Internet Radio", EVO);
+      vi.advanceTimersByTime(600_000);
+      listeningRecord.noteSleep();
+      vi.advanceTimersByTime(3600_000);
+      // the wake finds the socket gone: the session waits for the streamer's word
+      listeningRecord.flush();
+      vi.advanceTimersByTime(5_000);
+      listeningRecord.onPlayState(station("Harbor FM"), "Internet Radio", EVO);
+      vi.advanceTimersByTime(60_000);
+      listeningRecord.flush();
+    });
+    const sessions = seen.filter((e) => e.kind === "radio-session");
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ station: "Harbor FM", playedSeconds: 600 + 3600 + 5 + 60 });
+  });
+
+  it("ends a station's session where the sleep began when the wake finds it gone", () => {
+    const seen = appended(() => {
+      listeningRecord.onPlayState(station("Harbor FM"), "Internet Radio", EVO);
+      vi.advanceTimersByTime(600_000);
+      listeningRecord.noteSleep();
+      vi.advanceTimersByTime(3600_000);
+      listeningRecord.onPlayState(station("Harbor FM", "stop"), "Internet Radio", EVO);
+    });
+    expect(seen.filter((e) => e.kind === "radio-session").at(-1)).toMatchObject({
+      playedSeconds: 600,
+    });
+  });
+
+  it("ends it at the sleep when the app quits before the streamer says", () => {
+    const seen = appended(() => {
+      listeningRecord.onPlayState(station("Tide Radio"), "Internet Radio", EVO);
+      vi.advanceTimersByTime(300_000);
+      listeningRecord.noteSleep();
+      vi.advanceTimersByTime(3600_000);
+      listeningRecord.flush();
+      listeningRecord.flush({ quitting: true });
+    });
+    expect(seen.filter((e) => e.kind === "radio-session").at(-1)).toMatchObject({
+      station: "Tide Radio",
+      playedSeconds: 300,
+    });
+  });
+
+  it("counts a play left open long past its track as the track's length", () => {
+    const seen = appended(() => {
+      listeningRecord.onPlayState(track(8100002, "Tin Weather", 300), "Media Library", EVO);
+      vi.advanceTimersByTime(5 * 3600_000);
+      listeningRecord.flush();
+    });
+    expect(seen.at(-1)).toMatchObject({ title: "Tin Weather", playedSeconds: 300 });
+  });
+
+  it("keeps a play that ran a little past its length as it ran", () => {
+    const seen = appended(() => {
+      listeningRecord.onPlayState(track(8100003, "Small Hours", 300), "Media Library", EVO);
+      vi.advanceTimersByTime(320_000);
+      listeningRecord.flush();
+    });
+    expect(seen.at(-1)).toMatchObject({ title: "Small Hours", playedSeconds: 320 });
+  });
+
+  it("reads a line written before the bound as its track's length, leaving others as written", () => {
+    const dir = join(app.getPath("userData"), "history");
+    mkdirSync(dir, { recursive: true });
+    const line = (kind: string, played: number, duration: number | null): string =>
+      JSON.stringify({
+        v: 1,
+        at: Date.UTC(2041, 2, 3),
+        tzOffsetMin: 0,
+        kind,
+        title: "Tin Weather",
+        artist: "Glass Orchard",
+        album: "Paper Moons",
+        duration,
+        playedSeconds: played,
+      });
+    writeFileSync(
+      join(dir, "2041.jsonl"),
+      [
+        line("play", 224109, 376),
+        line("play", 400, 376),
+        line("play", 900, null),
+        line("external", 5000, 376),
+      ].join("\n") + "\n",
+    );
+    expect(
+      listeningRecord
+        .readYear(2041)
+        .events.map((e) => ("playedSeconds" in e ? e.playedSeconds : null)),
+    ).toEqual([376, 400, 900, 5000]);
   });
 });

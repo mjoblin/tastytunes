@@ -93,6 +93,55 @@ describe("volume", () => {
       { path: "/zone/state", params: { volume_step_change: -1 } },
     ]);
   });
+
+  it("a raise that would cross the limit stops at it; one below it stays a step change", () => {
+    const at = (volume_percent: number): CommandState => ({
+      ...idle,
+      volumeLimitPercent: 40,
+      zoneState: { volume_percent } as CommandState["zoneState"],
+    });
+    expect(commandFrames({ type: "volumeStepChange", delta: 20 }, at(39))).toEqual([
+      { path: "/zone/state", params: { volume_percent: 40 } },
+    ]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 5 }, at(36))).toEqual([
+      { path: "/zone/state", params: { volume_percent: 40 } },
+    ]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 5 }, at(30))).toEqual([
+      { path: "/zone/state", params: { volume_step_change: 5 } },
+    ]);
+    // no limit: the step goes as sent
+    expect(
+      commandFrames(
+        { type: "volumeStepChange", delta: 20 },
+        { ...at(39), volumeLimitPercent: null },
+      ),
+    ).toEqual([{ path: "/zone/state", params: { volume_step_change: 20 } }]);
+  });
+
+  it("holds the limit on a model read in steps alone, by the same share of its scale", () => {
+    // limit 50% on the 30-step scale is step 15
+    const steps = (volume_step: number): CommandState => ({
+      ...idle,
+      volumeLimitPercent: 50,
+      zoneState: { volume_step, volume_percent: null } as unknown as CommandState["zoneState"],
+    });
+    expect(commandFrames({ type: "setVolumeStep", step: 28 }, steps(10))).toEqual([
+      { path: "/zone/state", params: { volume_step: 15 } },
+    ]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 1 }, steps(15))).toEqual([]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 4 }, steps(13))).toEqual([
+      { path: "/zone/state", params: { volume_step: 15 } },
+    ]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 1 }, steps(10))).toEqual([
+      { path: "/zone/state", params: { volume_step_change: 1 } },
+    ]);
+    expect(
+      commandFrames(
+        { type: "setVolumeStep", step: 28 },
+        { ...steps(10), volumeLimitPercent: null },
+      ),
+    ).toEqual([{ path: "/zone/state", params: { volume_step: 28 } }]);
+  });
 });
 
 describe("tone and device controls", () => {

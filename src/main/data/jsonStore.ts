@@ -1,4 +1,14 @@
-import { chmodSync, mkdirSync, renameSync, rmSync, unlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  fsyncSync,
+  mkdirSync,
+  openSync,
+  renameSync,
+  rmSync,
+  unlinkSync,
+  writeSync,
+} from "node:fs";
 import { dirname } from "node:path";
 import { keepAsFound, readSaved } from "./savedFiles";
 
@@ -15,10 +25,13 @@ import { keepAsFound, readSaved } from "./savedFiles";
  * file, and there is no recovery path for user data. Writing a sibling temp
  * file and renaming it into place is atomic on the same filesystem: the live
  * file is always either the old complete content or the new complete content.
- * (No fsync — the threat model here is process death mid-write, which rename
- * fully covers; true power-loss durability would need fsync on file AND
- * directory for a marginal gain these files don't warrant.) A `mode` (the secrets store's 0600)
- * applies to the temporary file before any data reaches it.
+ * The temporary file is synced to disk before the rename (0.16.0): without it, a
+ * power cut seconds after a save can leave the renamed file empty on NTFS, XFS,
+ * exFAT and FAT, and the reader would then move it aside and start the settings,
+ * schedules or playlists fresh. (The directory isn't synced: a lost rename leaves
+ * the old complete file, which is the outcome the rename already promises.) A
+ * `mode` (the secrets store's 0600) applies to the temporary file before any data
+ * reaches it.
  */
 export function atomicWriteFileSync(path: string, data: string, mode?: number): void {
   mkdirSync(dirname(path), { recursive: true });
@@ -28,7 +41,13 @@ export function atomicWriteFileSync(path: string, data: string, mode?: number): 
     // left behind would keep its own mode, so it goes first; the chmod makes the mode exact
     // whatever the umask took
     if (mode != null) rmSync(tmp, { force: true });
-    writeFileSync(tmp, data, mode != null ? { mode } : undefined);
+    const fd = openSync(tmp, "w", mode);
+    try {
+      writeSync(fd, data);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
     if (mode != null) chmodSync(tmp, mode);
     renameSync(tmp, path);
   } catch (err) {
@@ -60,10 +79,11 @@ export function jsonFileStore<T>(opts: {
   /** For the persist-failure log line. */
   scope: string;
   load(parsed: unknown, setAside: string[]): T;
-}): { get(): T; set(next: T): T } {
+}): { get(): T; set(next: T): T; readWhole(): boolean } {
   let cached: T | null = null;
   // a file that couldn't be read is never written over this session (data/savedFiles)
   let unreadable = false;
+  let whole = false;
   return {
     get() {
       if (cached !== null) return cached;
@@ -72,8 +92,16 @@ export function jsonFileStore<T>(opts: {
       unreadable = read.state === "unreadable";
       const setAside: string[] = [];
       cached = opts.load(read.state === "read" ? read.parsed : undefined, setAside);
+      whole = read.state === "read" && setAside.length === 0;
       keepAsFound(path, setAside);
       return cached;
+    },
+    /** Whether this session's load read the file, all of it: not missing, moved aside,
+     *  unreadable, or with anything set aside. A store that deletes what its file doesn't name
+     *  (artist pictures) does so only then. */
+    readWhole() {
+      this.get();
+      return whole;
     },
     set(next: T) {
       cached = next;

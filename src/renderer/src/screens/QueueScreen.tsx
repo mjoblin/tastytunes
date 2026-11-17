@@ -50,7 +50,7 @@ import {
   X,
 } from "lucide-react";
 import { queueContentHash, type QueueListItem } from "@shared/smoip";
-import { presetVolumeKey, audioAnalysisKey } from "@shared/model";
+import { audioAnalysisKey, playlistFullSentence, presetVolumeKey } from "@shared/model";
 import { ViewOptions } from "@/components/library/lenses/ViewOptions";
 import { type ContentRef, type QueueRestoreResult } from "@shared/model";
 import { tt } from "@/api";
@@ -304,7 +304,13 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
       minute: "2-digit",
     })}`;
     // Toast the STORED name (two saves in the same minute uniquify to "… (2)").
-    const created = await tt.playlistCreate(name, items);
+    let created: Awaited<ReturnType<typeof tt.playlistCreate>>;
+    try {
+      created = await tt.playlistCreate(name, items);
+    } catch (e) {
+      showToast({ kind: "error", text: playlistFullSentence(e) ?? "Couldn't save the queue" });
+      return;
+    }
     showToast({
       kind: "success",
       text: `Saved ${items.length} tracks as “${created.name}”`,
@@ -1046,17 +1052,16 @@ function removeAlbumRun(g: AlbumRun): void {
   for (const i of g.items) if (i.id != null) void tt.command({ type: "queueDelete", id: i.id });
   // One closure, two entry points — sequential, ascending positions, each
   // restore arming the FLIP (the batch-remove pattern exactly).
-  const undoId = useStore
-    .getState()
-    .pushUndo(
-      g.album != null ? `Remove “${g.album}”` : `Remove ${g.items.length} Tracks`,
-      async () => {
-        for (const s of saved) {
-          snapQueueRows();
-          await restoreToQueue(s.content, s.position);
-        }
-      },
-    );
+  const undoId = useStore.getState().pushUndo(
+    g.album != null ? `Remove “${g.album}”` : `Remove ${g.items.length} Tracks`,
+    async () => {
+      for (const s of saved) {
+        snapQueueRows();
+        await restoreToQueue(s.content, s.position);
+      }
+    },
+    { queue: true },
+  );
   useStore.getState().showToast({
     kind: "success",
     text: `Removed ${g.items.length} ${g.items.length === 1 ? "track" : "tracks"} from “${g.album}”`,
@@ -1265,10 +1270,17 @@ function removeFromQueue(item: QueueListItem): void {
   // No title, no content identity, nothing to find it by later — so no offer.
   // (Same rule as the row's heart: see queueItemFavorite.)
   if (!title) return;
-  const undoId = useStore.getState().pushUndo(`Remove “${title}”`, () => {
-    snapQueueRows();
-    void restoreToQueue({ title, artist: md?.artist ?? null, album: md?.album ?? null }, position);
-  });
+  const undoId = useStore.getState().pushUndo(
+    `Remove “${title}”`,
+    () => {
+      snapQueueRows();
+      void restoreToQueue(
+        { title, artist: md?.artist ?? null, album: md?.album ?? null },
+        position,
+      );
+    },
+    { queue: true },
+  );
   useStore.getState().showToast({
     kind: "success",
     text: `Removed “${title}”`,

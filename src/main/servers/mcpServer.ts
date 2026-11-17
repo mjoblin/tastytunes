@@ -20,7 +20,7 @@ import {
   albumTracksOf,
   trackPosition,
 } from "@shared/model";
-import { resumeRun, resumeTarget } from "@shared/model";
+import { playlistFullSentence, resumeRun, resumeTarget } from "@shared/model";
 import { playStatsFromRecord } from "../data/playStats";
 import {
   MCP_CLUSTERS,
@@ -364,7 +364,8 @@ export class McpBridge {
             try {
               return await impl.handler(args ?? {});
             } catch (e) {
-              return err((e as Error).message);
+              // a refusal at a playlist bound says its own sentence, never its IPC token
+              return err(playlistFullSentence(e) ?? (e as Error).message);
             }
           }) as never,
         );

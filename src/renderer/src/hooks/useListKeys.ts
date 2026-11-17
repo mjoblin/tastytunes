@@ -226,7 +226,8 @@ export function useListKeys(o: ListKeysOptions): ListKeys {
     if (e.key === "Enter") {
       if (!opts.current.onEnter || count === 0) return;
       take();
-      opts.current.onEnter(at, itemEl(at));
+      // a held Enter plays (or opens) once
+      if (!e.repeat) opts.current.onEnter(at, itemEl(at));
       return;
     }
     if (isMenuKey(e)) {
@@ -238,7 +239,8 @@ export function useListKeys(o: ListKeysOptions): ListKeys {
     if (e.key === "Delete" || e.key === "Backspace") {
       if (!opts.current.onDelete || count === 0) return;
       take();
-      opts.current.onDelete(at);
+      // a held Delete removes one row: its repeat would clear the list faster than undo can follow
+      if (!e.repeat) opts.current.onDelete(at);
       return;
     }
     if (opts.current.step) {

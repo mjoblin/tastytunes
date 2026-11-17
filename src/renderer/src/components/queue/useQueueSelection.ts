@@ -102,12 +102,16 @@ export function useQueueSelection(d: {
     // same stack entry, so they can never double-restore). Sequential,
     // ascending positions — parallel restores raced each other's inserts and
     // resolves; each restore arms the FLIP so neighbors part with motion.
-    const undoId = useStore.getState().pushUndo(`Remove ${chosen.length} Tracks`, async () => {
-      for (const s of saved) {
-        snapQueueRows();
-        await restoreToQueue(s.content, s.position);
-      }
-    });
+    const undoId = useStore.getState().pushUndo(
+      `Remove ${chosen.length} Tracks`,
+      async () => {
+        for (const s of saved) {
+          snapQueueRows();
+          await restoreToQueue(s.content, s.position);
+        }
+      },
+      { queue: true },
+    );
     useStore.getState().showToast({
       kind: "success",
       text: `Removed ${chosen.length} tracks`,

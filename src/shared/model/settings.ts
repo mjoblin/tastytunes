@@ -414,6 +414,13 @@ export interface AppSettings {
    */
   presetVolumes: Record<string, number>;
   /**
+   * The name of the preset each presetVolumes level was set for, by the same key. A level holds for
+   * the preset now in its slot only when the names agree (presetVolumeHolds), so a preset moved,
+   * replaced or deleted (here or in another app) never lends its level to other music; main moves
+   * a level to its preset's new slot by this name, and drops it once no preset has the name.
+   */
+  presetVolumeNames: Record<string, string>;
+  /**
    * queueContentHash of the queue at save time for queue presets saved
    * through this app, keyed via presetVolumeKey(udn, slot). Lets the
    * Presets screen recognize a saved queue exactly (all tracks, in order)
@@ -475,8 +482,8 @@ export interface AppSettings {
    * names are just the album title, so this is what lets the Presets filter
    * match "iron" against an Iron Maiden album preset. Presets saved by other
    * controllers have no entry (nothing to record from). Same lifecycle trade
-   * as presetVolumes: entries are keyed by slot and not remapped on
-   * move/delete.
+   * as queueSignatures: entries are keyed by slot, moved with a move made in
+   * TastyTunes and dropped with a delete made here (main/device/presetSlots).
    */
   presetArtists: Record<string, string>;
   /**
@@ -600,6 +607,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   schedules: [],
   sleepFade: true,
   presetVolumes: {},
+  presetVolumeNames: {},
   queueSignatures: {},
   mcp: {
     enabled: false,
