@@ -50,7 +50,6 @@ import {
   presetVolumeFor,
   PresetVolumeAfterRecall,
   type StreamerCache,
-  WAKE_COMMANDS,
 } from "./streamerCache";
 import * as smoipHttp from "./smoipHttp";
 import { getSettings, updateSettings } from "../data/persist";
@@ -61,7 +60,7 @@ import { getFavorites } from "../data/favorites";
 import { getPlaylists } from "../data/playlists";
 import { QueueOps } from "./queueOps";
 import { Collections } from "./collections";
-import { commandFrames } from "./commandFrames";
+import { type CommandConnection, openAgain, sendCommand } from "./commandPath";
 import { SleepCountdown } from "./sleepCountdown";
 import { TrackNotifier } from "./trackNotifier";
 import { VolumeFader } from "./volumeFader";
@@ -355,15 +354,6 @@ export class DeviceManager {
     await queueAdd(conn.host, serverUdn, objectId, action, playFromId, opts);
   }
 
-  /** Whether `socket` is still this manager's and open, waiting up to `ms` for a reconnect. */
-  private async socketBack(socket: SmoipSocket, ms = 5000): Promise<boolean> {
-    const until = Date.now() + ms;
-    while (this.socket === socket && !socket.isOpen() && Date.now() < until) {
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    return this.socket === socket && socket.isOpen();
-  }
-
   /** Rate-limited liveness probe, run on window focus and system resume. */
   healthCheck(): void {
     const now = Date.now();
@@ -387,6 +377,29 @@ export class DeviceManager {
     connected: () => this.connection.phase === "connected",
     log: (text) => this.log("info", "sleep", text),
   });
+
+  // this connection to the shared command rules (device/commandPath): its socket, its wake with
+  // the asked thing named, its wait for the same socket after it, and its words for a refusal
+  private readonly path: CommandConnection = {
+    cache: () => this.cache,
+    socket: () => this.socket,
+    fader: this.fader,
+    presetLevel: this.presetLevel,
+    ensureAwake: (cmd) => this.ensureAwake(this.askedBy(cmd)),
+    socketBack: (socket) => openAgain(socket, () => this.socket === socket),
+    refuse: (cmd, why) => {
+      if (why === "no connection") {
+        this.log("warn", "command", `ignored ${cmd.type} — not connected`);
+        return null;
+      }
+      if (why === "not open") {
+        this.log("warn", "command", `dropped ${cmd.type} — socket not open`);
+        return new Error(`streamer socket not open (${cmd.type})`);
+      }
+      this.log("warn", "command", `dropped ${cmd.type} — socket not open after the wake`);
+      return new Error(`streamer socket not open after the wake (${cmd.type})`);
+    },
+  };
 
   /** Current pre-amp level, or null when the device is in control-bus mode (no fades there). */
   preAmpVolume(): number | null {
@@ -565,71 +578,11 @@ export class DeviceManager {
   }
 
   async command(cmd: StreamerCommand): Promise<void> {
-    this.presetLevel.onCommand(cmd.type);
-    // A user touching volume, power or transport takes over from a running
-    // fade — cancel it without restoring (their level wins). The fade engine's
-    // own writes are flagged and pass through.
-    if (
-      this.fader.interruptible &&
-      (cmd.type === "setVolumePercent" ||
-        cmd.type === "setVolumeStep" ||
-        cmd.type === "volumeStepChange" ||
-        cmd.type === "power" ||
-        cmd.type === "pause" ||
-        cmd.type === "play" ||
-        cmd.type === "togglePlayback")
-    ) {
-      this.fader.cancelFade(false);
-    }
-    const socket = this.socket;
-    const host = socket?.host;
-    if (!socket || !host) {
-      this.log("warn", "command", `ignored ${cmd.type} — not connected`);
-      return;
-    }
-    // A half-dead socket (closed or mid-reconnect) used to swallow commands
-    // silently — the user clicks a preset, the card marks, nothing plays.
-    // Fail loudly instead so the renderer's central catch can toast it.
-    if (!socket.isOpen()) {
-      this.log("warn", "command", `dropped ${cmd.type} — socket not open`);
-      throw new Error(`streamer socket not open (${cmd.type})`);
-    }
-    if (
-      WAKE_COMMANDS.has(cmd.type) &&
-      this.cache.systemPower != null &&
-      this.cache.systemPower.power !== "ON"
-    ) {
-      await this.ensureAwake(this.askedBy(cmd));
-      // The wake takes seconds, and the connection can drop and reconnect across it (or another
-      // streamer be chosen meanwhile): the command waits a moment for this manager's socket to be
-      // open again, else it fails loudly like any other, never into a closed socket
-      // (0.12.0-rc.2; S127)
-      if (!(await this.socketBack(socket))) {
-        this.log("warn", "command", `dropped ${cmd.type} — socket not open after the wake`);
-        throw new Error(`streamer socket not open after the wake (${cmd.type})`);
-      }
-    }
-
-    // PASSIVE-ONLY firmware policy (deliberate): there is NO command
-    // that sends /system/update with an `action` param. TastyTunes only ever
-    // SUBSCRIBES to /system/update (read-only, see smoipSocket SUBSCRIBED_PATHS)
-    // to SHOW whether an update is available; it never sends action=CHECK
-    // (refresh availability) or action=UPDATE (install). Updating the streamer's
-    // firmware stays the user's job via the Cambridge Audio app or the
-    // streamer's own web admin. Do not add a firmware check/install command here.
-    const frames = commandFrames(cmd, {
-      nowPlaying: this.cache.nowPlaying,
-      playState: this.cache.playState,
-      zoneState: this.cache.zoneState,
-      systemPower: this.cache.systemPower,
-      audioSpec: this.cache.audioSpec,
-      powerSpec: this.cache.powerSpec,
-      volumeLimitPercent: getSettings().volumeLimitPercent,
-    });
-    if (frames) {
-      for (const f of frames) socket.send(f.path, f.params);
-      return;
-    }
+    // the shared rules (device/commandPath): the fade take-over, the open socket, the wake first
+    // and the wait after it, the plain writes; what comes back is this connection's own verb
+    const socket = await sendCommand(this.path, cmd);
+    if (!socket) return;
+    const host = socket.host;
     // what is not a plain socket write (commandFrames answers null for these)
     switch (cmd.type) {
       case "resumeHeld":
