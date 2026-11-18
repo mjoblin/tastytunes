@@ -18,6 +18,13 @@ files:
   # inside the asar is fine (Electron patches fs), so no asarUnpack.
   - resources/**
 npmRebuild: false
+# THE MAC APP'S OWN UUIDS (0.16.0): macOS keeps the Local Network permission by the main
+# executable's Mach-O UUID, and Electron's stock executable carries the same one in every app on
+# the same Electron release, so another such app with Local Network turned off could make this
+# app's permission stop holding. The hook gives the app's executable and its helpers UUIDs of
+# their own before the fuses and the signature (scripts/mac-uuid.mjs); release.yml checks the
+# signed app.
+afterPack: ./scripts/mac-uuid.mjs
 # THE FUSES (0.16.0), flipped in the packaged binary before it is signed. Off: running the app as
 # plain Node (ELECTRON_RUN_AS_NODE) and NODE_OPTIONS from the environment, two ways to run other
 # code under the app's signature; nothing in the app needs either. On: the app loads only from its
