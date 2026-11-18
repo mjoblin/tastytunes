@@ -582,6 +582,20 @@ export const ONE_HOME = [
     },
   },
   {
+    id: "one-command-path",
+    was: "RemoteStreamer.command (0.16.0, an agent's connection to another streamer) repeated DeviceManager.command's rules and lost two of them: the fade take-over and the wait for the socket after a wake",
+    // a streamer command built into frames outside the one command path
+    selector: "CallExpression[callee.type='Identifier'][callee.name='commandFrames']",
+    files: ["^src/main/"],
+    allow: ["device/commandPath\\.ts$", "\\.test\\.ts$"],
+    message:
+      "Streamer commands go through device/commandPath's sendCommand (the fade take-over, the open socket, the wake and the wait after it, the volume limit), which every connection calls; commandFrames is its alone",
+    bad: {
+      file: "src/main/device/remoteStreamer.ts",
+      code: "const frames = commandFrames(cmd, state);",
+    },
+  },
+  {
     id: "upnp-shapes",
     was: "none (0.15.0, the hygiene pass: the demo and the tests' fake streamer each kept a copy of the media server's answers, and a live truth reached the second only if someone remembered)",
     // a SOAP envelope, a DIDL-Lite document or a ContentDirectory answer spelled out

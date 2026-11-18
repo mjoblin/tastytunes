@@ -1,8 +1,7 @@
 import type { StreamerCommand } from "@shared/ipc";
 import type { MediaQueueAction, SleepTimer } from "@shared/model";
 import { queueAdd } from "../media/upnpBrowser";
-import { getSettings } from "../data/persist";
-import { commandFrames } from "./commandFrames";
+import { type CommandConnection, openAgain, sendCommand } from "./commandPath";
 import { checkFrame } from "./frameCheck";
 import { QueueOps } from "./queueOps";
 import { recallSignature } from "./recallWatch";
@@ -15,7 +14,6 @@ import {
   presetVolumeFor,
   PresetVolumeAfterRecall,
   type StreamerCache,
-  WAKE_COMMANDS,
 } from "./streamerCache";
 import { VolumeFader } from "./volumeFader";
 
@@ -54,6 +52,17 @@ export class RemoteStreamer {
     signature: () => recallSignature(this.cache.playState),
     apply: (percent) => void this.command({ type: "setVolumePercent", percent }).catch(() => {}),
   });
+  // this connection to the shared command rules (device/commandPath), the window's own: the fade
+  // take-over, the wake first and the wait for the socket after it, the plain writes
+  private readonly path: CommandConnection = {
+    cache: () => this.cache,
+    socket: () => this.socket,
+    fader: this.fader,
+    presetLevel: this.presetLevel,
+    ensureAwake: () => this.ensureAwake(),
+    socketBack: (socket) => openAgain(socket),
+    refuse: () => new Error(`${this.name} isn't connected right now.`),
+  };
   readonly queueOps = new QueueOps({
     host: () => (this.socket.isOpen() ? this.host : null),
     socket: () => this.socket,
@@ -142,35 +151,17 @@ export class RemoteStreamer {
     return this.wakePromise;
   }
 
-  /** A command, by the rules the window's commands follow (commandFrames, the wake first for a
-   *  play-shaped one, the preset's volume after a recall). The verbs an agent sends another
-   *  streamer; the rest are the window's. */
+  /** A command, by the rules the window's commands follow (device/commandPath: the fade take-over,
+   *  the wake first for a play-shaped one and the wait after it, the plain writes), then the
+   *  preset's volume after a recall. The verbs an agent sends another streamer; the rest are the
+   *  window's. */
   async command(cmd: StreamerCommand): Promise<void> {
     this.lastUsed = Date.now();
-    if (!this.socket.isOpen()) throw new Error(`${this.name} isn't connected right now.`);
-    this.presetLevel.onCommand(cmd.type);
-    if (
-      WAKE_COMMANDS.has(cmd.type) &&
-      this.cache.systemPower != null &&
-      this.cache.systemPower.power !== "ON"
-    )
-      await this.ensureAwake();
-    const frames = commandFrames(cmd, {
-      nowPlaying: this.cache.nowPlaying,
-      playState: this.cache.playState,
-      zoneState: this.cache.zoneState,
-      systemPower: this.cache.systemPower,
-      audioSpec: this.cache.audioSpec,
-      powerSpec: this.cache.powerSpec,
-      volumeLimitPercent: getSettings().volumeLimitPercent,
-    });
-    if (frames) {
-      for (const f of frames) this.socket.send(f.path, f.params);
-      return;
-    }
+    const socket = await sendCommand(this.path, cmd);
+    if (!socket) return;
     switch (cmd.type) {
       case "recallPreset": {
-        this.socket.send("/zone/recall_preset", { preset: cmd.presetId });
+        socket.send("/zone/recall_preset", { preset: cmd.presetId });
         const name = this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name;
         this.presetLevel.recalled(
           cmd.skipVolume ? null : presetVolumeFor(this.cache.systemInfo?.udn, cmd.presetId, name),
