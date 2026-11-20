@@ -176,12 +176,13 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Set volume",
         hints: { idempotent: true },
         description:
-          "Set volume to an absolute percent (0–100). Respects the volume limit configured in the app.",
+          "Set volume to an absolute percent (0–100). Respects the volume limit configured in the app. Use only a level the user names.",
       },
       {
         name: "change_volume",
         title: "Change volume",
-        description: "Nudge volume up or down by a number of steps (positive or negative).",
+        description:
+          "Nudge volume up or down by a number of steps (positive or negative). Use this when the user asks for louder or quieter without naming a level.",
       },
       {
         name: "set_mute",
