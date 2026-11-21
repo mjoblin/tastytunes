@@ -6,6 +6,7 @@ import {
   type MediaServerInfo,
 } from "@shared/model";
 import { tt } from "@/api";
+import { inRunningOrder } from "./searchOrder";
 import { useStore } from "@/store";
 import { mediaKind } from "@/lib/media";
 import { useOneShotAsk } from "@/hooks/useOneShotAsk";
@@ -28,9 +29,10 @@ export const matchesKind = (n: MediaNode, kind: SearchKind): boolean =>
 
 // Shared result sort — single-server results and every cross-server group
 // order the same way. 'relevance' keeps the index's artists→albums→tracks
-// order (the hierarchy: artists make albums, albums contain tracks).
+// order (the hierarchy: artists make albums, albums contain tracks), an
+// album's tracks in running order (inRunningOrder).
 export const sortSearch = (list: MediaNode[], sort: SearchSort, reversed: boolean): MediaNode[] => {
-  let out = list;
+  let out = sort === "relevance" ? inRunningOrder(list) : list;
   if (sort !== "relevance") {
     out = [...list].sort((a, b) => {
       if (sort === "artist")
