@@ -270,17 +270,11 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
         device: DEVICE_ARG,
         mode: z
           .enum(["off", "all", "one"])
-          .optional()
           .describe("off, all (the whole queue) or one (the current track)."),
-        on: z
-          .boolean()
-          .optional()
-          .describe("Older form: true is all, false is off. mode wins when both are given."),
       },
       handler: async (a) => {
         const t = await ctx.target(a.device);
-        const mode = a.mode ?? (a.on === true ? "all" : a.on === false ? "off" : null);
-        if (!mode) return err("Say which: mode off, all or one.");
+        const mode = a.mode;
         return acted(
           t,
           () => t.command({ type: "setRepeat", mode }),
@@ -397,12 +391,14 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
     }),
     connect_device: defineTool({
-      inputSchema: { host: z.string().describe("Host or IP from list_devices.") },
+      inputSchema: {
+        device: z.string().describe("The streamer by name, host or IP (from list_devices)."),
+      },
       handler: (a) => {
         // the window's streamer becomes trusted (its pictures, its media servers): on this
-        // network only, by the rule a tool's device argument follows (mcp/toolkit)
+        // network only, named as every tool's device argument names one (mcp/toolkit)
         const s = dm.snapshot();
-        const named = streamerHostOf(a.host, [...s.devices, ...getSettings().knownDevices]);
+        const named = streamerHostOf(a.device, [...s.devices, ...getSettings().knownDevices]);
         if ("error" in named) return err(named.error);
         dm.connect(named.host);
         return ok(`Connecting to ${named.host}. Call get_status to confirm.`);

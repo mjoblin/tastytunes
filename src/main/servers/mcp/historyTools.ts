@@ -670,7 +670,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
             resume_from: { title: offer.target.title, track: offer.position, of: offer.total },
             last_played: localTime(offer.run.last.at),
             plays_in_run: offer.run.plays.length,
-            how: "resume_playback plays it from that track (opt-in queue editing).",
+            how: "resume_album plays it from that track (opt-in queue editing).",
           },
         });
       },

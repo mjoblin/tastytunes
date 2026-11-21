@@ -40,7 +40,7 @@ export function sceneTools(ctx: ToolContext): Record<string, ToolImpl> {
           .describe(
             "A scene id from list_scenes, 'sleeve' for the album art, or 'shuffle' for a different scene each track.",
           ),
-        host: z
+        where: z
           .enum(["display", "tile"])
           .describe(
             "'display' for display mode (the full-screen view), 'tile' for the Now Playing art box.",
@@ -53,10 +53,10 @@ export function sceneTools(ctx: ToolContext): Record<string, ToolImpl> {
             `Unknown scene '${String(a.scene)}'. list_scenes gives the ids: ${DISPLAY_SCENE_IDS.join(", ")}.`,
           );
         const id = scene as DisplayScene;
-        const host = a.host;
-        ctx.saveSettings(host === "display" ? { displayScene: id } : { nowPlayingScene: id });
+        const where = a.where;
+        ctx.saveSettings(where === "display" ? { displayScene: id } : { nowPlayingScene: id });
         return ok({
-          host,
+          where,
           scene: id,
           name: sceneText(id).label,
           note:

@@ -56,6 +56,12 @@ export function mcpClusterEnabled(c: McpClusterInfo, mcp: McpSettings): boolean 
  * server agree exactly. Schemas and handlers live in main (mcpServer.ts);
  * enable/disable state lives in settings.mcp.
  */
+/** Tools renamed since they first shipped, old name to new: a tool the user switched off under
+ *  its old name stays off (data/persist reads settings.mcp.disabledTools through it). */
+export const MCP_RENAMED_TOOLS: Readonly<Record<string, string>> = {
+  resume_playback: "resume_album",
+};
+
 export const MCP_CLUSTERS: McpClusterInfo[] = [
   {
     id: "status",
@@ -246,7 +252,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Connect device",
         hints: { idempotent: true },
         description:
-          "Switch the TastyTunes window to a different streamer by host/IP (see list_devices): the user's window moves with it. To act on another streamer and leave the window as it is, pass device to the tool instead.",
+          "Switch the TastyTunes window to a different streamer, by its name, host or IP from list_devices: the user's window moves with it. To act on another streamer and leave the window as it is, pass device to the tool instead.",
       },
     ],
   },
@@ -386,8 +392,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
     id: "favorites",
     title: "Favorites",
     group: "control",
-    description:
-      "List, play, add to, and remove from the user's favorites (stations, albums, tracks).",
+    description: "List, play and add to the user's favorites (stations, albums, tracks).",
     tools: [
       {
         name: "list_favorites",
@@ -408,6 +413,16 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         description:
           "With no arguments, favorite the currently playing track. For a library album or track, pass its server_udn + object_id from a listing (no streamer needed). For an internet-radio station, pass station_url + station_name (e.g. from search_radio).",
       },
+    ],
+  },
+  {
+    // removing changes a saved thing, so it is off until the user turns it on (the rule above)
+    id: "favoriteedit",
+    title: "Favorites editing",
+    group: "write",
+    optIn: true,
+    description: "Remove favorites. Each removal is immediate and there is no undo.",
+    tools: [
       {
         name: "remove_favorite",
         title: "Remove favorite",
@@ -505,7 +520,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         name: "history_resume",
         title: "Where you left off",
         description:
-          "The album most recently left unfinished (a run of plays within the past week that stopped before the album's end) and the track to resume from. Read-only; resume_playback acts on it.",
+          "The album most recently left unfinished (a run of plays within the past week that stopped before the album's end) and the track to resume from. Read-only; resume_album acts on it.",
       },
     ],
   },
@@ -621,7 +636,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Set scene",
         hints: { idempotent: true },
         description:
-          "Choose the scene for display mode (host 'display') or the Now Playing tile (host 'tile'): a scene id from list_scenes, 'sleeve' for the album art, or 'shuffle'. Takes effect at once; an abstract scene draws once the playing track has been analyzed, and shows the album art until then.",
+          "Choose the scene for display mode (where 'display') or the Now Playing tile (where 'tile'): a scene id from list_scenes, 'sleeve' for the album art, or 'shuffle'. Takes effect at once; an abstract scene draws once the playing track has been analyzed, and shows the album art until then.",
       },
       {
         name: "set_display_mode",
@@ -689,7 +704,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         description: "Remove every item from the play queue (the streamer's clear-all).",
       },
       {
-        name: "resume_playback",
+        name: "resume_album",
         title: "Resume where you left off",
         hints: { destructive: true },
         description:
