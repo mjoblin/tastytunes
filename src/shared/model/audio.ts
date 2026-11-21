@@ -322,3 +322,19 @@ export function keyMatches(
     (want.mode == null || key.mode === want.mode)
   );
 }
+
+/** How fast an analysis nobody is waiting on reads a file (the album being played, measured beside
+ *  the streamer's own read of the same server): a server that is read no faster sends no faster. */
+export const UNHURRIED_BYTES_PER_SECOND = 2 * 1024 * 1024;
+
+/** A reader's pace: given the bytes just read, how long to wait before the next read so the
+ *  whole stays at UNHURRIED_BYTES_PER_SECOND or under. Both of the analysis's reads keep it: the
+ *  file in pieces (the window) and the whole file for a lossy one (main). */
+export function unhurried(perSecond = UNHURRIED_BYTES_PER_SECOND): (bytes: number) => number {
+  const started = Date.now();
+  let total = 0;
+  return (bytes) => {
+    total += bytes;
+    return Math.max(0, (total / perSecond) * 1000 - (Date.now() - started));
+  };
+}

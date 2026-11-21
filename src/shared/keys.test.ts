@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { matchesQuery, mediaType, nameKey, queryWords, searchFold } from "./keys";
+import {
+  foldFields,
+  matchesQuery,
+  matchesWords,
+  mediaType,
+  nameKey,
+  queryWords,
+  searchFold,
+} from "./keys";
 
 describe("nameKey", () => {
   it("finds a name the same however it is cased, padded or composed", () => {
@@ -74,5 +82,14 @@ describe("searchFold and the one text match", () => {
   it("matches everything on an empty query, as the filters always have", () => {
     expect(queryWords("   ")).toEqual([]);
     expect(matchesQuery("", ["anything"])).toBe(true);
+  });
+});
+
+describe("a record folded once and searched many times", () => {
+  it("answers as folding at every search does, the typed form included", () => {
+    const fields = ["Ace of Spades", "Motörhead", null, "Kilmister"];
+    const folded = foldFields(fields);
+    for (const q of ["motorhead", "ace spades", "kilmister", "!!!", "beatles", "Motör"])
+      expect(matchesWords(queryWords(q), fields, folded)).toBe(matchesQuery(q, fields));
   });
 });

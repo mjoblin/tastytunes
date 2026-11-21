@@ -21,6 +21,7 @@ import {
   tempoBpm,
   type AnalysisFeatures,
   type AudioAnalysis,
+  unhurried,
 } from "@shared/model";
 import { Lru } from "@/lib/lru";
 
@@ -167,10 +168,9 @@ export function measuringNow(): boolean {
 }
 
 // AN UNHURRIED READ (0.16.0): a measuring nobody is waiting on (the album being played,
-// lib/albumOnPlay) asks for the file's next piece (main hands at most 2 MB a read) no sooner than
-// PACE_MS after the last, so it reads no faster than 2 MB a second beside the streamer's own read
-// of the same server; a server that is read no faster sends no faster
-const PACE_MS = 1000;
+// lib/albumOnPlay) reads the file no faster than UNHURRIED_BYTES_PER_SECOND beside the streamer's
+// own read of the same server (shared/model unhurried), in pieces here and, for a lossy file, the
+// whole file in main
 
 /** A file measured in pieces (FLAC, WAV, AIFF): its analysis; "whole" when only the whole-file
  *  decode reads it; null when it couldn't be measured (`stalled` says when the server stopped). */
@@ -183,14 +183,13 @@ async function measureInPieces(
 ): Promise<Analysis | "whole" | null> {
   const opened = await tt.audioStreamOpen(serverUdn, objectId).catch(() => null);
   if (!opened) return null;
-  let nextRead = 0;
+  const due = pace ? unhurried() : null;
+  let wait = 0;
   const read = async (): ReturnType<typeof tt.audioStreamRead> => {
-    if (pace) {
-      const wait = nextRead - Date.now();
-      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      nextRead = Date.now() + PACE_MS;
-    }
-    return tt.audioStreamRead(opened.id);
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    const piece = await tt.audioStreamRead(opened.id);
+    if (due && piece instanceof Uint8Array) wait = due(piece.byteLength);
+    return piece;
   };
   try {
     const out = await measureStreamOffThread(read, CAPTURE_BUCKETS, (p) => setLive(key, p), signal);
@@ -294,7 +293,7 @@ export async function storedIsCurrent(contentKey: string): Promise<boolean> {
  *  the file again even when a current analysis is stored (Analyze audio with
  *  nothing else to do, 0.12.0: a file replaced under the same title, artist,
  *  album and length keeps its old analysis otherwise). `pace` reads the file at the unhurried
- *  pace (PACE_MS), for a measuring nobody is waiting on. */
+ *  pace (shared/model unhurried), for a measuring nobody is waiting on. */
 export function analyzeTrack(
   serverUdn: string,
   objectId: string,
@@ -334,7 +333,9 @@ export function analyzeTrack(
       if (pieces && contentKey) void tt.audioAnalysisPut(contentKey, toStored(pieces));
       return pieces;
     }
-    const got = await tt.expTrackAudio(serverUdn, objectId);
+    // a lossy file is read whole, at the same unhurried pace when nobody is waiting (0.16.0 read
+    // it at full speed beside the streamer's own read)
+    const got = await tt.expTrackAudio(serverUdn, objectId, { pace });
     if (!got) return null;
     if (!ArrayBuffer.isView(got)) {
       if ("tooLarge" in got) tooLarge.set(key, got.tooLarge);

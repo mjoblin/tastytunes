@@ -445,6 +445,7 @@ export interface TastyTunesApi {
   expTrackAudio(
     serverUdn: string,
     objectId: string,
+    opts?: { pace?: boolean },
   ): Promise<
     | Uint8Array
     | { tooLarge: { bytes: number; maxBytes: number } }
