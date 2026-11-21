@@ -197,6 +197,8 @@ export type PushMessage =
    *  (main/app/windows), which applies it once. */
   | { kind: "menu"; command: MenuCommand; delivery?: number }
   | { kind: "updateState"; state: UpdateState }
+  /** Something the windows should say (a save that failed, data/savedFiles saveFailed). */
+  | { kind: "notice"; text: string }
   /** Sent when a request starts (pending) and again when it settles — upsert by id. */
   | { kind: "netRequest"; entry: NetRequestEntry };
 
@@ -581,6 +583,8 @@ export interface TastyTunesApi {
   /** Force a media-index (re)build for one server (also the only way to
    *  build one for a Browse-only server). */
   mediaIndexRebuild(serverUdn: string): Promise<void>;
+  /** Remove the index of a server that is gone (main/media/mediaIndex removeIndex). */
+  mediaIndexRemove(serverUdn: string): Promise<void>;
   /** A server's own Recently added list (0.13.0 round 9): a container chosen in the Library,
    *  "off", or null for the one found by its name; read again at once, with no walk. */
   setRecentlyAddedList(
@@ -735,6 +739,7 @@ export const IPC = {
   contentResolve: "tt:contentResolve",
   mediaNodeInfo: "tt:mediaNodeInfo",
   mediaIndexRebuild: "tt:mediaIndexRebuild",
+  mediaIndexRemove: "tt:mediaIndexRemove",
   setRecentlyAddedList: "tt:setRecentlyAddedList",
   recentListCandidates: "tt:recentListCandidates",
   displayModeReport: "tt:displayModeReport",

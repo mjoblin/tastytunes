@@ -1075,6 +1075,8 @@ export const useStore = create<TTState>((set, get) => ({
           if (frames.length > FRAME_RING_SIZE) frames.splice(0, frames.length - FRAME_RING_SIZE);
           return { frames };
         }
+        case "notice":
+          return { toast: { kind: "error", text: msg.text, id: ++toastNonce } };
         case "log": {
           const logs = [...s.logs, msg.entry];
           if (logs.length > LOG_RING_SIZE) logs.splice(0, logs.length - LOG_RING_SIZE);

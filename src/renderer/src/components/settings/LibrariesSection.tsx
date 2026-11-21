@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { type AppSettings, type MediaIndexStatus } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -84,19 +84,36 @@ export function LibrariesSection({ settings, save }: SectionProps): React.JSX.El
                     {`couldn't rebuild${FACT_SEP}${st.failure}`}
                   </span>
                 )}
-              </span>
-              <HeaderChip
-                onClick={() => void tt.mediaIndexRebuild(st.udn)}
-                disabled={st.state === "building"}
-                className="shrink-0 flex items-center gap-1.5 text-[12px] px-3 py-1.5 motion-safe:active:scale-90 disabled:opacity-40 disabled:pointer-events-none"
-              >
-                {st.state === "building" ? (
-                  <Loader2 size={13} className="motion-safe:animate-spin" />
-                ) : (
-                  <RefreshCw size={13} />
+                {st.gone && (
+                  <span className="block font-mono text-[10.5px] text-faint">
+                    not on the network now
+                  </span>
                 )}
-                {st.state === "ready" ? "Rebuild" : st.state === "failed" ? "Retry" : "Build"}
-              </HeaderChip>
+              </span>
+              {/* a server that's gone can't be rebuilt: its index can go (it builds anew if the
+                  server comes back) */}
+              {st.gone ? (
+                <HeaderChip
+                  onClick={() => void tt.mediaIndexRemove(st.udn)}
+                  className="shrink-0 flex items-center gap-1.5 text-[12px] px-3 py-1.5 motion-safe:active:scale-90"
+                >
+                  <Trash2 size={13} />
+                  Remove
+                </HeaderChip>
+              ) : (
+                <HeaderChip
+                  onClick={() => void tt.mediaIndexRebuild(st.udn)}
+                  disabled={st.state === "building"}
+                  className="shrink-0 flex items-center gap-1.5 text-[12px] px-3 py-1.5 motion-safe:active:scale-90 disabled:opacity-40 disabled:pointer-events-none"
+                >
+                  {st.state === "building" ? (
+                    <Loader2 size={13} className="motion-safe:animate-spin" />
+                  ) : (
+                    <RefreshCw size={13} />
+                  )}
+                  {st.state === "ready" ? "Rebuild" : st.state === "failed" ? "Retry" : "Build"}
+                </HeaderChip>
+              )}
             </div>
             <RecentListRow st={st} chosen={settings.recentlyAddedLists[st.udn]} />
           </div>

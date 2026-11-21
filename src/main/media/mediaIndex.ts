@@ -132,6 +132,9 @@ const rebuildHints = new Map<string, "search" | "browse">();
 // Every server the streamer has listed this session — so Settings can show
 // un-indexed ones too (a USB stick deserves its Build button).
 const known = new Map<string, MediaServerInfo>();
+/** The servers in the streamer's last whole list (ensureFresh): an index whose server isn't is
+ *  gone, and can be removed (null until the first list, so nothing reads as gone at launch). */
+let listed: Set<string> | null = null;
 const building = new Set<string>();
 /** The build under way per server, so a second asker waits for the same walk. */
 const inflight = new Map<string, Promise<void>>();
@@ -214,6 +217,7 @@ export function status(): MediaIndexStatus[] {
       udn: idx.udn,
       serverName: idx.serverName,
       state: building.has(idx.udn) ? "building" : "ready",
+      ...(listed && !listed.has(idx.udn) && !building.has(idx.udn) ? { gone: true } : {}),
       ...(k ? { searchable: k.searchable } : {}),
       ...(buildingWhy.get(idx.udn) === "refresh" ? { quiet: true } : {}),
       ...(staleIds.has(idx.udn) && !building.has(idx.udn) ? { stale: true } : {}),
@@ -1088,7 +1092,10 @@ async function idsGone(host: string, server: MediaServerInfo, held: StoredIndex)
  */
 export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
   load();
-  let announceNeeded = false;
+  const was = listed;
+  listed = new Set(servers.map((s) => s.udn));
+  let announceNeeded =
+    was == null || [...indexes.keys()].some((u) => was.has(u) !== listed?.has(u));
   for (const server of servers) {
     if (!known.has(server.udn)) announceNeeded = true;
     known.set(server.udn, server);
@@ -1145,6 +1152,17 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
       );
     })();
   }
+}
+
+/** An index whose server is gone, removed (0.16.0-rc.8: one held for a server sold or renamed
+ *  stayed in Settings and the lenses with no way out); a server that comes back builds anew. */
+export function removeIndex(udn: string): void {
+  load();
+  if (!indexes.delete(udn)) return;
+  failed.delete(udn);
+  staleIds.delete(udn);
+  save();
+  announce(status());
 }
 
 /** The manual rebuild — and the only way to first-build a Browse-only server. */

@@ -12,7 +12,7 @@ import {
 } from "@shared/model";
 import { atomicWriteFileSync } from "./jsonStore";
 import { checkSettingsKinds } from "./savedChecks";
-import { keepAsFound, readSaved } from "./savedFiles";
+import { keepAsFound, readSaved, saveFailed } from "./savedFiles";
 import { getSecret, setSecret } from "./secrets";
 
 let cached: AppSettings | null = null;
@@ -138,6 +138,12 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
     atomicWriteFileSync(settingsPath(), JSON.stringify(next, null, 2));
   } catch (err) {
     console.error("failed to persist settings", err);
+    // said once a session (data/savedFiles saveFailed)
+    if (!settingsFailSaid) {
+      settingsFailSaid = true;
+      saveFailed("your settings", err);
+    }
   }
   return next;
 }
+let settingsFailSaid = false;

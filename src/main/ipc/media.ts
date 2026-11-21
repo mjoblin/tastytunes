@@ -29,6 +29,9 @@ export function registerMediaIpc(): void {
     const server = servers.find((x) => x.udn === serverUdn);
     if (server) await mediaIndex.rebuild(streamerHost(), server);
   });
+  handle(IPC.mediaIndexRemove, (_e, serverUdn: unknown) => {
+    if (typeof serverUdn === "string" && serverUdn) mediaIndex.removeIndex(serverUdn);
+  });
   // a server's own Recently added list: chosen, off, or back to the one found by its name
   handle(IPC.setRecentlyAddedList, async (_e, serverUdn: unknown, choice: unknown) => {
     if (typeof serverUdn !== "string" || !serverUdn) return;

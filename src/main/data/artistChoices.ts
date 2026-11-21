@@ -77,6 +77,7 @@ let carriedNotes: string[] = [];
 const store = jsonFileStore<Record<string, Stored>>({
   pathOf: () => join(app.getPath("userData"), "artist-choices.json"),
   scope: "artist-choices",
+  said: "your artist picture choices",
   encode: (next) => {
     const back = Object.fromEntries(Object.entries(carried).filter(([k]) => !(k in next)));
     return { ...back, ...next };

@@ -32,6 +32,7 @@ let carried = playlistsCarriedNone();
 const store = jsonFileStore<Playlist[]>({
   pathOf: () => join(app.getPath("userData"), "playlists.json"),
   scope: "playlists",
+  said: "your playlists",
   load: (parsed, setAside) => {
     carried = playlistsCarriedNone();
     return sortNewest(checkPlaylists(parsed, setAside, carried));

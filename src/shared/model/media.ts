@@ -32,6 +32,8 @@ export const usbServer = (s: Pick<MediaServerInfo, "isStreamer" | "searchable">)
 export interface MediaIndexStatus {
   udn: string;
   serverName: string;
+  /** The server wasn't in the streamer's last list of servers: its index can be removed. */
+  gone?: boolean;
   /** 'failed': the last build produced nothing (the server refused Search AND Browse — offline, or mid-scan); `failure` says why. */
   state: "none" | "building" | "ready" | "failed";
   /** Why the last build failed: with 'failed', why there is no index; with 'ready', why the last

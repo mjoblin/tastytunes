@@ -2,7 +2,7 @@ import type { StreamerCommand } from "@shared/ipc";
 import type { MediaQueueAction, SleepTimer } from "@shared/model";
 import { queueAdd } from "../media/upnpBrowser";
 import { type CommandConnection, openAgain, sendCommand } from "./commandPath";
-import { checkFrame } from "./frameCheck";
+import { checkDocument, checkFrame } from "./frameCheck";
 import { QueueOps } from "./queueOps";
 import { recallSignature } from "./recallWatch";
 import { SleepCountdown } from "./sleepCountdown";
@@ -93,10 +93,16 @@ export class RemoteStreamer {
         // the capability specs a command reads (tone, power), and the presets, over HTTP as the
         // window's connection fetches them
         void smoipHttp.getAudioSpec(host).then((spec) => {
-          this.cache.audioSpec = (spec as StreamerCache["audioSpec"]) ?? null;
+          this.cache.audioSpec = checkDocument<NonNullable<StreamerCache["audioSpec"]>>(
+            "/zone/audio/spec",
+            spec,
+          );
         });
         void smoipHttp.getPowerSpec(host).then((spec) => {
-          this.cache.powerSpec = (spec as StreamerCache["powerSpec"]) ?? null;
+          this.cache.powerSpec = checkDocument<NonNullable<StreamerCache["powerSpec"]>>(
+            "/system/power/spec",
+            spec,
+          );
         });
         void this.refreshPresets();
       },
@@ -140,8 +146,11 @@ export class RemoteStreamer {
 
   async refreshPresets(): Promise<void> {
     try {
-      const data = await smoipHttp.getPresets(this.host);
-      if (data != null) this.cache.presets = data as StreamerCache["presets"];
+      const data = checkDocument<NonNullable<StreamerCache["presets"]>>(
+        "/presets/list",
+        await smoipHttp.getPresets(this.host),
+      );
+      if (data != null) this.cache.presets = data;
     } catch {
       // the list stays as it was
     }

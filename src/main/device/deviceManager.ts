@@ -81,8 +81,11 @@ import {
   slotsAfterMove,
 } from "./presetSlots";
 import { RecallWatch, recallSignature } from "./recallWatch";
-import { checkFrame } from "./frameCheck";
+import { checkDocument, checkFrame } from "./frameCheck";
 import { appLog } from "../app/appLog";
+
+/** How long a repeated log line is counted rather than written again (DeviceManager.log). */
+const REPEAT_WINDOW_MS = 10 * 60_000;
 
 export class DeviceManager {
   private socket: SmoipSocket | null = null;
@@ -680,7 +683,10 @@ export class DeviceManager {
    * "this streamer has no tone controls" and the UI section stays hidden.
    */
   private async probeAudioSpec(socket: SmoipSocket): Promise<void> {
-    const spec = (await smoipHttp.getAudioSpec(socket.host)) as ZoneAudioSpec | null;
+    const spec = checkDocument<ZoneAudioSpec>(
+      "/zone/audio/spec",
+      await smoipHttp.getAudioSpec(socket.host),
+    );
     if (this.socket !== socket) return;
     this.cache.audioSpec = spec;
     this.push({ kind: "audioSpec", data: spec });
@@ -694,8 +700,12 @@ export class DeviceManager {
    */
   private async probeSystemSpecs(socket: SmoipSocket): Promise<void> {
     const [display, power] = await Promise.all([
-      smoipHttp.getDisplaySpec(socket.host) as Promise<SystemDisplaySpec | null>,
-      smoipHttp.getPowerSpec(socket.host) as Promise<SystemPowerSpec | null>,
+      smoipHttp
+        .getDisplaySpec(socket.host)
+        .then((d) => checkDocument<SystemDisplaySpec>("/system/display/spec", d)),
+      smoipHttp
+        .getPowerSpec(socket.host)
+        .then((d) => checkDocument<SystemPowerSpec>("/system/power/spec", d)),
     ]);
     if (this.socket !== socket) return;
     this.cache.displaySpec = display;
@@ -901,9 +911,9 @@ export class DeviceManager {
   private async refreshPresets(socket: SmoipSocket | null): Promise<void> {
     if (!socket || this.socket !== socket) return;
     try {
-      const data = await smoipHttp.getPresets(socket.host);
+      const data = checkDocument<Presets>("/presets/list", await smoipHttp.getPresets(socket.host));
       if (data == null || this.socket !== socket) return;
-      this.cache.presets = data as Presets;
+      this.cache.presets = data;
       this.presetsArrived(this.cache.presets);
       this.push({ kind: "presets", data: this.cache.presets });
     } catch (err) {
@@ -1098,13 +1108,44 @@ export class DeviceManager {
     this.log("warn", "wire", line);
   }
 
+  /**
+   * REPEATS COLLAPSED (0.16.0-rc.8): during an outage a socket error every 8 to 12 seconds and
+   * "found N streamers" every 10 filled the log in about a day, pushing out the wire-check notes
+   * an unseen model reports in by. A line written within the last REPEAT_WINDOW_MS is counted
+   * rather than written again, and once the window has passed its count is one line.
+   */
+  private readonly repeated = new Map<string, { entry: LogEntry; count: number }>();
+
   log(level: LogEntry["level"], scope: string, text: string): void {
-    const entry: LogEntry = { at: Date.now(), level, scope, text };
+    const now = Date.now();
+    for (const [key, r] of this.repeated)
+      if (now - r.entry.at > REPEAT_WINDOW_MS) {
+        this.repeated.delete(key);
+        if (r.count > 0)
+          this.write({
+            at: now,
+            level: r.entry.level,
+            scope: r.entry.scope,
+            text: `${r.entry.text} (${r.count} more ${r.count === 1 ? "time" : "times"} in ${REPEAT_WINDOW_MS / 60_000} minutes)`,
+          });
+      }
+    const key = `${level}|${scope}|${text}`;
+    const seen = this.repeated.get(key);
+    if (seen) {
+      seen.count++;
+      return;
+    }
+    const entry: LogEntry = { at: now, level, scope, text };
+    if (this.repeated.size < 32) this.repeated.set(key, { entry, count: 0 });
+    this.write(entry);
+  }
+
+  private write(entry: LogEntry): void {
     this.logs.push(entry);
     if (this.logs.length > LOG_RING_SIZE) this.logs.shift();
     this.push({ kind: "log", entry });
     appLog().write(entry);
-    console.log(`[${scope}] ${text}`);
+    console.log(`[${entry.scope}] ${entry.text}`);
   }
 
   // ------------------------------------------------------------------- snapshot

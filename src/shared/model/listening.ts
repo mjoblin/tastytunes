@@ -39,7 +39,10 @@ export function listenThresholdSecs(durationSecs: number | null): number {
  */
 export const PLAY_OVERRUN_SECS = 30;
 export function boundedPlayedSeconds(kind: string, played: number, duration: unknown): number {
-  if (kind !== "play" || typeof duration !== "number" || !(duration > 0)) return played;
+  // an external play too (AirPlay, Connect): its title or length can lag a track change, and a
+  // real record held 23.8 hours of such overrun (0.16.0-rc.8, read-only, the file as written)
+  if ((kind !== "play" && kind !== "external") || typeof duration !== "number" || !(duration > 0))
+    return played;
   return played > duration + PLAY_OVERRUN_SECS ? Math.round(duration) : played;
 }
 

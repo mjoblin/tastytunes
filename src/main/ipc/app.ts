@@ -6,6 +6,7 @@ import { loginItemState, setOpenAtLogin } from "../app/loginItem";
 import { deviceManager, mcpBridge } from "../app/runtime";
 import { checkUpdatesOnDemand, downloadUpdate, installUpdate } from "../app/updater";
 import {
+  getMainWindow,
   sendMenuCommand,
   setUndoMenuLabel,
   showMainWindow,
@@ -52,5 +53,9 @@ export function registerAppIpc(): void {
   handle(IPC.showMain, (_e, screen?: string) =>
     screen ? sendMenuCommand({ id: "screen", screen }) : showMainWindow(),
   );
-  handle(IPC.undoLabelSet, (_e, label: string | null) => setUndoMenuLabel(label));
+  // the main window's top entry is the one Cmd+Z runs, so it alone names the Edit menu's Undo
+  // (0.16.0: the tray panel's heart renamed it to an entry Cmd+Z then didn't run)
+  handle(IPC.undoLabelSet, (e, label: string | null) => {
+    if (e.sender === getMainWindow()?.webContents) setUndoMenuLabel(label);
+  });
 }

@@ -650,6 +650,21 @@ export function readTrackRefs(
     credits: [...trackArtists(h.node), h.node.albumArtist],
   });
   let loose: ((ref: TitleRef) => Hit[]) | null = null;
+  // the library's tracks by folded album, made once a call: a call naming 200 albums made a pass
+  // over the whole library for each (0.16.0: 5 s on the main thread at 50,000 tracks)
+  let byAlbum: Map<string, Hit[]> | null = null;
+  const onAlbumNamed = (folded: string): Hit[] => {
+    if (!byAlbum) {
+      byAlbum = new Map();
+      for (const h of tracks()) {
+        const k = titleFold(h.node.album);
+        const list = byAlbum.get(k);
+        if (list) list.push(h);
+        else byAlbum.set(k, [h]);
+      }
+    }
+    return byAlbum.get(folded) ?? [];
+  };
   const row = (h: Hit): TrackRow => ({
     title: h.node.title,
     artist: h.node.artist,
@@ -712,9 +727,8 @@ export function readTrackRefs(
     // album is taken and said among the close matches.
     if (album != null) {
       const want = titleFold(ref.title);
-      const there = tracks().filter(
+      const there = onAlbumNamed(album).filter(
         (h) =>
-          onAlbum(h) &&
           creditedBy(ref.artist, read(h).credits) &&
           (titleFold(h.node.title) === want || titleFold(bareTitle(h.node.title)) === want),
       );
