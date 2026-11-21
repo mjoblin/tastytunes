@@ -1,6 +1,7 @@
 import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import type { MediaRef } from "@/lib/mediaRef";
 import { cx } from "@/lib/format";
+import { FACT_SEP } from "@/lib/mediaFacts";
 import { useInListKeys } from "@/hooks/useListKeys";
 
 /**
@@ -79,7 +80,6 @@ export function NameLine({
   onArtist,
   onAlbum,
   tone = "dim",
-  sep = " — ",
 }: {
   artist?: string | null;
   /** What the artist reads as when it differs from the name navigated by (the
@@ -94,7 +94,6 @@ export function NameLine({
   onAlbum?: (() => void) | null;
   /** The line's resting tone, which picks the hover step. */
   tone?: "dim" | "faint";
-  sep?: string;
 }): React.JSX.Element | null {
   if (!artist && !album) return null;
   const link = cx(
@@ -114,7 +113,7 @@ export function NameLine({
         ))}
       {album && (
         <>
-          {artist ? sep : ""}
+          {artist ? FACT_SEP : ""}
           {onAlbum !== null && (onAlbum || ref) ? (
             <NameLink kind="album" name={album} ref={ref} onGo={onAlbum} className={link} />
           ) : (

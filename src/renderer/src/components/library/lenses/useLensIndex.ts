@@ -54,6 +54,9 @@ export interface LensIndex {
    *  0.13.0-rc.4). `formatShown` when the card's format line already says the format. One rule
    *  for the Albums lens, the Artists lens, the artist page and Favorites. */
   copyBadge(a: MediaNode, shown?: { formatShown?: boolean }): string | undefined;
+  /** A track's album's copyBadge, so a track in a flat list (the Tracks lens, search results)
+   *  says which copy it is from by the same rule; undefined when its album has no other copy. */
+  trackCopyBadge(t: MediaNode): string | undefined;
   /** Each album's codec and format tags, by nodeKey: the union over its own tracks. */
   albumCodecs: Map<string, Set<string>>;
   /** The albums that are compilations (by nodeKey). */
@@ -166,11 +169,26 @@ function build(pools: MediaIndexPools[]): LensIndex {
       const copies = (albumsByKey().get(albumKey(a)) ?? []).filter(
         (b) => nameKey(b.artist) === nameKey(a.artist),
       );
-      if (copies.some((b) => b !== a)) {
+      // the index's own copy by its key: a listing's node (search results, a server's folders)
+      // can be another object for the same album, and one the index can't place says no copy
+      const key = nodeKey(a);
+      const self = copies.find((b) => nodeKey(b) === key);
+      if (self && copies.length > 1) {
         const formatOf = (x: MediaNode): string | null => albumFormat(index.tracksOf(x)).label;
-        parts.push(whichCopy(a, copies, formatOf, shown));
+        parts.push(whichCopy(self, copies, formatOf, shown));
       }
       return parts.length > 0 ? parts.join(FACT_SEP) : undefined;
+    },
+    trackCopyBadge(t) {
+      const badges = lazy("trackCopyBadges", () => {
+        const m = new Map<string, string>();
+        for (const a of index.albums) {
+          const badge = index.copyBadge(a);
+          if (badge) for (const x of index.tracksOf(a)) m.set(nodeKey(x), badge);
+        }
+        return m;
+      });
+      return badges.get(nodeKey(t));
     },
     get albumCodecs() {
       return lazy("albumCodecs", () => {

@@ -99,6 +99,16 @@ describe("lensIndexOf", () => {
     expect([...(ix.albumCodecs.get("s1|h-mp3") ?? [])]).toEqual(["MP3"]);
     expect([...(ix.albumCodecs.get("s1|h-other") ?? [])]).toEqual(["AAC"]);
     expect(ix.compilationKeys.size).toBe(0);
+    // which copy: a listing's own object for an album says the same as the index's, one the index
+    // can't place says nothing, and each copy's tracks say their album's
+    const flac = shared[0].albums[0];
+    expect(ix.copyBadge(flac)).toBe("FLAC");
+    expect(ix.copyBadge({ ...flac })).toBe("FLAC");
+    expect(ix.copyBadge({ ...flac, id: "h-unknown" })).toBeUndefined();
+    expect(ix.copyBadge(shared[0].albums[2])).toBeUndefined();
+    expect(ix.trackCopyBadge(shared[0].tracks[0])).toBe("FLAC");
+    expect(ix.trackCopyBadge(shared[0].tracks[1])).toBe("MP3");
+    expect(ix.trackCopyBadge(shared[0].tracks[2])).toBeUndefined();
   });
 
   it("makes every performer an artist, never the packed string", () => {

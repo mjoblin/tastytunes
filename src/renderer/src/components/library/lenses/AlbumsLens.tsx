@@ -8,6 +8,7 @@ import {
   type MediaIndexPools,
   type MediaNode,
   nameSortKey,
+  sharedYear,
 } from "@shared/model";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
@@ -369,8 +370,9 @@ export function AlbumsLens({
     { node: rawNode, set }: (typeof tiles)[number],
     ti: number,
   ): React.JSX.Element => {
-    // a set tile is volume 1 wearing the base title and a count badge
-    const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
+    // a set tile is volume 1 wearing the base title and a count badge, and the year its volumes
+    // share (none when they differ)
+    const node = set ? { ...rawNode, title: set.base, year: sharedYear(set.volumes) } : rawNode;
     // a set's count, else which copy it is, only when there is another (useLensIndex.copyBadge),
     // the format left to a card's format line when it shows one
     const badge = set

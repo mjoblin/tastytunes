@@ -31,6 +31,7 @@ import { MOD } from "@/lib/screens";
 import { isAlbumClass, isArtistClass, stripFurniture } from "@/lib/media";
 import { FilterInput } from "@/components/controls/FilterInput";
 import { ContainerCard, ContainerRow, TrackRow } from "@/components/library/LibraryCards";
+import { COPY_BADGE_TIP } from "@/components/library/lenses/lensShared";
 import { Crumbs } from "@/components/library/Crumbs";
 import type { LandingTrack } from "@/components/library/landing";
 import { SortChip } from "@/components/controls/SortChip";
@@ -243,9 +244,19 @@ export function LibraryScreen(): React.JSX.Element {
   // a server's album cards take the format line too (0.14.0: every album card,
   // behind the same switch): the index's tracks give each its format, asked only while shown
   const formatLine = useStore((s) => s.settings.albumCardFormat);
-  const folderPools = useIndexPools(formatLine && cards && lens == null);
+  // and a listing's albums (a server's folders, search results) say which copy they are, as the
+  // lenses do: the pools are loaded anyway while the Library shows (usePlayingMatch)
+  const folderPools = useIndexPools(lens == null);
   const folderIndex = useLensIndex(folderPools ?? NO_POOLS);
-  const folderDetails = useCardDetails(folderPools ? folderIndex : null);
+  const folderDetails = useCardDetails(folderPools && formatLine && cards ? folderIndex : null);
+  // a server's own listing and its search answer with nodes unstamped: they are the browsed
+  // server's, which the index's copies are keyed by
+  const onServer = (node: MediaNode): MediaNode =>
+    node.serverUdn || !serverUdn ? node : { ...node, serverUdn };
+  const copyBadgeOf = (node: MediaNode): string | undefined =>
+    isAlbumClass(node.upnpClass) && folderPools
+      ? folderIndex.copyBadge(onServer(node), { formatShown: cards && folderDetails != null })
+      : undefined;
 
   // Action feedback: the app-wide toast for failures, an accent pulse for wins.
   // (The screen's original local notice banner graduated into the toast.)
@@ -829,6 +840,8 @@ export function LibraryScreen(): React.JSX.Element {
         item={item}
         node={node}
         details={isAlbumClass(node.upnpClass) ? folderDetails?.(node) : undefined}
+        badge={copyBadgeOf(node)}
+        badgeTip={COPY_BADGE_TIP}
         playing={queueSourceActive && isPlayingAlbum(node)}
         menuOpen={menuNodeId === node.id}
         favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
@@ -846,6 +859,8 @@ export function LibraryScreen(): React.JSX.Element {
         key={node.id}
         item={item}
         node={node}
+        badge={copyBadgeOf(node)}
+        badgeTip={COPY_BADGE_TIP}
         playing={queueSourceActive && isPlayingAlbum(node)}
         menuOpen={menuNodeId === node.id}
         favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
@@ -913,6 +928,9 @@ export function LibraryScreen(): React.JSX.Element {
       onMenu={(e) => openMenu(node, e, opts.infoList ?? siblings)}
       note={opts.note}
       artistLabel={opts.artistLabel}
+      // a result says which copy of its album it is from, as the Tracks lens's rows do
+      badge={opts.links && folderPools ? folderIndex.trackCopyBadge(onServer(node)) : undefined}
+      badgeTip={COPY_BADGE_TIP}
       onAlbumLink={
         opts.links && node.album && linkable(node, "albums")
           ? () => void goToAlbum(node)

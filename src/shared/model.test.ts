@@ -15,6 +15,7 @@ import {
   albumFormat,
   albumTracksOf,
   albumVolume,
+  sharedYear,
   compareTrackOrder,
   discCountIn,
   discGroups,
@@ -336,6 +337,15 @@ describe("discGroups: the quiet Disc N dividers", () => {
       { disc: 1, tracks: [at(1), at(2, 1)] },
       { disc: 2, tracks: [at(1, 2), at(2, 2)] },
     ]);
+  });
+});
+
+describe("sharedYear: a set's year", () => {
+  it("is the year every volume shares, and none when they differ or one has none", () => {
+    expect(sharedYear([{ year: "2017" }, { year: "2017" }])).toBe("2017");
+    expect(sharedYear([{ year: "2017" }, { year: "2019" }])).toBeNull();
+    expect(sharedYear([{ year: "2017" }, { year: null }])).toBeNull();
+    expect(sharedYear([{ year: null }, { year: null }])).toBeNull();
   });
 });
 

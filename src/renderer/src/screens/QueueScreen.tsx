@@ -1794,7 +1794,7 @@ function QueueCard({
             {md?.title ?? md?.name ?? "—"}
           </div>
           <div className="text-[11px] text-dim truncate mt-0.5">
-            {[artist, md?.album].filter(Boolean).join(" — ")}
+            {[artist, md?.album].filter(Boolean).join(FACT_SEP)}
           </div>
           <div className="microlabel mt-1">
             {String((item.position ?? 0) + 1).padStart(2, "0")} · {fmtTime(md?.duration)}

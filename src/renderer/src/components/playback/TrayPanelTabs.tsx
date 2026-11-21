@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Disc3, ListMusic, Radio, RadioTower, X } from "lucide-react";
 import { playKey, playlistTotalSecs, type ScreenLayout } from "@shared/model";
+import { FACT_SEP } from "@/lib/mediaFacts";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useQueuePerformer } from "@/hooks/useQueuePerformer";
@@ -240,7 +241,7 @@ export function QueueTab({
                 attrs={{ "data-tray-row": "queue" }}
                 title={md?.title ?? md?.name ?? "—"}
                 subtitle={
-                  [performerOf(md) ?? md?.artist, md?.album].filter(Boolean).join(" — ") ||
+                  [performerOf(md) ?? md?.artist, md?.album].filter(Boolean).join(FACT_SEP) ||
                   undefined
                 }
                 kind="track"
@@ -310,7 +311,7 @@ function DiscTab({
                 dense
                 attrs={{ "data-tray-row": "disc" }}
                 title={title}
-                subtitle={[disc.artist, disc.album].filter(Boolean).join(" — ") || undefined}
+                subtitle={[disc.artist, disc.album].filter(Boolean).join(FACT_SEP) || undefined}
                 kind="track"
                 artUrl={disc.artUrl}
                 playing={playing}
@@ -617,8 +618,9 @@ export function RecentTab({ density }: { density: TrayDensity }): React.JSX.Elem
         const ref = fromRecent(entry);
         const title = entry.isRadio ? (entry.station ?? entry.title) : entry.title;
         const subtitle =
-          (entry.isRadio ? entry.title : [entry.artist, entry.album].filter(Boolean).join(" — ")) ||
-          undefined;
+          (entry.isRadio
+            ? entry.title
+            : [entry.artist, entry.album].filter(Boolean).join(FACT_SEP)) || undefined;
         // Radio and songless rows carry no identity to replay — no stream URL
         // is stored for them — so they read as history, not as buttons.
         const play = ref ? () => void playRefNow(ref) : undefined;
