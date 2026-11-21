@@ -1,6 +1,6 @@
 import { knownServerHost } from "../media/upnpBrowser";
 import { loggedFetch } from "../netlog";
-import { allowed } from "./fetchGuard";
+import { allowed, localOnly } from "./fetchGuard";
 import { mediaType } from "@shared/keys";
 
 /**
@@ -50,7 +50,8 @@ export interface PictureLimits {
   timeoutMs: number;
   headers?: Record<string, string>;
   /** Shown in the requests console (the renderer's own asks); the thumbnail cache's origin
-   *  fetches are not, or a first browse would fill it. */
+   *  fetches on the local network are not, or a first browse would fill it. A hop to the
+   *  internet always is. */
   logged: boolean;
 }
 
@@ -70,7 +71,12 @@ export async function fetchPicture(
   const init: RequestInit = { signal, redirect: "manual", headers: limits.headers };
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     if (!(await allowed(url, trusted))) return null;
-    const res = limits.logged ? await loggedFetch("art", url.href, init) : await fetch(url, init);
+    // a hop that leaves the local network is always logged: the requests console lists every
+    // request to the internet (0.16.0 left the thumbnail cache's origin fetches out of it)
+    const res =
+      limits.logged || !localOnly(url.hostname)
+        ? await loggedFetch("art", url.href, init)
+        : await fetch(url, init);
     if (res.status >= 300 && res.status < 400) {
       const next = res.headers.get("location");
       if (!next) return null;

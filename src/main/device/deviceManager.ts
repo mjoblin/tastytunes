@@ -928,7 +928,9 @@ export class DeviceManager {
   }
 
   /** The OS notification for a track change while the app is unfocused; see trackNotifier.ts. */
-  private readonly trackNotifier = new TrackNotifier();
+  private readonly trackNotifier = new TrackNotifier(() =>
+    this.connection.phase === "connected" ? this.connection.host : null,
+  );
 
   // ------------------------------------------------------------------ MCP status
 
@@ -961,7 +963,10 @@ export class DeviceManager {
 
   /** The recently played log, favorites and playlists: each write pushes its list to every
    *  window (see collections.ts). */
-  readonly collections = new Collections((msg) => this.push(msg));
+  readonly collections = new Collections(
+    (msg) => this.push(msg),
+    () => (this.connection.phase === "connected" ? this.connection.host : null),
+  );
 
   /**
    * The queue-writing engine (playlist activation, queue undo, content

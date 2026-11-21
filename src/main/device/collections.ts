@@ -15,6 +15,7 @@ import {
   setPlaylistItems,
 } from "../data/playlists";
 import { CAPTURE_DELAY_MS, captureRecentArt, decorateRecents } from "../lookups/recentArt";
+import { artHostTrust } from "../lookups/artFetch";
 
 /** What the recents log reads off the device besides the play_state: the source and the streamer. */
 export interface PlayContext {
@@ -29,7 +30,11 @@ export interface PlayContext {
  * manager's only for its push relay, which they borrow here.
  */
 export class Collections {
-  constructor(private readonly push: (msg: PushMessage) => void) {}
+  constructor(
+    private readonly push: (msg: PushMessage) => void,
+    /** The streamer connected now, whose pictures a capture may fetch (lookups/artFetch). */
+    private readonly host: () => string | null = () => null,
+  ) {}
 
   // ------------------------------------------------------------- recently played
 
@@ -93,7 +98,7 @@ export class Collections {
       const key = recentKey(list[0]);
       setTimeout(() => {
         const head = getRecents()[0];
-        if (head && recentKey(head) === key) captureRecentArt(head);
+        if (head && recentKey(head) === key) captureRecentArt(head, artHostTrust(this.host()));
       }, CAPTURE_DELAY_MS);
     }
     if (changed) this.push({ kind: "recents", data: decorateRecents(list) });

@@ -15,6 +15,7 @@ import { app } from "electron";
 import electronUpdater from "electron-updater";
 import { version as appVersion } from "../../../package.json";
 import { REPO_URL } from "@shared/ipc";
+import { noteRequest } from "../netlog";
 import { type UpdateCheckResult, type UpdateState } from "@shared/model";
 import { getSettings } from "../data/persist";
 import {
@@ -160,6 +161,27 @@ let checking: ReturnType<typeof autoUpdater.checkForUpdates> | null = null;
  * download takes whichever check answered last.
  */
 function checkForUpdates(): ReturnType<typeof autoUpdater.checkForUpdates> {
+  // in the requests console as it ends (electron-updater's own request, outside loggedFetch)
+  const at = Date.now();
+  const logged = checkFeed();
+  void logged.then(
+    () =>
+      noteRequest("github", `${REPO_URL}/releases`, {
+        status: 200,
+        ms: Date.now() - at,
+        error: false,
+      }),
+    () =>
+      noteRequest("github", `${REPO_URL}/releases`, {
+        status: null,
+        ms: Date.now() - at,
+        error: true,
+      }),
+  );
+  return logged;
+}
+
+function checkFeed(): ReturnType<typeof autoUpdater.checkForUpdates> {
   if (!PRERELEASE) return autoUpdater.checkForUpdates();
   if (checking) return checking;
   checking = (async () => {

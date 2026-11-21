@@ -85,3 +85,27 @@ export async function loggedFetch(
     throw err;
   }
 }
+
+/**
+ * A request made elsewhere, put in the log as it ends: a picture a window loaded itself (Chromium's,
+ * seen by the session, app/permissions logWindowPictures) and the update check (electron-updater's,
+ * app/updater). The requests console lists every request to the internet (0.16.0 missed both).
+ */
+export function noteRequest(
+  service: ServiceId,
+  url: string,
+  outcome: { status: number | null; ms: number | null; error: boolean },
+  method = "GET",
+): void {
+  const entry: NetRequestEntry = {
+    id: nextId++,
+    at: Date.now(),
+    service,
+    method,
+    url: redactUrl(url),
+    ...outcome,
+  };
+  entries.push(entry);
+  if (entries.length > NET_RING_SIZE) entries.shift();
+  broadcast(entry);
+}
