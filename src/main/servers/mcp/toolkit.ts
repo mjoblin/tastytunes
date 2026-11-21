@@ -1059,10 +1059,18 @@ export function streamerHostOf(
   devices: ReadonlyArray<{ friendlyName: string; udn: string; host: string }>,
 ): { host: string } | { error: string } {
   const key = nameKey(arg);
-  const known = devices.find(
-    (d) => nameKey(d.friendlyName) === key || nameKey(d.udn) === key || nameKey(d.host) === key,
-  );
-  if (known) return { host: known.host };
+  // by udn or host it is one streamer; by name it can be two (two rooms both called "Evo"), and
+  // the first was taken unsaid (0.16.0): two streamers by one name are said, with their hosts
+  const exact = devices.find((d) => nameKey(d.udn) === key || nameKey(d.host) === key);
+  if (exact) return { host: exact.host };
+  const byName = new Map<string, string>();
+  for (const d of devices) if (nameKey(d.friendlyName) === key) byName.set(d.udn, d.host);
+  if (byName.size > 1)
+    return {
+      error: `More than one streamer is called '${arg}' (at ${[...byName.values()].join(" and ")}). Pass the host instead.`,
+    };
+  const [named] = byName.values();
+  if (named) return { host: named };
   const raw = arg.trim();
   const address = /^([\w.-]+)(?::\d+)?$/.exec(raw);
   if (address && /[.:]/.test(raw)) {

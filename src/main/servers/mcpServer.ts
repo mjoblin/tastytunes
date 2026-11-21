@@ -437,10 +437,12 @@ export class McpBridge {
       };
     }
     const remote = this.remotes.get(host);
-    if (!(await remote.ready()))
+    if (!(await remote.ready())) {
+      this.remotes.forget(host);
       throw new Error(
         `Couldn't reach ${device} at ${host}. It may be off the network, or asleep in eco standby.`,
       );
+    }
     const snapshotOf = (): ConnectedSnapshot => ({
       ...this.dm.snapshot(),
       connection: { phase: "connected", host },

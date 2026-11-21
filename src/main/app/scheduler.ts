@@ -62,30 +62,83 @@ interface Fireable {
   fadeInTo(target: number): Promise<void>;
 }
 
+/** The window's streamer by udn: the one it shows, or while it reconnects the one it last used
+ *  (so a schedule naming it waits for the window rather than opening a second connection). */
+function windowUdn(dm: DeviceManager): string | null {
+  const snap = dm.snapshot();
+  if (snap.systemInfo?.udn) return snap.systemInfo.udn;
+  const settings = getSettings();
+  return settings.knownDevices.find((d) => d.host === settings.lastHost)?.udn ?? null;
+}
+
+/** A schedule that names no streamer, or the window's, acts through the window's connection. */
+function isWindows(dm: DeviceManager, s: Schedule): boolean {
+  const named = s.streamer?.udn ?? null;
+  return named == null || named === windowUdn(dm);
+}
+
+/** The streamer a schedule acts on, with what the missed-schedule offer reads of it: whether it
+ *  is playing, and its presets' names. */
+interface ScheduleTarget {
+  fireable: Fireable;
+  playing(): boolean;
+  presetName(id: number): string | null;
+}
+
 /**
  * THE STREAMER A SCHEDULE ACTS ON (0.16.0): the one the window shows when it names none or that
  * one, while connected; another it names through the agents' pool of background connections
- * (device/remoteStreamer), found by its udn in the device book or on the network. Null when it
- * can't be reached now: a missed schedule is a log line.
+ * (device/remoteStreamer), found by its udn in the device book or on the network, with a fresh
+ * sweep when neither has it (a streamer the window never connected to, missed by the sweep at
+ * start-up). Null when it can't be reached now, said in the app's log.
  */
-async function targetOf(dm: DeviceManager, s: Schedule): Promise<Fireable | null> {
-  const snap = dm.snapshot();
-  const named = s.streamer?.udn ?? null;
-  if (named == null || named === snap.systemInfo?.udn)
-    return snap.connection.phase === "connected" ? dm : null;
-  const known = [...snap.devices, ...getSettings().knownDevices].find((d) => d.udn === named);
-  if (!known) return null;
+async function targetOf(dm: DeviceManager, s: Schedule): Promise<ScheduleTarget | null> {
+  const name = s.streamer?.name ?? "the streamer";
+  if (isWindows(dm, s)) {
+    if (dm.snapshot().connection.phase !== "connected") return null;
+    return {
+      fireable: dm,
+      playing: () => dm.snapshot().playState?.state === "play",
+      presetName: (id) => dm.snapshot().presets?.presets?.find((p) => p.id === id)?.name ?? null,
+    };
+  }
+  const named = s.streamer?.udn;
+  const find = (): { host: string } | undefined =>
+    [...dm.snapshot().devices, ...getSettings().knownDevices].find((d) => d.udn === named);
+  let known = find();
+  if (!known) {
+    await dm.discover();
+    known = find();
+  }
+  if (!known) {
+    dm.log(
+      "warn",
+      "schedule",
+      `${name} isn't on the network: the schedule at ${s.time} didn't run`,
+    );
+    return null;
+  }
   const remote = remoteStreamers.get(known.host);
-  return (await remote.ready(8000)) ? remote : null;
+  if (!(await remote.ready(8000))) {
+    remoteStreamers.forget(known.host);
+    dm.log(
+      "warn",
+      "schedule",
+      `${name} didn't answer at ${known.host}: the schedule at ${s.time} didn't run`,
+    );
+    return null;
+  }
+  return {
+    fireable: remote,
+    playing: () => remote.cache.playState?.state === "play",
+    presetName: (id) => remote.cache.presets?.presets?.find((p) => p.id === id)?.name ?? null,
+  };
 }
 
 async function fire(dm: DeviceManager, s: Schedule): Promise<void> {
   const target = await targetOf(dm, s);
-  if (!target) {
-    console.warn(`schedule ${s.id}: ${s.streamer?.name ?? "the streamer"} couldn't be reached`);
-    return;
-  }
-  return fireOn(target, s);
+  if (!target) return;
+  return fireOn(target.fireable, s);
 }
 
 async function fireOn(dm: Fireable, s: Schedule): Promise<void> {
@@ -188,23 +241,27 @@ export function catchUpOnResume(dm: DeviceManager): void {
   if (slept == null) return;
 
   let waited = 0;
-  const attempt = (): void => {
-    if (dm.snapshot().connection.phase !== "connected") {
-      waited += RECONNECT_POLL_MS;
-      if (waited > RECONNECT_GRACE_MS) return;
-      setTimeout(attempt, RECONNECT_POLL_MS);
-      return;
-    }
-    // Already listening? Then the offer is noise, and recalling a preset over
-    // it would be worse — the state-guard idiom wake-on-intent uses.
-    if (dm.snapshot().playState?.state === "play") return;
-
+  const attempt = async (): Promise<void> => {
     const pick = pickCatchUp(getSettings().schedules, {
       now: Date.now(),
       sleptAt: slept,
       fired: lastFired,
     });
     if (!pick) return;
+    // the window's streamer waits for the window's reconnect; another is reached on its own
+    if (isWindows(dm, pick.schedule) && dm.snapshot().connection.phase !== "connected") {
+      waited += RECONNECT_POLL_MS;
+      if (waited > RECONNECT_GRACE_MS) return;
+      setTimeout(() => void attempt(), RECONNECT_POLL_MS);
+      return;
+    }
+    // the checks and the offer read the streamer the schedule names (0.16.0: they read the
+    // window's, so a schedule for another room was offered by the window's state and preset)
+    const target = await targetOf(dm, pick.schedule);
+    if (!target) return;
+    // Already listening? Then the offer is noise, and recalling a preset over
+    // it would be worse — the state-guard idiom wake-on-intent uses.
+    if (target.playing()) return;
     // Claim the instance even though we only OFFERED: the Map means "don't act
     // on this firing again", and a second resume must not re-ask.
     lastFired.set(pick.schedule.id, pick.instance);
@@ -213,9 +270,9 @@ export function catchUpOnResume(dm: DeviceManager): void {
     // banner has been swiped away. Acting on either clears both.
     offered = pick;
     dm.setMissedSchedule({ scheduleId: pick.schedule.id, dueAt: pick.dueAt });
-    offerCatchUp(dm, pick);
+    offerCatchUp(dm, pick, target, !isWindows(dm, pick.schedule));
   };
-  setTimeout(attempt, RECONNECT_POLL_MS);
+  setTimeout(() => void attempt(), RECONNECT_POLL_MS);
 }
 
 /** The live offer, so the in-app surface and the notification act as one. */
@@ -228,7 +285,11 @@ export function runMissedSchedule(dm: DeviceManager): void {
   dm.setMissedSchedule(null);
   if (!pick) return;
   void fire(dm, pick.schedule).catch((e) =>
-    console.warn(`catch-up ${pick.schedule.id} failed:`, errorMessage(e)),
+    dm.log(
+      "warn",
+      "schedule",
+      `the missed schedule at ${pick.schedule.time} failed: ${errorMessage(e)}`,
+    ),
   );
 }
 
@@ -239,15 +300,22 @@ export function dismissMissedSchedule(dm: DeviceManager): void {
 }
 
 /** The offer itself. Clicking it runs the schedule exactly as the tick would. */
-function offerCatchUp(dm: DeviceManager, pick: CatchUpPick): void {
+function offerCatchUp(
+  dm: DeviceManager,
+  pick: CatchUpPick,
+  target: ScheduleTarget,
+  another: boolean,
+): void {
   if (!Notification.isSupported()) return;
   const { schedule: s } = pick;
-  const preset = dm.snapshot().presets?.presets?.find((p) => p.id === s.presetId);
-  const what = preset?.name ?? (s.presetId != null ? `preset ${s.presetId}` : null);
+  const what =
+    s.presetId != null ? (target.presetName(s.presetId) ?? `preset ${s.presetId}`) : null;
+  // a schedule for another streamer says which, so the offer isn't read as the window's
+  const on = another && s.streamer ? ` on ${s.streamer.name}` : "";
 
   const n = new Notification({
     title: what ? `Missed “${what}”` : "Missed a scheduled start",
-    body: `Due at ${s.time}, while your computer was asleep. Start it now?`,
+    body: `Due at ${s.time}${on}, while your computer was asleep. Start it now?`,
     // Audible on purpose: a silent banner for a missed alarm is a banner you
     // find later, which is the failure this whole feature exists to fix.
     silent: false,
@@ -273,12 +341,13 @@ export function startScheduler(dm: DeviceManager): void {
       if (lastFired.get(s.id) === instance) continue;
       // one that names no other streamer waits for the window's connection, as always; one that
       // does is reached on its own (targetOf)
-      const another = s.streamer != null && s.streamer.udn !== dm.snapshot().systemInfo?.udn;
-      if (!another && dm.snapshot().connection.phase !== "connected") continue;
+      if (isWindows(dm, s) && dm.snapshot().connection.phase !== "connected") continue;
       lastFired.set(s.id, instance);
       // commands throw on a half-dead socket — a missed schedule is a log
       // line, never an unhandled rejection
-      void fire(dm, s).catch((e) => console.warn(`schedule ${s.id} failed:`, errorMessage(e)));
+      void fire(dm, s).catch((e) =>
+        dm.log("warn", "schedule", `the schedule at ${s.time} failed: ${errorMessage(e)}`),
+      );
     }
   };
   setInterval(check, TICK_MS);
