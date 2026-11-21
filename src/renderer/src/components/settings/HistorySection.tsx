@@ -121,6 +121,13 @@ export function HistorySection({ settings, save }: SectionProps): React.JSX.Elem
             of the record is unaffected).
           </div>
         )}
+        {stats != null && stats.laterLines > 0 && (
+          <div className="rounded-lg bg-bg ring-1 ring-edge px-3 py-2.5 text-[12px] text-dim">
+            {stats.laterLines === 1
+              ? "1 line from a later version of TastyTunes is kept in the record but not counted."
+              : `${stats.laterLines} lines from a later version of TastyTunes are kept in the record but not counted.`}
+          </div>
+        )}
         {stats?.writeError != null && (
           <div className="rounded-lg bg-bg ring-1 ring-alert/40 px-3 py-2.5 text-[12px] text-alert">
             Couldn&apos;t write to the record: {stats.writeError}

@@ -14,6 +14,7 @@ import {
   KEEP,
   keepAsFound,
   keepVersionCopy,
+  laterVersion,
   onSavedNotes,
   readSaved,
   type SavedNote,
@@ -192,5 +193,26 @@ describe("keepVersionCopy", () => {
     keepVersionCopy(dir, "0.16.0", FILES);
     expect(readdirSync(join(dir, "backups"))).toEqual(["last-version"]);
     expect(notes).toEqual([]);
+  });
+});
+
+describe("a later version's copy, through a rollback", () => {
+  it("orders versions, a release after its candidates", () => {
+    expect(laterVersion("1.1.0", "1.0.9")).toBe(true);
+    expect(laterVersion("1.0.0", "1.0.0-rc.8")).toBe(true);
+    expect(laterVersion("1.0.0-rc.3", "1.0.0-rc.2")).toBe(true);
+    expect(laterVersion("1.0.0-rc.2", "1.0.0")).toBe(false);
+    expect(laterVersion("an earlier version", "1.0.0")).toBe(false);
+  });
+
+  it("keeps the newest copy from a later version however many launches prune", () => {
+    writeFileSync(join(dir, "settings.json"), '{"theme":"light"}');
+    keepVersionCopy(dir, "1.1.0", ["settings.json"], at(0));
+    // back to 1.0.0: the files as 1.1.0 left them are copied, then candidates come and go
+    keepVersionCopy(dir, "1.0.0", ["settings.json"], new Date(2026, 11, 1, 12));
+    for (const [i, v] of ["1.0.1-rc.1", "1.0.1-rc.2", "1.0.1-rc.3", "1.0.1-rc.4"].entries())
+      keepVersionCopy(dir, v, ["settings.json"], new Date(2026, 11, 2 + i, 12));
+    const kept = readdirSync(join(dir, "backups"));
+    expect(kept).toContain("2026-12-01T12-00-00 from 1.1.0");
   });
 });

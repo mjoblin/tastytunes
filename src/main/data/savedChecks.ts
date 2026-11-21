@@ -8,6 +8,30 @@ import { DEFAULT_SETTINGS, type AppSettings, type Favorite, type Playlist } from
 // and each is named, for the log. A file that matches passes exactly as it came. Never a throw.
 // favorites.json and playlists.json stay bare lists: a version from before 0.16.0 reads anything
 // else as empty and would save over it.
+//
+// 1.0 IS THE OLDEST READER A LATER VERSION'S FILE WILL MEET (an update then a rollback, a backup
+// restored), so what it doesn't know it carries through rather than drops: a row that is a record
+// but not one of the shapes this version reads (a later kind of favorite, a later playlist item)
+// is kept out of the app and written back at its place; a list a later version wrapped in an
+// object ({..., items: [...]}) is read through it and written back in the form found. Only a row
+// that isn't a record at all is left out, the file copied aside first (data/savedFiles).
+
+/** What a load kept out of the app but writes back as it found it. */
+export interface Carried {
+  rows: Array<{ at: number; row: unknown }>;
+  envelope: Record<string, unknown> | null;
+  /** What was kept, for the log (no copy aside: nothing is lost). */
+  notes: string[];
+}
+export const carriedNone = (): Carried => ({ rows: [], envelope: null, notes: [] });
+
+/** The list as written: the app's rows with the carried ones back at their places, in the form
+ *  the file was found in. */
+export function withCarried<T>(list: readonly T[], carried: Carried): unknown {
+  const out: unknown[] = [...list];
+  for (const { at, row } of carried.rows) out.splice(Math.min(at, out.length), 0, row);
+  return carried.envelope ? { ...carried.envelope, items: out } : out;
+}
 
 type Kind = "string" | "number" | "boolean" | "list" | "object";
 
@@ -75,14 +99,28 @@ function checkList<T>(
   parsed: unknown,
   rowOf: (row: unknown, at: string, notes: string[]) => Record<string, unknown> | null,
   notes: string[],
+  carried?: Carried,
 ): T[] {
   if (parsed === undefined) return [];
-  if (!Array.isArray(parsed)) {
+  let rows = parsed;
+  if (carried && isRecord(parsed) && Array.isArray(parsed.items)) {
+    const { items, ...envelope } = parsed;
+    carried.envelope = envelope;
+    rows = items;
+  }
+  if (!Array.isArray(rows)) {
     notes.push(`it held ${kindOf(parsed)}, not a list`);
     return [];
   }
-  return parsed.flatMap((row, i) => {
-    const kept = rowOf(row, `[${i}]`, notes);
+  return rows.flatMap((row, i) => {
+    const own: string[] = [];
+    const kept = rowOf(row, `[${i}]`, own);
+    if (!kept && carried && isRecord(row)) {
+      carried.rows.push({ at: i, row });
+      carried.notes.push(`[${i}] isn't a row this version reads, kept as it was`);
+      return [];
+    }
+    notes.push(...own);
     return kept ? [kept as T] : [];
   });
 }
@@ -112,7 +150,7 @@ const STATION: Record<string, Field> = {
 };
 
 /** favorites.json: a station or an album or track a row, each by its kind's fields. */
-export function checkFavorites(parsed: unknown, notes: string[]): Favorite[] {
+export function checkFavorites(parsed: unknown, notes: string[], carried?: Carried): Favorite[] {
   return checkList<Favorite>(
     parsed,
     (row, at, n) => {
@@ -124,6 +162,7 @@ export function checkFavorites(parsed: unknown, notes: string[]): Favorite[] {
       return checkRow(row, at, kind === "station" ? STATION : MEDIA, n);
     },
     notes,
+    carried,
   );
 }
 
@@ -148,8 +187,22 @@ const PLAYLIST: Record<string, Field> = {
   lastMissing: maybe("list", "string"),
 };
 
+/** What a playlists load carried through: whole playlists, and items within a playlist by its id. */
+export interface PlaylistsCarried {
+  lists: Carried;
+  items: Map<string, Carried>;
+}
+export const playlistsCarriedNone = (): PlaylistsCarried => ({
+  lists: carriedNone(),
+  items: new Map(),
+});
+
 /** playlists.json: each playlist by its fields, and each of its items by theirs. */
-export function checkPlaylists(parsed: unknown, notes: string[]): Playlist[] {
+export function checkPlaylists(
+  parsed: unknown,
+  notes: string[],
+  carried?: PlaylistsCarried,
+): Playlist[] {
   return checkList<Playlist>(
     parsed,
     (row, at, n) => {
@@ -157,13 +210,37 @@ export function checkPlaylists(parsed: unknown, notes: string[]): Playlist[] {
       if (!list) return null;
       const items = list.items as unknown[];
       const kept = items.flatMap((it, j) => {
-        const item = checkRow(it, `${at}.items[${j}]`, ITEM, n);
+        const own: string[] = [];
+        const item = checkRow(it, `${at}.items[${j}]`, ITEM, own);
+        if (!item && carried && isRecord(it)) {
+          const c = carried.items.get(list.id as string) ?? carriedNone();
+          c.rows.push({ at: j, row: it });
+          carried.items.set(list.id as string, c);
+          carried.lists.notes.push(
+            `${at}.items[${j}] isn't an item this version reads, kept as it was`,
+          );
+          return [];
+        }
+        n.push(...own);
         return item ? [item] : [];
       });
       return kept.length === items.length ? list : { ...list, items: kept };
     },
     notes,
+    carried?.lists,
   );
+}
+
+/** The playlists as written: each with its carried items back, and the carried playlists. */
+export function withCarriedPlaylists(
+  list: readonly Playlist[],
+  carried: PlaylistsCarried,
+): unknown {
+  const lists = list.map((p) => {
+    const c = carried.items.get(p.id);
+    return c ? { ...p, items: withCarried(p.items, c) } : p;
+  });
+  return withCarried(lists, carried.lists);
 }
 
 /** The settings whose default is null, and the kind each holds when it isn't. */

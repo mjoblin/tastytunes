@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { app } from "electron";
 import { jsonFileStore } from "./jsonStore";
-import { checkPlaylists } from "./savedChecks";
+import { checkPlaylists, playlistsCarriedNone, withCarriedPlaylists } from "./savedChecks";
 import {
   MAX_PLAYLISTS,
   MAX_PLAYLIST_ITEMS,
@@ -26,10 +26,18 @@ function sortNewest(list: Playlist[]): Playlist[] {
   return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+// a later version's playlists and items this one doesn't read, kept out of the app and written back
+let carried = playlistsCarriedNone();
+
 const store = jsonFileStore<Playlist[]>({
   pathOf: () => join(app.getPath("userData"), "playlists.json"),
   scope: "playlists",
-  load: (parsed, setAside) => sortNewest(checkPlaylists(parsed, setAside)),
+  load: (parsed, setAside) => {
+    carried = playlistsCarriedNone();
+    return sortNewest(checkPlaylists(parsed, setAside, carried));
+  },
+  encode: (list) => withCarriedPlaylists(list, carried),
+  kept: () => carried.lists.notes,
 });
 
 export function getPlaylists(): Playlist[] {

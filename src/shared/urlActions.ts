@@ -56,6 +56,23 @@ export const URL_EXAMPLES = [
   "toggle-mini",
 ] as const;
 
+/** THE SCREEN NAMES A LINK MAY USE, a promise from 1.0 (screen/<name>): a fixed table rather than
+ *  the Go menu's labels, which are layout and may be renamed. Each names a screen's key. */
+export const SCREEN_LINK_NAMES: Readonly<Record<string, string>> = {
+  "now-playing": "now-playing",
+  queue: "queue",
+  search: "search",
+  library: "library",
+  presets: "presets",
+  playlists: "playlists",
+  favorites: "favorites",
+  radio: "radio",
+  history: "recently-played",
+  "recently-played": "recently-played",
+  device: "device",
+  settings: "settings",
+};
+
 const PLAIN: Record<string, StreamerCommand> = {
   "toggle-play": { type: "togglePlayback" },
   play: { type: "play" },

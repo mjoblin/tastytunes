@@ -258,3 +258,29 @@ describe("a year past the argument limit reads whole", () => {
     expect(events.filter((e) => e.at >= at && e.at < at + 150_000)).toHaveLength(150_000);
   });
 });
+
+describe("a later version's lines are counted apart, never as plays", () => {
+  it("reads a known kind at version 1, and leaves an unknown kind or a later version uncounted", () => {
+    const dir = join(app.getPath("userData"), "history");
+    mkdirSync(dir, { recursive: true });
+    const at = Date.UTC(2044, 0, 1);
+    const line = (extra: Record<string, unknown>): string =>
+      JSON.stringify({
+        v: 1,
+        at,
+        tzOffsetMin: 0,
+        kind: "play",
+        title: "Tin Weather",
+        playedSeconds: 200,
+        duration: 300,
+        ...extra,
+      });
+    writeFileSync(
+      join(dir, "2044.jsonl"),
+      [line({}), line({ kind: "stop" }), line({ v: 2 }), line({ at: at + 1 })].join("\n") + "\n",
+    );
+    const year = listeningRecord.readYear(2044);
+    expect(year.events.map((e) => e.kind)).toEqual(["play", "play"]);
+    expect(year.unreadable).toBe(0);
+  });
+});

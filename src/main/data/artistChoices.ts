@@ -69,10 +69,22 @@ function own(c: ArtistChoice): ArtistChoice {
   return { kind: c.kind, url: c.url, album: c.album, serverUdn: c.serverUdn };
 }
 
+// a later version's choices this one doesn't read (1.0 is the oldest reader such a file will
+// meet), by key: kept out of the app and written back, and while there is one the sweep waits
+let carried: Record<string, unknown> = {};
+let carriedNotes: string[] = [];
+
 const store = jsonFileStore<Record<string, Stored>>({
   pathOf: () => join(app.getPath("userData"), "artist-choices.json"),
   scope: "artist-choices",
+  encode: (next) => {
+    const back = Object.fromEntries(Object.entries(carried).filter(([k]) => !(k in next)));
+    return { ...back, ...next };
+  },
+  kept: () => carriedNotes,
   load: (parsed, setAside) => {
+    carried = {};
+    carriedNotes = [];
     const out: Record<string, Stored> = {};
     if (parsed === undefined) return out;
     if (!isRecord(parsed)) {
@@ -81,7 +93,10 @@ const store = jsonFileStore<Record<string, Stored>>({
     }
     for (const [k, v] of Object.entries(parsed)) {
       if (!isArtistChoice(v)) {
-        setAside.push(`the choice for "${k}" isn't one this version reads, left out`);
+        if (isRecord(v)) {
+          carried[nameKey(k)] = v;
+          carriedNotes.push(`the choice for "${k}" isn't one this version reads, kept as it was`);
+        } else setAside.push(`the choice for "${k}" isn't one this version reads, left out`);
         continue;
       }
       const { at, copy } = v as { at?: unknown; copy?: unknown };
@@ -143,7 +158,8 @@ export function copyKept(c: StoredChoice): boolean {
  *  or with a choice left out names too few, and every other picture would go with the next
  *  choice, a picture picked from disk among them. */
 function sweepPicked(choices: Record<string, Stored>): void {
-  if (!store.readWhole()) return;
+  // a carried choice (a later version's) may name its files where this version doesn't look
+  if (!store.readWhole() || Object.keys(carried).length > 0) return;
   const used = new Set(
     Object.values(choices).flatMap((c) => (c.kind === "file" ? [c.file] : c.copy ? [c.copy] : [])),
   );
