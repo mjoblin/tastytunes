@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from "electron";
+import { BrowserWindow, screen, type WebContents } from "electron";
 import { join } from "node:path";
 import { IPC, type MenuCommand, type StreamerCommand } from "@shared/ipc";
 import { getSettings, updateSettings } from "../data/persist";
@@ -8,6 +8,7 @@ import { currentUpdateState } from "./updater";
 import { homeWorkArea, isOnScreen } from "./windowPlacement";
 import { deviceManager } from "./runtime";
 import { reloadOnCrash } from "./crashReload";
+import { windowStuck } from "./bootFailure";
 import { devOverride } from "./devOverride";
 
 // The main window and the mini player, and the callbacks the app menu and the tray use to
@@ -69,6 +70,18 @@ function showMain(): void {
 export function focusMain(): void {
   if (TEST_INACTIVE || !mainWindow || mainWindow.isDestroyed()) return;
   mainWindow.focus();
+}
+
+/** How long the main window has to come up: its page asks for the app's state (IPC.getSnapshot)
+ *  first thing once its script runs, so a page that loads blank or a script that fails never
+ *  asks, and the stuck dialog says so (app/bootFailure windowStuck). */
+const READY_MS = 30_000;
+let mainAsked = false;
+
+/** The main window's page asked for the app's state: it is up. */
+export function noteWindowAsked(sender: WebContents): void {
+  if (mainWindow && !mainWindow.isDestroyed() && sender === mainWindow.webContents)
+    mainAsked = true;
 }
 
 export function createWindow(): void {
@@ -149,7 +162,18 @@ export function createWindow(): void {
     persistBounds();
   });
 
-  reloadOnCrash(mainWindow, "main", (text) => deviceManager.log("warn", "app", text));
+  reloadOnCrash(
+    mainWindow,
+    "main",
+    (text) => deviceManager.log("warn", "app", text),
+    () => void windowStuck("stopped"),
+  );
+  // the window has a while to come up (its page asks for the app's state, noteWindowAsked)
+  mainAsked = false;
+  const made = mainWindow;
+  setTimeout(() => {
+    if (!mainAsked && !made.isDestroyed()) void windowStuck("never-ready");
+  }, READY_MS);
 
   // A window created (or reloaded) after a state change missed the push.
   mainWindow.webContents.on("did-finish-load", () => {

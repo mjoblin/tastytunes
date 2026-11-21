@@ -205,3 +205,28 @@ export function installUpdate(): void {
   if (state.phase !== "downloaded") return;
   autoUpdater.quitAndInstall();
 }
+
+/** The version an update offers now (available to download, or downloaded), or null. */
+export function updateOffered(): string | null {
+  return state.canDownload || state.phase === "downloaded" ? state.version : null;
+}
+
+/**
+ * AN UPDATE WITH NO WINDOW TO CLICK THROUGH (0.16.0-rc.8, toward 1.0): Download and Restart live in
+ * the window, so a window that never came up, or stopped and was left closed, left no route to the
+ * next version. The stuck dialog (app/bootFailure) calls this: checked if need be, downloaded,
+ * then installed and the app restarted. False when there is nothing to install.
+ */
+export async function updateFromMain(): Promise<boolean> {
+  if (!updaterUsable()) return false;
+  if (state.phase !== "downloaded") {
+    if (!state.canDownload) {
+      const found = await checkUpdatesOnDemand();
+      if (found.status !== "update") return false;
+    }
+    await downloadUpdate();
+  }
+  if (state.phase !== "downloaded") return false;
+  installUpdate();
+  return true;
+}
