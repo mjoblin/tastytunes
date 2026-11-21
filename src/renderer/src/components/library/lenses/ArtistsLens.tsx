@@ -75,6 +75,9 @@ export function focusArtistsLens(name: string): void {
  *  a half of context above it, so the eye reads where it is rather than
  *  finding the row pinned to the edge. */
 const REVEAL_PAD = 84;
+/** The Artists column's width (proportional: fixed widths starved the tracks column), and the
+ *  filter box's above it, so the box lines up with the column it filters. */
+const ARTISTS_COLUMN = "w-[24%] min-w-[220px] max-w-[320px]";
 /** Past this many artists the column renders only the rows near the viewport
  *  (useWindowedList); below it, every row, exactly as before (0.11.0 sweep, for review). */
 const WINDOW_ARTISTS_ABOVE = 150;
@@ -391,12 +394,16 @@ export function ArtistsLens({
       {/* the filter sits ABOVE the columns (left — over the artists column
           it scopes), so all three columns' headings and rows stay aligned */}
       <div className={`shrink-0 pb-3 flex items-center ${GAP_BETWEEN}`}>
-        <FilterInput
-          value={mem.filter}
-          onChange={(filter) => setMem({ filter })}
-          shown={shownArtists.length}
-          total={artists.length}
-        />
+        {/* in the columns, the box is the Artists column's width, so it reads as that column's */}
+        <div className={cards ? "contents" : cx(ARTISTS_COLUMN, "shrink-0")}>
+          <FilterInput
+            value={mem.filter}
+            onChange={(filter) => setMem({ filter })}
+            shown={shownArtists.length}
+            total={artists.length}
+            fill={!cards}
+          />
+        </div>
         <Chip
           state={albumsOnly ? "active" : "idle"}
           aria-pressed={albumsOnly}
@@ -451,7 +458,10 @@ export function ArtistsLens({
           {/* Artists ------------------------------------------------------- */}
           {/* proportional columns: fixed widths starved the tracks column (and
           its titles) at normal window sizes — tracks gets the largest share */}
-          <div className="w-[24%] min-w-[220px] max-w-[320px] shrink-0 min-h-0 flex flex-col">
+          <div
+            className={cx(ARTISTS_COLUMN, "shrink-0 min-h-0 flex flex-col")}
+            data-lens-artists-column
+          >
             {colHeading(
               "Artists",
               mem.filter || albumsOnly

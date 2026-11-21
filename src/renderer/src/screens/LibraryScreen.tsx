@@ -260,9 +260,15 @@ export function LibraryScreen(): React.JSX.Element {
         : undefined;
     return own ? albumSecs(folderIndex.tracksOf(own)) : null;
   };
+  // results grouped by library (the root's search) name it in each group's heading, so a copy's
+  // chip there leaves the library out
+  const libraryShown = crossMode && crossState != null;
   const copyBadgeOf = (node: MediaNode): string | undefined =>
     isAlbumClass(node.upnpClass) && folderPools
-      ? folderIndex.copyBadge(onServer(node), { formatShown: cards && folderDetails != null })
+      ? folderIndex.copyBadge(onServer(node), {
+          formatShown: cards && folderDetails != null,
+          libraryShown,
+        })
       : undefined;
 
   // Action feedback: the app-wide toast for failures, an accent pulse for wins.
@@ -937,7 +943,11 @@ export function LibraryScreen(): React.JSX.Element {
       note={opts.note}
       artistLabel={opts.artistLabel}
       // a result says which copy of its album it is from, as the Tracks lens's rows do
-      badge={opts.links && folderPools ? folderIndex.trackCopyBadge(onServer(node)) : undefined}
+      badge={
+        opts.links && folderPools
+          ? folderIndex.trackCopyBadge(onServer(node), { libraryShown })
+          : undefined
+      }
       badgeTip={COPY_BADGE_TIP}
       onAlbumLink={
         opts.links && node.album && linkable(node, "albums")
