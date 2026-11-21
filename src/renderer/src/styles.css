@@ -225,10 +225,12 @@
      text sits, measured on the darkest tenth of its real backgrounds). Each text color a step
      darker than it was (#241d12, #5f5749, #736c5c), its warmth kept: the old ones were tuned on
      bare paper, and most text sits on darker tinted panels and the wash (faint measured a median
-     3.9:1 where it sat). Dark mode is left as it is. */
+     3.9:1 where it sat). Dark mode is left as it is. Faint a step darker again in 0.16.0-rc.8
+     (#60594a): the lower part of a screen, where the album's wash darkens, and the selected
+     navigation item had it at 4.0 to 4.5 to 1; at #565043 the darkest measured holds 4.6. */
   --color-ink: #1a140b;
   --color-dim: #4a4338;
-  --color-faint: #60594a;
+  --color-faint: #565043;
   /* gold and the accent AS TEXT, a step deeper than the fills, rings and icons keep (gold text measured
      2.6:1); deeper still on their own wash (an active nav item); and a button's fill under
      paper-colored text (3.3:1 on the light gold). The accent follows the album art, so its deeper
@@ -1233,7 +1235,12 @@ img {
   ) {
   color: var(--color-accentink);
 }
-:root.light .bg-golddim.text-gold:not(svg) {
+:root.light .bg-golddim.text-gold:not(svg),
+/* the playing row's gold text sits on the row's own gold tint (its title 4.3:1 in the deeper ink,
+   5.5 in this), its faded forms too (History's "now") */
+:root.light
+  .row-playing
+  :is(.text-gold, .text-gold\/50, .text-gold\/70, .text-gold\/80, .text-gold\/90):not(svg) {
   color: var(--color-goldink-wash);
 }
 :root.light .bg-accentdim.text-accent:not(svg) {

@@ -59,7 +59,8 @@ export function FilterInput({
       // the whole box reads as an input — clicking anywhere in it focuses
       onClick={() => inputRef.current?.focus()}
       className={cx(
-        "no-drag flex items-center gap-1.5 h-8 pl-2.5 pr-1.5 rounded-lg ring-1 transition-all",
+        // it may give its text room back when its row is tight (a narrow window), down to 48px
+        "no-drag flex items-center gap-1.5 h-8 pl-2.5 pr-1.5 rounded-lg ring-1 transition-all min-w-0",
         fill && "w-full",
         value ? "ring-accent/50 bg-accentdim" : "ring-edge bg-panel/70 focus-within:ring-edge2",
       )}
@@ -103,7 +104,7 @@ export function FilterInput({
         // separately, so a toolbar still fits most before it wraps
         className={cx(
           "bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint",
-          fill ? "flex-1 min-w-0" : "w-32",
+          fill ? "flex-1 min-w-0" : "w-32 min-w-12",
         )}
       />
       {/* count + clear always occupy their space so the box never changes

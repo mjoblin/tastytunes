@@ -320,11 +320,12 @@ export function PresetsScreen(): React.JSX.Element {
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <ScreenTitle>Presets</ScreenTitle>
-        <span className="font-mono text-[11px] text-faint">
+        {/* one line that shortens rather than wraps, as the Queue's facts do */}
+        <span className="min-w-0 truncate whitespace-nowrap font-mono text-[11px] text-faint">
           {allItems.length} / {presets?.max_presets ?? "—"} slots
         </span>
         <div className="flex-1" />
-        <div className={`flex items-center ${GAP_BETWEEN}`}>
+        <div className={`flex min-w-0 items-center ${GAP_BETWEEN}`}>
           <FilterInput
             value={filter}
             onChange={(t) => setScreenFilter("presets", t)}
