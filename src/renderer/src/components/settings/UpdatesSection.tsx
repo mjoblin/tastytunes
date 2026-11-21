@@ -223,12 +223,22 @@ function UpdatePanel({
               {update.error}
             </span>
           </span>
-          <HeaderChip
-            onClick={() => void tt.updateDownload()}
-            className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
-          >
-            Try again
-          </HeaderChip>
+          {/* a cause that won't pass (a folder that can't be written) loops on Try again: the
+              release page is the way round it */}
+          <span className="shrink-0 flex items-center gap-2">
+            <HeaderChip
+              onClick={() => void tt.updateDownload()}
+              className="text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
+            >
+              Try again
+            </HeaderChip>
+            <HeaderChip
+              onClick={() => void tt.openExternal(update.url)}
+              className="flex items-center gap-1.5 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
+            >
+              Release page <ExternalLink size={12} />
+            </HeaderChip>
+          </span>
         </div>
       )}
     </div>
