@@ -16,6 +16,7 @@ export function FilterInput({
   total,
   onSubmit,
   lead,
+  fill = false,
 }: {
   value: string;
   onChange(value: string): void;
@@ -26,6 +27,9 @@ export function FilterInput({
   /** A control inside the box after the magnifier, a hairline before the text: the Tracks lens's
    *  "search in" (0.13.0-rc.4). */
   lead?: React.ReactNode;
+  /** The box takes its parent's width, the text the room left (the Artists view: the box as wide
+   *  as the Artists column below it, which it filters). */
+  fill?: boolean;
 }): React.JSX.Element {
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -56,6 +60,7 @@ export function FilterInput({
       onClick={() => inputRef.current?.focus()}
       className={cx(
         "no-drag flex items-center gap-1.5 h-8 pl-2.5 pr-1.5 rounded-lg ring-1 transition-all",
+        fill && "w-full",
         value ? "ring-accent/50 bg-accentdim" : "ring-edge bg-panel/70 focus-within:ring-edge2",
       )}
     >
@@ -93,9 +98,13 @@ export function FilterInput({
         onBlur={() => document.documentElement.classList.remove("filter-focused")}
         placeholder="Filter"
         spellCheck={false}
-        // 80px of text (0.12.0: people filter by a word or two, not long strings; the
-        // count's slot beside it is sized separately), so a toolbar fits more before it wraps
-        className="w-20 bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint"
+        // 128px of text (0.16.0-rc.8; 80 since 0.12.0 held ten characters, and two words like a
+        // title scrolled): a word or two, not long strings, the count's slot beside it sized
+        // separately, so a toolbar still fits most before it wraps
+        className={cx(
+          "bg-transparent outline-none text-[12.5px] text-ink placeholder:text-faint",
+          fill ? "flex-1 min-w-0" : "w-32",
+        )}
       />
       {/* count + clear always occupy their space so the box never changes
           width — the slot is sized from THIS listing's total ("345/345"

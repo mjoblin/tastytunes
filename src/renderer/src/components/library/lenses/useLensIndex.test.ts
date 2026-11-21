@@ -111,6 +111,22 @@ describe("lensIndexOf", () => {
     expect(ix.trackCopyBadge(shared[0].tracks[2])).toBeUndefined();
   });
 
+  it("names an album's library only where the list doesn't already say it", () => {
+    const two: MediaIndexPools[] = ["s1", "s2"].map((udn, i) => ({
+      udn,
+      serverName: i === 0 ? "One" : "Two",
+      albums: [{ ...album("Shared", "Band"), serverUdn: udn, serverName: i === 0 ? "One" : "Two" }],
+      artists: [],
+      tracks: [node({ id: `t-${udn}`, album: "Shared", artist: "Band", serverUdn: udn })],
+    }));
+    const ix = lensIndexOf(two);
+    const [a, b] = [two[0].albums[0], two[1].albums[0]];
+    expect([ix.copyBadge(a), ix.copyBadge(b)]).toEqual(["One", "Two"]);
+    expect(ix.copyBadge(a, { libraryShown: true })).toBeUndefined();
+    expect(ix.trackCopyBadge(two[1].tracks[0])).toBe("Two");
+    expect(ix.trackCopyBadge(two[1].tracks[0], { libraryShown: true })).toBeUndefined();
+  });
+
   it("makes every performer an artist, never the packed string", () => {
     const names = lensIndexOf(pools).artists.map((a) => a.name);
     expect(names).toContain("Guest Singer");
