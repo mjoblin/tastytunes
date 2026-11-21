@@ -4,7 +4,7 @@
 import { useMemo } from "react";
 import { MoreHorizontal, Play } from "lucide-react";
 import type { Favorite, MediaNode, Playlist, RadioStation } from "@shared/model";
-import { favoriteKey } from "@shared/model";
+import { favoriteKey, performerLine } from "@shared/model";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import type { PresetItem } from "@shared/smoip";
 import { nameKey } from "@shared/keys";
@@ -113,7 +113,9 @@ export function useSearchGroups({
           node: (
             <MediaRow
               title={node.title}
-              subtitle={[node.artist, node.serverName].filter(Boolean).join(FACT_SEP)}
+              subtitle={[performerLine(node, node.albumArtist), node.serverName]
+                .filter(Boolean)
+                .join(FACT_SEP)}
               artUrl={node.artUrl}
               artistName={nodeKind(node) === "artist" ? node.title : null}
               kind={nodeKind(node)}

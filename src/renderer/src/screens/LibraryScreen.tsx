@@ -16,7 +16,7 @@ import {
 import { albumDrKey, artistSummary } from "@shared/model";
 import { setInfoHere } from "@/lib/infoHotkey";
 import { useAlbumDr } from "@/lib/audioAnalysis";
-import { FACT_SEP, albumFactsLine, albumFromTracks } from "@/lib/mediaFacts";
+import { FACT_SEP, albumFactsLine, albumFromTracks, albumSecs } from "@/lib/mediaFacts";
 import { usePlayStats } from "@/lib/playStats";
 import { useBestArt } from "@/lib/bestArt";
 import { tt } from "@/api";
@@ -253,6 +253,13 @@ export function LibraryScreen(): React.JSX.Element {
   // server's, which the index's copies are keyed by
   const onServer = (node: MediaNode): MediaNode =>
     node.serverUdn || !serverUdn ? node : { ...node, serverUdn };
+  const lengthOf = (node: MediaNode): number | null => {
+    const own =
+      isAlbumClass(node.upnpClass) && folderPools
+        ? folderIndex.ownAlbum(onServer(node))
+        : undefined;
+    return own ? albumSecs(folderIndex.tracksOf(own)) : null;
+  };
   const copyBadgeOf = (node: MediaNode): string | undefined =>
     isAlbumClass(node.upnpClass) && folderPools
       ? folderIndex.copyBadge(onServer(node), { formatShown: cards && folderDetails != null })
@@ -865,6 +872,7 @@ export function LibraryScreen(): React.JSX.Element {
         menuOpen={menuNodeId === node.id}
         favorited={isAlbumClass(node.upnpClass) ? nodeFavorited(node) : undefined}
         dr={isAlbumClass(node.upnpClass) ? (albumDrMap[albumDrKey(node)]?.dr ?? null) : null}
+        length={lengthOf(node)}
         analyzing={isAlbumClass(node.upnpClass) ? analyzingOf(node) : null}
         onArtistLink={
           isAlbumClass(node.upnpClass) && node.artist ? () => goToArtistFromLens(node) : undefined

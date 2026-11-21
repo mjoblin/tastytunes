@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { albumSecs } from "@/lib/mediaFacts";
 import { AudioLines, Heart, ListEnd, ListPlus, ListStart, Play } from "lucide-react";
 import {
   albumDrKey,
@@ -420,6 +421,9 @@ export function AlbumsLens({
         badge={badge}
         badgeTip={set ? undefined : COPY_BADGE_TIP}
         dr={albumDr[albumDrKey(node)]?.dr ?? null}
+        length={albumSecs(
+          set ? set.volumes.flatMap((v) => index.tracksOf(v)) : index.tracksOf(rawNode),
+        )}
         analyzing={set ? null : analyzingOf(rawNode)}
         onArtistLink={
           actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined

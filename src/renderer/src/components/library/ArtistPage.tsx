@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { albumSecs } from "@/lib/mediaFacts";
 import {
   albumOfTrack,
   type AppSettings,
@@ -181,7 +182,11 @@ export function ArtistPage({
                     onPlay={(el) => void actions.playContainer(node, el)}
                   />
                 ) : (
-                  <ContainerRow key={nodeKey(node)} {...common} />
+                  <ContainerRow
+                    key={nodeKey(node)}
+                    {...common}
+                    length={albumSecs(index.tracksOf(node))}
+                  />
                 );
               })
             }

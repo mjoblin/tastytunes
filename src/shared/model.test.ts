@@ -176,7 +176,7 @@ describe("trackInAlbumOf: does a track belong to an album credited to someone", 
   });
 });
 
-describe("performerLine: a row's performers inside an album under its artist", () => {
+describe("performerLine: a row's performers, one rule everywhere", () => {
   const featured = { artist: "Lead; Guest", artists: ["Lead", "Guest"], albumArtist: "Lead" };
 
   it("names the album artist, then the guests as feat.", () => {
@@ -185,10 +185,17 @@ describe("performerLine: a row's performers inside an album under its artist", (
     expect(performerLine(two, "lead")).toBe("Lead feat. G1, G2");
   });
 
-  it("returns the packed string unchanged anywhere else", () => {
-    expect(performerLine(featured, null)).toBe("Lead; Guest");
-    expect(performerLine(featured, "Someone Else")).toBe("Lead; Guest");
+  it("names performers without the album's artist as a credit reads, never the packed string", () => {
+    expect(performerLine(featured, null)).toBe("Lead & Guest");
+    expect(performerLine(featured, "Someone Else")).toBe("Lead & Guest");
+    const three = { artist: "A; B; C", artists: ["A", "B", "C"] };
+    expect(performerLine(three, "Various Artists")).toBe("A, B & C");
+  });
+
+  it("shows one performer as it stands", () => {
     expect(performerLine({ artist: "Solo" }, "Solo")).toBe("Solo");
+    expect(performerLine({ artist: "Solo" }, null)).toBe("Solo");
+    expect(performerLine({ artist: null }, "Solo")).toBeNull();
   });
 });
 

@@ -1,4 +1,4 @@
-import type { MediaIndexPools, MediaNode } from "@shared/model";
+import { performerLine, type MediaIndexPools, type MediaNode } from "@shared/model";
 import { trackMatchesEntry, type EntryLike } from "@/lib/playingEntry";
 import { nameKey } from "@shared/keys";
 
@@ -61,7 +61,7 @@ export function performerFor(md: EntryLike | null | undefined, index: TrackIndex
     if (!trackMatchesEntry(n, md)) continue;
     if (!n.albumArtist || !sameName(n.albumArtist, md.artist)) continue;
     if (!n.artist || sameName(n.artist, md.artist)) continue;
-    found.add(n.artist);
+    found.add(performerLine(n, n.albumArtist) ?? n.artist);
   }
   return found.size === 1 ? [...found][0] : null;
 }
