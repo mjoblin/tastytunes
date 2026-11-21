@@ -52,7 +52,12 @@ export function currentUpdateState(): UpdateState {
   return state;
 }
 
-const updaterUsable = (): boolean => app.isPackaged || !!FEED;
+// A packaged Linux build updates itself only as an AppImage (APPIMAGE names the file to replace);
+// run any other way it was told it was on the latest release (0.16.0), and is offered the release
+// page instead, as a development build is
+const updaterUsable = (): boolean =>
+  (app.isPackaged && !(process.platform === "linux" && !process.env["APPIMAGE"])) || !!FEED;
+let installing = false;
 
 export function startUpdater(onState: (s: UpdateState) => void): void {
   announce = onState;
@@ -101,6 +106,13 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
   }
 
   autoUpdater.on("update-available", (info) => {
+    // the 4-hourly check finding the same version again leaves a download under way, or done, as
+    // it is (0.16.0 turned Restart now back into Download; the update still installed on quit)
+    if (
+      (state.phase === "downloading" || state.phase === "downloaded") &&
+      state.version === info.version
+    )
+      return;
     setState({ phase: "available", version: info.version, canDownload: true, error: null });
   });
   autoUpdater.on("update-not-available", () => {
@@ -113,9 +125,11 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
     setState({ phase: "downloaded", percent: 100, error: null });
   });
   autoUpdater.on("error", (err) => {
-    // A failed background check stays quiet; a failure mid-consent-flow is
-    // the user's business.
-    if (state.phase === "downloading") {
+    // A failed background check stays quiet; a failure mid-consent-flow is the user's business,
+    // the install's included (0.16.0 said a download's alone: an AppImage in a folder the user
+    // can't write failed at the install, and Restart now then did nothing, for good)
+    if (state.phase === "downloading" || installing) {
+      installing = false;
       setState({ phase: "error", error: err?.message ?? String(err) });
     }
   });
@@ -203,7 +217,13 @@ export async function downloadUpdate(): Promise<void> {
 /** Consent step 2. */
 export function installUpdate(): void {
   if (state.phase !== "downloaded") return;
-  autoUpdater.quitAndInstall();
+  installing = true;
+  try {
+    autoUpdater.quitAndInstall();
+  } catch (err) {
+    installing = false;
+    setState({ phase: "error", error: err instanceof Error ? err.message : String(err) });
+  }
 }
 
 /** The version an update offers now (available to download, or downloaded), or null. */
