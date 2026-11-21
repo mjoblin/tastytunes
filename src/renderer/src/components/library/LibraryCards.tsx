@@ -595,7 +595,7 @@ export function ContainerRow({
     <div
       {...item}
       className={cx(
-        "group relative grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-3 py-1.5 cursor-pointer transition-colors",
+        "group relative grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-3 py-1.5 cursor-pointer transition-colors",
         playing
           ? "row-playing bg-gold/10"
           : selected
@@ -643,11 +643,9 @@ export function ContainerRow({
         <div className={cx("text-[13.5px] truncate", playing ? "text-gold" : "text-ink")}>
           {node.title}
         </div>
-        {(node.artist || badge) && (
-          <div className={badge ? CARD_BADGE_LINE : "flex min-w-0"}>
-            {!node.artist ? (
-              <span />
-            ) : onArtistLink ? (
+        {node.artist && (
+          <div className="flex min-w-0">
+            {onArtistLink ? (
               <NameLink
                 kind="artist"
                 name={node.artist}
@@ -657,10 +655,12 @@ export function ContainerRow({
             ) : (
               <div className="text-[12px] text-faint truncate">{node.artist}</div>
             )}
-            {badge && <CardBadge label={badge} tip={badgeTip} />}
           </div>
         )}
       </div>
+      {/* the copy's place in its own cell, centered on the row with the year and DR beside it (it
+          rode the artist's line, below them) */}
+      {badge ? <CardBadge label={badge} tip={badgeTip} /> : <span />}
       {/* The rows view is the data view: year and DR ride RESERVED cells on
           album rows (the duration-cell principle — alignment holds whether or
           not a value exists; empty tracks collapse on non-album rows). */}

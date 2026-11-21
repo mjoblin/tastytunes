@@ -1,5 +1,13 @@
-import type { MediaNode } from "@shared/model";
-import { trackArtists } from "@shared/model";
+import type { CopyFacts, MediaNode } from "@shared/model";
+import {
+  artAddress,
+  artHostOf,
+  copiesOf,
+  nodeFacts,
+  sameCopyRow,
+  trackArtists,
+} from "@shared/model";
+import { isDeviceArt } from "@shared/artUrl";
 import type { QueueList, QueueListItem, QueueListItemMetadata, ZonePlayState } from "@shared/smoip";
 import { nameKey } from "@shared/keys";
 
@@ -131,4 +139,58 @@ export function trackMatchesEntry(node: MediaNode, m: EntryLike | null | undefin
 export function albumMatchesEntry(node: MediaNode, m: EntryLike | null | undefined): boolean {
   if (m == null || m.album == null) return false;
   return m.album === node.title && entryArtistMatches(m.artist, node);
+}
+
+/** A library copy's key: its server and its item. */
+export const copyKey = (n: Pick<MediaNode, "serverUdn" | "id">): string =>
+  `${n.serverUdn ?? ""}|${n.id}`;
+
+/** The copies the playing entry can be, and every copy there was (playingCopies). */
+export interface PlayingCopies {
+  kept: readonly MediaNode[];
+  all: ReadonlySet<string>;
+}
+
+/**
+ * WHICH COPY IS PLAYING (0.16.0-rc.8): the album and track highlights matched by title and artist
+ * alone, so every copy of the playing album lit, though the play counts and hearts have told copies
+ * apart since 0.13.0 (shared/model copies). The playing entry says which server it is served from
+ * by its picture's host, and which copy by the picture's address when that is the copy's own (a
+ * media server's; the streamer's own drive gives new addresses at every standby, so its copies in
+ * two folders stay one answer). Among `candidates` (every copy the library has of it), null when
+ * there is nothing to tell apart. `withLength` for a track: an album's length is not its track's.
+ */
+export function playingCopies(
+  entry: { art_url?: string | null; duration?: number | null },
+  candidates: readonly MediaNode[],
+  streamerHost: string | null,
+  withLength: boolean,
+): PlayingCopies | null {
+  if (candidates.length <= 1) return null;
+  const art = entry.art_url ?? null;
+  const facts: CopyFacts = {
+    art: art && !isDeviceArt(art, streamerHost) ? artAddress(art) : null,
+    host: artHostOf(art),
+    secs: withLength ? (entry.duration ?? null) : null,
+  };
+  const of = (n: MediaNode): CopyFacts =>
+    withLength ? nodeFacts(n) : { ...nodeFacts(n), secs: null };
+  return { kept: copiesOf(facts, candidates, of), all: new Set(candidates.map(copyKey)) };
+}
+
+/**
+ * Whether a row is one of the playing copies: by its key, or for a track the same row of the same
+ * copy (an album page's rows come from the server and can carry other ids than the index's); a row
+ * the index doesn't hold at all goes by its server. Every row is, when there was nothing to tell
+ * apart, or the row names no server.
+ */
+export function amongPlayingCopies(
+  copies: PlayingCopies | null,
+  node: MediaNode,
+  track: boolean,
+): boolean {
+  if (copies == null || node.serverUdn == null) return true;
+  const key = copyKey(node);
+  if (copies.kept.some((c) => copyKey(c) === key || (track && sameCopyRow(c, node)))) return true;
+  return !copies.all.has(key) && copies.kept.some((c) => c.serverUdn === node.serverUdn);
 }
