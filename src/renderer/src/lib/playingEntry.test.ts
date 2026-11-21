@@ -17,9 +17,11 @@ import type {
 } from "@shared/smoip";
 import {
   albumMatchesEntry,
+  amongPlayingCopies,
   contentPlayId,
   entryArtistMatches,
   entryMatchesReadout,
+  playingCopies,
   playingQueueEntry,
   trackMatchesEntry,
 } from "./playingEntry";
@@ -303,5 +305,49 @@ describe("the matchers on a real compilation's shapes", () => {
     expect(playingQueueEntry(byPlayId, playState(9, null))?.id).toBe(7);
     const byQueueId = queue([{ id: 9, position: 0, metadata: md }], null);
     expect(playingQueueEntry(byQueueId, playState(9, null))?.id).toBe(9);
+  });
+});
+
+describe("which copy of the playing album is lit", () => {
+  const streamer = "10.0.0.20";
+  const album = (serverUdn: string, id: string, artUrl: string) =>
+    ({
+      id,
+      title: "Frozen Charlotte",
+      artist: "Jack White",
+      isContainer: true,
+      serverUdn,
+      artUrl,
+    }) as MediaNode;
+  const mini = album("uuid:mini", "a1", "http://10.0.0.5:9790/art/frozen.jpg");
+  const music = album("uuid:usb", "u1", "http://10.0.0.20/stream/art?id=11");
+  const alt = album("uuid:usb", "u2", "http://10.0.0.20/stream/art?id=12");
+  const all = [mini, music, alt];
+  const lit = (artUrl: string | null) => {
+    const copies = playingCopies({ art_url: artUrl }, all, streamer, false);
+    return all.map((n) => amongPlayingCopies(copies, n, false));
+  };
+
+  it("lights only the media server's copy when its picture comes from that server", () => {
+    expect(lit("http://10.0.0.5:9790/art/frozen.jpg?size=640")).toEqual([true, false, false]);
+  });
+
+  it("lights both of the drive's copies when the streamer serves the picture, a new address and all", () => {
+    expect(lit("http://10.0.0.20/stream/art?id=97")).toEqual([false, true, true]);
+  });
+
+  it("lights every copy when the entry says nothing of where it is", () => {
+    expect(lit(null)).toEqual([true, true, true]);
+  });
+
+  it("knows a row the index doesn't hold by its server", () => {
+    const copies = playingCopies(
+      { art_url: "http://10.0.0.5:9790/art/frozen.jpg" },
+      all,
+      streamer,
+      false,
+    );
+    expect(amongPlayingCopies(copies, album("uuid:mini", "browsed-id", "x"), false)).toBe(true);
+    expect(amongPlayingCopies(copies, album("uuid:usb", "browsed-id", "x"), false)).toBe(false);
   });
 });
