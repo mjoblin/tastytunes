@@ -136,6 +136,17 @@ async function targetOf(dm: DeviceManager, s: Schedule): Promise<ScheduleTarget 
 }
 
 async function fire(dm: DeviceManager, s: Schedule): Promise<void> {
+  // only the two actions this version knows: a later version's (stop, mute) read as a wake once,
+  // powering the streamer on and recalling a preset at its time
+  const action: string = s.action;
+  if (action !== "on" && action !== "standby") {
+    dm.log(
+      "warn",
+      "schedule",
+      `the schedule at ${s.time} asks for "${action}", which this version doesn't do`,
+    );
+    return;
+  }
   const target = await targetOf(dm, s);
   if (!target) return;
   return fireOn(target.fireable, s);

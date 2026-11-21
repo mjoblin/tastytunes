@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { app } from "electron";
 import { favoriteKey, type Favorite } from "@shared/model";
 import { jsonFileStore } from "./jsonStore";
-import { checkFavorites } from "./savedChecks";
+import { carriedNone, checkFavorites, withCarried } from "./savedChecks";
 
 // The local favorites collection (stations, albums, tracks), persisted beside
 // settings.json. User-curated and unbounded (it's a small JSON of things
@@ -10,10 +10,18 @@ import { checkFavorites } from "./savedChecks";
 // identity = favoriteKey (content, not object ids). Load/save (cached,
 // atomic) live in jsonStore; only the domain verbs live here.
 
+// a later version's favorites this one doesn't read, kept out of the app and written back
+let carried = carriedNone();
+
 const store = jsonFileStore<Favorite[]>({
   pathOf: () => join(app.getPath("userData"), "favorites.json"),
   scope: "favorites",
-  load: (parsed, setAside) => checkFavorites(parsed, setAside),
+  load: (parsed, setAside) => {
+    carried = carriedNone();
+    return checkFavorites(parsed, setAside, carried);
+  },
+  encode: (list) => withCarried(list, carried),
+  kept: () => carried.notes,
 });
 
 export function getFavorites(): Favorite[] {

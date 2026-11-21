@@ -15,6 +15,8 @@ import { isRecord } from "@shared/guards";
 import { isDeviceArt } from "@shared/artUrl";
 import {
   LISTEN_FLOOR_SECS,
+  LISTENING_KINDS,
+  LISTENING_VERSION,
   type ListeningEvent,
   type ListeningRecordStats,
   type ListeningVia,
@@ -220,22 +222,33 @@ interface YearLines {
   mtimeMs: number;
   events: ListeningEvent[];
   unreadable: number;
+  /** A later version's lines (a kind or a version this one doesn't read), counted apart. */
+  later: number;
   /** The year's first line of any kind (the record's "since"). */
   since: number | null;
 }
 const years = new Map<number, YearLines>();
 
-/** One year's lines as parsed: torn or unparseable lines are counted, never thrown over;
- *  unknown kinds pass through untyped (readers skip what they don't know — the
- *  additive-evolution contract). */
-function parseLines(raw: string): { events: ListeningEvent[]; unreadable: number } {
+/** One year's lines as parsed: torn or unparseable lines are counted, never thrown over; a line
+ *  this version doesn't read (an unknown kind, a "v" past LISTENING_VERSION) is counted apart and
+ *  left in the file. The one gate: 0.16.0 let an unknown kind with playedSeconds add to the day,
+ *  the hour grid and Radio time, and wrote "v" without reading it. */
+function parseLines(raw: string): { events: ListeningEvent[]; unreadable: number; later: number } {
   const events: ListeningEvent[] = [];
   let unreadable = 0;
+  let later = 0;
   for (const line of raw.split("\n")) {
     if (line.trim() === "") continue;
     try {
       const parsed: unknown = JSON.parse(line);
       if (isRecord(parsed) && typeof parsed.at === "number" && typeof parsed.kind === "string") {
+        if (
+          !(LISTENING_KINDS as readonly string[]).includes(parsed.kind) ||
+          (typeof parsed.v === "number" && parsed.v > LISTENING_VERSION)
+        ) {
+          later++;
+          continue;
+        }
         const played = parsed.playedSeconds;
         const bounded =
           typeof played === "number"
@@ -253,7 +266,7 @@ function parseLines(raw: string): { events: ListeningEvent[]; unreadable: number
       unreadable++;
     }
   }
-  return { events, unreadable };
+  return { events, unreadable, later };
 }
 
 /** The year's lines, from memory while the file is unchanged; null when there is no file. */
@@ -276,10 +289,10 @@ function yearLines(year: number): YearLines | null {
     years.delete(year);
     return null;
   }
-  const { events, unreadable } = parseLines(raw);
+  const { events, unreadable, later } = parseLines(raw);
   let since: number | null = null;
   for (const e of events) if (since == null || e.at < since) since = e.at;
-  const lines = { size, mtimeMs, events, unreadable, since };
+  const lines = { size, mtimeMs, events, unreadable, later, since };
   years.set(year, lines);
   return lines;
 }
@@ -643,12 +656,12 @@ export const listeningRecord = {
   /** Read one year's events. Torn or unparseable lines are counted, never
    *  thrown over; unknown kinds pass through untyped (readers skip what
    *  they don't know — the additive-evolution contract). */
-  readYear(year: number): { events: ListeningEvent[]; unreadable: number } {
+  readYear(year: number): { events: ListeningEvent[]; unreadable: number; later: number } {
     const lines = yearLines(year);
     // a copy: the year in memory is never handed out to be sorted or spliced
     return lines
-      ? { events: lines.events.slice(), unreadable: lines.unreadable }
-      : { events: [], unreadable: 0 };
+      ? { events: lines.events.slice(), unreadable: lines.unreadable, later: lines.later }
+      : { events: [], unreadable: 0, later: 0 };
   },
 
   /**
@@ -676,16 +689,18 @@ export const listeningRecord = {
 
   /** Every event across all years, with the unreadable-line total — the MCP
    *  read tools' feedstock. Order follows the files (per year, append order). */
-  async readAll(): Promise<{ events: ListeningEvent[]; unreadable: number }> {
+  async readAll(): Promise<{ events: ListeningEvent[]; unreadable: number; later: number }> {
     const events: ListeningEvent[] = [];
     let unreadable = 0;
+    let later = 0;
     for (const year of await listYears()) {
       const r = this.readYear(year);
       // a loop, never a spread: a year past ~105,000 lines would throw (shared/model eventsOfYears)
       for (const e of r.events) events.push(e);
       unreadable += r.unreadable;
+      later += r.later;
     }
-    return { events, unreadable };
+    return { events, unreadable, later };
   },
 
   /** The Settings truth row, from the years in memory (each re-read when its file changed). */
@@ -694,12 +709,14 @@ export const listeningRecord = {
     let bytes = 0;
     let since: number | null = null;
     let unreadableLines = 0;
+    let laterLines = 0;
     for (const year of await listYears()) {
       const lines = yearLines(year);
       if (!lines) continue;
       bytes += lines.size;
       events += lines.events.length;
       unreadableLines += lines.unreadable;
+      laterLines += lines.later;
       if (lines.since != null && (since == null || lines.since < since)) since = lines.since;
     }
     const pending = current
@@ -719,6 +736,7 @@ export const listeningRecord = {
       bytes,
       since,
       unreadableLines,
+      laterLines,
       writeError,
       pending,
       pendingEligible: pendingSecs >= LISTEN_FLOOR_SECS,

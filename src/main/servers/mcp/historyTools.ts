@@ -143,7 +143,7 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
       // Local files only — works with the streamer off, so no connected() gate.
       handler: async (a) => {
-        const { events: everyLine, unreadable } = await listeningRecord.readAll();
+        const { events: everyLine, unreadable, later } = await listeningRecord.readAll();
         const keep = streamerKeep(a.streamer, dm.snapshot().devices);
         const events = keep ? everyLine.filter(keep) : everyLine;
         const range = dayRange(a);
@@ -168,6 +168,8 @@ export function historyTools(ctx: ToolContext): Record<string, ToolImpl> {
           offset,
           returned: page.length,
           ...(unreadable > 0 ? { unreadable_lines: unreadable } : {}),
+          // a later version's lines, kept in the record and not counted here
+          ...(later > 0 ? { later_version_lines: later } : {}),
           events: page,
         });
       },

@@ -9,8 +9,8 @@ import {
   unlinkSync,
   writeFileSync,
 } from "node:fs";
-import { dirname } from "node:path";
-import { keepAsFound, readSaved } from "./savedFiles";
+import { basename, dirname } from "node:path";
+import { keepAsFound, noteSaved, readSaved } from "./savedFiles";
 
 // The one JSON-persistence layer for the local data files (favorites,
 // playlists, recents, settings, the media index). Deliberately electron-free
@@ -81,6 +81,11 @@ export function jsonFileStore<T>(opts: {
   /** For the persist-failure log line. */
   scope: string;
   load(parsed: unknown, setAside: string[]): T;
+  /** What is written for `next`: the rows a load carried through put back (data/savedChecks
+   *  withCarried); `next` itself when absent. */
+  encode?(next: T): unknown;
+  /** What the load kept out of the app but carried through, for the log. */
+  kept?(): readonly string[];
 }): { get(): T; set(next: T): T; readWhole(): boolean } {
   let cached: T | null = null;
   // a file that couldn't be read is never written over this session (data/savedFiles)
@@ -96,6 +101,7 @@ export function jsonFileStore<T>(opts: {
       cached = opts.load(read.state === "read" ? read.parsed : undefined, setAside);
       whole = read.state === "read" && setAside.length === 0;
       keepAsFound(path, setAside);
+      for (const what of opts.kept?.() ?? []) noteSaved("info", `${basename(path)}: ${what}`);
       return cached;
     },
     /** Whether this session's load read the file, all of it: not missing, moved aside,
@@ -109,7 +115,7 @@ export function jsonFileStore<T>(opts: {
       cached = next;
       if (unreadable) return next;
       try {
-        atomicWriteFileSync(opts.pathOf(), JSON.stringify(next));
+        atomicWriteFileSync(opts.pathOf(), JSON.stringify(opts.encode ? opts.encode(next) : next));
       } catch (err) {
         console.error(`failed to persist ${opts.scope}`, err);
       }

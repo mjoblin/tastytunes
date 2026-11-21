@@ -139,6 +139,25 @@ export function keepAsFound(path: string, setAside: readonly string[], now = new
   noteSaved("warn", `${name}: ${setAside.length} set aside${kept}`);
 }
 
+/** Whether version `a` is later than `b` ("1.2.0" > "1.1.9" > "1.1.9-rc.3" > "1.1.9-rc.2"); a
+ *  name that isn't a version is never later. */
+export function laterVersion(a: string, b: string): boolean {
+  const parse = (v: string): { nums: number[]; pre: number[] | null } | null => {
+    const m = /^(\d+)\.(\d+)\.(\d+)(?:-[a-z]+\.?(\d+)?)?$/i.exec(v.trim());
+    if (!m) return null;
+    return {
+      nums: [Number(m[1]), Number(m[2]), Number(m[3])],
+      pre: v.includes("-") ? [Number(m[4] ?? 0)] : null,
+    };
+  };
+  const x = parse(a);
+  const y = parse(b);
+  if (!x || !y) return false;
+  for (let i = 0; i < 3; i++) if (x.nums[i] !== y.nums[i]) return x.nums[i] > y.nums[i];
+  if (x.pre == null || y.pre == null) return x.pre == null && y.pre != null;
+  return x.pre[0] > y.pre[0];
+}
+
 /**
  * The files as the last version left them, copied into backups/<when> from <version>/ the first time a
  * different version runs, before it writes anything; the last KEEP versions' backups kept, and the
@@ -175,8 +194,14 @@ export function keepVersionCopy(
         return from === "an earlier version" || (from !== "" && !from.includes("-"));
       };
       const newestRelease = kept.find(fromRelease);
+      // and the newest from a later version than this one (a rollback): its files are the only
+      // copy of what that version wrote, and each launch of this one would prune it in turn
+      const newestLater = kept.find((name) =>
+        laterVersion(/ from (.+)$/.exec(name)?.[1] ?? "", version),
+      );
       for (const old of kept.slice(KEEP))
-        if (old !== newestRelease) rmSync(join(backups, old), { recursive: true, force: true });
+        if (old !== newestRelease && old !== newestLater)
+          rmSync(join(backups, old), { recursive: true, force: true });
       noteSaved(
         "info",
         `${present.join(", ")} from ${last ?? "an earlier version"} kept in backups/${basename(into)}`,

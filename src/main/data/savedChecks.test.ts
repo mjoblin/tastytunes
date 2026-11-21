@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_SETTINGS } from "@shared/model";
-import { NULLABLE_KEYS, checkFavorites, checkPlaylists, checkSettingsKinds } from "./savedChecks";
+import {
+  NULLABLE_KEYS,
+  carriedNone,
+  checkFavorites,
+  checkPlaylists,
+  checkSettingsKinds,
+  playlistsCarriedNone,
+  withCarried,
+  withCarriedPlaylists,
+} from "./savedChecks";
 
 const album = {
   kind: "album",
@@ -170,5 +179,57 @@ describe("checkSettingsKinds", () => {
     const defaults = JSON.parse(JSON.stringify(DEFAULT_SETTINGS)) as Record<string, unknown>;
     expect(checkSettingsKinds(defaults, notes)).toEqual(defaults);
     expect(notes).toEqual([]);
+  });
+});
+
+describe("a later version's rows, carried through", () => {
+  it("keeps a favorite it doesn't know out of the list and writes it back at its place", () => {
+    const notes: string[] = [];
+    const carried = carriedNone();
+    const later = { kind: "playlist", addedAt: 5, name: "Later" };
+    const rows = checkFavorites([album, later, station, 7], notes, carried);
+    expect(rows).toEqual([album, station]);
+    // only the row that isn't a record at all is left out, and named
+    expect(notes).toEqual(["[3] was a number, left out"]);
+    expect(withCarried(rows, carried)).toEqual([album, later, station]);
+  });
+
+  it("reads a list a later version wrapped, and writes it back in the form found", () => {
+    const carried = carriedNone();
+    const rows = checkFavorites({ format: 2, items: [album] }, [], carried);
+    expect(rows).toEqual([album]);
+    expect(withCarried([...rows, station], carried)).toEqual({
+      format: 2,
+      items: [album, station],
+    });
+    // a bare list stays bare
+    expect(withCarried([album], carriedNone())).toEqual([album]);
+  });
+
+  it("keeps a playlist item it doesn't know in its playlist, and a playlist it doesn't know", () => {
+    const carried = playlistsCarriedNone();
+    const item = {
+      title: "One",
+      artist: null,
+      album: null,
+      artUrl: null,
+      serverUdn: null,
+      serverName: null,
+      objectId: null,
+      durationSecs: null,
+    };
+    const laterItem = { station: "Radio Later" };
+    const list = {
+      id: "p1",
+      name: "Mix",
+      createdAt: 1,
+      updatedAt: 2,
+      items: [laterItem, item],
+      lastPlayedAt: null,
+    };
+    const laterList = { kind: "smart", rule: "decade:1980" };
+    const rows = checkPlaylists([list, laterList], [], carried);
+    expect(rows).toEqual([{ ...list, items: [item] }]);
+    expect(withCarriedPlaylists(rows, carried)).toEqual([list, laterList]);
   });
 });

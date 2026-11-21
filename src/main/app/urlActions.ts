@@ -1,8 +1,13 @@
 import { app, Notification } from "electron";
 import type { StreamerCommand } from "@shared/ipc";
-import { parseUrlAction, staysInBackground, URL_SCHEME, type UrlAction } from "@shared/urlActions";
+import {
+  parseUrlAction,
+  SCREEN_LINK_NAMES,
+  staysInBackground,
+  URL_SCHEME,
+  type UrlAction,
+} from "@shared/urlActions";
 import { errorMessage } from "@shared/guards";
-import { MENU_SCREENS } from "./menu";
 import { deviceManager } from "./runtime";
 import { giveFocusBack, onUrl } from "./urlInbox";
 import { sendMenuCommand, showMainWindow, toggleMiniPlayer } from "./windows";
@@ -25,15 +30,6 @@ import { nameKey } from "@shared/keys";
 
 /** How long a verb waits for the streamer when it arrives with the app just launched. */
 const CONNECT_WAIT_MS = 15_000;
-
-/** The names a URL may give a screen: its key, and its name as the Go menu shows it
- *  ("history" for the History screen, whose key is recently-played), and Settings. */
-const SCREEN_NAMES: Readonly<Record<string, string>> = Object.fromEntries(
-  MENU_SCREENS.flatMap(([screen, label]): Array<[string, string]> => [
-    [screen, screen],
-    [label.toLowerCase().replace(/\s+/g, "-"), screen],
-  ]).concat([["settings", "settings"]]),
-);
 
 /** Takes the URLs; called once, in whenReady. */
 export function serveUrlActions(): void {
@@ -106,7 +102,7 @@ function commandFor(
 }
 
 async function run(url: string, stoleFocus: boolean): Promise<void> {
-  const parsed = parseUrlAction(url, SCREEN_NAMES);
+  const parsed = parseUrlAction(url, SCREEN_LINK_NAMES);
   // the focus first, before any wait: a key press should not leave the app in front
   if (stoleFocus && (!parsed.ok || staysInBackground(parsed.action))) giveFocusBack();
   if (!parsed.ok) return refuse(url, parsed.reason);

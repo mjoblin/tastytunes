@@ -523,6 +523,16 @@ export type ListeningEvent =
   | ListeningRadioTrackEvent
   | ListeningExternalEvent;
 
+/** The kinds of line this version reads, and the highest version of a line it reads: a line past
+ *  either (a later version's) stays in the file and is counted apart, never as a play. */
+export const LISTENING_KINDS: readonly ListeningEvent["kind"][] = [
+  "play",
+  "radio-session",
+  "radio-track",
+  "external",
+];
+export const LISTENING_VERSION = 1;
+
 /** A LISTENING SESSION (0.8.0, History round two): consecutive record lines
  *  with at most SESSION_GAP_MS between one line's end and the next's start,
  *  over every kind — a library run, a radio stretch, an AirPlay evening, or
@@ -584,6 +594,9 @@ export interface ListeningRecordStats {
   /** Torn/unparseable lines encountered while reading — surfaced, never
    *  silently dropped. */
   unreadableLines: number;
+  /** Lines a later version wrote (a kind or version this one doesn't read): kept in the record,
+   *  counted apart, never as plays. */
+  laterLines: number;
   /** The last append failure (disk full, permissions), or null while writes
    *  are healthy. */
   writeError: string | null;
