@@ -665,7 +665,7 @@ export function ContainerRow({
           album rows (the duration-cell principle — alignment holds whether or
           not a value exists; empty tracks collapse on non-album rows). */}
       {album && (
-        <div className="w-9 text-right font-mono text-[11px] text-faint tabular-nums">
+        <div className="w-9 text-right font-mono text-[11px] text-faint tabular-nums" data-row-year>
           {node.year ?? ""}
         </div>
       )}
@@ -678,7 +678,11 @@ export function ContainerRow({
           )}
         </div>
       )}
-      {playing ? <Eqbars /> : <span />}
+      {/* the bars' cell keeps their width on every row, so the playing row's year and DR stay in
+          line with the others' */}
+      <span className="flex w-[13px] justify-center" data-row-bars>
+        {playing && <Eqbars />}
+      </span>
       {album && onHeart ? (
         <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
       ) : (
