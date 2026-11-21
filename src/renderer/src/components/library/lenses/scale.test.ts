@@ -85,6 +85,8 @@ describe("the Library at 50,000 tracks", () => {
         index.tracksOf(a);
         index.copyBadge(a);
       }
+      // a flat list's first row maps every copy's tracks to its chip
+      index.trackCopyBadge(index.tracks[0]);
     }, 300);
   });
 

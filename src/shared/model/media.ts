@@ -1050,6 +1050,14 @@ const VOLUME_ROMAN: Record<string, number> = {
   xx: 20,
 };
 
+/** The year a set's volumes share, or null when they differ or none has one: what a set's own
+ *  row and card say (a box whose volumes span years says none rather than one of them). */
+export function sharedYear(volumes: ReadonlyArray<Pick<MediaNode, "year">>): string | null {
+  const years = new Set(volumes.map((v) => v.year?.trim() || null));
+  const [only] = years;
+  return years.size === 1 ? only : null;
+}
+
 export function albumVolume(title: string): { base: string; volume: number } | null {
   // The value can be digits, a spelled-out word (one–twenty) or a Roman
   // numeral (I–XX) — real servers produce all three. The keyword is still

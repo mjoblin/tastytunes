@@ -12,7 +12,6 @@ import { cardChip } from "@/components/chrome/Chrome";
 import { DrBadge, DrPending, drTone, fmtLufs } from "@/components/media/Waveform";
 import { SignalDot } from "@/components/device/SignalLamp";
 import type { CardDetails } from "@/components/library/useCardDetails";
-import { FACT_SEP } from "@/lib/mediaFacts";
 import { DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
 import { NameLine, NameLink } from "@/components/media/NameLine";
@@ -663,13 +662,16 @@ export function ContainerRow({
       {badge ? <CardBadge label={badge} tip={badgeTip} /> : <span />}
       {/* The rows view is the data view: year and DR ride RESERVED cells on
           album rows (the duration-cell principle — alignment holds whether or
-          not a value exists; empty tracks collapse on non-album rows). */}
-      {album && (
+          not a value exists). A folder's or an artist's row keeps both cells, empty and
+          narrow, so its buttons end where an album row's do. */}
+      {album ? (
         <div className="w-9 text-right font-mono text-[11px] text-faint tabular-nums" data-row-year>
           {node.year ?? ""}
         </div>
+      ) : (
+        <span />
       )}
-      {album && (
+      {album ? (
         <div className="flex w-12 justify-end font-mono text-[10.5px]">
           {dr != null ? (
             <DrBadge dr={dr} className="" />
@@ -677,6 +679,8 @@ export function ContainerRow({
             analyzing && <DrPending at={analyzing.at} of={analyzing.of} className="" />
           )}
         </div>
+      ) : (
+        <span />
       )}
       {/* the bars' cell keeps their width on every row, so the playing row's year and DR stay in
           line with the others' */}
@@ -748,6 +752,8 @@ export function TrackRow({
   dr,
   lufs = null,
   meta,
+  badge,
+  badgeTip,
   showPosition = true,
   selStart = true,
   selEnd = true,
@@ -807,6 +813,12 @@ export function TrackRow({
   /** The track's integrated loudness (0.8.0), when known — the DR badge's
    *  tooltip carries it; the cell itself stays the DR number. */
   lufs?: number | null;
+  /** In a flat list (the Tracks lens, search results): which copy of its album the track is
+   *  from (the lens index's trackCopyBadge), the album rows' chip, set apart from the title
+   *  beside the row's buttons. */
+  badge?: string;
+  /** What the chip means (CardBadge). */
+  badgeTip?: string;
   /** The Tracks lens turns the number off: a track's position within ITS
    *  album reads as noise in a flat list across albums. The cell stays —
    *  the playing eqbars still live there (the flat-row rule). */
@@ -904,7 +916,6 @@ export function TrackRow({
               onArtist={onArtistLink ?? null}
               onAlbum={onAlbumLink ?? null}
               tone="faint"
-              sep={FACT_SEP}
             />
           </div>
         )}
@@ -912,6 +923,11 @@ export function TrackRow({
       {/* per-button reveal (not on the wrapper): a set heart must stay
           visible on the resting row while play/⋯ remain hover-only */}
       <div className="flex items-center gap-0.5">
+        {badge && (
+          <span className="mr-2 flex">
+            <CardBadge label={badge} tip={badgeTip} />
+          </span>
+        )}
         <RowAction
           icon={Play}
           label="Play"

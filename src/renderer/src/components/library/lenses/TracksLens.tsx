@@ -41,6 +41,7 @@ import {
   filterFields,
   filterScopeCounts,
   type FilterScope,
+  COPY_BADGE_TIP,
 } from "./lensShared";
 import {
   useLensTrackSelection,
@@ -594,6 +595,9 @@ export function TracksLens({
                             dr={drOf(t)}
                             lufs={lufsOf(t)}
                             meta={metaOf(t)}
+                            // which copy of its album, when there is another (the album rows' chip)
+                            badge={index.trackCopyBadge(t)}
+                            badgeTip={COPY_BADGE_TIP}
                             // the second line's links — the search-results
                             // treatment: the row plays, the names navigate
                             onAlbumLink={
