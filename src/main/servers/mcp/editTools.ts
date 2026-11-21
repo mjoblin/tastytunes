@@ -16,6 +16,7 @@ import {
   scheduleOut,
   freshObjectId,
   defineTool,
+  DEVICE_ARG,
 } from "./toolkit";
 
 // The MCP bridge's edit tools (the writes with a contract: queue edits, preset saves, schedules),
@@ -26,15 +27,20 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
   const { dm } = ctx;
   return {
     // ---- queue editing (opt-in cluster)
+    // the queue edits take device, as list_queue does: ids from another streamer's queue once
+    // removed or moved whatever held them in the window's
     remove_queue_item: defineTool({
-      inputSchema: { id: z.number().int().describe("Queue item id from list_queue.") },
+      inputSchema: {
+        device: DEVICE_ARG,
+        id: z.number().int().describe("Queue item id from list_queue."),
+      },
       handler: async (a) => {
-        const s = ctx.connected();
+        const t = await ctx.target(a.device);
+        const s = t.snapshot();
         const item = (s.queue?.items ?? []).find((i) => i.id === a.id);
         if (!item) return err(`No queue item ${String(a.id)}. Use list_queue.`);
         // with the queue it left, once the streamer says so (0.16.0: a list_queue straight after
         // two removals still counted one of them)
-        const t = await ctx.target();
         return acted(
           t,
           () => t.command({ type: "queueDelete", id: a.id }),
@@ -44,10 +50,11 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
       },
     }),
     clear_queue: defineTool({
-      handler: async () => {
-        const s = ctx.connected();
+      inputSchema: { device: DEVICE_ARG },
+      handler: async (a) => {
+        const t = await ctx.target(a.device);
+        const s = t.snapshot();
         const n = s.queue?.total ?? s.queue?.items?.length ?? 0;
-        const t = await ctx.target();
         return acted(
           t,
           () => t.command({ type: "queueClear" }),
@@ -56,12 +63,14 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         );
       },
     }),
-    resume_playback: defineTool({
-      handler: async () => {
+    resume_album: defineTool({
+      inputSchema: { device: DEVICE_ARG },
+      handler: async (a) => {
         const s = ctx.connected();
+        const t = await ctx.target(a.device);
         // awake before the album is browsed, which can be on the streamer's own drive (the queue
         // write wakes it in any case: DeviceManager.queueAdd)
-        await ctx.dm.ensureAwake();
+        await t.ensureAwake();
         const offer = await ctx.resumeOffer();
         if ("reason" in offer) return err(offer.reason);
         // the album's OWN browse listing supplies the container and track ids —
@@ -81,7 +90,7 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           return err("The album could not be browsed as an album-sized container.");
         const target = resumeTarget(offer.run, tracks);
         if (!target) return err("The run reached the album's end; nothing to resume.");
-        await ctx.dm.queueAdd(udn, fresh.id, "PLAY_FROM_HERE", target.id);
+        await t.queueAdd(udn, fresh.id, "PLAY_FROM_HERE", target.id);
         return ok(
           `Resuming "${offer.node.title}" from track ${tracks.indexOf(target) + 1}, "${target.title}".`,
         );
@@ -89,17 +98,19 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
     }),
     move_queue_item: defineTool({
       inputSchema: {
+        device: DEVICE_ARG,
         id: z.number().int().describe("Queue item id from list_queue."),
         to_position: z.number().int().min(0).describe("New 0-based position."),
       },
       handler: async (a) => {
-        const s = ctx.connected();
+        const t = await ctx.target(a.device);
+        const s = t.snapshot();
         const item = (s.queue?.items ?? []).find((i) => i.id === a.id);
         if (!item || item.position == null)
           return err(`No queue item ${String(a.id)}. Use list_queue.`);
         const total = s.queue?.total ?? 0;
         if (a.to_position >= total) return err(`to_position must be below ${total}.`);
-        await dm.command({
+        await t.command({
           type: "queueMove",
           id: a.id,
           from: item.position,

@@ -85,7 +85,7 @@ const INSTRUCTIONS = [
   "To find music by style or era, read library_facets and list_artists and use what you know about the artists, because genre tags are often missing.",
   "Dynamic range, loudness, tempo and key exist only for analyzed tracks, and answers that use them say how many were measured.",
   "Don't replace the queue unless the user asks.",
-  "The tools that act on a streamer take device, another streamer by its name from list_devices, and act on it without moving the TastyTunes window; connect_device is the one tool that moves the window.",
+  "A tool that takes device acts on that streamer, by its name from list_devices, without moving the TastyTunes window; a tool that doesn't acts on the window's streamer, and connect_device is the one tool that moves the window.",
   "The history tools take local days (YYYY-MM-DD) or a named period.",
   "Some editing tools are off until the user turns them on in Settings › Integrations.",
 ].join(" ");

@@ -350,7 +350,7 @@ export function foldPlayEvent(stats: PlayStats, e: ListeningEvent): void {
 /** "Pick up where you left off": the most recent RUN of plays from one album
  *  (consecutive plays of the same album with at most `gapMs` between one
  *  play's end and the next's start), if it ended within `withinMs`. Shared
- *  by the resume card and the MCP history_resume / resume_playback tools. */
+ *  by the resume card and the MCP history_resume / resume_album tools. */
 export interface ResumeRun {
   album: string;
   artist: string | null;

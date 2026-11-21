@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { isRecord, kindOf } from "@shared/guards";
+import { MCP_RENAMED_TOOLS } from "@shared/mcpCatalog";
 import { join } from "node:path";
 import { app } from "electron";
 import {
@@ -60,6 +61,8 @@ export function getSettings(): AppSettings {
     loaded = { ...DEFAULT_SETTINGS, ...(file as Partial<AppSettings>) };
     // The merge above is shallow — backfill nested objects from older files.
     loaded.mcp = { ...DEFAULT_SETTINGS.mcp, ...loaded.mcp };
+    // an agent tool renamed keeps the user's choice to switch it off
+    loaded.mcp.disabledTools = loaded.mcp.disabledTools.map((n) => MCP_RENAMED_TOOLS[n] ?? n);
     // The Tracks view had no Rows or Cards of its own before 0.13.0-rc.4 (it followed the
     // Library's one choice): an older file keeps what it showed
     if (!("lensTracksLayout" in file)) loaded.lensTracksLayout = loaded.libraryLayout;

@@ -336,7 +336,7 @@ export class DeviceManager {
 
   /**
    * Put a media server's container or track on the streamer's queue (0.15.0: one home for the
-   * wake every caller had to remember, which an agent's resume_playback forgot). A play is a wake
+   * wake every caller had to remember, which the agents' album resume once forgot). A play is a wake
    * intent: queue writes to a standby streamer land on deaf ears (probed 2026-07-23).
    */
   async queueAdd(
