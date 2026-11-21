@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import {
@@ -34,19 +34,34 @@ export function useAnalyzeAlbumOnPlay(): void {
   const queue = useStore((s) => s.queue);
   const playState = useStore((s) => s.playState);
   const plan = useMemo(() => (on ? albumQueue(queue, playState) : null), [on, queue, playState]);
+  // the last album seen: a moment with no album (a track change can read as one for a beat) is
+  // waited out for GAP_MS, so the same album coming back carries on rather than starting over
+  // (0.16.0 stopped the pass at the gap and began it again)
   const planRef = useRef(plan);
-  planRef.current = plan;
+  if (plan) planRef.current = plan;
   const sig = plan?.sig ?? null;
+  const [held, setHeld] = useState(sig);
+  useEffect(() => {
+    if (sig) {
+      setHeld(sig);
+      return;
+    }
+    const gone = setTimeout(() => setHeld(null), GAP_MS);
+    return () => clearTimeout(gone);
+  }, [sig]);
   useEffect(() => {
     const p = planRef.current;
-    if (!sig || !p) return;
+    if (!held || !p || p.sig !== held) return;
     const run = { stopped: false };
     void measureAlbum(p, run);
     return () => {
       run.stopped = true;
     };
-  }, [sig]);
+  }, [held]);
 }
+
+/** How long a moment with no album is waited out before the pass stops. */
+const GAP_MS = 5000;
 
 /** How often a waiting turn looks again. */
 const WAIT_MS = 1500;

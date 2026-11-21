@@ -60,14 +60,20 @@ export const queryWords = (query: string): QueryWord[] =>
 export function matchesWords(
   words: readonly QueryWord[],
   fields: ReadonlyArray<string | null | undefined>,
+  folded: string = foldFields(fields),
 ): boolean {
-  const joined = fields.filter(Boolean).join(" ");
-  const folded = searchFold(joined);
   let typed: string | null = null;
   return words.every((w) =>
-    w.folded !== "" ? folded.includes(w.folded) : (typed ??= nameKey(joined)).includes(w.typed),
+    w.folded !== ""
+      ? folded.includes(w.folded)
+      : (typed ??= nameKey(fields.filter(Boolean).join(" "))).includes(w.typed),
   );
 }
+
+/** A record's search text folded (searchFold), as matchesWords reads it: a caller that searches
+ *  the same records many times folds each once and passes it in (mediaIndex). */
+export const foldFields = (fields: ReadonlyArray<string | null | undefined>): string =>
+  searchFold(fields.filter(Boolean).join(" "));
 
 export const matchesQuery = (
   query: string,

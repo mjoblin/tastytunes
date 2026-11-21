@@ -59,7 +59,7 @@ import { learnArtMove, moveArt } from "./artMove";
 import { arrivalKey, recentRanks } from "@shared/recentlyAdded";
 import { arrivalsOf, noteArrivals } from "../data/albumArrivals";
 import { readRecentList, type RecentListRead } from "./recentList";
-import { matchesWords, nameKey, queryWords } from "@shared/keys";
+import { foldFields, matchesWords, nameKey, queryWords } from "@shared/keys";
 
 interface StoredIndex {
   udn: string;
@@ -1153,6 +1153,11 @@ export async function rebuild(host: string, server: MediaServerInfo): Promise<vo
   await build(host, server, server.searchable ? "search" : "browse", "asked");
 }
 
+/** Each node's search text folded once, kept with the node for as long as its index holds it: a
+ *  search folds only the query (0.16.0 folded every node at every keystroke, 160 ms at 100,000
+ *  nodes against 17 before folding). */
+const foldedText = new WeakMap<MediaNode, string>();
+
 /** Fresh-index tokenized search; null = no usable index (caller goes live). */
 export function searchIndex(
   udn: string,
@@ -1165,8 +1170,15 @@ export function searchIndex(
   if (words.length === 0) return { items: [], total: 0 };
   // the one text match (shared/keys), accents and punctuation folded; composers are searchable
   // ("bangalter" finds the track) without being artists
-  const matches = (n: MediaNode): boolean =>
-    matchesWords(words, [n.title, n.artist, n.album, ...(n.composers ?? [])]);
+  const matches = (n: MediaNode): boolean => {
+    const fields = [n.title, n.artist, n.album, ...(n.composers ?? [])];
+    let folded = foldedText.get(n);
+    if (folded === undefined) {
+      folded = foldFields(fields);
+      foldedText.set(n, folded);
+    }
+    return matchesWords(words, fields, folded);
+  };
   // EVERY MATCH (1,035 results once stopped at "first 500"): the scan is local, the lenses
   // already hold the whole index, and the Library reveals the results 500 at a time, so nothing
   // here needs a cap.

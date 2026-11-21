@@ -12,7 +12,7 @@ on:
 permissions:
   contents: write # electron-builder uploads release assets
 # id-token: write (the OIDC token Azure Artifact Signing takes in place of a stored secret) is
-# granted to the Windows job alone, the one that signs with it
+# granted to the Windows signing job alone (sign-windows), which runs only the packager
 
 jobs:
   # THE DRAFT IS CREATED ONCE, BEFORE ANY BUILD JOB. Every build job publishes
@@ -194,19 +194,20 @@ jobs:
   # repo:mjoblin/tastytunes:environment:release) — without it the azure/login
   # OIDC exchange is rejected. Kept off the matrix so the environment's
   # deployment semantics can't touch the other legs (see the note above).
+  # THE WINDOWS LEG IN TWO JOBS (0.16.0-rc.8). The OIDC token Azure Artifact Signing takes is in
+  # the environment of every step of a job granted id-token: write, so the job that installs the
+  # dependencies (their install scripts), runs the check and builds the app holds no such grant:
+  # it hands the built app (out/) to the signing job, which installs with every install script off
+  # (no production dependency has one) and runs only the packager, the one step that must sign.
   build-windows:
     needs: draft
     runs-on: windows-latest
     permissions:
-      contents: write # electron-builder uploads release assets
-      id-token: write # GitHub OIDC token for Azure Artifact Signing (no stored secret)
-    environment: release
-    # A signed dual-arch build is slower than unsigned (per-file service
-    # round-trips) but 45 minutes means something is stuck, not slow.
-    timeout-minutes: 45
+      contents: read
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
-        # no token left in .git/config for the steps after it (gh and the packaging read GH_TOKEN)
+        # no token left in .git/config for the steps after it
         with:
           persist-credentials: false
 
@@ -234,6 +235,43 @@ jobs:
 
       - run: npm run build
 
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: tastytunes-windows-out
+          retention-days: 1
+          path: out/
+          if-no-files-found: error
+
+  sign-windows:
+    needs: build-windows
+    runs-on: windows-latest
+    permissions:
+      contents: write # electron-builder uploads release assets
+      id-token: write # GitHub OIDC token for Azure Artifact Signing (no stored secret)
+    environment: release
+    # A signed dual-arch build is slower than unsigned (per-file service
+    # round-trips) but 45 minutes means something is stuck, not slow.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        # no token left in .git/config for the steps after it (the packaging reads GH_TOKEN)
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      # the packager and the app's production dependencies, no install script run beside the
+      # token (Electron's own binary is the packager's download, not an install script's)
+      - run: npm ci --ignore-scripts
+
+      - uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v6.0.0
+        with:
+          name: tastytunes-windows-out
+          path: out/
+
       # Azure Artifact Signing auth. OIDC only — no long-lived secret exists
       # anywhere; the exchanged token is scoped to the signer role on the
       # redactedcatsigning account. build-win.mjs turns signing on when it
@@ -259,16 +297,17 @@ jobs:
 
       # Windows goes through scripts/build-win.mjs — it pins the 7z filter
       # (without it the arm64 installer ships broken) and injects the Azure
-      # signing options; see that file.
+      # signing options; see that file. It packages the out/ the build job made
+      # (the dist:win script would build the app again here).
       - name: Package and publish
         if: startsWith(github.ref, 'refs/tags/v')
-        run: npm run dist:win -- --publish always
+        run: node scripts/build-win.mjs --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Package only
         if: "!startsWith(github.ref, 'refs/tags/v')"
-        run: npm run dist:win -- --publish never
+        run: node scripts/build-win.mjs --publish never
 
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: "!startsWith(github.ref, 'refs/tags/v')"

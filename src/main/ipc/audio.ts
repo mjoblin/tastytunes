@@ -1,4 +1,5 @@
 import { IPC } from "@shared/ipc";
+import { unhurried } from "@shared/model";
 import { broadcastAlbumDrs, broadcastAnalysisStats, broadcastSettings } from "../app/broadcast";
 import { streamerHost } from "../app/runtime";
 import { getSettings, updateSettings } from "../data/persist";
@@ -44,6 +45,8 @@ const ANALYSIS_MAX_BYTES =
  * out before a window stopped is not handed out again this session.
  */
 const DECODED_MAX_BYTES = 1024 * 1024 * 1024;
+/** How long an unhurried whole-file read waits for the server's next bytes before giving up. */
+const PACED_IDLE_MS = 30_000;
 const handedOut = new Map<string, number>();
 
 // whether this session has asked for the summaries made before tempo and key to be remade
@@ -64,7 +67,11 @@ export function registerAudioIpc(): void {
     if (getSettings().waveformSeen) return;
     broadcastSettings(updateSettings({ waveformSeen: true }));
   };
-  handle(IPC.expTrackAudio, async (_e, serverUdn: string, objectId: string) => {
+  handle(IPC.expTrackAudio, async (_e, serverUdn: string, objectId: string, opts?: unknown) => {
+    // unhurried (shared/model): a measuring nobody is waiting on reads no faster than the pace,
+    // and is given up only when the server stops sending, not after a fixed two minutes
+    const paced =
+      typeof opts === "object" && opts != null && (opts as { pace?: unknown }).pace === true;
     const host = streamerHost();
     if (!host || typeof serverUdn !== "string" || typeof objectId !== "string") return null;
     const res0 = await audioRes(host, serverUdn, objectId);
@@ -84,7 +91,16 @@ export function registerAudioIpc(): void {
     handedOut.set(key, windowsGone());
     if (handedOut.size > 500) handedOut.delete(handedOut.keys().next().value as string);
     try {
-      const res = await loggedFetch("media-audio", url, { signal: AbortSignal.timeout(120_000) });
+      const quiet = new AbortController();
+      let idle: NodeJS.Timeout | null = null;
+      const stillSending = (): void => {
+        if (idle) clearTimeout(idle);
+        idle = setTimeout(() => quiet.abort(), PACED_IDLE_MS);
+      };
+      if (paced) stillSending();
+      const res = await loggedFetch("media-audio", url, {
+        signal: paced ? quiet.signal : AbortSignal.timeout(120_000),
+      });
       if (!res.ok || !res.body) return null;
       const declared = Number(res.headers.get("content-length") ?? 0);
       const tooLarge = (bytes: number) => ({ tooLarge: { bytes, maxBytes: ANALYSIS_MAX_BYTES } });
@@ -96,6 +112,7 @@ export function registerAudioIpc(): void {
       // one buffer the size the server declared (no second copy on the way to the renderer);
       // chunks gathered only when it declared none, or more arrived than it said
       const reader = res.body.getReader();
+      const due = paced ? unhurried() : null;
       let out: Buffer | null = declared > 0 ? Buffer.allocUnsafe(declared) : null;
       let chunks: Uint8Array[] = [];
       let total = 0;
@@ -114,7 +131,13 @@ export function registerAudioIpc(): void {
         if (out) out.set(value, total);
         else chunks.push(value);
         total += value.byteLength;
+        if (due) {
+          const wait = due(value.byteLength);
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+          stillSending();
+        }
       }
+      if (idle) clearTimeout(idle);
       return out ? out.subarray(0, total) : Buffer.concat(chunks, total);
     } catch {
       return null;

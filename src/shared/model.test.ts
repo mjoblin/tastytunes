@@ -7,8 +7,10 @@
  * pick up again, and how a title meets the library. The names in the
  * fixtures are placeholders chosen to show a shape.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  UNHURRIED_BYTES_PER_SECOND,
+  unhurried,
   creditNames,
   albumFormat,
   albumTracksOf,
@@ -1004,5 +1006,22 @@ describe("withoutAppended: an undo of an add takes out only what it added", () =
     expect(withoutAppended(now, [t("A")]).map((i) => i.title)).toEqual(["A", "B"]);
     // a track removed since is simply not there to take
     expect(withoutAppended([t("B")], [t("A")]).map((i) => i.title)).toEqual(["B"]);
+  });
+});
+
+describe("the unhurried pace, one rule for both of the analysis's reads", () => {
+  it("waits so the bytes read stay at the pace or under, and never waits once behind it", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      const due = unhurried();
+      expect(due(UNHURRIED_BYTES_PER_SECOND)).toBe(1000);
+      vi.setSystemTime(1000);
+      expect(due(UNHURRIED_BYTES_PER_SECOND / 2)).toBe(500);
+      vi.setSystemTime(5000);
+      expect(due(UNHURRIED_BYTES_PER_SECOND)).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
