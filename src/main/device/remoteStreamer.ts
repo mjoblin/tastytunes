@@ -114,13 +114,28 @@ export class RemoteStreamer {
   }
 
   /** Connected and known: the socket open and the streamer's identity and state in hand, waited
-   *  for up to `ms`. */
+   *  for up to `ms`. Then, within the same wait, its power, what it is playing and its queue,
+   *  which arrive a moment after (0.16.0 answered without them: a first list_queue read an empty
+   *  queue for a full one, and a power-on went to a streamer already on); a model that never
+   *  sends one of them is still ready once the wait is up. */
   async ready(ms = 6000): Promise<boolean> {
     const until = Date.now() + ms;
+    const pause = (): Promise<void> => new Promise((r) => setTimeout(r, 100));
     const isReady = (): boolean =>
       this.socket.isOpen() && this.cache.systemInfo != null && this.cache.zoneState != null;
-    while (!isReady() && Date.now() < until) await new Promise((r) => setTimeout(r, 100));
-    return isReady();
+    const settled = (): boolean =>
+      this.cache.systemPower != null && this.cache.playState != null && this.cache.queue != null;
+    while (!isReady() && Date.now() < until) await pause();
+    if (!isReady()) return false;
+    while (!settled() && this.socket.isOpen() && Date.now() < until) await pause();
+    return this.socket.isOpen();
+  }
+
+  /** After the computer wakes: the socket's liveness checked, and a sleep timer that came due
+   *  during the sleep fired, as the window's connection does both. */
+  resumed(): void {
+    void this.socket.healthCheck();
+    this.sleeper.checkSleepTimer();
   }
 
   async refreshPresets(): Promise<void> {
@@ -267,6 +282,22 @@ export class RemoteStreamers {
   /** The connections open now (get_status names them). */
   hosts(): string[] {
     return [...this.open.keys()];
+  }
+
+  /** A connection that didn't become ready (no streamer there, or one that isn't answering)
+   *  closes now rather than retrying until the idle sweep, unless a sleep timer is armed on it. */
+  forget(host: string): void {
+    const remote = this.open.get(host);
+    if (!remote || remote.sleeper.current != null) return;
+    remote.close();
+    this.open.delete(host);
+    this.log(`closed the connection to ${host}: no streamer answered`);
+  }
+
+  /** The computer woke: each open connection checked, and its sleep timer (0.16.0: only the
+   *  window's was, so a timer on another streamer that came due during the sleep fired late). */
+  resumed(): void {
+    for (const remote of this.open.values()) remote.resumed();
   }
 
   /** Closes the connections an agent has left idle, none with a sleep timer armed. */

@@ -260,4 +260,17 @@ describe("the streamer an agent names, on this network only", () => {
       error: "No streamer called 'Kitchen'. Use list_devices for their names.",
     });
   });
+  it("says when two streamers share the name, and takes one seen twice as one", () => {
+    const twins = [
+      ...devices,
+      { friendlyName: "Living Room", udn: "uuid:evo-2", host: "10.0.0.21" },
+    ];
+    const out = streamerHostOf("Living Room", twins);
+    expect("error" in out && out.error).toBe(
+      "More than one streamer is called 'Living Room' (at 10.0.0.20 and 10.0.0.21). Pass the host instead.",
+    );
+    expect(streamerHostOf("10.0.0.21", twins)).toEqual({ host: "10.0.0.21" });
+    // the device book and the network sweep both list the same streamer
+    expect(streamerHostOf("Living Room", [...devices, ...devices])).toEqual({ host: "10.0.0.20" });
+  });
 });

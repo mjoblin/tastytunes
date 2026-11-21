@@ -35,6 +35,7 @@ import { registerIpc } from "./ipc";
 import { artistPrefetchAfterIndex, startArtistPrefetch } from "./lookups/artistPrefetch";
 import { flushArtThumbs } from "./lookups/artThumbs";
 import { flushLookupCaches } from "./lookups/diskCache";
+import { remoteStreamers } from "./device/remoteStreamer";
 import * as mediaIndex from "./media/mediaIndex";
 import { deviceLaneReset, refreshServers } from "./media/upnpBrowser";
 import { stopDemoStreamer } from "./servers/demoStreamer";
@@ -176,6 +177,8 @@ if (!gotLock) {
       powerMonitor.on("resume", () => {
         deviceManager.healthCheck();
         deviceManager.checkSleepTimer();
+        // an agent's connections to other streamers, and their sleep timers, as the window's
+        remoteStreamers.resumed();
         catchUpOnResume(deviceManager);
       });
     })
