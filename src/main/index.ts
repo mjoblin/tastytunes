@@ -4,7 +4,7 @@ import "./app/boot";
 import { app, globalShortcut, powerMonitor } from "electron";
 import { IPC } from "@shared/ipc";
 import { serveArtProtocol } from "./app/artProtocol";
-import { denyPermissionsByDefault, keepNoCookies } from "./app/permissions";
+import { denyPermissionsByDefault, keepNoCookies, logWindowPictures } from "./app/permissions";
 import { lateStep, startupFailed } from "./app/bootFailure";
 import { broadcastSettings, wireListeningPushes } from "./app/broadcast";
 import { syncMediaKeys } from "./app/mediaKeys";
@@ -100,6 +100,7 @@ if (!gotLock) {
       await moveSecrets();
       denyPermissionsByDefault();
       keepNoCookies();
+      logWindowPictures();
       serveArtProtocol();
       registerIpc();
       installAppMenu(menuDeps);

@@ -15,6 +15,12 @@ protocol.registerSchemesAsPrivileged([
   { scheme: "tt-art", privileges: { standard: true, secure: true, supportFetchAPI: true } },
 ]);
 
+// THE WINDOWS' OWN PICTURE CACHE, BOUNDED (0.16.0-rc.8): Chromium keeps what a window loads from
+// the web in an HTTP cache that grew to 1.3 GB in a real profile, outside Settings' sizes and
+// Clear. Held at 64 MB, and emptied with the album-art cache's Clear (ipc/lookups).
+export const HTTP_CACHE_BYTES = 64 * 1024 * 1024;
+app.commandLine.appendSwitch("disk-cache-size", String(HTTP_CACHE_BYTES));
+
 // A dead log pipe must never crash the app: when a parent process that
 // spawned us (a script, a test harness) dies, our stdout/stderr writes
 // eventually hit EPIPE once the kernel buffer fills — hours later — and an

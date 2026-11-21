@@ -114,6 +114,8 @@ export function createWindow(): void {
     // hidden until Alt reveals it (no-op on macOS).
     autoHideMenuBar: true,
     webPreferences: {
+      // no text box in the app needs it, and off the Mac it fetches its dictionaries from Google
+      spellcheck: false,
       preload: join(__dirname, "../preload/index.cjs"),
       sandbox: true,
     },
@@ -227,6 +229,8 @@ export function toggleMiniPlayer(): void {
     ...(process.platform === "darwin" ? { type: "panel" as const } : {}),
     fullscreenable: false,
     webPreferences: {
+      // no text box in the app needs it, and off the Mac it fetches its dictionaries from Google
+      spellcheck: false,
       preload: join(__dirname, "../preload/index.cjs"),
       sandbox: true,
     },

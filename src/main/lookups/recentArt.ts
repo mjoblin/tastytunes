@@ -1,6 +1,7 @@
 import { nativeImage } from "electron";
 import { playAlbumKey, playKey, type RecentTrack } from "@shared/model";
 import { DiskCache } from "./diskCache";
+import { fetchPicture } from "./artFetch";
 
 /**
  * The device log's ART CACHE (2026-09-05, History round two). A track played
@@ -67,27 +68,28 @@ export function setRecentArtNotifier(fn: (key: string) => void): void {
 
 /** Capture a log entry's art while its URL is alive (no-op for durable art,
  *  a known key, or a capture already in flight). Failures leave the icon. */
-export function captureRecentArt(e: RecentTrack): void {
+export function captureRecentArt(e: RecentTrack, trusted: (hostname: string) => boolean): void {
   if (!transient(e)) return;
   const key = recentArtKey(e);
   if ((cache.has(key) && covers.has(key)) || inflight.has(key)) return;
   inflight.add(key);
   void (async () => {
     try {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), FETCH_MS);
-      const res = await fetch(e.artUrl as string, { signal: ctrl.signal });
-      clearTimeout(timer);
-      if (!res.ok) {
-        // a retired id: the streamer serves only the current track's cover and
-        // answers 400 (or 500) for any earlier one. Expected in the ordinary
-        // course of a session (the first frame of a new AirPlay track names the
-        // previous cover), so not a warning; the row keeps its icon and a later
-        // frame's URL gets its own capture.
-        return;
-      }
-      const buf = Buffer.from(await res.arrayBuffer());
-      if (buf.length === 0 || buf.length > 8 * 1024 * 1024) return;
+      // through the one picture fetch (lookups/artFetch): every hop checked, capped as it
+      // arrives, and in the requests console when it leaves the local network (0.16.0: a bare
+      // fetch, redirects followed, the whole body buffered before its size check)
+      const got = await fetchPicture(e.artUrl as string, trusted, {
+        maxBytes: 8 * 1024 * 1024,
+        timeoutMs: FETCH_MS,
+        logged: false,
+      });
+      // null for a retired id too: the streamer serves only the current track's cover and
+      // answers 400 (or 500) for any earlier one. Expected in the ordinary course of a session
+      // (the first frame of a new AirPlay track names the previous cover), so not a warning; the
+      // row keeps its icon and a later frame's URL gets its own capture.
+      if (!got) return;
+      const buf = got.bytes;
+      if (buf.length === 0) return;
       const img = nativeImage.createFromBuffer(buf);
       if (img.isEmpty()) return; // a format nativeImage cannot read (SVG)
       const { width } = img.getSize();

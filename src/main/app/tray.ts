@@ -541,6 +541,8 @@ function ensurePanel(): BrowserWindow {
     // No traffic lights, no shadow gap — the panel draws its own card.
     backgroundColor: "#00000000",
     webPreferences: {
+      // no text box in the app needs it, and off the Mac it fetches its dictionaries from Google
+      spellcheck: false,
       preload: join(__dirname, "../preload/index.cjs"),
       sandbox: true,
       // THE PANEL MUST NOT BE THROTTLED WHILE HIDDEN. Chromium suspends

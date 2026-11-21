@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { BrowserWindow, session } from "electron";
 import { IPC } from "@shared/ipc";
 import type {
   ArtistChoice,
@@ -248,7 +248,11 @@ export function registerLookupsIpc(): void {
   handle(IPC.lookupCacheStats, () => lookupCacheStats());
   handle(IPC.clearLookupCaches, () => clearLookupCaches());
   handle(IPC.artThumbsStats, () => artThumbsStats());
-  handle(IPC.clearArtThumbs, () => clearArtThumbs());
+  handle(IPC.clearArtThumbs, async () => {
+    // the windows' own cache of web pictures goes with it (app/boot HTTP_CACHE_BYTES)
+    await session.defaultSession.clearCache().catch(() => {});
+    return clearArtThumbs();
+  });
   handle(IPC.radioSearch, (_e, query: string) => radioSearch(query));
   handle(IPC.radioTop, () => radioTop());
   handle(IPC.radioByTags, (_e, tags: string[]) => radioByTags(tags));
