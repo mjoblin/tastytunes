@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { checkFrame } from "./frameCheck";
+import { checkDocument, checkFrame } from "./frameCheck";
 
 // the Evo's own shapes (trimmed captures), the ones that must pass exactly as they came
 const PLAY_STATE = {
@@ -124,5 +124,27 @@ describe("checkFrame", () => {
 
   it("passes a path it has no check for as it came", () => {
     expect(checkFrame("/zone/play_control", null)).toEqual({ ok: true, data: null, setAside: [] });
+  });
+});
+
+describe("the documents fetched over HTTP, checked as frames are", () => {
+  it("keeps a capability document's fields of their kind and sets aside the rest", () => {
+    expect(
+      checkDocument("/system/power/spec", {
+        power: { enum: ["ON", "NETWORK"], readonly: false },
+        auto_power_down: { minimum: "soon" },
+        future: 1,
+      }),
+    ).toEqual({
+      power: { enum: ["ON", "NETWORK"], readonly: false },
+      auto_power_down: { minimum: null },
+      future: 1,
+    });
+  });
+
+  it("answers null for no document or one that isn't an object", () => {
+    expect(checkDocument("/zone/audio/spec", null)).toBeNull();
+    expect(checkDocument("/zone/audio/spec", "not json")).toBeNull();
+    expect(checkDocument("/presets/list", [1, 2])).toBeNull();
   });
 });

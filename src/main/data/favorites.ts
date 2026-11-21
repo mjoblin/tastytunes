@@ -16,6 +16,7 @@ let carried = carriedNone();
 const store = jsonFileStore<Favorite[]>({
   pathOf: () => join(app.getPath("userData"), "favorites.json"),
   scope: "favorites",
+  said: "your favorites",
   load: (parsed, setAside) => {
     carried = carriedNone();
     return checkFavorites(parsed, setAside, carried);

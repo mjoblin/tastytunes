@@ -211,7 +211,7 @@ describe("a play's time is the music's, never the clock's", () => {
     expect(seen.at(-1)).toMatchObject({ title: "Small Hours", playedSeconds: 320 });
   });
 
-  it("reads a line written before the bound as its track's length, leaving others as written", () => {
+  it("reads a line written before the bound as its track's length, an external play's too, leaving others as written", () => {
     const dir = join(app.getPath("userData"), "history");
     mkdirSync(dir, { recursive: true });
     const line = (kind: string, played: number, duration: number | null): string =>
@@ -239,7 +239,7 @@ describe("a play's time is the music's, never the clock's", () => {
       listeningRecord
         .readYear(2041)
         .events.map((e) => ("playedSeconds" in e ? e.playedSeconds : null)),
-    ).toEqual([376, 400, 900, 5000]);
+    ).toEqual([376, 400, 900, 376]);
   });
 });
 

@@ -263,7 +263,7 @@ export function PlaylistsScreen(): React.JSX.Element {
       preview: (from, to) => setMovePreview({ from, to }),
       commit: (from, to) => {
         if (!selected) return setMovePreview(null);
-        void tt.playlistSetItems(selected.id, arrayMove(selected.items, from, to));
+        moveItem(from, to);
       },
       cancel: () => setMovePreview(null),
     },
@@ -274,7 +274,32 @@ export function PlaylistsScreen(): React.JSX.Element {
     const from = ids.indexOf(String(e.active.id));
     const to = ids.indexOf(String(e.over.id));
     if (from < 0 || to < 0) return;
-    void tt.playlistSetItems(selected.id, arrayMove(selected.items, from, to));
+    moveItem(from, to);
+  };
+
+  /**
+   * A move, with its own undo (0.16.0 pushed none, so Cmd+Z after reordering a new playlist undid
+   * its creation as it stood). Undoing finds the track in the playlist as it is NOW, at its new
+   * place or by its content, and puts it back where it was.
+   */
+  const moveItem = (from: number, to: number): void => {
+    if (!selected) return;
+    const id = selected.id;
+    const item = selected.items[from];
+    void tt.playlistSetItems(id, arrayMove(selected.items, from, to));
+    if (!item) return;
+    const same = (x: PlaylistItem | undefined): boolean =>
+      !!x && x.title === item.title && x.artist === item.artist && x.objectId === item.objectId;
+    useStore.getState().pushUndo(`Move “${item.title}” in Playlist`, () => {
+      const current = useStore.getState().playlists.find((p) => p.id === id);
+      if (!current) return;
+      const at = same(current.items[to]) ? to : current.items.findIndex(same);
+      if (at < 0) return;
+      void tt.playlistSetItems(
+        id,
+        arrayMove(current.items, at, Math.min(from, current.items.length - 1)),
+      );
+    });
   };
 
   /**

@@ -10,7 +10,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname } from "node:path";
-import { keepAsFound, noteSaved, readSaved } from "./savedFiles";
+import { keepAsFound, noteSaved, readSaved, saveFailed } from "./savedFiles";
 
 // The one JSON-persistence layer for the local data files (favorites,
 // playlists, recents, settings, the media index). Deliberately electron-free
@@ -86,11 +86,15 @@ export function jsonFileStore<T>(opts: {
   encode?(next: T): unknown;
   /** What the load kept out of the app but carried through, for the log. */
   kept?(): readonly string[];
+  /** The reader's name for the file ("your favorites"): a failed save is then said in the
+   *  windows too (data/savedFiles saveFailed); without one it is a log line. */
+  said?: string;
 }): { get(): T; set(next: T): T; readWhole(): boolean } {
   let cached: T | null = null;
   // a file that couldn't be read is never written over this session (data/savedFiles)
   let unreadable = false;
   let whole = false;
+  let failedSaid = false;
   return {
     get() {
       if (cached !== null) return cached;
@@ -118,6 +122,11 @@ export function jsonFileStore<T>(opts: {
         atomicWriteFileSync(opts.pathOf(), JSON.stringify(opts.encode ? opts.encode(next) : next));
       } catch (err) {
         console.error(`failed to persist ${opts.scope}`, err);
+        if (!failedSaid) {
+          failedSaid = true;
+          if (opts.said) saveFailed(opts.said, err);
+          else noteSaved("error", `${opts.scope} couldn't be saved (${String(err)})`);
+        }
       }
       return next;
     },

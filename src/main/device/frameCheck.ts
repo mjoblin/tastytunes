@@ -212,8 +212,34 @@ const SYSTEM_SOURCES = z.looseObject({
   ),
 });
 
+// THE DOCUMENTS FETCHED OVER HTTP (0.16.0-rc.8): the three capability documents, read once at
+// connect, checked as a frame is (0.16.0 cast them as they came); the presets reuse their frame's
+const range = (at: string): z.ZodType => fields(at, { minimum: num, maximum: num, readonly: yes });
+const choice = (at: string): z.ZodType => fields(at, { enum: z.array(str), readonly: yes });
+const AUDIO_SPEC = fields("", {
+  volume_limit_percent: range("volume_limit_percent."),
+  pipeline: fields("pipeline.", { readonly: yes }),
+  tilt_eq: range("tilt_eq."),
+  user_eq: fields("user_eq.", {
+    bands: num,
+    filters: fields("user_eq.filters.", { enum: z.array(str) }),
+    readonly: yes,
+    always_on: yes,
+  }),
+  balance: range("balance."),
+});
+const POWER_SPEC = fields("", {
+  power: choice("power."),
+  standby_mode: choice("standby_mode."),
+  auto_power_down: range("auto_power_down."),
+});
+const DISPLAY_SPEC = fields("", { brightness: choice("brightness.") });
+
 /** Each subscribed path's check; a path not here (a command's echo, /queue/info) passes as it came. */
 const CHECKS: Record<string, z.ZodType> = {
+  "/zone/audio/spec": AUDIO_SPEC,
+  "/system/power/spec": POWER_SPEC,
+  "/system/display/spec": DISPLAY_SPEC,
   "/zone/play_state": PLAY_STATE,
   "/zone/play_state/position": z.looseObject({ position: num }),
   "/zone/now_playing": NOW_PLAYING,
@@ -247,4 +273,12 @@ export function checkFrame(path: string, data: unknown): FrameCheck {
   } finally {
     setAside = [];
   }
+}
+
+/** A document fetched over HTTP (the presets, the three capability documents), checked as its
+ *  frame would be: what to keep, or null when there is none or it isn't one. */
+export function checkDocument<T>(path: string, data: unknown): T | null {
+  if (data == null) return null;
+  const r = checkFrame(path, data);
+  return r.ok ? (r.data as T) : null;
 }

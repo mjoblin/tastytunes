@@ -1,6 +1,7 @@
 import { DeviceManager } from "../device/deviceManager";
 import { McpBridge } from "../servers/mcpServer";
-import { onSavedNotes } from "../data/savedFiles";
+import { webContents } from "electron";
+import { onSavedNotes, onSaveFailedNotice } from "../data/savedFiles";
 
 // The main process's two long-lived services, one instance each (split out of index.ts in the
 // 0.11.0 sweep). Constructed when first imported, which is after app/boot has pinned userData.
@@ -14,6 +15,11 @@ process.on("unhandledRejection", (reason) => deviceManager.logUnhandled(reason))
 process.on("uncaughtException", (err) => deviceManager.logUnhandled(err, "uncaught exception"));
 // what the saved files' checks found (data/savedFiles), the notes from before this point first
 onSavedNotes((note) => deviceManager.log(note.level, "saved", note.text));
+// a failed save is said in every window too, as a notice (data/savedFiles saveFailed)
+onSaveFailedNotice((text) => {
+  for (const wc of webContents.getAllWebContents())
+    if (!wc.isDestroyed()) wc.send("tt:push", { kind: "notice", text });
+});
 export const mcpBridge = new McpBridge(deviceManager);
 
 /** The connected streamer's host; media-browser calls need one and throw without it. */

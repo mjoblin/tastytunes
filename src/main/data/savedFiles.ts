@@ -215,3 +215,33 @@ export function keepVersionCopy(
     );
   }
 }
+
+/**
+ * A SAVE THAT FAILED, SAID (0.16.0-rc.8, toward 1.0): a full disk or a folder that can't be
+ * written was a console line only, and the session's changes were lost at quit with nothing
+ * shown. Said in the log, and in the windows as a notice, once per file a session; `what` is the
+ * reader's name for it ("your favorites").
+ */
+export function saveFailed(what: string, err: unknown): void {
+  // read inline: this module imports only node (the write tests run it in a plain Node process)
+  const code =
+    typeof err === "object" && err !== null && typeof (err as { code?: unknown }).code === "string"
+      ? (err as { code: string }).code
+      : "";
+  const cause =
+    code === "ENOSPC"
+      ? " The disk is full."
+      : code === "EACCES" || code === "EPERM" || code === "EROFS"
+        ? " The folder can't be written to."
+        : "";
+  const text = `Couldn't save ${what}.${cause}`;
+  noteSaved("error", `${text} (${errorMessage(err)})`);
+  notice(text);
+}
+
+// the windows are main's to reach (app/runtime wires this); this module stays free of electron,
+// since the write tests run it in a plain Node process
+let notice: (text: string) => void = () => {};
+export function onSaveFailedNotice(fn: (text: string) => void): void {
+  notice = fn;
+}
