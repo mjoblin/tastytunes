@@ -45,7 +45,13 @@ let gone = 0;
  *  whole-file decode handed out before one is not handed out again (main/ipc/audio). */
 export const windowsGone = (): number => gone;
 
-export function reloadOnCrash(win: BrowserWindow, name: string, log: (text: string) => void): void {
+export function reloadOnCrash(
+  win: BrowserWindow,
+  name: string,
+  log: (text: string) => void,
+  /** The window was left closed, out of reloads (the main window's stuck dialog). */
+  leftClosed: () => void = () => {},
+): void {
   const times: number[] = [];
   // the app's quit, watched once for every window
   if (!quitWatched) {
@@ -64,6 +70,7 @@ export function reloadOnCrash(win: BrowserWindow, name: string, log: (text: stri
       log(
         `The ${name} window stopped (${details.reason}) and was left closed: ${CRASH_MAX_RELOADS} reloads in a minute`,
       );
+      leftClosed();
       return;
     }
     log(`The ${name} window stopped (${details.reason}) and was reloaded`);

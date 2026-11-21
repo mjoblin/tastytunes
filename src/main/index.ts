@@ -5,7 +5,7 @@ import { app, globalShortcut, powerMonitor } from "electron";
 import { IPC } from "@shared/ipc";
 import { serveArtProtocol } from "./app/artProtocol";
 import { denyPermissionsByDefault, keepNoCookies } from "./app/permissions";
-import { startupFailed } from "./app/bootFailure";
+import { lateStep, startupFailed } from "./app/bootFailure";
 import { broadcastSettings, wireListeningPushes } from "./app/broadcast";
 import { syncMediaKeys } from "./app/mediaKeys";
 import { installAppMenu } from "./app/menu";
@@ -155,31 +155,37 @@ if (!gotLock) {
             .catch(() => {});
         }
       };
-      mcpBridge.sync(getSettings());
-      void deviceManager.startup();
+      // EACH LATE STEP IN ITS OWN TRY (app/bootFailure lateStep): with the window or the menu bar
+      // icon up, a step that throws costs itself, never the steps after it
+      lateStep("the agents' server", () => mcpBridge.sync(getSettings()));
+      lateStep("connecting", () => deviceManager.startup());
       // tastytunes:// URLs, those that arrived before ready first (app/urlInbox)
-      serveUrlActions();
-      startScheduler(deviceManager);
-      startArtistPrefetch();
-      mediaIndex.init((statuses) => {
-        deviceManager.setMediaIndex(statuses);
-        artistPrefetchAfterIndex();
-      });
+      lateStep("links", () => serveUrlActions());
+      lateStep("schedules", () => startScheduler(deviceManager));
+      lateStep("artist pictures", () => startArtistPrefetch());
+      lateStep("the library index", () =>
+        mediaIndex.init((statuses) => {
+          deviceManager.setMediaIndex(statuses);
+          artistPrefetchAfterIndex();
+        }),
+      );
 
       // Node timers stall during system sleep. The sleep timer fires what came
       // due; the SCHEDULER offers it instead (an alarm minutes late is a
       // question, not an instruction) — see scheduler.ts for the three rules.
-      powerMonitor.on("suspend", () => {
-        noteSuspend();
-        // a station's session waits for the wake to say whether it played through (data/listeningRecord)
-        listeningRecord.noteSleep();
-      });
-      powerMonitor.on("resume", () => {
-        deviceManager.healthCheck();
-        deviceManager.checkSleepTimer();
-        // an agent's connections to other streamers, and their sleep timers, as the window's
-        remoteStreamers.resumed();
-        catchUpOnResume(deviceManager);
+      lateStep("the sleep handlers", () => {
+        powerMonitor.on("suspend", () => {
+          noteSuspend();
+          // a station's session waits for the wake to say whether it played through (data/listeningRecord)
+          listeningRecord.noteSleep();
+        });
+        powerMonitor.on("resume", () => {
+          deviceManager.healthCheck();
+          deviceManager.checkSleepTimer();
+          // an agent's connections to other streamers, and their sleep timers, as the window's
+          remoteStreamers.resumed();
+          catchUpOnResume(deviceManager);
+        });
       });
     })
     // a failure anywhere in start-up says so, and points at the latest version; with the window or

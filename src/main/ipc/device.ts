@@ -3,12 +3,17 @@ import type { StreamerCommand } from "@shared/ipc";
 import type { SleepTimer } from "@shared/model";
 import { dismissMissedSchedule, runMissedSchedule } from "../app/scheduler";
 import { deviceManager } from "../app/runtime";
+import { noteWindowAsked } from "../app/windows";
 import { startDemoStreamer } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
 
 /** Connection, the demo, commands, the sleep timer and missed schedules. (Split out of index.ts's registerIpc in the 0.11.0 sweep.) */
 export function registerDeviceIpc(): void {
-  handle(IPC.getSnapshot, () => deviceManager.snapshot());
+  handle(IPC.getSnapshot, (e) => {
+    // the main window's page asks first thing: it is up (app/windows)
+    noteWindowAsked(e.sender);
+    return deviceManager.snapshot();
+  });
   handle(IPC.discover, () => deviceManager.discover());
   // leaving the demo shuts its server down inside connect and disconnect (DeviceManager)
   handle(IPC.connect, (_e, host: string) => deviceManager.connect(host));
