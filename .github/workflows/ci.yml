@@ -2,7 +2,7 @@ name: CI
 
 # The gate on every push and pull request: typecheck, lint, format check and
 # the unit tests, via the same npm run check the Release workflow runs before
-# it builds. On Linux and Windows, so a test that fails only on Windows (a path,
+# it builds. On Linux, Windows and macOS, so a test that fails only on Windows (a path,
 # a line ending) is seen on the push that brings it, not first in a Release
 # run's Windows leg; no packaging: the release legs already prove the build on
 # each OS, and this is the check that should answer in a few minutes, not the
@@ -23,7 +23,7 @@ jobs:
       # each OS reports on its own: a Windows-only failure doesn't cancel the Linux run
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3

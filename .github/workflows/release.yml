@@ -122,6 +122,20 @@ jobs:
       # On manual runs: build only; artifacts are attached to the workflow run.
       # The Mac's signing and notarization secrets are in this step's env only, the macOS leg's,
       # and become electron-builder's variables in .github/scripts/mac-signing.sh
+      # A RE-RUN NEVER REPLACES A PUBLISHED RELEASE'S FILES: a leg re-run after the publish would
+      # upload over installers people already have; it publishes only into the draft
+      - name: The release is still a draft
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          draft=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          if [ "$draft" != "true" ]; then
+            echo "::error::$GITHUB_REF_NAME is published already: a re-run would replace its files. Cut a new version instead."
+            exit 1
+          fi
+
       - name: Package and publish
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -299,6 +313,20 @@ jobs:
       # (without it the arm64 installer ships broken) and injects the Azure
       # signing options; see that file. It packages the out/ the build job made
       # (the dist:win script would build the app again here).
+      # A RE-RUN NEVER REPLACES A PUBLISHED RELEASE'S FILES: a leg re-run after the publish would
+      # upload over installers people already have; it publishes only into the draft
+      - name: The release is still a draft
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          draft=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          if [ "$draft" != "true" ]; then
+            echo "::error::$GITHUB_REF_NAME is published already: a re-run would replace its files. Cut a new version instead."
+            exit 1
+          fi
+
       - name: Package and publish
         if: startsWith(github.ref, 'refs/tags/v')
         run: node scripts/build-win.mjs --publish always
@@ -316,3 +344,30 @@ jobs:
           retention-days: 7
           path: dist/*.exe
           if-no-files-found: ignore
+
+  # EVERY INSTALLER ATTACHED BEFORE ANYONE PUBLISHES: the twelve files a release carries, read back
+  # from the draft once every leg is done (a leg that published nothing used to show only in its
+  # own log, and the check was by eye)
+  verify:
+    needs: [build, sign-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: The draft carries every file
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          have=$(gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          missing=0
+          for f in latest.yml latest-mac.yml latest-linux.yml latest-linux-arm64.yml \
+            "TastyTunes-$version-universal-mac.zip" "TastyTunes-$version-universal-mac.zip.blockmap" \
+            TastyTunes.dmg TastyTunes.dmg.blockmap TastyTunes-Setup.exe TastyTunes-Setup.exe.blockmap \
+            TastyTunes-x86_64.AppImage TastyTunes-arm64.AppImage; do
+            if ! printf '%s\n' "$have" | grep -qxF "$f"; then echo "::error::missing from the draft: $f"; missing=1; fi
+          done
+          [ "$missing" = 0 ] && echo "all twelve files are attached"
+          exit "$missing"
