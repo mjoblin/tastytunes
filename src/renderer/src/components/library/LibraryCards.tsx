@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Disc3, Folder, Heart, MoreHorizontal, Play, UserRound } from "lucide-react";
-import { trackPosition, type MediaNode } from "@shared/model";
+import { performerLine, trackPosition, type MediaNode } from "@shared/model";
 import { cx } from "@/lib/format";
 import { isAlbumClass, isArtistClass, isMutedArt } from "@/lib/media";
 import { useArtistPicture } from "@/lib/artistPictures";
@@ -12,7 +12,7 @@ import { cardChip } from "@/components/chrome/Chrome";
 import { DrBadge, DrPending, drTone, fmtLufs } from "@/components/media/Waveform";
 import { SignalDot } from "@/components/device/SignalLamp";
 import type { CardDetails } from "@/components/library/useCardDetails";
-import { DurationCell } from "@/components/media/DurationCell";
+import { DURATION_WIDE, DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
 import { NameLine, NameLink } from "@/components/media/NameLine";
 import { artKeyOf, artSrc } from "@/lib/artSrc";
@@ -541,6 +541,7 @@ export function ContainerRow({
   badgeTip,
   dr,
   analyzing,
+  length,
   onArtistLink,
   onNavDrag,
   onHeart,
@@ -569,6 +570,9 @@ export function ContainerRow({
   dr?: number | null;
   /** The album is being analyzed (useAlbumAnalyzing): with no DR yet, its cell holds the place. */
   analyzing?: { at: number; of: number } | null;
+  /** The album's running time in seconds (albumSecs over its own tracks), in the time column a
+   *  track row has; null or absent when its tracks aren't known. */
+  length?: number | null;
   /** The album artist as a link (rows are the data view: names navigate;
    *  the row itself keeps opening the album). */
   onArtistLink?(): void;
@@ -687,25 +691,36 @@ export function ContainerRow({
       <span className="flex w-[13px] justify-center" data-row-bars>
         {playing && <Eqbars />}
       </span>
-      {album && onHeart ? (
-        <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
+      {/* the buttons in a track row's order, the ⋯ and then the heart beside the time, so where
+          albums and tracks share a list their buttons and times line up; a row without one keeps
+          its place */}
+      <div className="flex items-center gap-0.5">
+        {menuable ? (
+          <button
+            aria-label="More actions"
+            tabIndex={inList ? -1 : undefined}
+            onClick={onMenu}
+            className={cx(
+              "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
+              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+            )}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        ) : (
+          <span aria-hidden className="w-[26px]" />
+        )}
+        {album && onHeart ? (
+          <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
+        ) : (
+          <span aria-hidden className="w-[25px]" />
+        )}
+      </div>
+      {/* the album's running time where a track row has its own (unknown: the cell kept, empty) */}
+      {album && length != null && length > 0 ? (
+        <DurationCell secs={length} wide />
       ) : (
-        <span />
-      )}
-      {menuable ? (
-        <button
-          aria-label="More actions"
-          tabIndex={inList ? -1 : undefined}
-          onClick={onMenu}
-          className={cx(
-            "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
-          )}
-        >
-          <MoreHorizontal size={14} />
-        </button>
-      ) : (
-        <span />
+        <span aria-hidden className={cx("font-mono text-[11px]", DURATION_WIDE)} />
       )}
     </div>
   );
@@ -911,7 +926,7 @@ export function TrackRow({
                 callback reads as text. The album shows only where it links. */}
             <NameLine
               artist={node.artist}
-              artistText={artistLabel}
+              artistText={artistLabel ?? performerLine(node, node.albumArtist)}
               album={onAlbumLink ? node.album : null}
               onArtist={onArtistLink ?? null}
               onAlbum={onAlbumLink ?? null}
@@ -957,7 +972,7 @@ export function TrackRow({
           {meta}
         </div>
       )}
-      <DurationCell secs={node.durationSecs} />
+      <DurationCell secs={node.durationSecs} wide />
     </div>
   );
 }

@@ -54,6 +54,9 @@ export interface LensIndex {
    *  0.13.0-rc.4). `formatShown` when the card's format line already says the format. One rule
    *  for the Albums lens, the Artists lens, the artist page and Favorites. */
   copyBadge(a: MediaNode, shown?: { formatShown?: boolean }): string | undefined;
+  /** The index's own copy of an album by its key (a listing's node, search results' or a server's
+   *  folders', can be another object for it), or undefined when the index doesn't hold it. */
+  ownAlbum(a: MediaNode): MediaNode | undefined;
   /** A track's album's copyBadge, so a track in a flat list (the Tracks lens, search results)
    *  says which copy it is from by the same rule; undefined when its album has no other copy. */
   trackCopyBadge(t: MediaNode): string | undefined;
@@ -178,6 +181,10 @@ function build(pools: MediaIndexPools[]): LensIndex {
         parts.push(whichCopy(self, copies, formatOf, shown));
       }
       return parts.length > 0 ? parts.join(FACT_SEP) : undefined;
+    },
+    ownAlbum(a) {
+      const key = nodeKey(a);
+      return (albumsByKey().get(albumKey(a)) ?? []).find((b) => nodeKey(b) === key);
     },
     trackCopyBadge(t) {
       const badges = lazy("trackCopyBadges", () => {

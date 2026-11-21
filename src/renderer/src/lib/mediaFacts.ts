@@ -24,11 +24,18 @@ export { FACT_SEP };
 
 /** "2023 · 10 tracks · 26:53 · 200 MB" — collection facts only; the format
  *  rides beside it as chips (albumFormatChips). */
+/** An album's running time from its own tracks, in seconds, or null when none says its length:
+ *  one home for the album header's facts line and the rows' time cell. */
+export function albumSecs(tracks: ReadonlyArray<Pick<MediaNode, "durationSecs">>): number | null {
+  const secs = tracks.reduce((a, t) => a + (t.durationSecs ?? 0), 0);
+  return secs > 0 ? secs : null;
+}
+
 export function albumFactsLine(
   album: Pick<MediaNode, "year">,
   tracks: ReadonlyArray<Pick<MediaNode, "year" | "durationSecs" | "format">>,
 ): string {
-  const secs = tracks.reduce((a, t) => a + (t.durationSecs ?? 0), 0);
+  const secs = albumSecs(tracks) ?? 0;
   const bytes = tracks.reduce((a, t) => a + (t.format?.sizeBytes ?? 0), 0);
   return [
     album.year ?? tracks[0]?.year ?? null,

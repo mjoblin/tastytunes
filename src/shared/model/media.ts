@@ -254,23 +254,28 @@ export function albumFormat(tracks: ReadonlyArray<Pick<MediaNode, "format">>): {
 }
 
 /**
- * How a track row names its performers INSIDE AN ALBUM under its artist:
- * the album artist, then the guests as "feat." — "Daft Punk feat. Julian
- * Casablancas". Anywhere else (search, queue, a compilation) the raw packed
- * string is the honest thing to show, so this returns it unchanged unless
- * the album artist is among the performers and there are others.
+ * How every row names a track's performers, one rule wherever it shows (the album page, the
+ * lenses, search, the queue, playlists, favorites): its album's artist first, then the guests as
+ * "feat." ("Daft Punk feat. Julian Casablancas"); a track whose performers don't include its
+ * album's artist (a compilation's duet) names them as a credit reads, "A & B" or "A, B & C",
+ * never the server's packed "A; B". One performer, or none told apart, shows its artist as it
+ * stands. Callers pass the album's artist where they know it, else the track's own albumArtist.
  */
 export function performerLine(
   n: Pick<MediaNode, "artist" | "artists" | "albumArtist">,
   albumArtist: string | null | undefined,
 ): string | null {
   const names = trackArtists(n);
-  if (!albumArtist || names.length < 2) return n.artist;
-  const key = nameKey(albumArtist);
-  const lead = names.find((x) => nameKey(x) === key);
-  if (!lead) return n.artist;
-  const guests = names.filter((x) => x !== lead);
-  return guests.length > 0 ? `${lead} feat. ${guests.join(", ")}` : n.artist;
+  if (names.length < 2) return n.artist;
+  const key = albumArtist ? nameKey(albumArtist) : null;
+  const lead = key == null ? undefined : names.find((x) => nameKey(x) === key);
+  if (lead) {
+    const guests = names.filter((x) => x !== lead);
+    if (guests.length > 0) return `${lead} feat. ${guests.join(", ")}`;
+  }
+  return names.length === 2
+    ? `${names[0]} & ${names[1]}`
+    : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
 }
 
 const VARIOUS = /^(various(\s+artists?)?|va|v\.a\.|verschiedene(\s+interpreten)?|divers)$/i;
