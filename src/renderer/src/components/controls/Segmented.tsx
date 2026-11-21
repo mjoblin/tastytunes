@@ -47,7 +47,8 @@ export function Segmented<T extends string | number | boolean>({
           aria-disabled={opt.disabled || undefined}
           data-tip={opt.tip}
           className={cx(
-            "flex items-center gap-1.5 px-3 rounded-md text-[12px]",
+            // one line always: a two-word label ("All songs") broke in two in a narrow header
+            "flex items-center gap-1.5 px-3 rounded-md text-[12px] whitespace-nowrap",
             !modal && "transition-colors",
             opt.tip && "tip-top",
             opt.disabled

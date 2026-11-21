@@ -665,7 +665,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
             within one — the app-wide toolbar tiers, one home in Chrome
             (GAP_BETWEEN / GAP_WITHIN). The filter stands alone: typing is its
             own kind of act, so the between tier separates it from the verbs. */}
-          <div className={`flex items-center ${GAP_BETWEEN}`}>
+          <div className={`flex min-w-0 items-center ${GAP_BETWEEN}`}>
             <FilterInput
               value={filter}
               onChange={(t) => setScreenFilter("queue", t)}
