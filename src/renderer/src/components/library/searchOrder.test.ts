@@ -44,6 +44,12 @@ describe("inRunningOrder: search results' tracks", () => {
     ]);
   });
 
+  it("leaves a track with no album where it was", () => {
+    const loose = { ...track("Loose", "", 1), album: null };
+    const list = [track("B", "Night", 2), loose, track("A", "Night", 1)];
+    expect(inRunningOrder(list).map((n) => n.title)).toEqual(["A", "Loose", "B"]);
+  });
+
   it("orders by disc before position, a track with no number last on its disc", () => {
     const list = [track("B", "Box", 1, 2), track("C", "Box", null, 1), track("A", "Box", 3, 1)];
     expect(inRunningOrder(list).map((n) => n.title)).toEqual(["A", "C", "B"]);

@@ -128,8 +128,15 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
   autoUpdater.on("error", (err) => {
     // A failed background check stays quiet; a failure mid-consent-flow is the user's business,
     // the install's included (0.16.0 said a download's alone: an AppImage in a folder the user
-    // can't write failed at the install, and Restart now then did nothing, for good)
-    if (state.phase === "downloading" || installing) {
+    // can't write failed at the install, and Restart now then did nothing, for good). On macOS
+    // the download is said done before Squirrel has validated it, so its failure arrives while
+    // the phase is already "downloaded" with no check in flight (0.16.0-rc.8): said too, or Restart
+    // now would do nothing
+    if (
+      state.phase === "downloading" ||
+      installing ||
+      (state.phase === "downloaded" && checking == null)
+    ) {
       installing = false;
       setState({ phase: "error", error: err?.message ?? String(err) });
     }
@@ -270,5 +277,17 @@ export async function updateFromMain(): Promise<boolean> {
   }
   if (state.phase !== "downloaded") return false;
   installUpdate();
-  return true;
+  // the install quits the app when it works; one that fails says so through the error event, so
+  // wait a moment for it rather than report an install that never happened (0.16.0-rc.8)
+  for (let waited = 0; waited < INSTALL_SETTLE_MS; waited += 250) {
+    if (phaseNow() === "error") return false;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return phaseNow() !== "error";
 }
+
+/** The phase as it is now: the install's events change it behind a narrowed read. */
+const phaseNow = (): UpdateState["phase"] => state.phase;
+
+/** How long updateFromMain waits for an install's failure before taking it as under way. */
+const INSTALL_SETTLE_MS = 10_000;

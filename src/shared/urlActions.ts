@@ -177,7 +177,9 @@ export function parseUrlAction(raw: string, screens: Readonly<Record<string, str
       return ok({ kind: "source", name });
     }
     case "screen": {
-      const screen = parts.length === 2 ? screens[arg.toLowerCase()] : undefined;
+      // the object's own names only: screen/constructor or screen/__proto__ is no screen
+      const name = arg.toLowerCase();
+      const screen = parts.length === 2 && Object.hasOwn(screens, name) ? screens[name] : undefined;
       if (!screen)
         return {
           ok: false,
