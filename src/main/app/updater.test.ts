@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // a stable build (the rc soak can't see what only a stable build does), packaged, its checks on
 vi.mock("../../../package.json", () => ({ version: "1.0.0" }));
@@ -24,6 +24,12 @@ const emit = (name: string, arg?: unknown): void => updater.handlers.get(name)?.
 beforeEach(() => {
   vi.resetModules();
   updater.handlers.clear();
+  // a packaged Linux build updates itself only as an AppImage, so on Linux the build runs as one
+  vi.stubEnv("APPIMAGE", "/tmp/TastyTunes.AppImage");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("the updater's errors, on a stable build", () => {
