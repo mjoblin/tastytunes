@@ -57,19 +57,33 @@ let artistsMem: {
   /** An artist to scroll into a comfortable spot on the next render (set by
    *  focusArtistsLens; consumed once). */
   reveal: string | null;
+  /** The narrow view's two columns (0.16.0-rc.8): Artists and Albums, or Albums and Tracks, kept
+   *  like the rest so a trip to an artist's page and back returns to the same level. */
+  pair: "artists" | "tracks";
 } = {
   artist: null,
   album: null,
   filter: "",
   scroll: { artists: 0, albums: 0, tracks: 0, cards: 0 },
   reveal: null,
+  pair: "artists",
 };
 
 /** Point the Artists lens at an artist before opening it — the Tracks and
  *  Albums lenses' artist links. Keys match the lens's own: the lowercased,
  *  trimmed name. The lens then REVEALS the row near the top of its column. */
 export function focusArtistsLens(name: string): void {
-  artistsMem = { ...artistsMem, artist: nameKey(name), album: null, reveal: nameKey(name) };
+  const key = nameKey(name);
+  // the artist already picked keeps its album and the narrow view's level: opening their page
+  // points the lens here too, so the way back finds it as it was (0.16.0-rc.8)
+  const same = artistsMem.artist === key;
+  artistsMem = {
+    ...artistsMem,
+    artist: key,
+    album: same ? artistsMem.album : null,
+    reveal: key,
+    pair: same ? artistsMem.pair : "artists",
+  };
 }
 
 /** How far from the column's top a revealed artist lands — about a row and
@@ -84,6 +98,8 @@ const ARTISTS_COLUMN = "w-[24%] min-w-[220px] max-w-[320px]";
  *  shows two columns at a time, sliding over as an album is picked: Artists and Albums, then
  *  Albums and Tracks (an artist with only loose tracks: Artists and Tracks). */
 const THREE_COLUMNS_MIN = 220 + 250 + 300 + 2 * 24;
+/** The gap between the columns (gap-6), which the narrow slide measures by. */
+const COLUMN_GAP = 24;
 /** Past this many artists the column renders only the rows near the viewport
  *  (useWindowedList); below it, every row, exactly as before (0.11.0 sweep, for review). */
 const WINDOW_ARTISTS_ABOVE = 150;
@@ -215,10 +231,37 @@ export function ArtistsLens({
   // album: Albums and Tracks)
   const [attachCols, colsWidth] = useWidth();
   const narrow = colsWidth < THREE_COLUMNS_MIN;
-  const [pair, setPair] = useState<"artists" | "tracks">("artists");
-  const showArtistsCol = !narrow || pair === "artists";
-  const showAlbumsCol = !narrow || pair === "tracks" || looseTracks == null;
-  const showTracksCol = !narrow || pair === "tracks" || looseTracks != null;
+  const pair = mem.pair;
+  // THE SLIDE: narrow, the three columns stand side by side at half the view each and the view
+  // clips them; Albums and Tracks are the Artists and Albums moved one column over (a transform,
+  // eased while a pick moves them, never while the window is resized). An artist with only loose
+  // tracks shows them beside the artists, the empty Albums column out of the way.
+  const colW = narrow ? Math.max(0, (colsWidth - COLUMN_GAP) / 2) : 0;
+  const shifted = narrow && pair === "tracks" && looseTracks == null;
+  const [sliding, setSliding] = useState(false);
+  const slideTo = (next: "artists" | "tracks"): void => {
+    if (next === pair) return;
+    // eased only when the columns will move (an artist with loose tracks moves none)
+    if (narrow && (next === "tracks" && looseTracks == null) !== shifted) setSliding(true);
+    setMem({ pair: next });
+  };
+  const showArtistsCol = !narrow || !shifted;
+  const showAlbumsCol = !narrow || looseTracks == null;
+  const showTracksCol = !narrow || shifted || looseTracks != null;
+  /** A column's place on the slide: its width and the view's offset, the ease while sliding. */
+  const slide = narrow
+    ? {
+        className: cx(
+          "shrink-0",
+          sliding &&
+            "motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
+        ),
+        style: {
+          width: colW,
+          transform: shifted ? `translateX(-${colW + COLUMN_GAP}px)` : undefined,
+        },
+      }
+    : null;
   /** Focus a column that may only now be shown (the narrow slide): after the render that shows it. */
   const focusSoon = (focus: () => void): void => {
     requestAnimationFrame(() => focus());
@@ -285,7 +328,7 @@ export function ArtistsLens({
     onEnter: (i) => {
       const a = shownArtists[i];
       if (a) setMem({ artist: a.key === mem.artist ? null : a.key, album: null });
-      setPair("artists");
+      slideTo("artists");
     },
     onMenu: (i, el) => {
       const a = shownArtists[i];
@@ -303,7 +346,7 @@ export function ArtistsLens({
       // narrow, beside the artists: the album already picked shows its tracks (the click's rule)
       const shownAlready = narrow && pair === "artists" && alb && nodeKey(alb) === selectedAlbumKey;
       if (alb && !shownAlready) setMem({ album: nodeKey(alb) === mem.album ? null : nodeKey(alb) });
-      setPair("tracks");
+      slideTo("tracks");
     },
     onMenu: (i, el) => {
       const alb = columnAlbums[i];
@@ -311,13 +354,13 @@ export function ArtistsLens({
     },
     onLeft: () => {
       if (narrow && pair === "tracks") {
-        setPair("artists");
+        slideTo("artists");
         focusSoon(() => artistKeys.focus());
       } else artistKeys.focus();
     },
     onRight: () => {
       if (narrow && pair === "artists") {
-        setPair("tracks");
+        slideTo("tracks");
         focusSoon(() => trackKeys.focus());
       } else trackKeys.focus();
     },
@@ -436,7 +479,7 @@ export function ArtistsLens({
             onChange={(filter) => {
               setMem({ filter });
               // narrow, beside the tracks: the column being filtered comes back into view
-              if (narrow) setPair("artists");
+              if (narrow) slideTo("artists");
             }}
             shown={shownArtists.length}
             total={artists.length}
@@ -495,7 +538,8 @@ export function ArtistsLens({
       ) : (
         <div
           ref={attachCols}
-          className="min-h-0 flex-1 flex gap-6"
+          // clipped, never a scroll box: focus moved into a column mid-slide can't scroll the view
+          className={cx("min-h-0 flex-1 flex gap-6", narrow && "overflow-clip")}
           data-lens-columns={narrow ? 2 : 3}
         >
           {/* Artists ------------------------------------------------------- */}
@@ -503,10 +547,11 @@ export function ArtistsLens({
           its titles) at normal window sizes — tracks gets the largest share */}
           <div
             className={cx(
-              narrow ? "flex-1 min-w-0" : cx(ARTISTS_COLUMN, "shrink-0"),
+              slide ? slide.className : cx(ARTISTS_COLUMN, "shrink-0"),
               "min-h-0 flex flex-col",
-              !showArtistsCol && "hidden",
             )}
+            style={slide?.style}
+            inert={!showArtistsCol}
             data-lens-artists-column
           >
             {colHeading(
@@ -547,7 +592,7 @@ export function ArtistsLens({
                         data-artist-row={a.name}
                         onClick={() => {
                           setMem({ artist: selected ? null : a.key, album: null });
-                          setPair("artists");
+                          slideTo("artists");
                         }}
                         // a double-click opens the artist's page (the page re-selects the
                         // artist, so the two clicks' toggle never shows on the way back)
@@ -663,10 +708,14 @@ export function ArtistsLens({
           {/* Albums -------------------------------------------------------- */}
           <div
             className={cx(
-              narrow ? "flex-1 min-w-0" : "w-[28%] min-w-[250px] max-w-[400px] shrink-0",
+              slide ? slide.className : "w-[28%] min-w-[250px] max-w-[400px] shrink-0",
               "min-h-0 flex flex-col",
               !showAlbumsCol && "hidden",
             )}
+            style={slide?.style}
+            onTransitionEnd={(e) => {
+              if (e.target === e.currentTarget) setSliding(false);
+            }}
             data-lens-albums-column
           >
             {colHeading(
@@ -687,7 +736,7 @@ export function ArtistsLens({
               narrow && pair === "tracks" && (
                 <button
                   data-lens-back-to-artists
-                  onClick={() => setPair("artists")}
+                  onClick={() => slideTo("artists")}
                   className="text-[11.5px] text-accent hover:brightness-110 transition-all"
                 >
                   ‹ Artists
@@ -727,7 +776,7 @@ export function ArtistsLens({
                         // never unpicked into an empty column
                         if (!(narrow && pair === "artists" && selected))
                           setMem({ album: selected ? null : nodeKey(alb) });
-                        setPair("tracks");
+                        slideTo("tracks");
                       }}
                       onPointerDown={(e) => {
                         if ((e.target as HTMLElement).closest("button")) return;
@@ -828,9 +877,11 @@ export function ArtistsLens({
           {/* Tracks -------------------------------------------------------- */}
           <div
             className={cx(
-              "relative flex-1 min-w-0 min-h-0 flex flex-col",
-              !showTracksCol && "hidden",
+              "relative min-h-0 flex flex-col",
+              slide ? slide.className : "flex-1 min-w-0",
             )}
+            style={slide?.style}
+            inert={!showTracksCol}
             data-lens-tracks-column
           >
             {colHeading(
