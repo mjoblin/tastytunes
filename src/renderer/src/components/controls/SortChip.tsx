@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { cx } from "@/lib/format";
 import { PopoverChrome } from "@/hooks/usePopover";
+import { moveAmongItems, useMenuKeys } from "@/hooks/useMenuKeys";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { HeaderChip } from "@/components/chrome/Chrome";
 
@@ -27,6 +28,9 @@ export function SortChip<T extends string>({
   onToggleReverse(): void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  // an open list is a menu from the keyboard (hooks/useMenuKeys), as the facet pickers' are
+  const listRef = useRef<HTMLDivElement | null>(null);
+  useMenuKeys(open, listRef);
   return (
     <div className="relative">
       <HeaderChip
@@ -43,10 +47,13 @@ export function SortChip<T extends string>({
           <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div
+            ref={listRef}
+            tabIndex={-1}
+            onKeyDown={moveAmongItems}
             className={cx(
               // 224 px: the longest labels ("Duration (longest first)") and the hint each fit one
               // line (at 192 the hint left "it" alone on a second, 0.13.0-rc.4)
-              "absolute right-0 top-full mt-1.5 z-30 w-56",
+              "absolute right-0 top-full mt-1.5 z-30 w-56 outline-none",
               POPOVER_CARD,
               "p-1.5 space-y-0.5",
             )}
@@ -56,6 +63,7 @@ export function SortChip<T extends string>({
               return (
                 <button
                   key={s.value}
+                  aria-current={active || undefined}
                   onClick={() => {
                     // clicking the active sort flips its direction
                     if (active) {

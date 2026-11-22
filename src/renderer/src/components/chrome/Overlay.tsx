@@ -5,6 +5,7 @@ import { PopoverChrome, usePopoverChrome, useClampedPosition } from "@/hooks/use
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { holdKeyboard } from "@/lib/keyboardOwner";
+import { moveAmongItems, useMenuKeys } from "@/hooks/useMenuKeys";
 
 /**
  * The two overlay shells. Every transient surface in the app is one of these:
@@ -81,10 +82,9 @@ export function PopoverCard({
   usePopoverChrome(onClose);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const pos = useClampedPosition(boxRef, at.x, at.y);
-  useDialogFocus(true, boxRef);
   // A MENU HOLDS THE KEYBOARD (0.14.0): while it is open, nothing behind it hears a key
   // (the arrows changed the volume under an open menu); the arrows move between its items
-  useEffect(() => holdKeyboard(), []);
+  useMenuKeys(true, boxRef);
   const { onKeyDown, ...attrs } = rest;
 
   return createPortal(
@@ -111,31 +111,6 @@ export function PopoverCard({
     </>,
     document.body,
   );
-}
-
-/** Up and down (Home, End) through a menu's enabled buttons, round at the ends; a text box or
- *  a slider inside keeps its own arrows. */
-function moveAmongItems(e: React.KeyboardEvent<HTMLDivElement>): void {
-  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
-  if ((e.target as HTMLElement).matches('input, textarea, [contenteditable], [role="slider"]'))
-    return;
-  const items = [...e.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled])")].filter(
-    (b) => b.offsetParent !== null,
-  );
-  if (items.length === 0) return;
-  e.preventDefault();
-  const at = items.indexOf(document.activeElement as HTMLElement);
-  const next =
-    e.key === "Home"
-      ? 0
-      : e.key === "End"
-        ? items.length - 1
-        : e.key === "ArrowDown"
-          ? (at + 1) % items.length
-          : at <= 0
-            ? items.length - 1
-            : at - 1;
-  items[next].focus();
 }
 
 /**
