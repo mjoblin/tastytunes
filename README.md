@@ -57,9 +57,10 @@ chmod +x TastyTunes-x86_64.AppImage
 ```
 
 You'll need a Cambridge Audio network player built on the StreamMagic
-platform, on the same network as your computer: Evo 75/150, CXN100 /
-CXN (V2), MXN10, AXN10, EXN100, Edge NQ, 851N. Developed and tested daily
-against an Evo 150.
+platform, on the same network as your computer. TastyTunes is developed and
+tested daily with an Evo 150, and is expected to work with the Evo 75,
+CXN100, CXN (V2), MXN10, AXN10, EXN100, Edge NQ and 851N. If you have one of
+those, an issue with the diagnostics log attached helps confirm it.
 
 ## Screenshots
 
@@ -104,7 +105,7 @@ An album's page lists its tracks with their format and dynamic range. An artist'
 
 Search your libraries, playlists, favorites, presets, and internet radio at once, then narrow the results to any one of them.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Search results grouped by type">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Search results from every category, with a filter for each">
 
 ### Synced lyrics
 
@@ -180,7 +181,7 @@ Themes, fonts, layouts and sort orders, and much more, stored on your machine.
 
 ### AI agents
 
-MCP tools that let local AI agents see and control the streamer.
+MCP tools that let local AI agents see and control your streamers.
 
 <img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The Integrations settings tab">
 
@@ -188,7 +189,7 @@ MCP tools that let local AI agents see and control the streamer.
 
 TastyTunes can host a local MCP server (off by default), so AI agents on your
 network (Claude Code, Cursor, anything that supports MCP over HTTP) can see and
-control the streamer:
+control the streamers on your network:
 
 ```bash
 claude mcp add --transport http tastytunes http://127.0.0.1:8555/mcp
@@ -450,7 +451,7 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 
 - An update is downloaded only when you click Download, and installed when you click Restart
 - Favorites, playlists, and settings are protected from damaged files, with a copy of each kept at every update
-- Signed and notarized universal macOS builds (Intel and Apple Silicon); one signed Windows installer covering x64 and arm64 (native on Windows-on-ARM); Linux AppImages for x64 and arm64, including 64-bit Raspberry Pi OS
+- Signed and notarized universal macOS builds (Intel and Apple Silicon); one signed Windows installer covering x64 and arm64 (native on Windows-on-ARM); Linux AppImages for x64 (run on Ubuntu 24.04 for every release) and arm64 (for 64-bit Raspberry Pi OS)
 
 ## What leaves your machine
 
@@ -462,12 +463,13 @@ The complete list:
 | Library browsing | your media servers, on your LAN | always (it's the app) |
 | Lyrics | lrclib.net | on by default; toggleable |
 | Liner notes | musicbrainz.org · wikidata.org · wikipedia.org | on by default; toggleable |
-| Artist photos | musicbrainz.org · wikidata.org · wikipedia.org | with Liner notes on, for every artist in your library |
-| Picture suggestions | commons.wikimedia.org | with Liner notes on, when you look for an artist's picture |
+| Artist photos | musicbrainz.org · wikidata.org · wikipedia.org · upload.wikimedia.org | with Liner notes on, for every artist in your library |
+| Picture suggestions | commons.wikimedia.org · upload.wikimedia.org | with Liner notes on, when you look for an artist's picture |
 | fanart.tv photos | fanart.tv | off until you add your own key |
-| Missing album art | musicbrainz.org · coverartarchive.org | on by default; toggleable |
+| Missing album art | musicbrainz.org · coverartarchive.org · archive.org | on by default; toggleable |
 | Radio directory | radio-browser.info | when you search or browse Radio |
 | Station logos | each station's own website or image host | when a station is shown |
+| Streaming album art | the streaming service's image host | while a streaming source such as Spotify or TIDAL plays |
 | Update check | github.com | on by default; toggleable |
 | Scrobbles | listenbrainz.org | off until you add your token |
 

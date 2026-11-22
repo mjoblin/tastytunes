@@ -43,7 +43,7 @@ export const SERVICES = {
   wikipedia: { where: "internet", hosts: ["wikipedia.org"], sent: "an article's title" },
   commons: {
     where: "internet",
-    hosts: ["commons.wikimedia.org"],
+    hosts: ["commons.wikimedia.org", "upload.wikimedia.org"],
     sent: "an artist's name, when you look for a picture of them",
   },
   fanart: {
@@ -53,7 +53,7 @@ export const SERVICES = {
   },
   caa: {
     where: "internet",
-    hosts: ["coverartarchive.org"],
+    hosts: ["coverartarchive.org", "archive.org"],
     sent: "an album's MusicBrainz identifier",
   },
   "radio-browser": {
