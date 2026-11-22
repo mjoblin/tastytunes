@@ -64,6 +64,7 @@ import { type CommandConnection, openAgain, sendCommand } from "./commandPath";
 import { SleepCountdown } from "./sleepCountdown";
 import { TrackNotifier } from "./trackNotifier";
 import { VolumeFader } from "./volumeFader";
+import { LogRepeats } from "./logRepeats";
 import { heldFor, heldFrom, saveHeld } from "./heldState";
 import type { ResolvedContent } from "../media/resolveContent";
 import { scrobbler } from "../lookups/scrobbler";
@@ -144,7 +145,7 @@ export class DeviceManager {
     this.pushDevices();
     try {
       this.devices = await discoverStreamers();
-      this.log("info", "discovery", `found ${this.devices.length} streamer(s)`);
+      this.log("info", "discovery", `found ${this.devices.length} streamer(s)`, { counted: true });
     } catch (err) {
       this.log("error", "discovery", `discovery failed: ${(err as Error).message}`);
     } finally {
@@ -318,7 +319,9 @@ export class DeviceManager {
         }
       },
       onLog: (level, text) => {
-        if (isCurrent(socket)) this.log(level, "socket", text);
+        // the socket's error repeats on every retry through an outage: counted (logRepeats)
+        if (isCurrent(socket))
+          this.log(level, "socket", text, { counted: text.startsWith("websocket error") });
       },
     });
     this.socket = socket;
@@ -330,6 +333,8 @@ export class DeviceManager {
     this.recallWatch.cancel();
     this.presetLevel.cancel();
     if (this.sleeper.current) this.setSleep(null);
+    // nor a fade left writing to a streamer let go (as connect() cancels one on a switch)
+    this.fader.cancelFade(false);
     this.socket?.close();
     this.socket = null;
     this.cache = emptyCache();
@@ -370,8 +375,8 @@ export class DeviceManager {
   }
 
   shutdown(): void {
-    // a run of one line still being counted is written before the app goes
-    this.flushRepeat();
+    // the counts still running are written before the app goes
+    this.repeats.flush(Date.now());
     this.sleeper.stop();
     this.socket?.close();
     this.socket = null;
@@ -1114,41 +1119,11 @@ export class DeviceManager {
     this.log("warn", "wire", line);
   }
 
-  /**
-   * REPEATS COLLAPSED (0.16.0-rc.8): during an outage a socket error every 8 to 12 seconds and
-   * "found N streamers" every 10 filled the log in about a day, pushing out the wire-check notes
-   * an unseen model reports in by. The same line again, straight after itself and within
-   * REPEAT_WINDOW_MS of its first, is counted rather than written; the count is one line when the
-   * run ends (another line, the window passed, or the app quitting). Only a line repeating itself
-   * collapses, so the log keeps its order.
-   */
-  private repeat: { key: string; entry: LogEntry; count: number } | null = null;
+  /** The log's repeats: a polling line marked counted is counted within its window (logRepeats). */
+  private readonly repeats = new LogRepeats((entry) => this.write(entry), REPEAT_WINDOW_MS);
 
-  log(level: LogEntry["level"], scope: string, text: string): void {
-    const now = Date.now();
-    const key = `${level}|${scope}|${text}`;
-    const run = this.repeat;
-    if (run && run.key === key && now - run.entry.at <= REPEAT_WINDOW_MS) {
-      run.count++;
-      return;
-    }
-    this.flushRepeat(now);
-    const entry: LogEntry = { at: now, level, scope, text };
-    this.repeat = { key, entry, count: 0 };
-    this.write(entry);
-  }
-
-  /** The run of a repeated line, written as its count. */
-  private flushRepeat(now = Date.now()): void {
-    const run = this.repeat;
-    this.repeat = null;
-    if (!run || run.count === 0) return;
-    this.write({
-      at: now,
-      level: run.entry.level,
-      scope: run.entry.scope,
-      text: `${run.entry.text} (${run.count} more ${run.count === 1 ? "time" : "times"} in a row)`,
-    });
+  log(level: LogEntry["level"], scope: string, text: string, opts?: { counted?: boolean }): void {
+    this.repeats.log({ at: Date.now(), level, scope, text }, opts?.counted === true);
   }
 
   private write(entry: LogEntry): void {

@@ -16,18 +16,20 @@ process.on("uncaughtException", (err) => deviceManager.logUnhandled(err, "uncaug
 // what the saved files' checks found (data/savedFiles), the notes from before this point first
 onSavedNotes((note) => deviceManager.log(note.level, "saved", note.text));
 // a failed save, or a saved file that couldn't be read, is said in every window too, as a notice
-// (data/savedFiles); said before any window is open, it waits for the first one (0.16.0-rc.8: it
-// was lost, and a once-a-session notice such as settings' was then never said)
+// (data/savedFiles); said before any window has finished loading (the settings and saved files
+// are read while the first window is still loading, for the tray's menu), it waits for the first
+// page that loads (0.16.0-rc.8: it was sent to a page not yet there, and lost)
 const heldNotices: string[] = [];
 onSaveFailedNotice((text) => {
-  const live = webContents.getAllWebContents().filter((wc) => !wc.isDestroyed());
-  if (live.length === 0) heldNotices.push(text);
-  for (const wc of live) wc.send("tt:push", { kind: "notice", text });
+  const ready = webContents
+    .getAllWebContents()
+    .filter((wc) => !wc.isDestroyed() && !wc.isLoading());
+  if (ready.length === 0) heldNotices.push(text);
+  for (const wc of ready) wc.send("tt:push", { kind: "notice", text });
 });
-app.on("browser-window-created", (_e, win) => {
-  win.webContents.once("did-finish-load", () => {
-    for (const text of heldNotices.splice(0))
-      win.webContents.send("tt:push", { kind: "notice", text });
+app.on("web-contents-created", (_e, wc) => {
+  wc.on("did-finish-load", () => {
+    for (const text of heldNotices.splice(0)) wc.send("tt:push", { kind: "notice", text });
   });
 });
 export const mcpBridge = new McpBridge(deviceManager);

@@ -5,10 +5,14 @@ name: Update smoke
 # own calls, and the version that comes back up asserted. This proves what the harness can't (its
 # feed override has no publisher, so the signature check is skipped): Windows' publisher check
 # against a real signed installer, the dual-arch installer run as an update on arm64, the NSIS
-# relaunch, and the AppImage's replace-and-relaunch. Run by hand after a release is published (the
+# relaunch, and the AppImage's replace-and-relaunch. Runs when a release is published, or by hand (the
 # feed must hold a version newer than `from`); it changes nothing but the runner.
 
 on:
+  # each release once it is published (a pre-release published from its draft included): the
+  # workflow at the tag runs, so it needs no copy on main (0.16.0-rc.8)
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       from:
