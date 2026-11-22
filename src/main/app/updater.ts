@@ -135,7 +135,7 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
     if (
       state.phase === "downloading" ||
       installing ||
-      (state.phase === "downloaded" && checking == null)
+      (state.phase === "downloaded" && checksInFlight === 0)
     ) {
       installing = false;
       setState({ phase: "error", error: err?.message ?? String(err) });
@@ -154,6 +154,8 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
  *  stable line first (checkForUpdates). */
 const PRERELEASE = /-/.test(appVersion);
 let checking: ReturnType<typeof autoUpdater.checkForUpdates> | null = null;
+/** Counted before a check calls out, so an error said during the call is known to be its own. */
+let checksInFlight = 0;
 
 /**
  * A PRE-RELEASE BUILD REJOINS THE STABLE TRAIN (2026-10-06, the user: 0.9.0-rc.2 did not
@@ -189,9 +191,13 @@ function checkForUpdates(): ReturnType<typeof autoUpdater.checkForUpdates> {
 }
 
 function checkFeed(): ReturnType<typeof autoUpdater.checkForUpdates> {
-  if (!PRERELEASE) return autoUpdater.checkForUpdates();
+  // one check at a time on every build, and known to be in flight: the error rule reads it, so a
+  // failed check never turns a waiting download into a failure (0.16.0-rc.8: a stable build's
+  // check went unmarked)
   if (checking) return checking;
+  checksInFlight++;
   checking = (async () => {
+    if (!PRERELEASE) return autoUpdater.checkForUpdates();
     autoUpdater.allowPrerelease = false;
     const stable = await autoUpdater.checkForUpdates();
     if (stable?.isUpdateAvailable) return stable;
@@ -199,6 +205,7 @@ function checkFeed(): ReturnType<typeof autoUpdater.checkForUpdates> {
     return autoUpdater.checkForUpdates();
   })().finally(() => {
     checking = null;
+    checksInFlight--;
   });
   return checking;
 }

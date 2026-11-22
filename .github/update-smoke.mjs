@@ -69,9 +69,13 @@ try {
   const from = await versionOf(app);
   ok(`the previous build runs (${from}, the feed's newest ${expect})`, from !== expect);
   const found = await page.evaluate(() => window.tastytunes.updateCheckNow());
+  // a build from before 0.16.0-rc.8 ordered versions without their pre-release part, so its Check
+  // now says there is nothing newer between two rcs while its window is still offered the update
+  // (the download and the restart below prove it); a later build must find it
+  const oldCheck = found?.status === "none" && /^0\.16\.0-rc\.[1-7]$/.test(from);
   ok(
-    `the check finds ${expect} on the real feed (${JSON.stringify(found)})`,
-    found?.status === "update" && found.version === expect,
+    `the check finds ${expect} on the real feed (${JSON.stringify(found)}${oldCheck ? `; ${from} predates the pre-release check` : ""})`,
+    (found?.status === "update" && found.version === expect) || oldCheck,
   );
   // resolves once the download is done, or has failed (the window then shows why)
   await page.evaluate(() => window.tastytunes.updateDownload());
