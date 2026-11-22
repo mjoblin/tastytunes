@@ -25,7 +25,7 @@ export function denyPermissionsByDefault(): void {
 }
 
 /**
- * NO COOKIES, EITHER WAY (0.16.0, toward 1.0). The windows draw large pictures straight from the
+ * NO COOKIES, EITHER WAY (0.16.0). The windows draw large pictures straight from the
  * hosts that serve them (an artist's photo, a station's logo), through the app's one persistent
  * session, and Chromium keeps a third-party cookie such a host sets and sends it back with every
  * later picture: a stable identifier for this install at a third party, beside "no analytics, no
@@ -57,7 +57,7 @@ export function keepNoCookies(): void {
 }
 
 /**
- * THE PICTURES A WINDOW LOADS ITSELF, IN THE REQUESTS CONSOLE (0.16.0-rc.8, toward 1.0): a large
+ * THE PICTURES A WINDOW LOADS ITSELF, IN THE REQUESTS CONSOLE (0.16.0-rc.8): a large
  * picture is drawn from where it is kept (the Now Playing hero, an artist's photo), straight from
  * that host through the window's session, so the console's "every request" missed them. Each one
  * that leaves the local network is logged as it ends, under the art service.

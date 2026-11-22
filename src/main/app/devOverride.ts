@@ -1,6 +1,6 @@
 import { app } from "electron";
 
-// THE OVERRIDES ONLY A DEVELOPMENT OR TEST RUN HONORS (0.16.0, toward 1.0). A program running as
+// THE OVERRIDES ONLY A DEVELOPMENT OR TEST RUN HONORS (0.16.0). A program running as
 // the same user can set a variable for the app's launch. Most of the app's overrides only point a
 // lookup elsewhere, and the install smokes keep them (a packaged build under test reaches no real
 // service). These five would hand such a program the app's identity, so an installed build reads

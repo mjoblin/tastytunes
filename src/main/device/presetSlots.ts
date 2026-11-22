@@ -1,4 +1,4 @@
-// A PRESET'S OWN FACTS FOLLOW THE PRESET, NOT ITS SLOT NUMBER (0.16.0, toward 1.0). The app keeps
+// A PRESET'S OWN FACTS FOLLOW THE PRESET, NOT ITS SLOT NUMBER (0.16.0). The app keeps
 // three things per preset slot, keyed by streamer and slot (presetVolumeKey): the level a recall
 // sets (presetVolumes), the artist of an album saved from the Library (presetArtists) and the exact
 // queue a queue preset holds (queueSignatures). A slot's number moves under its preset: a move
