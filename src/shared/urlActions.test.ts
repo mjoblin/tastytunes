@@ -104,6 +104,10 @@ describe("parseUrlAction", () => {
       screen: "recently-played",
     });
     expect(parse("tastytunes://screen/nowhere").ok).toBe(false);
+    // an object's own names only: the names every object carries are no screen
+    expect(parse("tastytunes://screen/constructor").ok).toBe(false);
+    expect(parse("tastytunes://screen/__proto__").ok).toBe(false);
+    expect(parse("tastytunes://screen/toString").ok).toBe(false);
   });
 
   it("is forgiving about how the link arrives", () => {

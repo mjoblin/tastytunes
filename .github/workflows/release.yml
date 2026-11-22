@@ -150,6 +150,20 @@ jobs:
           APPLE_API_KEY_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_API_KEY_ID || '' }}
           APPLE_API_ISSUER_ID: ${{ matrix.os == 'macos-latest' && secrets.APPLE_API_ISSUER_ID || '' }}
 
+      # SIGNED AND NOTARIZED, OR THE TAG FAILS (0.16.0-rc.8): electron-builder signs and notarizes
+      # only when its secrets are there and otherwise warns and carries on, so an empty or expired
+      # secret would ship an unsigned Mac build. The tag's app is checked as Gatekeeper sees it:
+      # codesign for the signature, spctl for the Developer ID and notarization (it rejects an
+      # unnotarized app). The release is still a draft here, so a failure publishes nothing.
+      - name: The Mac build is signed and notarized
+        if: startsWith(github.ref, 'refs/tags/v') && runner.os == 'macOS'
+        shell: bash
+        run: |
+          app=$(find dist -maxdepth 2 -name 'TastyTunes.app' -type d | head -1)
+          if [ -z "$app" ]; then echo "::error::no TastyTunes.app in dist"; exit 1; fi
+          codesign --verify --deep --strict --verbose=2 "$app"
+          spctl --assess --type execute --verbose=2 "$app"
+
       # THE UPDATE FEED'S macOS MINIMUM (0.14.0, Electron 44 dropped macOS 12). electron-builder
       # writes the minimum into the app but not into latest-mac.yml, and the updater in copies
       # already installed reads it only there, against os.release(): the Darwin version, so 22.0.0
@@ -352,8 +366,9 @@ jobs:
     needs: [build, sign-windows]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    # write, though it only reads: a draft release is visible only to a token that can write
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: The draft carries every file
         shell: bash

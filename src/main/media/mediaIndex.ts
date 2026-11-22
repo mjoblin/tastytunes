@@ -1155,7 +1155,9 @@ export function ensureFresh(host: string, servers: MediaServerInfo[]): void {
 }
 
 /** An index whose server is gone, removed (0.16.0-rc.8: one held for a server sold or renamed
- *  stayed in Settings and the lenses with no way out); a server that comes back builds anew. */
+ *  stayed in Settings and the lenses with no way out). A searchable server that comes back builds
+ *  anew on its own (the auto build); a browse-only one, whose first build is always asked for,
+ *  from Settings' Build. */
 export function removeIndex(udn: string): void {
   load();
   if (!indexes.delete(udn)) return;

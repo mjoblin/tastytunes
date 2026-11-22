@@ -31,6 +31,8 @@ function heldOf(st: MediaIndexStatus, what: "tracks" | "albums"): string {
 
 export function LibrariesSection({ settings, save }: SectionProps): React.JSX.Element {
   const statuses = useStore((s) => s.mediaIndex);
+  // removing an index is a whole collection's worth of work gone: asked first (the confirm rule)
+  const confirmRemove = useConfirmPopover();
 
   const age = (at: number | null): string => {
     if (at == null) return "";
@@ -43,6 +45,7 @@ export function LibrariesSection({ settings, save }: SectionProps): React.JSX.El
 
   return (
     <section className="space-y-3">
+      {confirmRemove.popover}
       <SettingsCard>
         <Toggle
           label="Build indexes automatically"
@@ -90,11 +93,17 @@ export function LibrariesSection({ settings, save }: SectionProps): React.JSX.El
                   </span>
                 )}
               </span>
-              {/* a server that's gone can't be rebuilt: its index can go (it builds anew if the
-                  server comes back) */}
+              {/* a server that's gone can't be rebuilt: its index can go (a searchable server that
+                  comes back builds anew on its own; a browse-only one, from its Build here) */}
               {st.gone ? (
                 <HeaderChip
-                  onClick={() => void tt.mediaIndexRemove(st.udn)}
+                  onClick={(e) =>
+                    confirmRemove.ask(e, {
+                      question: `Remove the index of “${st.serverName}”? It can be built again if the server comes back.`,
+                      verb: "Remove",
+                      onConfirm: () => void tt.mediaIndexRemove(st.udn),
+                    })
+                  }
                   className="shrink-0 flex items-center gap-1.5 text-[12px] px-3 py-1.5 motion-safe:active:scale-90"
                 >
                   <Trash2 size={13} />

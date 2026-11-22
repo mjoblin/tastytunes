@@ -262,8 +262,12 @@ export class DeviceManager {
     this.demo = opts?.demo === true;
     // A recall remembered from one device means nothing on another.
     this.setRecalledPreset(null);
-    // A timer armed for one device must never act on another.
-    if (this.sleeper.current && this.socket && this.socket.host !== host) this.setSleep(null);
+    // A timer armed for one device must never act on another, nor a fade one began (0.16.0-rc.8:
+    // a schedule's fade-in went on writing its steps to the streamer switched to)
+    if (this.socket && this.socket.host !== host) {
+      if (this.sleeper.current) this.setSleep(null);
+      this.fader.cancelFade(false);
+    }
     this.socket?.close();
     this.cache = emptyCache();
     this.trackNotifier.reset();
@@ -366,6 +370,8 @@ export class DeviceManager {
   }
 
   shutdown(): void {
+    // a run of one line still being counted is written before the app goes
+    this.flushRepeat();
     this.sleeper.stop();
     this.socket?.close();
     this.socket = null;
@@ -1111,33 +1117,38 @@ export class DeviceManager {
   /**
    * REPEATS COLLAPSED (0.16.0-rc.8): during an outage a socket error every 8 to 12 seconds and
    * "found N streamers" every 10 filled the log in about a day, pushing out the wire-check notes
-   * an unseen model reports in by. A line written within the last REPEAT_WINDOW_MS is counted
-   * rather than written again, and once the window has passed its count is one line.
+   * an unseen model reports in by. The same line again, straight after itself and within
+   * REPEAT_WINDOW_MS of its first, is counted rather than written; the count is one line when the
+   * run ends (another line, the window passed, or the app quitting). Only a line repeating itself
+   * collapses, so the log keeps its order.
    */
-  private readonly repeated = new Map<string, { entry: LogEntry; count: number }>();
+  private repeat: { key: string; entry: LogEntry; count: number } | null = null;
 
   log(level: LogEntry["level"], scope: string, text: string): void {
     const now = Date.now();
-    for (const [key, r] of this.repeated)
-      if (now - r.entry.at > REPEAT_WINDOW_MS) {
-        this.repeated.delete(key);
-        if (r.count > 0)
-          this.write({
-            at: now,
-            level: r.entry.level,
-            scope: r.entry.scope,
-            text: `${r.entry.text} (${r.count} more ${r.count === 1 ? "time" : "times"} in ${REPEAT_WINDOW_MS / 60_000} minutes)`,
-          });
-      }
     const key = `${level}|${scope}|${text}`;
-    const seen = this.repeated.get(key);
-    if (seen) {
-      seen.count++;
+    const run = this.repeat;
+    if (run && run.key === key && now - run.entry.at <= REPEAT_WINDOW_MS) {
+      run.count++;
       return;
     }
+    this.flushRepeat(now);
     const entry: LogEntry = { at: now, level, scope, text };
-    if (this.repeated.size < 32) this.repeated.set(key, { entry, count: 0 });
+    this.repeat = { key, entry, count: 0 };
     this.write(entry);
+  }
+
+  /** The run of a repeated line, written as its count. */
+  private flushRepeat(now = Date.now()): void {
+    const run = this.repeat;
+    this.repeat = null;
+    if (!run || run.count === 0) return;
+    this.write({
+      at: now,
+      level: run.entry.level,
+      scope: run.entry.scope,
+      text: `${run.entry.text} (${run.count} more ${run.count === 1 ? "time" : "times"} in a row)`,
+    });
   }
 
   private write(entry: LogEntry): void {

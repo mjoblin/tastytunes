@@ -38,7 +38,9 @@ const env = {
   TASTYTUNES_ARTIST_URL: sink,
   TASTYTUNES_MB_URL: sink,
 };
-const launch = () => _electron.launch({ executablePath: exe, env });
+// the AppImage on a CI runner runs without the setuid sandbox, as linux-smoke.yml launches it
+const args = process.platform === "linux" ? ["--no-sandbox"] : [];
+const launch = () => _electron.launch({ executablePath: exe, env, args });
 const versionOf = (app) => app.evaluate(({ app }) => app.getVersion());
 
 /** Whether an instance of the app is running (the one the installer or the AppImage relaunched). */

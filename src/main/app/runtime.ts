@@ -1,6 +1,6 @@
 import { DeviceManager } from "../device/deviceManager";
 import { McpBridge } from "../servers/mcpServer";
-import { webContents } from "electron";
+import { app, webContents } from "electron";
 import { onSavedNotes, onSaveFailedNotice } from "../data/savedFiles";
 
 // The main process's two long-lived services, one instance each (split out of index.ts in the
@@ -15,10 +15,20 @@ process.on("unhandledRejection", (reason) => deviceManager.logUnhandled(reason))
 process.on("uncaughtException", (err) => deviceManager.logUnhandled(err, "uncaught exception"));
 // what the saved files' checks found (data/savedFiles), the notes from before this point first
 onSavedNotes((note) => deviceManager.log(note.level, "saved", note.text));
-// a failed save is said in every window too, as a notice (data/savedFiles saveFailed)
+// a failed save, or a saved file that couldn't be read, is said in every window too, as a notice
+// (data/savedFiles); said before any window is open, it waits for the first one (0.16.0-rc.8: it
+// was lost, and a once-a-session notice such as settings' was then never said)
+const heldNotices: string[] = [];
 onSaveFailedNotice((text) => {
-  for (const wc of webContents.getAllWebContents())
-    if (!wc.isDestroyed()) wc.send("tt:push", { kind: "notice", text });
+  const live = webContents.getAllWebContents().filter((wc) => !wc.isDestroyed());
+  if (live.length === 0) heldNotices.push(text);
+  for (const wc of live) wc.send("tt:push", { kind: "notice", text });
+});
+app.on("browser-window-created", (_e, win) => {
+  win.webContents.once("did-finish-load", () => {
+    for (const text of heldNotices.splice(0))
+      win.webContents.send("tt:push", { kind: "notice", text });
+  });
 });
 export const mcpBridge = new McpBridge(deviceManager);
 

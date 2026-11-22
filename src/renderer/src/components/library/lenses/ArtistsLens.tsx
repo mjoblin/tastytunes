@@ -300,7 +300,9 @@ export function ArtistsLens({
     initial: () => columnAlbums.findIndex((alb) => nodeKey(alb) === selectedAlbumKey),
     onEnter: (i) => {
       const alb = columnAlbums[i];
-      if (alb) setMem({ album: nodeKey(alb) === mem.album ? null : nodeKey(alb) });
+      // narrow, beside the artists: the album already picked shows its tracks (the click's rule)
+      const shownAlready = narrow && pair === "artists" && alb && nodeKey(alb) === selectedAlbumKey;
+      if (alb && !shownAlready) setMem({ album: nodeKey(alb) === mem.album ? null : nodeKey(alb) });
       setPair("tracks");
     },
     onMenu: (i, el) => {
@@ -431,7 +433,11 @@ export function ArtistsLens({
         <div className={cards || narrow ? "contents" : cx(ARTISTS_COLUMN, "shrink-0")}>
           <FilterInput
             value={mem.filter}
-            onChange={(filter) => setMem({ filter })}
+            onChange={(filter) => {
+              setMem({ filter });
+              // narrow, beside the tracks: the column being filtered comes back into view
+              if (narrow) setPair("artists");
+            }}
             shown={shownArtists.length}
             total={artists.length}
             fill={!cards && !narrow}
@@ -717,7 +723,10 @@ export function ArtistsLens({
                       {...albumKeys.item(ai)}
                       data-lens-album-row={alb.title}
                       onClick={() => {
-                        setMem({ album: selected ? null : nodeKey(alb) });
+                        // narrow, beside the artists: the album already picked shows its tracks,
+                        // never unpicked into an empty column
+                        if (!(narrow && pair === "artists" && selected))
+                          setMem({ album: selected ? null : nodeKey(alb) });
                         setPair("tracks");
                       }}
                       onPointerDown={(e) => {

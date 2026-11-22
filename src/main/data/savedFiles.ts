@@ -52,6 +52,15 @@ export function noteSaved(level: SavedNote["level"], text: string): void {
 /** How many copies of each kind are kept beside a file, and how many versions' backups. */
 export const KEEP = 3;
 
+/** The saved files as a notice names them, by file name. */
+const SAID_AS: Record<string, string> = {
+  "favorites.json": "your favorites",
+  "playlists.json": "your playlists",
+  "settings.json": "your settings",
+  "artist-choices.json": "your artist pictures",
+  "recents.json": "the Recent list",
+};
+
 const pad = (n: number): string => String(n).padStart(2, "0");
 /** The local day, as the person who opens the folder reads it: 2026-11-11. */
 const day = (now: Date): string =>
@@ -97,6 +106,10 @@ export function readSaved(path: string, now = new Date()): SavedRead {
       "error",
       `${name} couldn't be read (${errorMessage(err)}), so changes this session won't be saved to it`,
     );
+    // said in the windows too, as a failed save is (0.16.0-rc.8: only the log said it); the next
+    // launch reads the file again, as a session's changes can't be merged onto one that turns
+    // readable midway without risking it
+    notice(`Couldn't read ${SAID_AS[name] ?? name}, so this session's changes won't be saved.`);
     return { state: "unreadable" };
   }
   try {

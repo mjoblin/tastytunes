@@ -13,7 +13,8 @@ export function inRunningOrder(list: MediaNode[]): MediaNode[] {
   const slots: number[] = [];
   const first = new Map<string, number>();
   list.forEach((n, i) => {
-    if (mediaKind(n.upnpClass, n.isContainer) !== "track") return;
+    // a track with no album keeps its place: there is no running order to put it in
+    if (mediaKind(n.upnpClass, n.isContainer) !== "track" || !n.album) return;
     slots.push(i);
     const k = albumOf(n);
     if (!first.has(k)) first.set(k, first.size);

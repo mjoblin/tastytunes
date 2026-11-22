@@ -15,6 +15,7 @@ import {
   keepAsFound,
   keepVersionCopy,
   laterVersion,
+  onSaveFailedNotice,
   onSavedNotes,
   readSaved,
   type SavedNote,
@@ -40,6 +41,17 @@ describe("readSaved", () => {
       state: "read",
       parsed: { theme: "light" },
     });
+  });
+
+  it("says a file it can't read in the windows too, by what it holds", () => {
+    const said: string[] = [];
+    onSaveFailedNotice((text) => said.push(text));
+    mkdirSync(join(dir, "favorites.json"));
+    expect(readSaved(join(dir, "favorites.json"))).toEqual({ state: "unreadable" });
+    expect(said).toEqual([
+      "Couldn't read your favorites, so this session's changes won't be saved.",
+    ]);
+    onSaveFailedNotice(() => {});
   });
 
   it("reads a missing file as missing, saying nothing", () => {
