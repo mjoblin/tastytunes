@@ -10,7 +10,7 @@ import { cx, fmtCount } from "@/lib/format";
  * a popover of count-carrying options; the first row clears. One home
  * (2026-09-05, moved out of the Library lenses when the History Timeline
  * grew its own facets): the Albums and Tracks lenses' Genre / Decade / Format
- * / DR / Played pickers and the Timeline's Source / Period.
+ * / DR / Played pickers, the Timeline's Source / Period, and Radio's Genre / Decade.
  *
  * THE PILL HOLDS ITS WIDTH (choosing a genre once resized the pill and moved everything after
  * it). Every label the pill can show sits in one grid cell, the shown one as text and the rest
@@ -142,10 +142,12 @@ export function PickerPill({
         <>
           <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+          {/* tall enough for Radio's eleven genre rows whole (at 18rem its last three scrolled),
+              held to the window in a short one */}
           <div
             data-lens-picker-popover={id}
             className={cx(
-              "absolute top-full mt-1.5 z-30 w-56 max-h-72 overflow-y-auto",
+              "absolute top-full mt-1.5 z-30 w-56 max-h-[min(24rem,60vh)] overflow-y-auto",
               choice ? "right-0" : "left-0",
               POPOVER_CARD,
               "p-1.5 space-y-0.5",
