@@ -1060,7 +1060,7 @@ export function scheduleOut(s: Schedule): Record<string, unknown> {
 }
 
 /**
- * THE STREAMER AN AGENT NAMES, ON THIS NETWORK ONLY (0.16.0, toward 1.0). One seen on the network
+ * THE STREAMER AN AGENT NAMES, ON THIS NETWORK ONLY (0.16.0). One seen on the network
  * or kept in the device book, by its name, udn or host; else the argument itself, when it is an
  * address only the local network has (a private or link-local address, a .local name). Never a
  * host on the internet: a device argument made the app resolve the name, open a socket to it and

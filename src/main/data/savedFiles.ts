@@ -15,7 +15,7 @@ import { basename, dirname, extname, join } from "node:path";
  *  so jsonStore's crash test can run it in plain node). */
 const errorMessage = (e: unknown): string => (e instanceof Error ? e.message : String(e));
 
-// THE SAVED FILES ARE CHECKED ON LOAD (0.16.0, toward 1.0). Favorites, playlists and settings are
+// THE SAVED FILES ARE CHECKED ON LOAD (0.16.0). Favorites, playlists and settings are
 // the person's own work, and a file a sync tool, a disk or a hand edit broke must never be lost to
 // the next save. So every read of a saved file goes through readSaved:
 // - missing: a first run, nothing to keep;
@@ -230,7 +230,7 @@ export function keepVersionCopy(
 }
 
 /**
- * A SAVE THAT FAILED, SAID (0.16.0-rc.8, toward 1.0): a full disk or a folder that can't be
+ * A SAVE THAT FAILED, SAID (0.16.0-rc.8): a full disk or a folder that can't be
  * written was a console line only, and the session's changes were lost at quit with nothing
  * shown. Said in the log, and in the windows as a notice, once per file a session; `what` is the
  * reader's name for it ("your favorites").

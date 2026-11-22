@@ -4,7 +4,7 @@ import { appLog, revealLog } from "./appLog";
 import { updateFromMain, updateOffered } from "./updater";
 
 /**
- * A START-UP THAT FAILED SAYS SO (0.16.0, toward 1.0). Start-up is one chain, and a throw anywhere
+ * A START-UP THAT FAILED SAYS SO (0.16.0). Start-up is one chain, and a throw anywhere
  * in it used to end as a console line: no window, a Dock icon that did nothing, and a process
  * holding the single-instance lock, so a second launch did nothing either. A build that cannot
  * start cannot be repaired from inside it, so the dialog points at the latest version and the
@@ -95,7 +95,7 @@ export function lateStep(what: string, run: () => unknown): void {
 let stuckShown = false;
 
 /**
- * THE WINDOW THAT NEVER CAME UP, OR STOPPED AND WAS LEFT CLOSED (0.16.0-rc.8, toward 1.0): with no
+ * THE WINDOW THAT NEVER CAME UP, OR STOPPED AND WAS LEFT CLOSED (0.16.0-rc.8): with no
  * window, the update's Download and Restart can't be reached, so the dialog offers it itself when
  * one is known (app/updater updateFromMain), else the latest version on the site, and the log.
  * Once a session; the app keeps running (the menu bar icon, a link, an agent still reach it).

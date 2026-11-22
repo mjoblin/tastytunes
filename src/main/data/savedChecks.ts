@@ -1,7 +1,7 @@
 import { isRecord, kindOf } from "@shared/guards";
 import { DEFAULT_SETTINGS, type AppSettings, type Favorite, type Playlist } from "@shared/model";
 
-// THE ROWS AND VALUES OF THE SAVED FILES, CHECKED (0.16.0, toward 1.0; data/savedFiles says why). In
+// THE ROWS AND VALUES OF THE SAVED FILES, CHECKED (0.16.0; data/savedFiles says why). In
 // the wire check's manner (device/frameCheck): loose, so a field this version doesn't know is kept
 // and a missing optional field stays missing; a field of the wrong kind is set aside (null where the
 // type allows it, gone where it may be absent), a row without what it can't do without is left out,

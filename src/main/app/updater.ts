@@ -268,7 +268,7 @@ export function updateOffered(): string | null {
 }
 
 /**
- * AN UPDATE WITH NO WINDOW TO CLICK THROUGH (0.16.0-rc.8, toward 1.0): Download and Restart live in
+ * AN UPDATE WITH NO WINDOW TO CLICK THROUGH (0.16.0-rc.8): Download and Restart live in
  * the window, so a window that never came up, or stopped and was left closed, left no route to the
  * next version. The stuck dialog (app/bootFailure) calls this: checked if need be, downloaded,
  * then installed and the app restarted. False when there is nothing to install.
