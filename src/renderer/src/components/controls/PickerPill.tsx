@@ -3,6 +3,7 @@ import { ChevronDown } from "lucide-react";
 import { Chip } from "@/components/chrome/Chrome";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { PopoverChrome } from "@/hooks/usePopover";
+import { moveAmongItems, useMenuKeys } from "@/hooks/useMenuKeys";
 import { cx, fmtCount } from "@/lib/format";
 
 /**
@@ -28,6 +29,8 @@ import { cx, fmtCount } from "@/lib/format";
  * box, where a toolbar already full has no room for a chip): the same label held at its widest,
  * the same list and counts, drawn as the box's own text, the accent when a value is chosen; the clearing
  * row may carry its count too (`clearCount`).
+ * FROM THE KEYBOARD (0.16.0-rc.8): an open list is a menu (hooks/useMenuKeys), the arrows moving
+ * through it from the current choice, nothing behind it hearing a key, focus back on the pill after.
  */
 // 112 (from comparison shots): at 160 one long genre ("Contemporary Hip Hop")
 // set its pill's width and the lens row wrapped at a 1,180 px window; at 112 the row fits
@@ -74,6 +77,8 @@ export function PickerPill({
 }): React.JSX.Element | null {
   const [open, setOpen] = useState(false);
   const labelRef = useRef<HTMLSpanElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  useMenuKeys(open, listRef);
   const [truncated, setTruncated] = useState(false);
   const active = value ? options.find((o) => o.value === value) : null;
   const shown = active ? active.label : neutral;
@@ -145,9 +150,12 @@ export function PickerPill({
           {/* tall enough for Radio's eleven genre rows whole (at 18rem its last three scrolled),
               held to the window in a short one */}
           <div
+            ref={listRef}
+            tabIndex={-1}
+            onKeyDown={moveAmongItems}
             data-lens-picker-popover={id}
             className={cx(
-              "absolute top-full mt-1.5 z-30 w-56 max-h-[min(24rem,60vh)] overflow-y-auto",
+              "absolute top-full mt-1.5 z-30 w-56 max-h-[min(24rem,60vh)] overflow-y-auto outline-none",
               choice ? "right-0" : "left-0",
               POPOVER_CARD,
               "p-1.5 space-y-0.5",
@@ -156,6 +164,7 @@ export function PickerPill({
             {!choice && (
               <button
                 data-lens-chip={clearLabel}
+                aria-current={value === null || undefined}
                 onClick={() => {
                   onChange(null);
                   setOpen(false);
@@ -179,6 +188,7 @@ export function PickerPill({
               <button
                 key={o.value}
                 data-lens-chip={o.label}
+                aria-current={value === o.value || undefined}
                 onClick={() => {
                   onChange(choice ? o.value : value === o.value ? null : o.value);
                   setOpen(false);
