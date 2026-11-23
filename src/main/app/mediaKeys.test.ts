@@ -152,7 +152,7 @@ describe("the media keys through the Mac's Now Playing", () => {
     sys.helper = true;
     syncMediaKeys();
     expect(electron.globalShortcut.register).not.toHaveBeenCalled();
-    expect(np.sync).toHaveBeenCalledWith(true);
+    expect(np.sync).toHaveBeenCalledWith(true, expect.any(Function));
     expect(mediaKeysState()).toEqual({
       on: true,
       bound: true,
@@ -167,7 +167,25 @@ describe("the media keys through the Mac's Now Playing", () => {
     sys.helper = true;
     sys.settings = { mediaKeys: false };
     syncMediaKeys();
-    expect(np.sync).toHaveBeenCalledWith(false);
+    expect(np.sync).toHaveBeenCalledWith(false, expect.any(Function));
     expect(mediaKeysState()).toMatchObject({ on: false, bound: false, system: true });
+  });
+
+  it("go back to the shortcuts when the helper is given up on (it couldn't run here)", () => {
+    onSystem("win32");
+    sys.helper = true;
+    syncMediaKeys();
+    expect(electron.globalShortcut.register).not.toHaveBeenCalled();
+    const gaveUp = np.sync.mock.calls[0][1] as () => void;
+    // given up: the helper no longer carries the keys
+    sys.helper = false;
+    gaveUp();
+    expect(electron.globalShortcut.register).toHaveBeenCalled();
+    expect(mediaKeysState()).toEqual({
+      on: true,
+      bound: true,
+      needsPermission: false,
+      system: false,
+    });
   });
 });

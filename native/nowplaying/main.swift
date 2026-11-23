@@ -104,13 +104,19 @@ func publish(_ m: Message) {
   }
   let playing = m.playing ?? false
   info[MPNowPlayingInfoPropertyPlaybackRate] = playing ? 1.0 : 0.0
-  if let path = m.art, path != lastArtPath {
-    lastArtPath = path
-    if let image = NSImage(contentsOfFile: path) {
-      lastArt = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
-    } else {
-      lastArt = nil
+  if let path = m.art {
+    if path != lastArtPath {
+      lastArtPath = path
+      if let image = NSImage(contentsOfFile: path) {
+        lastArt = MPMediaItemArtwork(boundsSize: image.size) { _ in image }
+      } else {
+        lastArt = nil
+      }
     }
+  } else {
+    // a message with no picture shows none, never the last play's
+    lastArtPath = nil
+    lastArt = nil
   }
   if let a = lastArt { info[MPMediaItemPropertyArtwork] = a }
   center.nowPlayingInfo = info

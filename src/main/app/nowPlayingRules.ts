@@ -13,14 +13,22 @@ import type { PlayKind, ZonePlayStateState } from "@shared/smoip";
  * - WHAT IS CLAIMED is a positive list: a play from the streamer's queue, radio, or something
  *   started here (a preset recalled from the app, a link or an agent). Another app's play
  *   (AirPlay, cast, Spotify Connect, a TIDAL app) is claimed only when the setting says so, and an
- *   unknown play (no title yet, an input with no metadata) never is; while already claimed, an
- *   unknown moment keeps the claim, so a title that lags at a track change doesn't let go.
+ *   unknown play (no title yet, an input with no metadata) never is.
+ * - NEVER A PLAY THE KEYS CAN'T STEER: a play that offers no play, pause, next or previous (an
+ *   input such as AirPlay waiting, the TV, analog) is never claimed, even started here: claiming
+ *   it would take the keys from another app and give nothing back.
+ * - A HELD CLAIM IS SHORT: while claimed, a moment with no title or no controls (a track change's
+ *   lag) keeps the claim, but only on the source it was claimed on and for HOLD_MS; a move to
+ *   another source, or a lag that outlasts it, lets go.
  */
 
 export type NowPlayingVerdict = "claim" | "hold" | "release-now" | "release-soon";
 
 /** How long a stopped streamer keeps the claim before letting go. */
 export const SETTLE_MS = 3_000;
+
+/** How long a claim is held through a moment with no title or no controls. */
+export const HOLD_MS = 10_000;
 
 const LIVE: ReadonlySet<ZonePlayStateState> = new Set([
   "play",
@@ -38,12 +46,21 @@ export interface ClaimInputs {
   startedHere: boolean;
   claimExternal: boolean;
   claimed: boolean;
+  /** Whether the play offers the keys anything: play or pause, next or previous. */
+  steerable: boolean;
+  /** The streamer's source now, and the one the claim was made on. */
+  source: string | null;
+  claimedSource: string | null;
+  /** How long the claim has been held through a moment with no title or controls (0 if not). */
+  heldMs: number;
 }
 
 export function nowPlayingVerdict(i: ClaimInputs): NowPlayingVerdict {
   if (!i.connected || !i.powerOn) return "release-now";
   if (i.state == null || !LIVE.has(i.state)) return "release-soon";
-  if (i.kind == null) return i.startedHere ? "claim" : i.claimed ? "hold" : "release-now";
+  const holdable =
+    i.claimed && i.source != null && i.source === i.claimedSource && i.heldMs < HOLD_MS;
+  if (i.kind == null || !i.steerable) return holdable ? "hold" : "release-now";
   const ours =
     i.kind === "queue" ||
     i.kind === "radio" ||

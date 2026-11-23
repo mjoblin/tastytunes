@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { app } from "electron";
 import type { PushMessage } from "@shared/ipc";
 import { artHostTrust, fetchPicture } from "../lookups/artFetch";
@@ -8,6 +8,7 @@ import { getSettings } from "../data/persist";
 import { connectedHost, deviceManager } from "./runtime";
 import { showMainWindow } from "./windows";
 import { NowPlayingBridge } from "./nowPlayingBridge";
+import { helperPath } from "./nowPlayingHelper";
 
 /**
  * THE SYSTEM'S NOW PLAYING (0.17.0): with the helper (native/nowplaying in the Mac app's
@@ -18,25 +19,19 @@ import { NowPlayingBridge } from "./nowPlayingBridge";
  * when it is available). The rules are app/nowPlayingRules, the process and feed
  * app/nowPlayingBridge; this file wires them to the app.
  *
- * The helper runs only while the Media keys setting is on. A development run uses it only when
- * TASTYTUNES_NP_HELPER names one (the suite's fake, or a built helper): two copies of the app
- * each claiming Now Playing would take the keys from each other.
+ * The helper runs only while the Media keys setting is on; which helper is app/nowPlayingHelper's
+ * rule (a packaged app only its own, a development run only one TASTYTUNES_NP_HELPER names).
  */
 
-export const HELPER_NAME = "TastyTunes Now Playing";
-
 function helperFile(): string | null {
-  const named = process.env["TASTYTUNES_NP_HELPER"];
-  if (named) return named;
-  if (!app.isPackaged) return null;
-  // macOS: Contents/Helpers; Windows: beside TastyTunes.exe (native/nowplaying-win)
-  const file =
-    process.platform === "darwin"
-      ? join(process.resourcesPath, "..", "Helpers", HELPER_NAME)
-      : process.platform === "win32"
-        ? join(dirname(process.execPath), `${HELPER_NAME}.exe`)
-        : null;
-  return file && existsSync(file) ? file : null;
+  return helperPath({
+    packaged: app.isPackaged,
+    platform: process.platform,
+    env: process.env,
+    resourcesPath: process.resourcesPath,
+    execPath: process.execPath,
+    exists: existsSync,
+  });
 }
 
 /** The app's icon, for a play with no sleeve, so the Mac's tile never shows a blank square
@@ -58,22 +53,31 @@ const EXT: Record<string, string> = {
   "image/svg+xml": "svg",
 };
 
-/** The sleeve as one file in the cache folder, the last one removed: the one picture fetch path
- *  (lookups/artFetch, checked and logged as every other). */
+/** The sleeve as one file in the cache folder, the older ones removed: the one picture fetch path
+ *  (lookups/artFetch, checked and logged as every other). A picture that can't be had is none,
+ *  never a rejection. The new file is written first and the old ones removed one by one, each
+ *  failure ignored: Windows may still hold the last one open, and that mustn't cost this one. */
 async function sleeveFile(url: string): Promise<string | null> {
-  const picture = await fetchPicture(url, artHostTrust(connectedHost()), {
-    maxBytes: MAX_SLEEVE_BYTES,
-    timeoutMs: 8_000,
-    logged: false,
-  });
-  if (!picture) return null;
-  const dir = join(app.getPath("userData"), "cache", "nowplaying");
   try {
+    const picture = await fetchPicture(url, artHostTrust(connectedHost()), {
+      maxBytes: MAX_SLEEVE_BYTES,
+      timeoutMs: 8_000,
+      logged: false,
+    });
+    if (!picture) return null;
+    const dir = join(app.getPath("userData"), "cache", "nowplaying");
     mkdirSync(dir, { recursive: true });
     const name = `${createHash("sha1").update(url).digest("hex").slice(0, 16)}.${EXT[picture.type] ?? "img"}`;
-    for (const old of readdirSync(dir)) if (old !== name) rmSync(join(dir, old), { force: true });
     const file = join(dir, name);
     writeFileSync(file, picture.bytes);
+    for (const old of readdirSync(dir)) {
+      if (old === name) continue;
+      try {
+        rmSync(join(dir, old), { force: true });
+      } catch {
+        // still open elsewhere: the next track's turn removes it
+      }
+    }
     return file;
   } catch {
     return null;
@@ -82,12 +86,14 @@ async function sleeveFile(url: string): Promise<string | null> {
 
 let bridge: NowPlayingBridge | null = null;
 
-/** Turns the Mac's Now Playing on or off with the Media keys setting; false where it isn't
- *  available (another system, or a development run with no helper named), so the caller binds
- *  the keys the old way. */
-export function syncNowPlaying(on: boolean): boolean {
+/** Turns the system's Now Playing on or off with the Media keys setting; false where it isn't
+ *  available (another system, a development run with no helper named, or a helper given up on),
+ *  so the caller binds the keys the old way. `gaveUp` is called when the helper is given up on
+ *  later, so the caller can do that then. */
+export function syncNowPlaying(on: boolean, gaveUp: () => void): boolean {
   const file = helperFile();
   if (!file) return false;
+  if (on && bridge?.gaveUp) return false;
   bridge ??= new NowPlayingBridge({
     command: { file },
     view: () => {
@@ -107,6 +113,7 @@ export function syncNowPlaying(on: boolean): boolean {
     fallbackArt: iconFile(),
     log: (text) => deviceManager.log("info", "nowplaying", text),
     now: () => Date.now(),
+    gaveUp,
   });
   if (on) bridge.start();
   else bridge.stop();

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { nowPlayingVerdict, PENDING_MS, StartedHere, type ClaimInputs } from "./nowPlayingRules";
+import {
+  HOLD_MS,
+  nowPlayingVerdict,
+  PENDING_MS,
+  StartedHere,
+  type ClaimInputs,
+} from "./nowPlayingRules";
 
 const base: ClaimInputs = {
   connected: true,
@@ -9,7 +15,12 @@ const base: ClaimInputs = {
   startedHere: false,
   claimExternal: false,
   claimed: false,
+  steerable: true,
+  source: "MEDIA_PLAYER",
+  claimedSource: null,
+  heldMs: 0,
 };
+const held = { claimed: true, claimedSource: "MEDIA_PLAYER" };
 const v = (over: Partial<ClaimInputs>) => nowPlayingVerdict({ ...base, ...over });
 
 describe("when TastyTunes claims the system's Now Playing", () => {
@@ -36,8 +47,25 @@ describe("when TastyTunes claims the system's Now Playing", () => {
   it("never claims an unknown play, but an unknown moment keeps a claim already held", () => {
     expect(v({ kind: null })).toBe("release-now");
     expect(v({ kind: null, claimExternal: true })).toBe("release-now");
-    expect(v({ kind: null, claimed: true })).toBe("hold");
-    expect(v({ kind: null, startedHere: true })).toBe("claim");
+    expect(v({ kind: null, startedHere: true })).toBe("release-now");
+    expect(v({ kind: null, ...held })).toBe("hold");
+  });
+
+  it("holds a claim only on the source it was claimed on, and only for a while", () => {
+    expect(v({ kind: null, ...held, heldMs: HOLD_MS - 1 })).toBe("hold");
+    expect(v({ kind: null, ...held, heldMs: HOLD_MS })).toBe("release-now");
+    // a queue play claimed, then the streamer moves to an input with nothing to show
+    expect(v({ kind: null, ...held, source: "AIRPLAY" })).toBe("release-now");
+    expect(v({ kind: null, ...held, source: null })).toBe("release-now");
+  });
+
+  it("never claims a play the keys can do nothing with, even one started here", () => {
+    expect(v({ steerable: false })).toBe("release-now");
+    expect(v({ kind: "external", startedHere: true, steerable: false })).toBe("release-now");
+    expect(v({ kind: "radio", steerable: false })).toBe("release-now");
+    // a claimed play whose controls drop for a moment keeps the claim, as a lagging title does
+    expect(v({ steerable: false, ...held })).toBe("hold");
+    expect(v({ steerable: false, ...held, heldMs: HOLD_MS })).toBe("release-now");
   });
 });
 

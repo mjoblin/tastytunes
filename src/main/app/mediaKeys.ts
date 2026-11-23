@@ -24,7 +24,8 @@ const KEYS: Array<[string, StreamerCommand]> = [
 
 /** Whether any key was bound by the last sync. */
 let bound = false;
-/** Whether the Mac's own Now Playing carries the keys (the helper is there): no shortcuts then. */
+/** Whether the system's own Now Playing carries the keys (the helper is there and not given up
+ *  on): no shortcuts then. */
 let system = false;
 
 /** macOS without the Accessibility permission the keys need (never asks: no dialog). */
@@ -36,8 +37,9 @@ export function syncMediaKeys(): void {
   globalShortcut.unregisterAll();
   bound = false;
   const on = getSettings().mediaKeys;
-  // macOS with the Now Playing helper: the system's own route carries the keys
-  system = syncNowPlaying(on);
+  // the system's Now Playing through the helper carries the keys; a helper given up on (it
+  // couldn't run here) hands them back to the shortcuts, at once
+  system = syncNowPlaying(on, () => syncMediaKeys());
   if (system) {
     bound = on;
     return;

@@ -70,9 +70,19 @@ int wmain() {
   // the app's identity, so Windows names the session TastyTunes (the installer's shortcut)
   SetCurrentProcessExplicitAppUserModelID(L"com.redactedcat.tastytunes");
 
-  MediaPlayer player;
-  player.CommandManager().IsEnabled(false);
-  auto smtc = player.SystemMediaTransportControls();
+  // a Windows without the media features (the N editions) has no media player: say so on
+  // stderr, which the app logs, and end before the hello, so the app binds the keys as before
+  MediaPlayer player{nullptr};
+  SystemMediaTransportControls smtc{nullptr};
+  try {
+    player = MediaPlayer();
+    player.CommandManager().IsEnabled(false);
+    smtc = player.SystemMediaTransportControls();
+  } catch (hresult_error const& e) {
+    std::fprintf(stderr, "error: Windows' media controls aren't available here (0x%08X)\n",
+                 static_cast<unsigned>(e.code().value));
+    return 2;
+  }
   smtc.IsEnabled(false);
   smtc.ButtonPressed([](auto const&, SystemMediaTransportControlsButtonPressedEventArgs const& e) {
     switch (e.Button()) {

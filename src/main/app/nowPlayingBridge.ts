@@ -9,7 +9,7 @@ import {
   type ZonePlayState,
 } from "@shared/smoip";
 import { commandForMedia, transportAbilities, type MediaCommand } from "@shared/transport";
-import { nowPlayingVerdict, SETTLE_MS, StartedHere } from "./nowPlayingRules";
+import { HOLD_MS, nowPlayingVerdict, SETTLE_MS, StartedHere } from "./nowPlayingRules";
 
 /**
  * THE NOW PLAYING HELPER'S OTHER END (0.17.0): starts the helper (native/nowplaying), feeds it what
@@ -22,7 +22,13 @@ import { nowPlayingVerdict, SETTLE_MS, StartedHere } from "./nowPlayingRules";
  *   elapsed time and the rate let macOS run the clock, and a position that drifts or jumps (a seek)
  *   is sent again.
  * - A helper that exits on its own is started again after 1, 5 and 30 s, and given up on after
- *   five restarts in ten minutes.
+ *   five restarts in ten minutes. One that never says hello, speaks another protocol, or ends
+ *   before its hello (a Windows without the media features) is given up on at once, with its
+ *   last stderr line in the log. GIVING UP IS SAID (gaveUp): app/mediaKeys then binds the keys
+ *   the old way, so a helper that can't run never leaves the keys dead.
+ * - While a claim is held (a title that lags), the tile keeps the last info; a new sleeve is
+ *   waited for a moment (ART_WAIT_MS) before a new track is shown, so the tile doesn't flash the
+ *   app's icon between albums.
  */
 
 export const PROTOCOL = 1;
@@ -33,6 +39,8 @@ const RESTART_WINDOW_MS = 10 * 60_000;
 const MAX_RESTARTS = 5;
 /** How far the streamer's position may wander from macOS's own clock before it is sent again. */
 const DRIFT_SECS = 2.5;
+/** How long a new track waits for its sleeve before it is shown without one. */
+export const ART_WAIT_MS = 1_500;
 
 export interface StreamerView {
   connected: boolean;
@@ -56,6 +64,8 @@ export interface BridgeDeps {
   fallbackArt: string | null;
   log(text: string): void;
   now(): number;
+  /** The helper was given up on: the keys need their old route. */
+  gaveUp?(): void;
 }
 
 interface Info {
@@ -83,6 +93,12 @@ export class NowPlayingBridge {
   private lastElapsed: { secs: number; at: number; rate: number } | null = null;
   private artFor: string | null = null;
   private artPath: string | null = null;
+  /** The sleeve asked for and not yet answered, waited for until `until`. */
+  private artWaiting: { until: number; timer: ReturnType<typeof setTimeout> } | null = null;
+  private holdingSince: number | null = null;
+  private holdTimer: ReturnType<typeof setTimeout> | null = null;
+  private claimedSource: string | null = null;
+  private givenUp = false;
   private readonly started = new StartedHere();
 
   constructor(private readonly deps: BridgeDeps) {}
@@ -91,16 +107,27 @@ export class NowPlayingBridge {
     return this.child != null && this.ready;
   }
 
+  /** Given up on (no hello, another protocol, ended before its hello, or kept exiting): not used
+   *  until the setting is turned off and on. */
+  get gaveUp(): boolean {
+    return this.givenUp;
+  }
+
   start(): void {
+    if (this.givenUp) return;
     this.wanted = true;
     if (!this.child) this.spawn();
   }
 
   stop(): void {
     this.wanted = false;
+    this.givenUp = false;
+    this.restarts = [];
     if (this.restartTimer) clearTimeout(this.restartTimer);
     this.restartTimer = null;
     this.clearSettle();
+    this.clearHold();
+    this.clearArtWait();
     const child = this.child;
     this.child = null;
     this.ready = false;
@@ -132,7 +159,10 @@ export class NowPlayingBridge {
       v.powerOn &&
       state != null &&
       !["stop", "not_ready", "no_signal"].includes(state);
-    const startedHere = this.started.observe(ps?.metadata?.source ?? null, live, this.deps.now());
+    const now = this.deps.now();
+    const source = ps?.metadata?.source ?? null;
+    const startedHere = this.started.observe(source, live, now);
+    const can = transportAbilities(v.nowPlaying?.controls, ps?.metadata?.duration ?? null);
     const verdict = nowPlayingVerdict({
       connected: v.connected,
       powerOn: v.powerOn,
@@ -141,6 +171,10 @@ export class NowPlayingBridge {
       startedHere,
       claimExternal: this.deps.claimExternal(),
       claimed: this.claimed,
+      steerable: can.canToggle || can.canNext || can.canPrev,
+      source,
+      claimedSource: this.claimedSource,
+      heldMs: this.holdingSince != null ? now - this.holdingSince : 0,
     });
     if (verdict === "release-now") return this.release("now");
     if (verdict === "release-soon") {
@@ -157,7 +191,19 @@ export class NowPlayingBridge {
       return;
     }
     this.clearSettle();
-    if (verdict === "hold" && !this.claimed) return;
+    if (verdict === "hold") {
+      // the tile keeps the last info; a hold that outlasts HOLD_MS lets go at its check
+      if (this.holdingSince == null) {
+        this.holdingSince = now;
+        this.holdTimer = setTimeout(() => {
+          this.holdTimer = null;
+          this.update();
+        }, HOLD_MS);
+      }
+      return;
+    }
+    this.clearHold();
+    this.claimedSource = source;
     this.publish(v);
   }
 
@@ -169,15 +215,30 @@ export class NowPlayingBridge {
     if (art !== this.artFor) {
       this.artFor = art;
       this.artPath = null;
+      this.clearArtWait();
       if (art) {
-        void this.deps.artFile(art).then((file) => {
-          // a slow answer for a picture no longer current is dropped
-          if (this.artFor !== art) return;
-          this.artPath = file;
-          this.update();
-        });
+        // a new track waits a moment for its sleeve rather than showing the app's icon first
+        const until = this.deps.now() + ART_WAIT_MS;
+        this.artWaiting = {
+          until,
+          timer: setTimeout(() => {
+            this.artWaiting = null;
+            this.update();
+          }, ART_WAIT_MS),
+        };
+        void this.deps
+          .artFile(art)
+          .catch(() => null)
+          .then((file) => {
+            // a slow answer for a picture no longer current is dropped
+            if (this.artFor !== art) return;
+            this.artPath = file;
+            this.clearArtWait();
+            this.update();
+          });
       }
     }
+    if (this.artWaiting) return;
     const duration = md?.duration ?? null;
     const can = transportAbilities(v.nowPlaying?.controls, duration);
     const title =
@@ -223,6 +284,8 @@ export class NowPlayingBridge {
 
   private release(why: string): void {
     this.clearSettle();
+    this.clearHold();
+    this.claimedSource = null;
     if (!this.claimed) return;
     this.claimed = false;
     this.lastShape = "";
@@ -234,6 +297,25 @@ export class NowPlayingBridge {
   private clearSettle(): void {
     if (this.settleTimer) clearTimeout(this.settleTimer);
     this.settleTimer = null;
+  }
+
+  private clearHold(): void {
+    if (this.holdTimer) clearTimeout(this.holdTimer);
+    this.holdTimer = null;
+    this.holdingSince = null;
+  }
+
+  private clearArtWait(): void {
+    if (this.artWaiting) clearTimeout(this.artWaiting.timer);
+    this.artWaiting = null;
+  }
+
+  /** Not used again until the setting is turned off and on; the keys go back to their old route. */
+  private giveUp(why: string): void {
+    this.deps.log(why);
+    this.wanted = false;
+    this.givenUp = true;
+    this.deps.gaveUp?.();
   }
 
   private send(o: object): void {
@@ -252,24 +334,26 @@ export class NowPlayingBridge {
     }
     this.child = child;
     this.ready = false;
+    let said = "";
     const hello = setTimeout(() => {
       if (!this.ready) {
-        this.deps.log("the helper never said hello: not used");
-        this.wanted = false;
         child.kill();
+        this.giveUp("the helper never said hello: not used");
       }
     }, HELLO_MS);
     child.on("error", (e) => this.deps.log(`the helper failed: ${e.message}`));
-    child.stderr.on("data", () => {});
+    // its last words, for the log when it ends before its hello
+    child.stderr.on("data", (d: Buffer) => {
+      said = (said + d.toString()).slice(-400);
+    });
     createInterface({ input: child.stdout }).on("line", (line) => {
       if (!this.ready) {
         clearTimeout(hello);
         if (line.trim() !== HELLO) {
-          this.deps.log(
+          child.kill();
+          this.giveUp(
             `the helper is not one this app speaks to ("${line.slice(0, 60)}"): not used`,
           );
-          this.wanted = false;
-          child.kill();
           return;
         }
         this.ready = true;
@@ -282,14 +366,20 @@ export class NowPlayingBridge {
     child.on("exit", (code) => {
       clearTimeout(hello);
       if (this.child !== child) return;
+      const wasReady = this.ready;
       this.child = null;
       this.ready = false;
       this.claimed = false;
       this.lastShape = "";
-      if (this.wanted) {
-        this.deps.log(`the helper exited (${code ?? "signal"})`);
-        this.scheduleRestart();
-      }
+      if (!this.wanted) return;
+      const last = said.trim().split("\n").at(-1)?.slice(0, 200);
+      // ended before its hello: it can't run here, and starting it again won't change that
+      if (!wasReady)
+        return this.giveUp(
+          `the helper ended before its hello (${code ?? "signal"}${last ? `: ${last}` : ""}): not used`,
+        );
+      this.deps.log(`the helper exited (${code ?? "signal"})`);
+      this.scheduleRestart();
     });
   }
 
@@ -297,11 +387,8 @@ export class NowPlayingBridge {
     if (!this.wanted) return;
     const now = this.deps.now();
     this.restarts = this.restarts.filter((t) => now - t < RESTART_WINDOW_MS);
-    if (this.restarts.length >= MAX_RESTARTS) {
-      this.deps.log("the helper keeps exiting: given up until the setting is turned on again");
-      this.wanted = false;
-      return;
-    }
+    if (this.restarts.length >= MAX_RESTARTS)
+      return this.giveUp("the helper keeps exiting: given up until the setting is turned on again");
     const wait = RESTARTS[Math.min(this.restarts.length, RESTARTS.length - 1)];
     this.restarts.push(now);
     this.restartTimer = setTimeout(() => {
