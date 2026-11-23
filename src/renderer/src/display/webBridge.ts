@@ -1,11 +1,13 @@
 import { INVOKE_METHODS, type PushMessage, type Snapshot, type TastyTunesApi } from "@shared/ipc";
 import type { AppSettings, LyricsQuery } from "@shared/model";
+import { listenPushes } from "./live";
 
 /**
  * THE WINDOW'S API, AS A PAGE ON THE NETWORK HAS IT (0.17.0, Display on other screens). The
  * Display tree is the app's own (one home), and it reaches the app through window.tastytunes; in a
  * browser there is no preload, so this stands in for it, answering from the display server's
- * reads (main/servers/displayServer): the snapshot, the live channel and the lyrics. It has no
+ * reads (main/servers/displayServer): the snapshot, the live channel (display/live) and the
+ * playing track's lyrics. It has no
  * way back: a command does nothing, and a settings change (a scene picked, the lyrics hidden)
  * stays in this page. Every other method answers as if there were nothing: an empty list or
  * null.
@@ -27,6 +29,9 @@ const LISTS = new Set([
 
 export function webBridge(): TastyTunesApi {
   let settings: AppSettings | null = null;
+  listenPushes((msg) => {
+    if (msg.kind === "settings") settings = msg.settings;
+  });
   const known: Partial<TastyTunesApi> = {
     getSnapshot: async (): Promise<Snapshot> => {
       const res = await fetch("/api/snapshot", { credentials: "same-origin" });
@@ -43,15 +48,8 @@ export function webBridge(): TastyTunesApi {
       settings = { ...settings!, ...patch };
       return Promise.resolve(settings);
     },
-    onPush: (cb: (msg: PushMessage) => void): (() => void) => {
-      const live = new EventSource("/api/live");
-      live.onmessage = (e: MessageEvent<string>) => {
-        const msg = JSON.parse(e.data) as PushMessage;
-        if (msg.kind === "settings") settings = msg.settings;
-        cb(msg);
-      };
-      return () => live.close();
-    },
+    // the page's one live channel (display/live), which the page opens
+    onPush: (cb: (msg: PushMessage) => void): (() => void) => listenPushes(cb),
     fetchLyrics: async (q: LyricsQuery) => {
       const p = new URLSearchParams({
         artist: q.artist,

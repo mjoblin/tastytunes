@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { Snapshot } from "@shared/ipc";
 import { DEFAULT_SETTINGS } from "@shared/model";
-import { artIdOf, displayPush, displaySettings, displaySnapshot } from "./displayFeed";
+import {
+  artIdOf,
+  displayPush,
+  displaySettings,
+  displaySnapshot,
+  HELD_SETTINGS,
+  SHOWN_SETTINGS,
+} from "./displayFeed";
 
 const art = (url: string): string => `/art/${artIdOf(url)}`;
 
@@ -80,5 +87,28 @@ describe("what a screen on the network may see", () => {
     expect(JSON.stringify(conn)).not.toContain("10.0.0.2");
     const ps = displayPush({ kind: "playState", data: snap.playState! }, art);
     expect(JSON.stringify(ps)).not.toContain("192.168.1.5");
+  });
+
+  it("names every field it passes: one a firmware adds stays in the app", () => {
+    const ps = {
+      ...snap.playState!,
+      owner_email: "a@b.c",
+      metadata: { ...snap.playState!.metadata!, account: "x" },
+    } as never;
+    const out = JSON.stringify(displayPush({ kind: "playState", data: ps }, art));
+    expect(out).not.toContain("owner_email");
+    expect(out).not.toContain("account");
+    const power = displayPush(
+      { kind: "systemPower", data: { power: "ON", standby_mode: "ECO_MODE", extra: 1 } as never },
+      art,
+    );
+    expect(power).toEqual({ kind: "systemPower", data: { power: "ON" } });
+  });
+
+  it("holds every display setting to a decision: shown to a page, or held back", () => {
+    const decided = new Set<string>([...SHOWN_SETTINGS, ...HELD_SETTINGS]);
+    const display = Object.keys(DEFAULT_SETTINGS).filter((k) => k.startsWith("display"));
+    expect(display.filter((k) => !decided.has(k))).toEqual([]);
+    for (const k of SHOWN_SETTINGS) expect(k in DEFAULT_SETTINGS).toBe(true);
   });
 });

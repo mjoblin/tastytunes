@@ -57,6 +57,7 @@ import { sceneTools } from "./mcp/sceneTools";
 import { exportTools } from "./mcp/exportTools";
 import { mediaType, nameKey } from "@shared/keys";
 import { acceptBothForSdk } from "./mcp/accept";
+import { hostAllowed } from "./hostCheck";
 
 /**
  * The address another computer on the local network reaches: a private IPv4 on a physical
@@ -246,13 +247,11 @@ export class McpBridge {
     }
     // DNS-rebinding guard for the localhost bind: a malicious web page can make
     // a browser POST to 127.0.0.1, but it can't forge the Host header.
-    if (bind === "localhost") {
-      const host = (req.headers.host ?? "").split(":")[0];
-      if (host !== "127.0.0.1" && host !== "localhost") {
-        res.writeHead(403, { "content-type": "application/json" });
-        res.end(JSON.stringify({ error: "forbidden host" }));
-        return;
-      }
+    // (On the network bind the token is the guard: a rebinding page holds none.)
+    if (bind === "localhost" && !hostAllowed(req.headers.host, "loopback")) {
+      res.writeHead(403, { "content-type": "application/json" });
+      res.end(JSON.stringify({ error: "forbidden host" }));
+      return;
     }
     // THE REQUEST CHECKS (0.10.0, the whole-app review). A web page can POST to this port
     // without a preflight (a text/plain body naming application/json passed the SDK's own

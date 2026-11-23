@@ -4,7 +4,7 @@ import { contentPlayId, PLAYING_SETTLE_MS } from "@/lib/playingEntry";
 import type { InfoList, InfoPage } from "@/lib/infoSteps";
 import type { CoverOffer } from "@/lib/artistPictures";
 import { modalHasKeyboard } from "@/lib/keyboardOwner";
-import type { MenuCommand, PushMessage, Snapshot } from "@shared/ipc";
+import type { DisplayStatus, MenuCommand, PushMessage, Snapshot } from "@shared/ipc";
 import type {
   AppSettings,
   ConnectionState,
@@ -417,6 +417,9 @@ interface TTState {
   lastStation: LastStation | null;
   /** MCP server state, mirrored from the main process. */
   mcpStatus: McpStatus;
+  /** Display on other screens' server (main/app/display): read when its card shows, then
+   *  pushed as it starts, stops or fails; null until read. */
+  displayStatus: DisplayStatus | null;
   /** A wake schedule missed while the computer slept — offered, never fired.
    *  The Schedules tab shows it; the OS notification is the other surface. */
   missedSchedule: MissedSchedule | null;
@@ -703,6 +706,7 @@ export const useStore = create<TTState>((set, get) => ({
   libraryTarget: null,
   lastStation: null,
   mcpStatus: { running: false, url: null, error: null },
+  displayStatus: null,
   missedSchedule: null,
   mediaIndex: [],
   update: null,
@@ -1137,6 +1141,8 @@ export const useStore = create<TTState>((set, get) => ({
           return { favorites: msg.data };
         case "mcpStatus":
           return { mcpStatus: msg.status };
+        case "displayStatus":
+          return { displayStatus: msg.status };
         case "scheduleMissed":
           return { missedSchedule: msg.missed };
         case "mediaIndex":

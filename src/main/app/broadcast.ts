@@ -1,5 +1,5 @@
 import { BrowserWindow } from "electron";
-import { IPC } from "@shared/ipc";
+import { IPC, type DisplayStatus } from "@shared/ipc";
 import type { AlbumDr, AppSettings } from "@shared/model";
 import { listeningRecord } from "../data/listeningRecord";
 
@@ -16,6 +16,20 @@ export function broadcastSettings(settings: AppSettings): void {
   for (const w of BrowserWindow.getAllWindows()) {
     w.webContents.send(IPC.push, { kind: "settings", settings });
   }
+  for (const hear of settingsHeard) hear(settings);
+}
+
+/** Beyond the windows, whatever else draws from the settings (Display on other screens' open
+ *  pages, app/display): wired once, where it is made, so every write reaches it. */
+const settingsHeard: Array<(settings: AppSettings) => void> = [];
+export function alsoHearSettings(hear: (settings: AppSettings) => void): void {
+  settingsHeard.push(hear);
+}
+
+/** Settings › Integrations' card shows the display server's address as it changes. */
+export function broadcastDisplayStatus(status: DisplayStatus): void {
+  for (const w of BrowserWindow.getAllWindows())
+    w.webContents.send(IPC.push, { kind: "displayStatus", status });
 }
 
 /** Every window hears an album DR main recorded from its tracks (a track measured in the mini

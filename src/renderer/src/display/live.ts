@@ -1,0 +1,95 @@
+import type { PushMessage, Snapshot } from "@shared/ipc";
+
+/**
+ * THE PAGE'S LINE TO THE APP (0.17.0, Display on other screens): one live channel
+ * (main/servers/displayServer's /api/live), whole on its own. Every connection opens with the
+ * reduced snapshot, so a reconnect after a wake or a restart shows what is playing now, never
+ * the last track; the app pings every few seconds, so a page that hears nothing for a while
+ * knows it has lost the app (it goes dark) and opens the channel again. A channel the app
+ * refuses (a new address was made) asks once whether this page is still let in, and if not,
+ * reloads into the app's "open the address" page.
+ */
+
+/** About two missed pings (PING_MS, 5 s). */
+const LOST_MS = 12_000;
+const AGAIN_MS = 3_000;
+
+const listeners = new Set<(msg: PushMessage) => void>();
+
+/** The app's pushes, for the web bridge's onPush. A snapshot arrives as its settings too. */
+export function listenPushes(cb: (msg: PushMessage) => void): () => void {
+  listeners.add(cb);
+  return () => listeners.delete(cb);
+}
+
+export interface Follow {
+  snapshot(snap: Snapshot): void;
+  /** Whether the app is heard: false after LOST_MS of silence, true at the next word. */
+  reachable(heard: boolean): void;
+}
+
+export function followApp(follow: Follow): () => void {
+  let source: EventSource | null = null;
+  let heardAt = 0;
+  let heard = false;
+  let ended = false;
+  let again: ReturnType<typeof setTimeout> | undefined;
+
+  const hear = (): void => {
+    heardAt = Date.now();
+    if (!heard) {
+      heard = true;
+      follow.reachable(true);
+    }
+  };
+  const later = (): void => {
+    clearTimeout(again);
+    if (!ended) again = setTimeout(open, AGAIN_MS);
+  };
+  const drop = (): void => {
+    source?.close();
+    source = null;
+  };
+  function open(): void {
+    drop();
+    const live = new EventSource("/api/live");
+    source = live;
+    live.addEventListener("snapshot", (e: MessageEvent<string>) => {
+      hear();
+      const snap = JSON.parse(e.data) as Snapshot;
+      follow.snapshot(snap);
+      for (const l of listeners) l({ kind: "settings", settings: snap.settings });
+    });
+    live.addEventListener("ping", hear);
+    live.onmessage = (e: MessageEvent<string>) => {
+      hear();
+      const msg = JSON.parse(e.data) as PushMessage;
+      for (const l of listeners) l(msg);
+    };
+    live.onerror = () => {
+      // still connecting: the browser tries again by itself
+      if (live.readyState !== EventSource.CLOSED || source !== live) return;
+      drop();
+      // refused: still let in (the app was busy, or full), or a new address was made
+      void fetch("/api/snapshot", { credentials: "same-origin", cache: "no-store" }).then(
+        (res) => (res.status === 401 ? location.reload() : later()),
+        later,
+      );
+    };
+  }
+
+  const watch = setInterval(() => {
+    if (!heard || Date.now() - heardAt < LOST_MS) return;
+    heard = false;
+    follow.reachable(false);
+    // a connection that went quiet (the computer slept, the network moved) is opened afresh
+    open();
+  }, 2_000);
+  open();
+  return () => {
+    ended = true;
+    clearInterval(watch);
+    clearTimeout(again);
+    drop();
+  };
+}

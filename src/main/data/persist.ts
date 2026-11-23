@@ -128,13 +128,20 @@ export function newMcpToken(): Promise<void> {
 }
 
 /** The token in Display on other screens' address, minted the first time it is turned on. */
-export async function displayToken(): Promise<string> {
-  const have = await getSecret("displayToken");
-  if (have) return have;
-  const token = mintToken();
-  await setSecret("displayToken", token);
-  return token;
+export function displayToken(): Promise<string> {
+  // the first mint held, so a request that arrives while it is written reads the same token
+  minting ??= (async () => {
+    const have = await getSecret("displayToken");
+    if (have) return have;
+    const token = mintToken();
+    await setSecret("displayToken", token);
+    return token;
+  })().finally(() => {
+    minting = null;
+  });
+  return minting;
 }
+let minting: Promise<string> | null = null;
 
 /** A new display address: every screen on the old one shows the "open the address" page until
  *  it is opened again. */

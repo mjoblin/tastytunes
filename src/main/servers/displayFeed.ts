@@ -1,7 +1,14 @@
 import { createHash } from "node:crypto";
 import type { PushMessage, Snapshot } from "@shared/ipc";
 import { DEFAULT_SETTINGS, type AppSettings } from "@shared/model";
-import type { ZoneNowPlaying, ZonePlayState } from "@shared/smoip";
+import type {
+  SystemPower,
+  ZoneNowPlaying,
+  ZoneNowPlayingDisplay,
+  ZonePlayState,
+  ZonePlayStateMetadata,
+  ZonePosition,
+} from "@shared/smoip";
 
 /**
  * WHAT A SCREEN ON THE NETWORK MAY SEE (0.17.0, Display on other screens): the reduced feed the
@@ -22,38 +29,128 @@ export const artIdOf = (url: string): string =>
 /** The page's address for a picture, and the server's note of which address the id stands for. */
 export type ArtRegistry = (url: string) => string;
 
-const SHOWN_SETTING = /^(display(?!Server)|theme$|accent|ambientArt$|motion$|lyrics$)/;
+/** The settings a page draws with, by name (a new key reaches the network only once it is
+ *  listed here; displayFeed.test holds every display* key to this list or HELD_SETTINGS). */
+export const SHOWN_SETTINGS = [
+  "theme",
+  "accent",
+  "ambientArt",
+  "motion",
+  "lyrics",
+  "displayFont",
+  "displayHintSeen",
+  "displayWaveform",
+  "displayLyrics",
+  "displayScene",
+  "displaySceneSettings",
+  "displaySyncMs",
+  "displayDrops",
+  "displayFinish",
+  "displayCathodeCurve",
+  "displayCathodeFill",
+  "displayCornerTitle",
+  "displayCornerClock",
+  "displayCathodeFlicker",
+  "displayShuffleOrder",
+  "displayShuffleEvery",
+  "displayShuffleExclude",
+] as const satisfies readonly (keyof AppSettings)[];
+
+/** Display settings a page never sees: the server's own switch and port. */
+export const HELD_SETTINGS = ["displayServer"] as const satisfies readonly (keyof AppSettings)[];
 
 /** Display's own settings and the look they draw with, over the defaults; scenes stay the Sleeve
  *  until the page can run them (stage 2). */
 export function displaySettings(s: AppSettings): AppSettings {
   const out: Record<string, unknown> = { ...DEFAULT_SETTINGS };
-  for (const [k, v] of Object.entries(s)) if (SHOWN_SETTING.test(k)) out[k] = v;
+  for (const k of SHOWN_SETTINGS) out[k] = s[k];
   out["displayScene"] = "sleeve";
   return out as unknown as AppSettings;
 }
 
-function withArt<T extends { art_url?: string | null } | null | undefined>(
-  md: T,
-  art: ArtRegistry,
-): T {
-  if (!md?.art_url) return md;
-  return { ...md, art_url: art(md.art_url) };
+// EVERY FIELD BY NAME (the wire check keeps fields it doesn't know, device/frameCheck): a field a
+// firmware adds to the streamer's answers reaches the app, never a screen on the network, until
+// it is named here. The types make each list whole: a field the app learns is a decision here.
+
+function metadataOf(md: ZonePlayStateMetadata, art: ArtRegistry): ZonePlayStateMetadata {
+  return {
+    class: md.class ?? null,
+    source: md.source ?? null,
+    name: md.name ?? null,
+    playback_source: md.playback_source ?? null,
+    track_number: md.track_number ?? null,
+    duration: md.duration ?? null,
+    album: md.album ?? null,
+    artist: md.artist ?? null,
+    title: md.title ?? null,
+    art_url: md.art_url ? art(md.art_url) : null,
+    sample_format: md.sample_format ?? null,
+    mqa: md.mqa ?? null,
+    codec: md.codec ?? null,
+    lossless: md.lossless ?? null,
+    sample_rate: md.sample_rate ?? null,
+    bit_depth: md.bit_depth ?? null,
+    encoding: md.encoding ?? null,
+    station: md.station ?? null,
+    bitrate: md.bitrate ?? null,
+    radio_id: md.radio_id ?? null,
+  };
 }
 
-export function displayPlayState(ps: ZonePlayState | null, art: ArtRegistry): ZonePlayState | null {
-  if (!ps) return ps;
-  return { ...ps, metadata: withArt(ps.metadata, art) };
+export function displayPlayState(ps: ZonePlayState, art: ArtRegistry): ZonePlayState {
+  return {
+    state: ps.state ?? null,
+    position: ps.position ?? null,
+    presettable: ps.presettable ?? null,
+    queue_index: ps.queue_index ?? null,
+    queue_length: ps.queue_length ?? null,
+    queue_id: ps.queue_id ?? null,
+    mode_repeat: ps.mode_repeat ?? null,
+    mode_shuffle: ps.mode_shuffle ?? null,
+    metadata: ps.metadata ? metadataOf(ps.metadata, art) : null,
+  };
 }
 
-export function displayNowPlaying(
-  np: ZoneNowPlaying | null,
-  art: ArtRegistry,
-): ZoneNowPlaying | null {
-  if (!np?.display) return np;
-  // the streamer's own file path for the art goes too: a page needs only the picture's id
-  return { ...np, display: { ...withArt(np.display, art), art_file: null } };
+function nowDisplayOf(d: ZoneNowPlayingDisplay, art: ArtRegistry): ZoneNowPlayingDisplay {
+  return {
+    line1: d.line1 ?? null,
+    line2: d.line2 ?? null,
+    line3: d.line3 ?? null,
+    format: d.format ?? null,
+    mqa: d.mqa ?? null,
+    playback_source: d.playback_source ?? null,
+    class: d.class ?? null,
+    art_url: d.art_url ? art(d.art_url) : null,
+    // the streamer's own file path for the art never goes: a page needs only the picture's id
+    art_file: null,
+    progress: d.progress
+      ? { position: d.progress.position ?? null, duration: d.progress.duration ?? null }
+      : null,
+    context: d.context ?? null,
+  };
 }
+
+export function displayNowPlaying(np: ZoneNowPlaying, art: ArtRegistry): ZoneNowPlaying {
+  return {
+    state: np.state ?? null,
+    source: np.source ? { id: np.source.id ?? null, name: np.source.name ?? null } : null,
+    display: np.display ? nowDisplayOf(np.display, art) : null,
+    queue: np.queue
+      ? {
+          length: np.queue.length ?? null,
+          position: np.queue.position ?? null,
+          shuffle: np.queue.shuffle ?? null,
+          repeat: np.queue.repeat ?? null,
+        }
+      : null,
+    controls: Array.isArray(np.controls) ? np.controls.filter((c) => typeof c === "string") : null,
+  };
+}
+
+const positionOf = (p: ZonePosition): ZonePosition => ({ position: p.position });
+
+/** The streamer's power, and nothing else of its power settings. */
+const powerOf = (p: SystemPower): SystemPower => ({ power: p.power });
 
 /** The page's whole first look: the snapshot, reduced. */
 export function displaySnapshot(snap: Snapshot, art: ArtRegistry): Snapshot {
@@ -64,14 +161,14 @@ export function displaySnapshot(snap: Snapshot, art: ArtRegistry): Snapshot {
     devices: [],
     discovering: false,
     settings: displaySettings(snap.settings),
-    playState: displayPlayState(snap.playState, art),
-    position: snap.position,
-    nowPlaying: displayNowPlaying(snap.nowPlaying, art),
+    playState: snap.playState ? displayPlayState(snap.playState, art) : null,
+    position: snap.position ? positionOf(snap.position) : null,
+    nowPlaying: snap.nowPlaying ? displayNowPlaying(snap.nowPlaying, art) : null,
     zoneState: null,
     queue: null,
     presets: null,
     systemInfo: null,
-    systemPower: snap.systemPower,
+    systemPower: snap.systemPower ? powerOf(snap.systemPower) : null,
     firmwareUpdate: null,
     sources: null,
     zoneAudio: null,
@@ -99,12 +196,13 @@ export function displaySnapshot(snap: Snapshot, art: ArtRegistry): Snapshot {
 export function displayPush(msg: PushMessage, art: ArtRegistry): PushMessage | null {
   switch (msg.kind) {
     case "playState":
-      return { kind: "playState", data: displayPlayState(msg.data, art) ?? msg.data };
+      return { kind: "playState", data: displayPlayState(msg.data, art) };
     case "nowPlaying":
-      return { kind: "nowPlaying", data: displayNowPlaying(msg.data, art) ?? msg.data };
+      return { kind: "nowPlaying", data: displayNowPlaying(msg.data, art) };
     case "position":
+      return { kind: "position", data: positionOf(msg.data) };
     case "systemPower":
-      return msg;
+      return { kind: "systemPower", data: powerOf(msg.data) };
     case "connection":
       return {
         kind: "connection",

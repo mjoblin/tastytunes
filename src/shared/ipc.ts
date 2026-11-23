@@ -194,6 +194,8 @@ export type PushMessage =
   /** A preset recall came to nothing: main decided (main/device/recallWatch), the repair chip shows. */
   | { kind: "presetRecallDead"; id: number }
   | { kind: "mcpStatus"; status: McpStatus }
+  /** Display on other screens started, stopped or failed (main/app/display); windows only. */
+  | { kind: "displayStatus"; status: DisplayStatus }
   | { kind: "scheduleMissed"; missed: MissedSchedule | null }
   | { kind: "mediaIndex"; statuses: MediaIndexStatus[] }
   /** A menu command; `delivery` marks the copies of one click sent to a window still loading

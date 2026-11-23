@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import type { DisplayStatus } from "@shared/ipc";
 import { tt } from "@/api";
+import { useStore } from "@/store";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import {
   CopyRow,
@@ -13,34 +14,28 @@ import {
 } from "@/components/settings/SettingsKit";
 
 /**
- * DISPLAY ON OTHER SCREENS (0.17.0, main/app/display): the switch, the address a tablet or a TV's
- * browser opens (with its token), a new address when one has been shared too widely, and the port.
- * The status is read when the card shows and after each change.
+ * DISPLAY ON OTHER SCREENS (0.17.0, main/app/display): the switch, the address a tablet or another
+ * computer's browser opens (with its token), a new address when one has been shared too widely,
+ * and the port. The status is read fresh when the card shows (the computer's address can have
+ * changed), then follows main's pushes as the server starts, stops or fails.
  */
+const setDisplayStatus = (displayStatus: DisplayStatus): void =>
+  useStore.setState({ displayStatus });
+
 export function DisplayServerSection({ settings, save }: SectionProps): React.JSX.Element {
-  const [status, setStatus] = useState<DisplayStatus | null>(null);
+  const status = useStore((s) => s.displayStatus);
   const { copied, copy } = useCopied();
   const on = settings.displayServer.enabled;
   const port = settings.displayServer.port;
   useEffect(() => {
-    let live = true;
-    // the server starts a moment after the setting is saved
-    const t = setTimeout(() => {
-      void tt.getDisplayStatus().then((s) => {
-        if (live) setStatus(s);
-      });
-    }, 300);
-    return () => {
-      live = false;
-      clearTimeout(t);
-    };
-  }, [on, port]);
+    void tt.getDisplayStatus().then(setDisplayStatus);
+  }, []);
   return (
     <SettingsCard>
       <div data-display-server className="space-y-3">
         <Toggle
           label="Display on other screens"
-          hint="Show Display mode on a tablet, a TV's browser or another computer on your network. Each lyric is looked up as it plays, as on this screen."
+          hint="Show Display mode on a tablet or another computer on your network. Each lyric is looked up as it plays, as on this screen."
           checked={on}
           onChange={(enabled) =>
             void save({ displayServer: { ...settings.displayServer, enabled } })
@@ -61,7 +56,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
                 Open it once on each screen. Anyone with the address can see what's playing.
               </div>
               <HeaderChip
-                onClick={() => void tt.displayNewAddress().then(setStatus)}
+                onClick={() => void tt.displayNewAddress().then(setDisplayStatus)}
                 className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
               >
                 New address

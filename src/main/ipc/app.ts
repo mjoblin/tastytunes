@@ -29,7 +29,7 @@ export function registerAppIpc(): void {
   handle(IPC.getMediaKeys, () => Promise.resolve(refreshMediaKeys()));
   handle(IPC.openAccessibilitySettings, () => openAccessibilitySettings());
   // Display on other screens: its status and a new address (app/display)
-  handle(IPC.getDisplayStatus, () => Promise.resolve(displayStatus()));
+  handle(IPC.getDisplayStatus, () => displayStatus());
   handle(IPC.displayNewAddress, () => newDisplayAddress());
   // where the agent tools' exports go: set only by this dialog (app/exportsFolder)
   handle(IPC.getExportFolder, () => Promise.resolve(exportFolderStatus()));
