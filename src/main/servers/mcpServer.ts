@@ -55,6 +55,7 @@ import { audioTools } from "./mcp/audioTools";
 import { editTools } from "./mcp/editTools";
 import { sceneTools } from "./mcp/sceneTools";
 import { mediaType, nameKey } from "@shared/keys";
+import { acceptBothForSdk } from "./mcp/accept";
 
 /**
  * The address another computer on the local network reaches: a private IPv4 on a physical
@@ -310,6 +311,9 @@ export class McpBridge {
       }
       const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
 
+      // a client that sends no Accept, or */* (Home Assistant's rest_command, curl), is served
+      // like one that lists both types; the transport alone would refuse it with a 406
+      acceptBothForSdk(req);
       const mcpServer = this.buildServer();
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined, // stateless
