@@ -46,7 +46,7 @@ export function BehaviorSection({ settings, save }: SectionProps): React.JSX.Ele
           />
         </SettingRow>
 
-        <MediaKeys checked={settings.mediaKeys} save={save} />
+        <MediaKeys checked={settings.mediaKeys} external={settings.mediaKeysExternal} save={save} />
 
         <Toggle
           label="Track-change notifications"
@@ -137,9 +137,11 @@ function OpenAtLogin({ tray }: { tray: boolean }): React.JSX.Element | null {
  */
 function MediaKeys({
   checked,
+  external,
   save,
 }: {
   checked: boolean;
+  external: boolean;
   save: SectionProps["save"];
 }): React.JSX.Element {
   const [state, setState] = useState<MediaKeysState | null>(null);
@@ -157,13 +159,15 @@ function MediaKeys({
       window.removeEventListener("focus", read);
     };
   }, [checked]);
-  const hint = !checked
-    ? "Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background."
-    : state?.needsPermission
-      ? "On a Mac, the media keys work only once TastyTunes is allowed in System Settings › Privacy & Security › Accessibility."
-      : state && !state.bound
-        ? "TastyTunes couldn't use the media keys. Another app may be using them."
-        : "Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background.";
+  const hint = state?.system
+    ? "Play/pause, next, and previous keys, Control Center, and headphone buttons control the streamer while it's playing."
+    : !checked
+      ? "Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background."
+      : state?.needsPermission
+        ? "On a Mac, the media keys work only once TastyTunes is allowed in System Settings › Privacy & Security › Accessibility."
+        : state && !state.bound
+          ? "TastyTunes couldn't use the media keys. Another app may be using them."
+          : "Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background.";
   return (
     <div className="space-y-2">
       <Toggle
@@ -172,6 +176,18 @@ function MediaKeys({
         checked={checked}
         onChange={(mediaKeys) => void save({ mediaKeys })}
       />
+      {/* the Mac's Now Playing claims TastyTunes' own plays; another app's (AirPlay, Spotify
+          from a phone) only with this on (main/app/nowPlayingRules) */}
+      {checked && state?.system && (
+        <div className="pl-4 ml-1 border-l-2 border-edge/50">
+          <Toggle
+            label="When another app is playing"
+            hint="Also control the streamer while another app plays to it, such as AirPlay or Spotify from a phone. Off, the keys stay with the Mac's own apps then."
+            checked={external}
+            onChange={(mediaKeysExternal) => void save({ mediaKeysExternal })}
+          />
+        </div>
+      )}
       {checked && state?.needsPermission && (
         <div className="flex justify-end" data-media-keys-permission>
           <HeaderChip

@@ -2,6 +2,7 @@ import { IPC } from "@shared/ipc";
 import type { AppSettings } from "@shared/model";
 import { broadcastSettings } from "../app/broadcast";
 import { syncMediaKeys } from "../app/mediaKeys";
+import { nowPlayingRefresh } from "../app/nowPlaying";
 import { deviceManager, mcpBridge } from "../app/runtime";
 import { syncTray } from "../app/tray";
 import { checkUpdatesNow } from "../app/updater";
@@ -18,6 +19,8 @@ export function registerSettingsIpc(): void {
     // OS-global shortcut churn only when the toggle itself changed — every
     // settings write used to unregister/re-register all four media keys.
     if ("mediaKeys" in patch) syncMediaKeys();
+    // which plays the Mac's Now Playing claims (app/nowPlaying), at once
+    if ("mediaKeysExternal" in patch) nowPlayingRefresh();
     // the mini player's lyric line keeps its room, so the open mini grows or shrinks with it
     if ("lyricsLineMini" in patch || "lyrics" in patch) fitMiniPlayer();
     // The tray comes and goes live — toggling it is not a restart.

@@ -8,6 +8,7 @@ import { denyPermissionsByDefault, keepNoCookies, logWindowPictures } from "./ap
 import { lateStep, startupFailed } from "./app/bootFailure";
 import { broadcastSettings, wireListeningPushes } from "./app/broadcast";
 import { syncMediaKeys, watchMediaKeys } from "./app/mediaKeys";
+import { nowPlayingPush } from "./app/nowPlaying";
 import { installAppMenu } from "./app/menu";
 import { deviceManager, mcpBridge } from "./app/runtime";
 import { catchUpOnResume, noteSuspend, startScheduler } from "./app/scheduler";
@@ -139,6 +140,8 @@ if (!gotLock) {
           else if (was !== "ON" && aheadHost) mediaIndex.scheduleHealAhead(aheadHost);
         }
         if (trayWantsRefresh(msg.kind)) refreshTrayMenu();
+        // the Mac's Now Playing follows the streamer (app/nowPlaying)
+        nowPlayingPush(msg);
         // INDEX AT CONNECT: the media indexes used to
         // build only when the Library screen first listed servers, so on a
         // fresh install the Queue's album links and Open in Library could "not

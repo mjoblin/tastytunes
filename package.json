@@ -25,7 +25,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
-    "dist:mac": "electron-vite build && electron-builder --mac",
+    "dist:mac": "electron-vite build && node scripts/build-nowplaying.mjs && electron-builder --mac",
     "dist:win": "electron-vite build && node scripts/build-win.mjs",
     "dist:linux": "electron-vite build && electron-builder --linux"
   },

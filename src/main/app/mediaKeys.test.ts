@@ -9,6 +9,7 @@ const sys = vi.hoisted(() => ({
   trusted: false,
   takes: true,
   settings: { mediaKeys: true },
+  helper: false,
 }));
 const electron = vi.hoisted(() => ({
   app: { on: vi.fn() },
@@ -19,6 +20,8 @@ const electron = vi.hoisted(() => ({
 vi.mock("electron", () => electron);
 vi.mock("../data/persist", () => ({ getSettings: () => sys.settings }));
 vi.mock("./runtime", () => ({ deviceManager: { fire: vi.fn() } }));
+const np = vi.hoisted(() => ({ sync: vi.fn() }));
+vi.mock("./nowPlaying", () => ({ syncNowPlaying: np.sync }));
 
 import {
   mediaKeysState,
@@ -36,6 +39,8 @@ beforeEach(() => {
   sys.trusted = false;
   sys.takes = true;
   sys.settings = { mediaKeys: true };
+  sys.helper = false;
+  np.sync.mockImplementation(() => sys.helper);
   // as macOS does: without the permission the media keys don't register
   electron.globalShortcut.register.mockImplementation(
     () => sys.takes && (process.platform !== "darwin" || sys.trusted),
@@ -51,13 +56,23 @@ describe("the media keys on a Mac", () => {
   it("say they need the permission, and bind once it is there", () => {
     onSystem("darwin");
     syncMediaKeys();
-    expect(mediaKeysState()).toEqual({ on: true, bound: false, needsPermission: true });
+    expect(mediaKeysState()).toEqual({
+      on: true,
+      bound: false,
+      needsPermission: true,
+      system: false,
+    });
     // still not granted: no second try
     electron.globalShortcut.register.mockClear();
     refreshMediaKeys();
     expect(electron.globalShortcut.register).not.toHaveBeenCalled();
     sys.trusted = true;
-    expect(refreshMediaKeys()).toEqual({ on: true, bound: true, needsPermission: false });
+    expect(refreshMediaKeys()).toEqual({
+      on: true,
+      bound: true,
+      needsPermission: false,
+      system: false,
+    });
   });
 
   it("only ever check the permission, never ask for it", () => {
@@ -96,7 +111,12 @@ describe("the media keys elsewhere", () => {
   it("bind without asking anything", () => {
     onSystem("win32");
     syncMediaKeys();
-    expect(mediaKeysState()).toEqual({ on: true, bound: true, needsPermission: false });
+    expect(mediaKeysState()).toEqual({
+      on: true,
+      bound: true,
+      needsPermission: false,
+      system: false,
+    });
     expect(electron.systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled();
   });
 
@@ -104,7 +124,12 @@ describe("the media keys elsewhere", () => {
     onSystem("win32");
     sys.takes = false;
     syncMediaKeys();
-    expect(mediaKeysState()).toEqual({ on: true, bound: false, needsPermission: false });
+    expect(mediaKeysState()).toEqual({
+      on: true,
+      bound: false,
+      needsPermission: false,
+      system: false,
+    });
   });
 
   it("are neither bound nor wanted when the setting is off", () => {
@@ -112,6 +137,37 @@ describe("the media keys elsewhere", () => {
     sys.settings = { mediaKeys: false };
     syncMediaKeys();
     expect(electron.globalShortcut.register).not.toHaveBeenCalled();
-    expect(refreshMediaKeys()).toEqual({ on: false, bound: false, needsPermission: false });
+    expect(refreshMediaKeys()).toEqual({
+      on: false,
+      bound: false,
+      needsPermission: false,
+      system: false,
+    });
+  });
+});
+
+describe("the media keys through the Mac's Now Playing", () => {
+  it("bind no shortcut and want no permission when the helper carries them", () => {
+    onSystem("darwin");
+    sys.helper = true;
+    syncMediaKeys();
+    expect(electron.globalShortcut.register).not.toHaveBeenCalled();
+    expect(np.sync).toHaveBeenCalledWith(true);
+    expect(mediaKeysState()).toEqual({
+      on: true,
+      bound: true,
+      needsPermission: false,
+      system: true,
+    });
+    expect(electron.systemPreferences.isTrustedAccessibilityClient).not.toHaveBeenCalled();
+  });
+
+  it("stop the helper when the setting is off", () => {
+    onSystem("darwin");
+    sys.helper = true;
+    sys.settings = { mediaKeys: false };
+    syncMediaKeys();
+    expect(np.sync).toHaveBeenCalledWith(false);
+    expect(mediaKeysState()).toMatchObject({ on: false, bound: false, system: true });
   });
 });

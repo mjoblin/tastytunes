@@ -343,6 +343,9 @@ export interface MediaKeysState {
   on: boolean;
   bound: boolean;
   needsPermission: boolean;
+  /** The Mac's own Now Playing carries the keys (main/app/nowPlaying): no shortcuts, no
+   *  permission, Control Center and a headset's buttons as well. */
+  system: boolean;
 }
 
 export interface TastyTunesApi {

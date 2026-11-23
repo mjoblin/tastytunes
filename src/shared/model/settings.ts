@@ -152,6 +152,12 @@ export interface AppSettings {
   /** Every streamer ever connected — see KnownDevice. */
   knownDevices: KnownDevice[];
   mediaKeys: boolean;
+  /** The media keys for another app's play on the streamer too (AirPlay, cast, Spotify Connect, a
+   *  streaming app): off, TastyTunes claims the Mac's Now Playing only for its own plays (the
+   *  queue, radio, a preset recalled from it), so the keys stay with the app driving the
+   *  streamer. On, for owners who cast from a phone and want the Mac's keys anyway. macOS, with
+   *  the Now Playing helper (main/app/nowPlaying). */
+  mediaKeysExternal: boolean;
   volumeLimitPercent: number | null;
   notifications: boolean;
   /**
@@ -568,6 +574,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lastHost: null,
   knownDevices: [],
   mediaKeys: true,
+  mediaKeysExternal: false,
   volumeLimitPercent: null,
   notifications: true,
   // ON by default (once the panel feature-completed):

@@ -136,6 +136,12 @@ jobs:
             exit 1
           fi
 
+      # THE NOW PLAYING HELPER (0.17.0): a universal Swift binary electron-builder takes into
+      # Contents/Helpers and signs with the app; the signing check below verifies it
+      - name: Build the Now Playing helper
+        if: runner.os == 'macOS'
+        run: node scripts/build-nowplaying.mjs
+
       - name: Package and publish
         if: startsWith(github.ref, 'refs/tags/v')
         shell: bash
@@ -162,6 +168,9 @@ jobs:
           app=$(find dist -maxdepth 2 -name 'TastyTunes.app' -type d | head -1)
           if [ -z "$app" ]; then echo "::error::no TastyTunes.app in dist"; exit 1; fi
           codesign --verify --deep --strict --verbose=2 "$app"
+          helper="$app/Contents/Helpers/TastyTunes Now Playing"
+          if [ ! -x "$helper" ]; then echo "::error::the Now Playing helper is missing"; exit 1; fi
+          codesign --verify --strict --verbose=2 "$helper"
           spctl --assess --type execute --verbose=2 "$app"
 
       # THE UPDATE FEED'S macOS MINIMUM (0.14.0, Electron 44 dropped macOS 12). electron-builder

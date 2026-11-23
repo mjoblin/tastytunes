@@ -74,6 +74,11 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  # the Now Playing helper (native/nowplaying, built by scripts/build-nowplaying.mjs before
+  # packaging): Contents/Helpers/, signed with the app and notarized with it
+  extraFiles:
+    - from: "build/nowplaying/TastyTunes Now Playing"
+      to: "Helpers/TastyTunes Now Playing"
   notarize: true
   extendInfo:
     # macOS 15+ shows a local-network consent prompt the first time the app

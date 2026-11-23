@@ -2,6 +2,7 @@ import { app, globalShortcut, shell, systemPreferences } from "electron";
 import type { MediaKeysState, StreamerCommand } from "@shared/ipc";
 import { getSettings } from "../data/persist";
 import { deviceManager } from "./runtime";
+import { syncNowPlaying } from "./nowPlaying";
 
 /**
  * The OS media keys, bound while the setting is on (split out of index.ts in the 0.11.0 sweep).
@@ -23,6 +24,8 @@ const KEYS: Array<[string, StreamerCommand]> = [
 
 /** Whether any key was bound by the last sync. */
 let bound = false;
+/** Whether the Mac's own Now Playing carries the keys (the helper is there): no shortcuts then. */
+let system = false;
 
 /** macOS without the Accessibility permission the keys need (never asks: no dialog). */
 function lacksPermission(): boolean {
@@ -32,7 +35,14 @@ function lacksPermission(): boolean {
 export function syncMediaKeys(): void {
   globalShortcut.unregisterAll();
   bound = false;
-  if (!getSettings().mediaKeys) return;
+  const on = getSettings().mediaKeys;
+  // macOS with the Now Playing helper: the system's own route carries the keys
+  system = syncNowPlaying(on);
+  if (system) {
+    bound = on;
+    return;
+  }
+  if (!on) return;
   for (const [accelerator, cmd] of KEYS) {
     try {
       if (globalShortcut.register(accelerator, () => deviceManager.fire(cmd))) bound = true;
@@ -45,14 +55,14 @@ export function syncMediaKeys(): void {
 /** The setting, whether the keys are bound, and why not. */
 export function mediaKeysState(): MediaKeysState {
   const on = getSettings().mediaKeys;
-  const needsPermission = on && !bound && lacksPermission();
-  return { on, bound, needsPermission };
+  const needsPermission = on && !system && !bound && lacksPermission();
+  return { on, bound, needsPermission, system };
 }
 
 /** Binds the keys again when they are on, unbound, and could now be bound (the permission granted
  *  since); then says where they stand. */
 export function refreshMediaKeys(): MediaKeysState {
-  if (getSettings().mediaKeys && !bound && !lacksPermission()) syncMediaKeys();
+  if (!system && getSettings().mediaKeys && !bound && !lacksPermission()) syncMediaKeys();
   return mediaKeysState();
 }
 
