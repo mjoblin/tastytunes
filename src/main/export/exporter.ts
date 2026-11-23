@@ -144,6 +144,7 @@ const EXT: Record<string, string> = {
   "image/png": "png",
   "image/webp": "webp",
   "image/gif": "gif",
+  "image/svg+xml": "svg",
 };
 const AUDIO_EXT: Record<string, string> = {
   FLAC: "flac",
