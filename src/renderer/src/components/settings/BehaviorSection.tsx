@@ -160,7 +160,7 @@ function MediaKeys({
     };
   }, [checked]);
   const hint = state?.system
-    ? "Play/pause, next, and previous keys, Control Center, and headphone buttons control the streamer while it's playing."
+    ? "Control the streamer with the media keys, Control Center, or your headphones."
     : !checked
       ? "Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background."
       : state?.needsPermission
@@ -181,8 +181,8 @@ function MediaKeys({
       {checked && state?.system && (
         <div className="pl-4 ml-1 border-l-2 border-edge/50">
           <Toggle
-            label="When another app is playing"
-            hint="Also control the streamer while another app plays to it, such as AirPlay or Spotify from a phone. Off, the keys stay with the Mac's own apps then."
+            label="Also for other apps"
+            hint="Use them even when the streamer is playing from AirPlay or another app."
             checked={external}
             onChange={(mediaKeysExternal) => void save({ mediaKeysExternal })}
           />
