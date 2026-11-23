@@ -24,6 +24,10 @@ import { ToneEq } from "@/components/device/ToneEq";
 import { DeviceControls } from "@/components/device/DeviceControls";
 import { HeaderChip, ScreenTitle, pageEdges } from "@/components/chrome/Chrome";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { IS_MAC, IS_WINDOWS } from "@/lib/screens";
+import { modelReportUrl } from "@shared/modelReport";
+import type { SystemInfo } from "@shared/smoip";
+import { version } from "../../../../package.json";
 
 export function DeviceScreen(): React.JSX.Element {
   const connection = useStore((s) => s.connection);
@@ -466,6 +470,13 @@ export function DeviceScreen(): React.JSX.Element {
                 {/* §10 controls — brightness / standby / auto power-down, each
                   feature-detected via its /spec (hidden on models without it) */}
                 <DeviceControls />
+
+                {/* MODEL CHECK-IN (shared/modelReport): a prefilled GitHub issue with the model,
+                  its firmware and what the app couldn't read from it; the app sends nothing.
+                  Not for the demo, which is no model. */}
+                {!(connection.phase === "connected" && connection.demo) && (
+                  <ModelCheckIn systemInfo={systemInfo} />
+                )}
               </div>
               {/* Sources: the streamer's inputs, one click to switch. Bare rows
                 rather than a ring-and-panel card — they ARE the panel, same as
@@ -504,6 +515,36 @@ function InfoRow({
       >
         {value}
       </span>
+    </div>
+  );
+}
+
+/** One click to a prefilled report of how TastyTunes works with this model (shared/modelReport). */
+function ModelCheckIn({ systemInfo }: { systemInfo: SystemInfo }): React.JSX.Element {
+  const logs = useStore((s) => s.logs);
+  const open = (): void => {
+    const url = modelReportUrl({
+      model: systemInfo.model,
+      api: systemInfo.api,
+      versions: systemInfo.versions,
+      appVersion: version,
+      platform: IS_MAC ? "macOS" : IS_WINDOWS ? "Windows" : "Linux",
+      wire: logs.filter((l) => l.scope === "wire").map((l) => l.text),
+    });
+    void tt.openExternal(url);
+  };
+  return (
+    <div data-model-checkin className="pt-1 flex items-center justify-between gap-4">
+      <div className="text-[11.5px] text-faint max-w-sm">
+        Opens a prefilled report on GitHub with the model and its firmware. Nothing is sent until
+        you submit it there.
+      </div>
+      <button
+        onClick={open}
+        className="shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-accent hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
+      >
+        Report this model <ExternalLink size={12} />
+      </button>
     </div>
   );
 }
