@@ -30,7 +30,7 @@ for (const arch of ["x64", "arm64"]) {
   mkdirSync(outDir, { recursive: true });
   const target = host === arch ? arch : `${host}_${arch}`;
   const cl = [
-    "cl /nologo /std:c++17 /EHsc /O2 /permissive- /DUNICODE /D_UNICODE",
+    "cl /nologo /std:c++20 /EHsc /O2 /permissive- /DUNICODE /D_UNICODE",
     `"${source}"`,
     `/Fo"${outDir}\\\\"`,
     `/Fe"${join(outDir, NAME)}"`,
