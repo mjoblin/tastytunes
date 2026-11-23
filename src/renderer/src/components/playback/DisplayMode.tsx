@@ -245,6 +245,7 @@ export function DisplayMode(): React.JSX.Element {
           itself). Hidden entirely when the master toggle is off. */}
       <button
         data-display-scene-button
+        data-display-corner
         onClick={() => setScenesOpen((o) => !o)}
         title="Scene (Tab steps through them)"
         className={cx(
@@ -267,6 +268,7 @@ export function DisplayMode(): React.JSX.Element {
       )}
       {settings.waveforms && (
         <button
+          data-display-corner
           onClick={() => void saveSettings({ displayWaveform: !settings.displayWaveform })}
           title={settings.displayWaveform ? "Hide waveform" : "Show waveform"}
           className={cx(
@@ -280,6 +282,7 @@ export function DisplayMode(): React.JSX.Element {
       )}
       {lyricsToggleable && (
         <button
+          data-display-corner
           onClick={() => void toggleLyrics()}
           title={settings.displayLyrics ? "Hide lyrics" : "Show lyrics"}
           className={cx(
@@ -292,6 +295,7 @@ export function DisplayMode(): React.JSX.Element {
         </button>
       )}
       <button
+        data-display-corner
         onClick={() => setDisplayMode(false)}
         title="Exit display mode (F)"
         className={cx(

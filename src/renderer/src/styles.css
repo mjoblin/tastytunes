@@ -1307,3 +1307,10 @@ img {
 :root.light .playhead-time {
   color: var(--color-dim);
 }
+
+/* DISPLAY ON OTHER SCREENS (0.17.0, display.html): a page on another screen shows, it doesn't
+   steer, so Display mode's corner controls (the scene picker, the waveform and lyrics switches,
+   the exit) are not drawn there */
+.display-page [data-display-corner] {
+  display: none;
+}

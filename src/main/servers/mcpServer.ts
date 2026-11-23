@@ -62,7 +62,7 @@ import { acceptBothForSdk } from "./mcp/accept";
  * interface first (0.16.0: the first external address found could be a VPN's, and the setup line
  * Settings showed then reached nothing).
  */
-function lanAddress(): string | null {
+export function lanAddress(): string | null {
   const vpn = /^(utun|tun|tap|ppp|wg|ipsec|zt|tailscale|gpd)/i;
   const privateRange = (ip: string): boolean =>
     /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);

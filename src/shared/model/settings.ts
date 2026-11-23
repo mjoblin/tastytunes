@@ -494,6 +494,10 @@ export interface AppSettings {
   queueSignatures: Record<string, string>;
   /** MCP server for local AI agents. */
   mcp: McpSettings;
+  /** Display on other screens (main/servers/displayServer): the app's Display mode served to any
+   *  browser on the local network, off by default, on its own port; the address carries a token
+   *  (the secrets store's displayToken). */
+  displayServer: { enabled: boolean; port: number };
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
   /** Media indexes build/rebuild themselves (off = only from the Libraries buttons). */
   mediaIndexAuto: boolean;
@@ -676,6 +680,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presetVolumes: {},
   presetVolumeNames: {},
   queueSignatures: {},
+  displayServer: { enabled: false, port: 8556 },
   mcp: {
     enabled: false,
     bind: "localhost",

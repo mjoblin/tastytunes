@@ -16,7 +16,8 @@ export { artKeyOf } from "@shared/artUrl";
 export function artSrc(url: string | null | undefined, px: number, key?: string): string | null {
   if (!url) return null;
   if (artUrlResizable(url)) return artUrlAt(url, px);
-  if (/^(data|blob|tt-art):/.test(url)) return url;
+  // a picture the display server hands out by id (Display on other screens) is served as it is
+  if (/^(data|blob|tt-art):/.test(url) || url.startsWith("/art/")) return url;
   const want = px * 2;
   if (want > 480) return url;
   const tier = want <= 320 ? "thumb" : "card";

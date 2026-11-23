@@ -3,6 +3,7 @@ import type { AppSettings } from "@shared/model";
 import { broadcastSettings } from "../app/broadcast";
 import { syncMediaKeys } from "../app/mediaKeys";
 import { nowPlayingRefresh } from "../app/nowPlaying";
+import { syncDisplay } from "../app/display";
 import { deviceManager, mcpBridge } from "../app/runtime";
 import { syncTray } from "../app/tray";
 import { checkUpdatesNow } from "../app/updater";
@@ -26,6 +27,8 @@ export function registerSettingsIpc(): void {
     // The tray comes and goes live — toggling it is not a restart.
     if ("tray" in patch) syncTray(next.tray, trayDeps);
     mcpBridge.sync(next);
+    // Display on other screens follows its switch and port (app/display)
+    if ("displayServer" in patch) void syncDisplay(next);
     // Only when the limit itself changed — a volume set above the limit from
     // outside the app (device knob) mustn't be ambushed by unrelated saves.
     if ("volumeLimitPercent" in patch) deviceManager.enforceVolumeLimit();

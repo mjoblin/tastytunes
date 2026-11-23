@@ -3,6 +3,7 @@
 // tab where the links had sat in Behavior and the server in its own.
 import { ActionLinks } from "@/components/settings/ActionLinks";
 import { McpSection } from "@/components/settings/McpSection";
+import { DisplayServerSection } from "@/components/settings/DisplayServerSection";
 import { SettingsCard, type SectionProps } from "@/components/settings/SettingsKit";
 
 export function IntegrationsSection(props: SectionProps): React.JSX.Element {
@@ -12,6 +13,7 @@ export function IntegrationsSection(props: SectionProps): React.JSX.Element {
         <ActionLinks />
       </SettingsCard>
       <McpSection {...props} />
+      <DisplayServerSection {...props} />
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { lateStep, startupFailed } from "./app/bootFailure";
 import { broadcastSettings, wireListeningPushes } from "./app/broadcast";
 import { syncMediaKeys, watchMediaKeys } from "./app/mediaKeys";
 import { nowPlayingPush } from "./app/nowPlaying";
+import { displayServer, syncDisplay } from "./app/display";
 import { installAppMenu } from "./app/menu";
 import { deviceManager, mcpBridge } from "./app/runtime";
 import { catchUpOnResume, noteSuspend, startScheduler } from "./app/scheduler";
@@ -142,6 +143,8 @@ if (!gotLock) {
         if (trayWantsRefresh(msg.kind)) refreshTrayMenu();
         // the Mac's Now Playing follows the streamer (app/nowPlaying)
         nowPlayingPush(msg);
+        // and every screen showing Display on other screens (app/display)
+        displayServer.push(msg);
         // INDEX AT CONNECT: the media indexes used to
         // build only when the Library screen first listed servers, so on a
         // fresh install the Queue's album links and Open in Library could "not
@@ -163,6 +166,7 @@ if (!gotLock) {
       // EACH LATE STEP IN ITS OWN TRY (app/bootFailure lateStep): with the window or the menu bar
       // icon up, a step that throws costs itself, never the steps after it
       lateStep("the agents' server", () => mcpBridge.sync(getSettings()));
+      lateStep("Display on other screens", () => void syncDisplay(getSettings()));
       lateStep("connecting", () => deviceManager.startup());
       // tastytunes:// URLs, those that arrived before ready first (app/urlInbox)
       lateStep("links", () => serveUrlActions());

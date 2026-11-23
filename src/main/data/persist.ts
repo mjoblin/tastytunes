@@ -127,6 +127,21 @@ export function newMcpToken(): Promise<void> {
   return setSecret("mcpToken", mintToken());
 }
 
+/** The token in Display on other screens' address, minted the first time it is turned on. */
+export async function displayToken(): Promise<string> {
+  const have = await getSecret("displayToken");
+  if (have) return have;
+  const token = mintToken();
+  await setSecret("displayToken", token);
+  return token;
+}
+
+/** A new display address: every screen on the old one shows the "open the address" page until
+ *  it is opened again. */
+export function newDisplayToken(): Promise<void> {
+  return setSecret("displayToken", mintToken());
+}
+
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const merged = { ...getSettings(), ...patch };
   const next = secretsMoved ? withoutSecrets(merged) : merged;

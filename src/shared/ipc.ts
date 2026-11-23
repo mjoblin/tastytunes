@@ -348,6 +348,14 @@ export interface MediaKeysState {
   system: boolean;
 }
 
+/** Display on other screens (main/app/display): whether it is serving, the address with its token
+ *  that Settings shows, and why it couldn't start. */
+export interface DisplayStatus {
+  running: boolean;
+  url: string | null;
+  error: string | null;
+}
+
 export interface TastyTunesApi {
   getSnapshot(): Promise<Snapshot>;
   /** Cover Art Archive fallback for an album the server has no art for (null when off or unknown). */
@@ -378,6 +386,10 @@ export interface TastyTunesApi {
   getMediaKeys(): Promise<MediaKeysState>;
   /** macOS: System Settings' Accessibility pane, where the media keys' permission is given. */
   openAccessibilitySettings(): Promise<void>;
+  /** Display on other screens as it stands (main/app/display). */
+  getDisplayStatus(): Promise<DisplayStatus>;
+  /** A new address for Display on other screens: screens on the old one need the new one. */
+  displayNewAddress(): Promise<DisplayStatus>;
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
   fetchArt(url: string): Promise<{ dataUrl: string } | null>;
   /** The picture embedded in a track's audio file, for surfaces the server's
@@ -681,6 +693,8 @@ export const IPC = {
   setLoginItem: "tt:setLoginItem",
   getMediaKeys: "tt:getMediaKeys",
   openAccessibilitySettings: "tt:openAccessibilitySettings",
+  getDisplayStatus: "tt:getDisplayStatus",
+  displayNewAddress: "tt:displayNewAddress",
   fetchArt: "tt:fetchArt",
   embeddedArt: "tt:embeddedArt",
   fetchLyrics: "tt:fetchLyrics",
