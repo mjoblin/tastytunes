@@ -46,7 +46,7 @@ export function serveArtProtocol(): void {
     if ((tier !== "thumb" && tier !== "card") || !key || !origin)
       return new Response(null, { status: 400 });
     // the streamer's own art server is fetched one picture at a time
-    const conn = deviceManager.snapshot().connection;
+    const conn = deviceManager.connectionNow;
     const streamer = conn.phase === "connected" ? conn.host : null;
     const device = isDeviceArt(origin, streamer);
     // the origin comes from the renderer, so it is checked like every picture fetch

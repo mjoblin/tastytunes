@@ -97,7 +97,7 @@ export function registerMediaIpc(): void {
   );
   handle(IPC.contentResolve, (_e, ref: ContentRef) => deviceManager.contentResolve(ref));
   handle(IPC.mediaNodeInfo, (_e, query: MediaInfoQuery, purpose: unknown) => {
-    const conn = deviceManager.snapshot().connection;
+    const conn = deviceManager.connectionNow;
     // anything but an explicit act is a show: a show never rebuilds an index
     return lookupMediaInfo(
       conn.phase === "connected" ? conn.host : null,

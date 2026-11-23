@@ -22,6 +22,8 @@ import {
   type PlaylistItem,
   type QueueRestoreResult,
   KNOWN_DEVICES_MAX,
+  bookAfterConnect,
+  bookAfterSweep,
   RECONNECT_GRACE_MS,
   type HeldState,
 } from "@shared/model";
@@ -216,24 +218,17 @@ export class DeviceManager {
   /** Upsert one streamer into the device book: newest-first, UDN-keyed, LRU-capped. */
   private rememberDevice(dev: Omit<KnownDevice, "lastSeenAt">): void {
     if (!dev.udn) return; // identity or nothing — a host alone can't be remembered safely
-    const rest = getSettings().knownDevices.filter((d) => d.udn !== dev.udn);
-    const knownDevices = [{ ...dev, lastSeenAt: Date.now() }, ...rest].slice(0, KNOWN_DEVICES_MAX);
+    const next = bookAfterConnect(getSettings().knownDevices, dev, Date.now());
+    if (!next) return; // already first and unchanged: no write, no push
+    const knownDevices = next.slice(0, KNOWN_DEVICES_MAX);
     this.push({ kind: "settings", settings: updateSettings({ knownDevices }) });
   }
 
+  /** A sweep that sees a known streamer refreshes its entry in place; it writes the settings only
+   *  when an address, name or model changed, or the entry's time is an hour old. */
   private refreshKnownFromSweep(): void {
-    const known = getSettings().knownDevices;
-    for (const seen of this.devices) {
-      const match = seen.udn ? known.find((d) => d.udn === seen.udn) : undefined;
-      if (match) {
-        this.rememberDevice({
-          udn: match.udn,
-          host: seen.host,
-          friendlyName: seen.friendlyName || match.friendlyName,
-          model: seen.model || match.model,
-        });
-      }
-    }
+    const knownDevices = bookAfterSweep(getSettings().knownDevices, this.devices, Date.now());
+    if (knownDevices) this.push({ kind: "settings", settings: updateSettings({ knownDevices }) });
   }
 
   // one clock for a recall that loaded nothing (0.15.0): every recall the app sends is watched
@@ -1005,6 +1000,18 @@ export class DeviceManager {
     push: (msg) => this.push(msg),
     ensureAwake: () => this.ensureAwake(),
   });
+
+  /** The connection as it stands, read without building a snapshot (which decorates the recents,
+   *  reading the art cache, and gathers every saved list): for a caller that wants only this. */
+  get connectionNow(): ConnectionState {
+    return this.connection;
+  }
+
+  /** What the connected streamer has said so far (its power, play state and the rest), read
+   *  without a snapshot. */
+  get streamerNow(): Readonly<StreamerCache> {
+    return this.cache;
+  }
 
   /** Live activation state, for the boot snapshot. */
   get playlistActivation(): PlaylistActivation | null {
