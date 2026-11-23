@@ -148,7 +148,7 @@ export function PlaybackBar(): React.JSX.Element {
           {lyricRoom && (
             <div className="mt-auto min-h-[15px]">
               {active && screen !== "now-playing" && (
-                <CurrentLyric className="font-display text-[12px] tracking-tight text-faint" />
+                <CurrentLyric className="font-display text-[12px] tracking-tight" />
               )}
             </div>
           )}

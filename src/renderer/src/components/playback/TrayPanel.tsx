@@ -388,7 +388,7 @@ export function TrayPanel(): React.JSX.Element {
                     tabIndex={-1}
                   >
                     {active && (
-                      <CurrentLyric className="font-display no-optical tracking-tight text-[12px] text-faint" />
+                      <CurrentLyric className="font-display no-optical tracking-tight text-[12px]" />
                     )}
                   </button>
                 )}

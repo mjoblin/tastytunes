@@ -182,7 +182,7 @@ export function MiniPlayer(): React.JSX.Element {
                   tabIndex={-1}
                 >
                   {active && (
-                    <CurrentLyric className="font-display no-optical tracking-tight text-[11px] text-faint" />
+                    <CurrentLyric className="font-display no-optical tracking-tight text-[11px]" />
                   )}
                 </button>
               )}

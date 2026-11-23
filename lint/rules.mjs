@@ -643,7 +643,7 @@ export const ONE_HOME = [
       "display/palette\\.ts$",
       // the playback bar, which belongs to the music (styles.css .music-gold), and the mini player
       // and the tray panel beside it
-      "playback/(Transport|PlaybackBar|TrayPanel|VolumeCluster|VolumeDial|MiniPlayer)\\.tsx$",
+      "playback/(Transport|PlaybackBar|TrayPanel|VolumeCluster|VolumeDial|MiniPlayer|CurrentLyric)\\.tsx$",
     ],
     message:
       "Gold is TastyTunes and what's playing; what you click, select or are shown arriving takes the accent (styles.css, two colors, two meanings)",

@@ -20,6 +20,8 @@ export function CurrentLyric({ className }: { className?: string }): React.JSX.E
   const reduced = useReducedMotion();
   const line = synced && currentIndex >= 0 ? synced[currentIndex].text : "";
   const { shown, visible } = useFadedText(synced ? line || "♪" : "", !reduced);
+  // gold, as Now Playing's line: the lyric is the music, and gold is the app's color for what's
+  // playing; the "♪" between lines stays faint
   return (
     <div
       data-current-lyric
@@ -27,6 +29,7 @@ export function CurrentLyric({ className }: { className?: string }): React.JSX.E
         "truncate leading-tight",
         !reduced && "transition-opacity duration-200",
         visible ? "opacity-100" : "opacity-0",
+        shown === "♪" ? "text-faint" : "text-gold/90 lyric-glow",
         className,
       )}
     >
