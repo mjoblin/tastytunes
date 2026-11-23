@@ -1,6 +1,6 @@
 import { STRIP_BANDS } from "@shared/model";
 import { fed, Tape, type Sink } from "./stream/tape";
-import type { Strip } from "@shared/analysisCodec";
+import { STRIP_BAND_EDGES_HZ, type Strip } from "@shared/analysisCodec";
 // the packed format and the decoded shape live in shared/analysisCodec (main reads them too)
 export { b64, stripFromStored, stripToStored, unb64, type Strip } from "@shared/analysisCodec";
 
@@ -21,8 +21,8 @@ export { b64, stripFromStored, stripToStored, unb64, type Strip } from "@shared/
  */
 
 export const STRIP_FPS = 10;
-/** Band edges in Hz: bass, low, low-mid, mid, presence, air. */
-export const BAND_EDGES_HZ = [20, 80, 250, 800, 2500, 6000, 16000];
+/** Band edges in Hz, kept in shared beside the strip's codec (the export for an agent names them). */
+export const BAND_EDGES_HZ = STRIP_BAND_EDGES_HZ;
 const DB_FLOOR = -60;
 
 const toByte = (db: number): number =>

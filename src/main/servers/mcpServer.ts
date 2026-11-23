@@ -54,6 +54,7 @@ import { collectionTools } from "./mcp/collectionTools";
 import { audioTools } from "./mcp/audioTools";
 import { editTools } from "./mcp/editTools";
 import { sceneTools } from "./mcp/sceneTools";
+import { exportTools } from "./mcp/exportTools";
 import { mediaType, nameKey } from "@shared/keys";
 import { acceptBothForSdk } from "./mcp/accept";
 
@@ -526,6 +527,7 @@ export class McpBridge {
       ...audioTools(ctx),
       ...editTools(ctx),
       ...sceneTools(ctx),
+      ...exportTools(ctx),
     };
   }
 

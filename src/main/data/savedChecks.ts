@@ -254,6 +254,7 @@ const NULLABLE: Partial<Record<keyof AppSettings, Kind>> = {
   mainBounds: "object",
   updateSnooze: "object",
   updateNotified: "string",
+  agentExportFolder: "string",
 };
 
 /** The kind a setting's type holds, by its values (a literal union collapses to its one kind). */

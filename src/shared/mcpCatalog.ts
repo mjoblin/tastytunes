@@ -778,4 +778,28 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
       },
     ],
   },
+  {
+    id: "export",
+    title: "Exports",
+    group: "write",
+    optIn: true,
+    description:
+      "Write everything TastyTunes knows about a track or an album into a folder you choose, for another agent to work from: the analysis, the lyrics, the credits, the pictures and, when asked, the audio. Nothing is written outside that folder, and nothing there is overwritten.",
+    tools: [
+      {
+        name: "export_track",
+        title: "Export track",
+        hints: { openWorld: true },
+        description:
+          "Write everything TastyTunes knows about one track into a new dated folder inside the export folder the user chose, and answer with the folder's path, its files and what is missing. The folder holds README.md (every file and field explained), track.json (identity, file and format, measured facts, lyrics with timed lines, credits, album and artist notes, play counts, the favorites, playlists and presets that hold it, a timeline of the track's sections with their lyric lines and the moments worth cutting on, and what is missing with its remedy), analysis.json (the whole audio analysis, decoded: beats, sections, key, chord changes, drops, drum hits, and loudness, bands, timbre, stereo and chroma frame by frame), the lyrics as .lrc and .txt, and pictures/ (the sleeve at full size, the artist's pictures, the artist's other sleeves in the library, and pictures.json). The playing track by default, or one named by server_udn and object_id, or by title (with artist or album to tell tracks apart). fill: also look up what is missing, as far as Settings › Connections allows, and analyze the audio first when it hasn't been (then it answers to call again later). audio: 'link' (the default: the track's address on the user's network), 'copy' (the file itself, counted against a 2 GB cap) or 'none'. redact: leave out addresses on the user's network, server ids and the dates of plays, so the folder can be handed on. plays: with redact off, also list every play with its date. Refuses when no export folder is chosen.",
+      },
+      {
+        name: "export_album",
+        title: "Export album",
+        hints: { openWorld: true },
+        description:
+          "export_track for a whole album: album.json (the album, its notes, what was measured across it, its tracks in order), one folder per track under tracks/ with the track's own files, and the pictures once. The playing album by default, or one named by server_udn and object_id (list_albums), or by album and artist. The same fill, audio, redact and plays arguments; lookups for a long album stop after 45 seconds so the answer comes in time, and a second call carries on from what was found.",
+      },
+    ],
+  },
 ];

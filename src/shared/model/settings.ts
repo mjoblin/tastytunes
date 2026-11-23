@@ -498,6 +498,9 @@ export interface AppSettings {
    *  browser on the local network, off by default, on its own port; the address carries a token
    *  (the secrets store's displayToken). */
   displayServer: { enabled: boolean; port: number };
+  /** Where the agent tools' exports go (main/app/exportsFolder): chosen in a dialog when the Exports
+   *  group is first switched on, null until then. Set only by that dialog. */
+  agentExportFolder: string | null;
   /** Last-visited Settings tab (id from the Settings screen's tab rail). */
   /** Media indexes build/rebuild themselves (off = only from the Libraries buttons). */
   mediaIndexAuto: boolean;
@@ -681,6 +684,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presetVolumeNames: {},
   queueSignatures: {},
   displayServer: { enabled: false, port: 8556 },
+  agentExportFolder: null,
   mcp: {
     enabled: false,
     bind: "localhost",

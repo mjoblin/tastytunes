@@ -56,11 +56,20 @@ async function getJson(url: string): Promise<Fetched> {
   }
 }
 
+const lyricsKey = (q: LyricsQuery): string =>
+  [q.artist, q.title, q.album ?? "", q.duration ?? ""].join("|").toLowerCase();
+
+/** Whether the cache holds an answer for this track, lyrics or LRCLIB's settled none, for a reader
+ *  that must not ask anyone (an export without fill). */
+export function lyricsKnown(q: LyricsQuery): boolean {
+  return cache.has(lyricsKey(q));
+}
+
 export function fetchLyrics(
   q: LyricsQuery,
   force = false,
 ): Promise<LyricsResult | null | "unreachable"> {
-  const key = [q.artist, q.title, q.album ?? "", q.duration ?? ""].join("|").toLowerCase();
+  const key = lyricsKey(q);
   const pending = force ? undefined : asking.get(key);
   if (pending) return pending;
   const run = lookUp(key, q, force).finally(() => {

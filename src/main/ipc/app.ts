@@ -1,10 +1,11 @@
 import { IPC } from "@shared/ipc";
-import { shell } from "electron";
+import { BrowserWindow, shell } from "electron";
 import { hasLocalNetworkPrivacy } from "../app/localNetwork";
 import { revealLog } from "../app/appLog";
 import { loginItemState, setOpenAtLogin } from "../app/loginItem";
 import { openAccessibilitySettings, refreshMediaKeys } from "../app/mediaKeys";
 import { displayStatus, newDisplayAddress } from "../app/display";
+import { chooseExportFolder, exportFolderStatus, revealExportFolder } from "../app/exportsFolder";
 import { deviceManager, mcpBridge } from "../app/runtime";
 import { checkUpdatesOnDemand, downloadUpdate, installUpdate } from "../app/updater";
 import {
@@ -30,6 +31,12 @@ export function registerAppIpc(): void {
   // Display on other screens: its status and a new address (app/display)
   handle(IPC.getDisplayStatus, () => Promise.resolve(displayStatus()));
   handle(IPC.displayNewAddress, () => newDisplayAddress());
+  // where the agent tools' exports go: set only by this dialog (app/exportsFolder)
+  handle(IPC.getExportFolder, () => Promise.resolve(exportFolderStatus()));
+  handle(IPC.chooseExportFolder, (e) =>
+    chooseExportFolder(BrowserWindow.fromWebContents(e.sender)),
+  );
+  handle(IPC.revealExportFolder, () => revealExportFolder());
   handle(IPC.revealLogFile, () => {
     // a line first, so the file is there to show even before anything else was logged
     deviceManager.log("info", "app", "the log file was shown");

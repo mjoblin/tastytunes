@@ -131,6 +131,21 @@ function collect(
   }
 }
 
+/** The cache's key for a recording, or null when the query names none. */
+function trackKey(query: TrackInfoQuery): string | null {
+  const artist = query.artist.trim();
+  const title = query.title.trim();
+  if (!artist || !title) return null;
+  return `${artist}|${query.album?.trim() || ""}|${title}`.toLowerCase();
+}
+
+/** Whether the cache holds a verdict for this recording, credits or a settled none, for a reader
+ *  that must not ask anyone (an export without fill). */
+export function trackInfoKnown(query: TrackInfoQuery): boolean {
+  const key = trackKey(query);
+  return key != null && cache.has(key);
+}
+
 export async function fetchTrackInfo(
   query: TrackInfoQuery,
   force = false,
@@ -138,8 +153,8 @@ export async function fetchTrackInfo(
   const artist = query.artist.trim();
   const title = query.title.trim();
   const album = query.album?.trim() || null;
-  if (!artist || !title) return null;
-  const key = `${artist}|${album ?? ""}|${title}`.toLowerCase();
+  const key = trackKey(query);
+  if (key == null) return null;
   if (!force && cache.has(key)) return cache.get(key) ?? null;
 
   let result: TrackInfo | null = null;

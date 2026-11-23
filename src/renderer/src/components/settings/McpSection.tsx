@@ -18,6 +18,7 @@ import {
   SettingsCard,
 } from "@/components/settings/SettingsKit";
 import { Segmented } from "@/components/controls/Segmented";
+import { ExportFolderRow } from "@/components/settings/ExportFolderRow";
 
 // The MCP section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
@@ -50,6 +51,17 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
   };
   const clusterOn = (c: McpClusterInfo): boolean => mcpClusterEnabled(c, mcp);
   const toggleCluster = (c: McpClusterInfo, on: boolean): void => {
+    // EXPORTS ASK WHERE FIRST (0.17.0): switched on with no folder chosen, the folder dialog opens,
+    // and the group stays off if it is cancelled (main/app/exportsFolder)
+    if (c.id === "export" && on && !settings.agentExportFolder) {
+      void tt.chooseExportFolder().then((s) => {
+        if (s.folder) setCluster(c, true);
+      });
+      return;
+    }
+    setCluster(c, on);
+  };
+  const setCluster = (c: McpClusterInfo, on: boolean): void => {
     if (c.optIn) {
       // Opt-in clusters live in an explicit allow-list — absence means off.
       saveMcp({
@@ -261,6 +273,9 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
                             checked={on}
                             onChange={(v) => toggleCluster(cluster, v)}
                           />
+                          {cluster.id === "export" && on && (
+                            <ExportFolderRow folder={settings.agentExportFolder} />
+                          )}
                           {/* tools stay tucked away — one small line per cluster
                             instead of a wall of chips */}
                           <button

@@ -14,7 +14,11 @@ import { handle } from "../app/guard";
 /** Settings: the one write path, and what a write sets moving. (Split out of index.ts's registerIpc in the 0.11.0 sweep.) */
 export function registerSettingsIpc(): void {
   handle(IPC.getSettings, () => getSettings());
-  handle(IPC.setSettings, (_e, patch: Partial<AppSettings>) => {
+  handle(IPC.setSettings, (_e, sent: Partial<AppSettings>) => {
+    // the export folder is set by its dialog alone (app/exportsFolder), never by a window's patch
+    const patch = Object.fromEntries(
+      Object.entries(sent ?? {}).filter(([k]) => k !== "agentExportFolder"),
+    ) as Partial<AppSettings>;
     const next = updateSettings(patch);
     broadcastSettings(next);
     // OS-global shortcut churn only when the toggle itself changed — every

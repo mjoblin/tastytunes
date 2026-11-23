@@ -356,6 +356,13 @@ export interface DisplayStatus {
   error: string | null;
 }
 
+/** Where the agent tools' exports go (main/app/exportsFolder): the folder chosen, and whether it
+ *  is still there. */
+export interface ExportFolderStatus {
+  folder: string | null;
+  usable: boolean;
+}
+
 export interface TastyTunesApi {
   getSnapshot(): Promise<Snapshot>;
   /** Cover Art Archive fallback for an album the server has no art for (null when off or unknown). */
@@ -390,6 +397,12 @@ export interface TastyTunesApi {
   getDisplayStatus(): Promise<DisplayStatus>;
   /** A new address for Display on other screens: screens on the old one need the new one. */
   displayNewAddress(): Promise<DisplayStatus>;
+  /** The folder the agent tools export into (main/app/exportsFolder). */
+  getExportFolder(): Promise<ExportFolderStatus>;
+  /** The folder dialog: the only way the export folder is set. */
+  chooseExportFolder(): Promise<ExportFolderStatus>;
+  /** Open the export folder in Finder or Explorer. */
+  revealExportFolder(): Promise<void>;
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
   fetchArt(url: string): Promise<{ dataUrl: string } | null>;
   /** The picture embedded in a track's audio file, for surfaces the server's
@@ -695,6 +708,9 @@ export const IPC = {
   openAccessibilitySettings: "tt:openAccessibilitySettings",
   getDisplayStatus: "tt:getDisplayStatus",
   displayNewAddress: "tt:displayNewAddress",
+  getExportFolder: "tt:getExportFolder",
+  chooseExportFolder: "tt:chooseExportFolder",
+  revealExportFolder: "tt:revealExportFolder",
   fetchArt: "tt:fetchArt",
   embeddedArt: "tt:embeddedArt",
   fetchLyrics: "tt:fetchLyrics",

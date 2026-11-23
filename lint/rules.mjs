@@ -596,6 +596,21 @@ export const ONE_HOME = [
     },
   },
   {
+    id: "export-writes",
+    was: "none (0.17.0, export for an agent: a tool that writes where it is told is a hole, so an agent's writes have one home that keeps them inside the folder the owner chose)",
+    // a file-writing function of fs, or the whole module, imported where an agent's request runs
+    selector: String.raw`ImportDeclaration[source.value=/^(node:)?fs(\/promises)?$/] :matches(ImportSpecifier[imported.name=/^(writeFile|writeFileSync|appendFile|appendFileSync|createWriteStream|open|openSync|mkdir|mkdirSync|mkdtemp|mkdtempSync|rm|rmSync|rmdir|rmdirSync|unlink|unlinkSync|rename|renameSync|copyFile|copyFileSync|cp|cpSync|symlink|symlinkSync|link|linkSync|truncate|truncateSync|utimes|utimesSync|chmod|chmodSync)$/], ImportNamespaceSpecifier, ImportDefaultSpecifier)`,
+    files: ["^src/main/servers/mcp/", "^src/main/export/"],
+    // the unit tests make and clear their own temporary folders
+    allow: ["^src/main/export/exportFolder\\.ts$", "\\.test\\.ts$"],
+    message:
+      "The agent tools write files only through export/exportFolder's ExportWriter, which keeps every write inside the export folder the owner chose and holds it to a size cap",
+    bad: {
+      file: "src/main/servers/mcp/exportTools.ts",
+      code: 'import { writeFileSync } from "node:fs";',
+    },
+  },
+  {
     id: "upnp-shapes",
     was: "none (0.15.0, the hygiene pass: the demo and the tests' fake streamer each kept a copy of the media server's answers, and a live truth reached the second only if someone remembered)",
     // a SOAP envelope, a DIDL-Lite document or a ContentDirectory answer spelled out

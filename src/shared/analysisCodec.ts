@@ -16,6 +16,9 @@ import {
 
 // ------------------------------------------------------------------ the strip
 
+/** The strip's band edges in Hz: bass, low, low-mid, mid, presence, air (STRIP_BANDS bands). */
+export const STRIP_BAND_EDGES_HZ: readonly number[] = [20, 80, 250, 800, 2500, 6000, 16000];
+
 export interface Strip {
   fps: number;
   /** STRIP_BANDS values per frame, frame-major. */

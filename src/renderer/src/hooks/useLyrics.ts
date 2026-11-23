@@ -3,11 +3,10 @@ import type { LyricsResult } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { deriveNowPlaying } from "@/lib/format";
+import { parseLrc, type SyncedLine } from "@shared/lrc";
 
-export interface SyncedLine {
-  t: number;
-  text: string;
-}
+// the lines are read in shared (the export for an agent reads them too); kept here for callers
+export { parseLrc, type SyncedLine };
 
 /** "unreachable": lrclib.net didn't answer, asked again and still nothing (not "none", which is
  *  LRCLIB's own answer that it has no lyrics). */
@@ -18,18 +17,6 @@ export type LyricsStatus = "loading" | "ready" | "none" | "unreachable";
  *  line was toggled off and on. Main keeps no failure, so each is a real
  *  ask. */
 const RETRY_SECS = [5, 15, 45];
-
-// "[mm:ss.xx] line" — repeated tags on one line share the text.
-export function parseLrc(lrc: string): SyncedLine[] {
-  const out: SyncedLine[] = [];
-  for (const raw of lrc.split("\n")) {
-    const tags = [...raw.matchAll(/\[(\d+):(\d+(?:\.\d+)?)\]/g)];
-    if (tags.length === 0) continue;
-    const text = raw.replace(/\[\d+:\d+(?:\.\d+)?\]/g, "").trim();
-    for (const m of tags) out.push({ t: Number(m[1]) * 60 + Number(m[2]), text });
-  }
-  return out.sort((a, b) => a.t - b.t);
-}
 
 /**
  * Two-phase crossfade for a changing text line: fade the old text out
