@@ -27,6 +27,7 @@ import {
 } from "./Transport";
 import { SignalLamp } from "../device/SignalLamp";
 import { SleepTimer } from "./SleepTimer";
+import { CurrentLyric } from "./CurrentLyric";
 import { DeviceSwitcher } from "../device/DeviceSwitcher";
 import { useChromeGround } from "@/hooks/useChromeGround";
 
@@ -34,7 +35,10 @@ export function PlaybackBar(): React.JSX.Element {
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   const setScreen = useStore((s) => s.setScreen);
+  const setLyricsOpen = useStore((s) => s.setLyricsOpen);
   const screen = useStore((s) => s.screen);
+  // the current lyric line's room, kept while its switch is on (components/playback/CurrentLyric)
+  const lyricRoom = useStore((s) => s.settings.lyrics && s.settings.lyricsLineBar);
   const { position, duration, known: elapsedKnown } = usePlayhead();
   const t = useTransport(duration);
   const { shownPosition, slider } = useSeekScrub(position, duration, t.seek);
@@ -88,7 +92,11 @@ export function PlaybackBar(): React.JSX.Element {
           "flex items-center gap-3 min-w-0 text-left rounded-lg p-1.5 -m-1.5 transition-colors",
           active && screen !== "now-playing" && "hover:bg-veil",
         )}
-        onClick={() => setScreen("now-playing")}
+        onClick={(e) => {
+          // the lyric line opens Now Playing with its full lyrics
+          if ((e.target as HTMLElement).closest("[data-current-lyric]")) setLyricsOpen(true);
+          setScreen("now-playing");
+        }}
         disabled={!active || screen === "now-playing"}
       >
         {/* The art keeps the bar's fill ratio (52 in 92 ≈ 64 in 108) and grows
@@ -110,7 +118,19 @@ export function PlaybackBar(): React.JSX.Element {
             }
           />
         </div>
-        <div className="min-w-0">
+        {/* With the lyric line's room kept, the text hangs from the art's top edge and the lyric
+            sits at its bottom, so the block never re-centres as lyrics come and go; without it,
+            the two lines are centred beside the art as ever. */}
+        <div
+          className={cx(
+            "min-w-0",
+            lyricRoom &&
+              cx(
+                "flex flex-col transition-[height] duration-300",
+                seekWaveformOn ? "h-16" : "h-[52px]",
+              ),
+          )}
+        >
           <div className="font-display font-bold text-[15px] leading-tight tracking-tight text-ink truncate">
             {/* idle shows nothing (the empty art tile already says so) — the
                 non-breaking space keeps the line's height so the block
@@ -125,6 +145,13 @@ export function PlaybackBar(): React.JSX.Element {
           <div className="font-display text-[13px] leading-tight tracking-tight text-dim truncate mt-0.5 min-h-[15px]">
             {(active && meta.subtitle) || "\u00A0"}
           </div>
+          {lyricRoom && (
+            <div className="mt-auto min-h-[15px]">
+              {active && screen !== "now-playing" && (
+                <CurrentLyric className="font-display text-[12px] tracking-tight text-faint" />
+              )}
+            </div>
+          )}
         </div>
       </button>
 

@@ -32,6 +32,7 @@ import { AmbientArt } from "@/components/media/AmbientArt";
 import { useDecodedArt } from "@/hooks/useDecodedArt";
 import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
 import { useDisc } from "@/hooks/useDisc";
+import { CurrentLyric } from "@/components/playback/CurrentLyric";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
 
 /**
@@ -52,6 +53,8 @@ export function MiniPlayer(): React.JSX.Element {
   const zoneState = useStore((s) => s.zoneState);
   const queue = useStore((s) => s.queue);
   const settings = useStore((s) => s.settings);
+  // the current lyric line's room, kept while its switch is on (components/playback/CurrentLyric)
+  const lyricRoom = settings.lyrics && settings.lyricsLineMini;
   const hovered = useStore((s) => s.miniHover);
   const { position, duration } = usePlayhead();
   const onWheel = useWheelVolume();
@@ -170,6 +173,19 @@ export function MiniPlayer(): React.JSX.Element {
               <div className="font-display no-optical tracking-tight text-[12px] text-dim truncate leading-tight mt-0.5 min-h-[14px]">
                 {(active && meta.subtitle) || (connected ? " " : "not connected")}
               </div>
+              {/* the current lyric line's room, kept while its switch is on (the window is a
+                  line taller then); a click opens the full lyrics in the main window */}
+              {lyricRoom && (
+                <button
+                  onClick={() => void tt.showLyrics()}
+                  className="no-drag block w-full text-left mt-0.5 min-h-[14px]"
+                  tabIndex={-1}
+                >
+                  {active && (
+                    <CurrentLyric className="font-display no-optical tracking-tight text-[11px] text-faint" />
+                  )}
+                </button>
+              )}
             </div>
             <div
               className={cx(

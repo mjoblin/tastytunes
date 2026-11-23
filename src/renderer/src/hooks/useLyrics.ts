@@ -36,15 +36,17 @@ export function parseLrc(lrc: string): SyncedLine[] {
  * (~180ms), swap, fade the new in. Pure opacity — the kind of fade the
  * reduced-motion pass deliberately keeps.
  */
-export function useFadedText(text: string): { shown: string; visible: boolean } {
+export function useFadedText(text: string, fade = true): { shown: string; visible: boolean } {
   const [shown, setShown] = useState(text);
   const [visible, setVisible] = useState(true);
   useEffect(() => {
     if (text === shown) return;
     // Hidden window: timers are throttled to a crawl (Chromium intensive
     // throttling) — the fade's "show again" step would lag by minutes and the
-    // line would sit at opacity 0. Nobody's watching; swap instantly.
-    if (document.hidden) {
+    // line would sit at opacity 0. Nobody's watching; swap instantly. And a
+    // caller that wants no fade (the lyric line beyond Now Playing under
+    // reduced motion) swaps instantly too.
+    if (document.hidden || !fade) {
       setShown(text);
       setVisible(true);
       return;
@@ -55,7 +57,7 @@ export function useFadedText(text: string): { shown: string; visible: boolean } 
       setVisible(true);
     }, 180);
     return () => clearTimeout(t);
-  }, [text, shown]);
+  }, [text, shown, fade]);
   return { shown, visible };
 }
 

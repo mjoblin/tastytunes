@@ -1,5 +1,7 @@
 // THE CONNECTIONS TAB (moved out of SettingsScreen.tsx as it was, 0.16.0's tidy before the design pass:
 // each tab its own section, as Libraries, History, Updates, Schedules and AI agents already were).
+import { cx } from "@/lib/format";
+import { IS_MAC } from "@/lib/screens";
 import { FanartKeyRow } from "@/components/settings/FanartKeyRow";
 import { ListenBrainzSection } from "@/components/settings/ListenBrainzSection";
 import {
@@ -22,13 +24,50 @@ export function ConnectionsSection({ settings, save }: SectionProps): React.JSX.
           onChange={(lyrics) => void save({ lyrics })}
         />
 
-        <Toggle
-          label="Current lyric line"
-          hint="Shows the live synced lyric under the track details on Now Playing (hidden while the full panel is open). Looks up each track as it plays, the same LRCLIB request as above."
-          disabled={!settings.lyrics}
-          checked={settings.lyricsLine}
-          onChange={(lyricsLine) => void save({ lyricsLine })}
-        />
+        {/* THE CURRENT LYRIC LINE, wherever it's wanted (0.17.0): Now Playing's line as ever, and
+            beyond it the playback bar, the mini player and the menu bar panel, each its own switch,
+            off by default, so anyone who wants lyrics only on Now Playing sees no change. A place
+            switched on keeps its line's room, so nothing moves with the song. */}
+        <div className="space-y-3">
+          {/* dimmed with its switches while lyrics are off (each switch dims itself) */}
+          <div className={cx(!settings.lyrics && "opacity-40")}>
+            <div className="text-[13.5px]">Current lyric line</div>
+            <div className="text-[11.5px] text-faint max-w-sm">
+              The live synced lyric, shown in the places switched on below. Looks up each track as
+              it plays, on any screen, the same LRCLIB request as above.
+            </div>
+          </div>
+          <div className="pl-4 ml-1 border-l-2 border-edge/50 space-y-3">
+            <Toggle
+              label="On Now Playing"
+              hint="Under the track details (hidden while the full lyrics panel is open)."
+              disabled={!settings.lyrics}
+              checked={settings.lyricsLine}
+              onChange={(lyricsLine) => void save({ lyricsLine })}
+            />
+            <Toggle
+              label="In the playback bar"
+              hint="Under the title and artist at the bottom of the window, on every other screen."
+              disabled={!settings.lyrics}
+              checked={settings.lyricsLineBar}
+              onChange={(lyricsLineBar) => void save({ lyricsLineBar })}
+            />
+            <Toggle
+              label="In the mini player"
+              hint="Under the title and artist."
+              disabled={!settings.lyrics}
+              checked={settings.lyricsLineMini}
+              onChange={(lyricsLineMini) => void save({ lyricsLineMini })}
+            />
+            <Toggle
+              label={IS_MAC ? "In the menu bar panel" : "In the tray panel"}
+              hint="Under the track, across the panel."
+              disabled={!settings.lyrics}
+              checked={settings.lyricsLinePanel}
+              onChange={(lyricsLinePanel) => void save({ lyricsLinePanel })}
+            />
+          </div>
+        </div>
 
         <Toggle
           label="Liner notes"

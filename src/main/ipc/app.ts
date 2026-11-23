@@ -57,6 +57,7 @@ export function registerAppIpc(): void {
   handle(IPC.showMain, (_e, screen?: string) =>
     screen ? sendMenuCommand({ id: "screen", screen }) : showMainWindow(),
   );
+  handle(IPC.showLyrics, () => sendMenuCommand({ id: "lyrics" }));
   // the main window's top entry is the one Cmd+Z runs, so it alone names the Edit menu's Undo
   // (0.16.0: the tray panel's heart renamed it to an entry Cmd+Z then didn't run)
   handle(IPC.undoLabelSet, (e, label: string | null) => {

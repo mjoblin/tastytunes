@@ -381,6 +381,13 @@ export interface AppSettings {
   lyrics: boolean;
   /** Inline flavor: current synced line under the Now Playing track details. */
   lyricsLine: boolean;
+  /** The current lyric line beyond Now Playing, each place its own switch, off by default: a third
+   *  line under the title and artist in the playback bar (left empty on Now Playing, which shows
+   *  its own), in the mini player, and in the menu bar panel. While a place's switch is on, the
+   *  line's room is kept whether or not a lyric is showing, so nothing moves with the song. */
+  lyricsLineBar: boolean;
+  lyricsLineMini: boolean;
+  lyricsLinePanel: boolean;
   /** Current synced line in full-screen display mode (toggled from its chrome). */
   displayLyrics: boolean;
   /** Display mode's scene (its in-mode picker, Tab cycles). */
@@ -632,6 +639,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   waveformSeen: false,
   lyrics: true,
   lyricsLine: true,
+  lyricsLineBar: false,
+  lyricsLineMini: false,
+  lyricsLinePanel: false,
   displayLyrics: true,
   displayScene: "sleeve",
   displaySceneSettings: {},

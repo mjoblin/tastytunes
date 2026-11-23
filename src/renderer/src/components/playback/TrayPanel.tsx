@@ -61,6 +61,7 @@ import {
 } from "@/components/playback/TrayPanelTabs";
 import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import { CurrentLyric } from "@/components/playback/CurrentLyric";
 
 const TABS: readonly TrayTab[] = ["queue", "presets", "playlists", "recent"];
 /** A stored tab from a future (or hand-edited) settings file must not blank the body. */
@@ -94,6 +95,8 @@ export function TrayPanel(): React.JSX.Element {
   const zoneState = useStore((s) => s.zoneState);
   const systemInfo = useStore((s) => s.systemInfo);
   const settings = useStore((s) => s.settings);
+  // the current lyric line's room, kept while its switch is on (components/playback/CurrentLyric)
+  const lyricRoom = settings.lyrics && settings.lyricsLinePanel;
   const saveSettings = useStore((s) => s.saveSettings);
   // the playhead ticks only while the panel shows (the trayPanel push; it is kept hidden between opens)
   const panelVisible = useStore((s) => s.trayPanelVisible);
@@ -283,7 +286,12 @@ export function TrayPanel(): React.JSX.Element {
             content (a wrapped radio song), so switching streamers lifted the
             tabs row a few pixels while the connect attempt showed. One
             number here, not a height per face. */}
-        <div data-tray-top className="relative shrink-0 h-[138px] flex flex-col">
+        {/* a line taller while the current lyric line's switch is on: the room follows the
+            switch, never the song, and every face keeps the one number */}
+        <div
+          data-tray-top
+          className={cx("relative shrink-0 flex flex-col", lyricRoom ? "h-[154px]" : "h-[138px]")}
+        >
           {offline ? (
             <TrayOffline phase={connection.phase} host={deviceName} />
           ) : standby ? (
@@ -370,6 +378,20 @@ export function TrayPanel(): React.JSX.Element {
                     />
                   )}
                 </div>
+
+                {/* the current lyric line, the panel's width under the track; a click opens the
+                    full lyrics in the main window */}
+                {lyricRoom && (
+                  <button
+                    onClick={() => void tt.showLyrics()}
+                    className="block w-full text-left mt-1.5 min-h-[15px]"
+                    tabIndex={-1}
+                  >
+                    {active && (
+                      <CurrentLyric className="font-display no-optical tracking-tight text-[12px] text-faint" />
+                    )}
+                  </button>
+                )}
 
                 {/* ---- transport + modes + playhead, on one line ---- */}
                 <div data-transport className="flex items-center gap-1 mt-2">

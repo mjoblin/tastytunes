@@ -193,6 +193,20 @@ export function createWindow(): void {
   }
 }
 
+/** The mini player's height: one line taller while its current lyric line is on, the room
+ *  following the switch, never the song (components/playback/CurrentLyric). */
+const miniHeight = (): number => {
+  const s = getSettings();
+  return 132 + (s.lyrics && s.lyricsLineMini ? 16 : 0);
+};
+
+/** A change to the mini player's lyric line resizes an open mini player at once. */
+export function fitMiniPlayer(): void {
+  if (!miniWindow || miniWindow.isDestroyed()) return;
+  const bounds = miniWindow.getBounds();
+  if (bounds.height !== miniHeight()) miniWindow.setBounds({ ...bounds, height: miniHeight() });
+}
+
 export function toggleMiniPlayer(): void {
   if (miniWindow) {
     miniWindow.close();
@@ -208,7 +222,7 @@ export function toggleMiniPlayer(): void {
     );
   miniWindow = new BrowserWindow({
     width: 360,
-    height: 132,
+    height: miniHeight(),
     ...(onScreen ? miniBounds : {}),
     frame: false,
     transparent: true,

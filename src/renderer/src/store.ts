@@ -1215,6 +1215,10 @@ export const useStore = create<TTState>((set, get) => ({
       case "screen":
         s.setScreen(command.screen as Screen);
         break;
+      case "lyrics":
+        s.setScreen("now-playing");
+        s.setLyricsOpen(true);
+        break;
       // Settings › Updates, from the menus, the tray and the system's notice; Check for Updates…
       // also asks the feed (the section runs the check, so its outcome shows there)
       case "updates":

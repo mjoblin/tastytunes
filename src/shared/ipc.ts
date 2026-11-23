@@ -132,6 +132,9 @@ export type MenuCommand =
   | { id: "navBack" }
   | { id: "navForward" }
   | { id: "screen"; screen: string }
+  /** Now Playing with its full lyrics open: a click on the current lyric line in the mini player or
+   *  the menu bar panel. */
+  | { id: "lyrics" }
   /** Settings › Updates, from the menus and the tray; check: and ask the feed now. */
   | { id: "updates"; check?: boolean }
   /** An agent's analyze_album: the album's Analyze audio, run in the window (analysis decodes
@@ -506,6 +509,8 @@ export interface TastyTunesApi {
    * MENU's items use; without the argument it's the plain "just show it".
    */
   showMain(screen?: string): Promise<void>;
+  /** The main window on Now Playing with its full lyrics open (the current lyric line's click). */
+  showLyrics(): Promise<void>;
   /** Arm or clear the sleep timer (lives in the main process). */
   setSleep(sleep: SleepTimer | null): Promise<void>;
   /** Act on a wake missed during sleep — runs it exactly as the tick would. */
@@ -710,6 +715,7 @@ export const IPC = {
   libraryArtByKeys: "tt:libraryArtByKeys",
   toggleMini: "tt:toggleMini",
   showMain: "tt:showMain",
+  showLyrics: "tt:showLyrics",
   setSleep: "tt:setSleep",
   scheduleRunMissed: "tt:scheduleRunMissed",
   scheduleDismissMissed: "tt:scheduleDismissMissed",

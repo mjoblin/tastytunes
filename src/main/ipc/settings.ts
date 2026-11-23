@@ -5,7 +5,7 @@ import { syncMediaKeys } from "../app/mediaKeys";
 import { deviceManager, mcpBridge } from "../app/runtime";
 import { syncTray } from "../app/tray";
 import { checkUpdatesNow } from "../app/updater";
-import { trayDeps } from "../app/windows";
+import { fitMiniPlayer, trayDeps } from "../app/windows";
 import { getSettings, updateSettings } from "../data/persist";
 import { handle } from "../app/guard";
 
@@ -18,6 +18,8 @@ export function registerSettingsIpc(): void {
     // OS-global shortcut churn only when the toggle itself changed — every
     // settings write used to unregister/re-register all four media keys.
     if ("mediaKeys" in patch) syncMediaKeys();
+    // the mini player's lyric line keeps its room, so the open mini grows or shrinks with it
+    if ("lyricsLineMini" in patch || "lyrics" in patch) fitMiniPlayer();
     // The tray comes and goes live — toggling it is not a restart.
     if ("tray" in patch) syncTray(next.tray, trayDeps);
     mcpBridge.sync(next);
