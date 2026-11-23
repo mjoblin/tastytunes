@@ -33,13 +33,17 @@ const record = (pools: MediaIndexPools[]): PlayStats => {
   return stats;
 };
 
-/** The best of three runs, in ms: one slow run is the machine, not the code. */
+/** The best of three runs, in ms of the worker's CPU time: one slow run is the machine, not the
+ *  code. CPU time, not the clock: on a busy machine the clock also counts the time a run waits for
+ *  a core, which falls harder on a long run than a short one, so a step that grows about 10x alone
+ *  measured 26x on a CI runner and up to 40x under heavy load, and about 10x to 19x in CPU time. */
 function timed(run: () => unknown): number {
   let best = Infinity;
   for (let i = 0; i < 3; i++) {
-    const t = performance.now();
+    const start = process.cpuUsage();
     run();
-    best = Math.min(best, performance.now() - t);
+    const { user, system } = process.cpuUsage(start);
+    best = Math.min(best, (user + system) / 1000);
   }
   return best;
 }
