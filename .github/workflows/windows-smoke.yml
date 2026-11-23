@@ -69,8 +69,32 @@ jobs:
           Write-Host "installed: $exe"
           "TT_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
 
+      # THE APP'S IDENTITY: the app takes the installer's appId as its AppUserModelID, and an
+      # open-at-login entry written under Electron's default name (before it did) moves to the new
+      # one at launch. Seeded here as an older version left it, checked after the drive.
+      - name: Seed a login item under the old name
+        shell: pwsh
+        run: |
+          $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          New-ItemProperty -Path $run -Name 'electron.app.TastyTunes' -Value "`"$env:TT_EXE`" --opened-at-login" -PropertyType String -Force | Out-Null
+          Get-ItemProperty -Path $run | Format-List | Out-String -Width 200
+
       - name: Drive the installed app
         shell: pwsh
         run: |
           npm i --no-save playwright-core
           node .github/windows-smoke.mjs
+
+      - name: Check the identity and the moved login item
+        shell: pwsh
+        run: |
+          $run = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+          $values = Get-ItemProperty -Path $run
+          $values | Format-List | Out-String -Width 200
+          if ($values.PSObject.Properties.Name -contains 'electron.app.TastyTunes') { throw 'the login item under the old name is still there' }
+          if (-not ($values.PSObject.Properties.Name -contains 'com.redactedcat.tastytunes')) { throw 'no login item under the app identity' }
+          # the installer's Start menu shortcut carries the same identity the app now takes
+          $start = Get-StartApps | Where-Object { $_.Name -eq 'TastyTunes' }
+          $start | Format-List | Out-String -Width 200
+          if ($start.AppID -ne 'com.redactedcat.tastytunes') { throw "the shortcut's AppID is $($start.AppID)" }
+          Remove-ItemProperty -Path $run -Name 'com.redactedcat.tastytunes' -ErrorAction SilentlyContinue

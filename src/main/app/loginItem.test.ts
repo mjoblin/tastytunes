@@ -13,11 +13,17 @@ const electron = vi.hoisted(() => ({
     getPath: () => "/tmp",
     getLoginItemSettings: vi.fn(),
     setLoginItemSettings: vi.fn(),
+    setAppUserModelId: vi.fn(),
   },
 }));
 vi.mock("electron", () => ({ default: electron, app: electron.app }));
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
+  adoptAppIdentity,
+  APP_USER_MODEL_ID,
+  LEGACY_LOGIN_NAME,
   LOGIN_ARG,
   loginItemState,
   openedAtLogin,
@@ -156,5 +162,50 @@ describe("under the suite's flag", () => {
     expect(fresh.loginItemState().on).toBe(true);
     expect(electron.app.setLoginItemSettings).not.toHaveBeenCalled();
     expect(electron.app.getLoginItemSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe("the app's identity on Windows", () => {
+  it("is the appId the installer gives its shortcuts", () => {
+    const yml = readFileSync(join(__dirname, "../../../electron-builder.yml"), "utf8");
+    expect(yml).toMatch(new RegExp(`^appId: ${APP_USER_MODEL_ID.replace(/\./g, "\\.")}$`, "m"));
+    expect(LEGACY_LOGIN_NAME).toBe("electron.app.TastyTunes");
+  });
+
+  it("is set on Windows only", () => {
+    onSystem("darwin");
+    adoptAppIdentity();
+    expect(electron.app.setAppUserModelId).not.toHaveBeenCalled();
+    onSystem("win32");
+    adoptAppIdentity();
+    expect(electron.app.setAppUserModelId).toHaveBeenCalledWith(APP_USER_MODEL_ID);
+  });
+
+  it("moves a login item written under the old name, read before the identity changes", () => {
+    onSystem("win32");
+    electron.app.isPackaged = true;
+    const order: string[] = [];
+    electron.app.getLoginItemSettings.mockImplementation(() => {
+      order.push("read");
+      return { openAtLogin: true, executableWillLaunchAtLogin: false };
+    });
+    electron.app.setAppUserModelId.mockImplementation(() => order.push("identity"));
+    adoptAppIdentity();
+    expect(order).toEqual(["read", "identity"]);
+    expect(electron.app.setLoginItemSettings.mock.calls).toEqual([
+      [{ openAtLogin: false, name: LEGACY_LOGIN_NAME, args: [LOGIN_ARG] }],
+      // Task Manager had turned it off: it stays off under the new name
+      [{ openAtLogin: true, args: [LOGIN_ARG], enabled: false }],
+    ]);
+  });
+
+  it("writes nothing when there was no login item, or in a development run", () => {
+    onSystem("win32");
+    electron.app.isPackaged = true;
+    electron.app.getLoginItemSettings.mockReturnValue({ openAtLogin: false });
+    adoptAppIdentity();
+    electron.app.isPackaged = false;
+    adoptAppIdentity();
+    expect(electron.app.setLoginItemSettings).not.toHaveBeenCalled();
   });
 });
