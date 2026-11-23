@@ -87,6 +87,56 @@ export interface KnownDevice {
  *  least-recently-seen eviction for free. */
 export const KNOWN_DEVICES_MAX = 8;
 
+/** How stale a book entry's lastSeenAt may grow before a sighting writes it again: the book shows
+ *  it by the day, and a sweep every ten seconds wrote settings.json and pushed the settings to
+ *  every window for a timestamp nobody could see change. */
+export const SEEN_REFRESH_MS = 60 * 60 * 1000;
+
+type Sighting = Omit<KnownDevice, "lastSeenAt">;
+
+const sameAs = (d: KnownDevice, seen: Sighting): boolean =>
+  d.host === seen.host && d.friendlyName === seen.friendlyName && d.model === seen.model;
+
+/** The book after a connection to `dev`: it goes first, the rest newest-seen first (the caller
+ *  caps it). Null when it is already first, unchanged, and seen within SEEN_REFRESH_MS: nothing
+ *  worth a write. */
+export function bookAfterConnect(
+  book: readonly KnownDevice[],
+  dev: Sighting,
+  now: number,
+): KnownDevice[] | null {
+  const first = book[0];
+  if (first?.udn === dev.udn && sameAs(first, dev) && now - first.lastSeenAt < SEEN_REFRESH_MS)
+    return null;
+  const rest = book.filter((d) => d.udn !== dev.udn).sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+  return [{ ...dev, lastSeenAt: now }, ...rest];
+}
+
+/** The book after a sweep: each known streamer it saw is refreshed IN PLACE (a new address, name
+ *  or model at once, the time only once SEEN_REFRESH_MS old); strangers are not learned here.
+ *  Null when nothing changed. */
+export function bookAfterSweep(
+  book: readonly KnownDevice[],
+  seen: readonly { udn?: string | null; host: string; friendlyName?: string; model?: string }[],
+  now: number,
+): KnownDevice[] | null {
+  let changed = false;
+  const next = book.map((d) => {
+    const s = seen.find((x) => x.udn != null && x.udn === d.udn);
+    if (!s) return d;
+    const fresh: Sighting = {
+      udn: d.udn,
+      host: s.host,
+      friendlyName: s.friendlyName || d.friendlyName,
+      model: s.model || d.model,
+    };
+    if (sameAs(d, fresh) && now - d.lastSeenAt < SEEN_REFRESH_MS) return d;
+    changed = true;
+    return { ...fresh, lastSeenAt: now };
+  });
+  return changed ? next : null;
+}
+
 /**
  * How long a failing reconnect keeps the benefit of the doubt. Under this,
  * the loss reads as a blip (Wi-Fi hiccup, reboot) and the app just retries;

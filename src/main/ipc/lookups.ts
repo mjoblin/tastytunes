@@ -218,7 +218,7 @@ export function registerLookupsIpc(): void {
     (_e, releaseId: string, count: number | null, secs: number | null) => {
       if (!getSettings().artistInfo) return null;
       const demo = demoHost();
-      const conn = deviceManager.snapshot().connection;
+      const conn = deviceManager.connectionNow;
       const fromDemo = demo != null && conn.phase === "connected" && conn.host === demo;
       return fetchDiscTracks(releaseId, count, secs, fromDemo ? `http://${demo}` : undefined);
     },

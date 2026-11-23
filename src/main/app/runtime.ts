@@ -36,7 +36,7 @@ export const mcpBridge = new McpBridge(deviceManager);
 
 /** The connected streamer's host; media-browser calls need one and throw without it. */
 export function streamerHost(): string {
-  const conn = deviceManager.snapshot().connection;
+  const conn = deviceManager.connectionNow;
   if (conn.phase !== "connected") throw new Error("not connected to a streamer");
   return conn.host;
 }
@@ -44,6 +44,6 @@ export function streamerHost(): string {
 /** The connected streamer's host, or null: best-effort lookups answer null while the socket
  *  recycles rather than throw. */
 export function connectedHost(): string | null {
-  const conn = deviceManager.snapshot().connection;
+  const conn = deviceManager.connectionNow;
   return conn.phase === "connected" ? conn.host : null;
 }

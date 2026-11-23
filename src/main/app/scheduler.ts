@@ -95,11 +95,11 @@ interface ScheduleTarget {
 async function targetOf(dm: DeviceManager, s: Schedule): Promise<ScheduleTarget | null> {
   const name = s.streamer?.name ?? "the streamer";
   if (isWindows(dm, s)) {
-    if (dm.snapshot().connection.phase !== "connected") return null;
+    if (dm.connectionNow.phase !== "connected") return null;
     return {
       fireable: dm,
-      playing: () => dm.snapshot().playState?.state === "play",
-      presetName: (id) => dm.snapshot().presets?.presets?.find((p) => p.id === id)?.name ?? null,
+      playing: () => dm.streamerNow.playState?.state === "play",
+      presetName: (id) => dm.streamerNow.presets?.presets?.find((p) => p.id === id)?.name ?? null,
     };
   }
   const named = s.streamer?.udn;
@@ -260,7 +260,7 @@ export function catchUpOnResume(dm: DeviceManager): void {
     });
     if (!pick) return;
     // the window's streamer waits for the window's reconnect; another is reached on its own
-    if (isWindows(dm, pick.schedule) && dm.snapshot().connection.phase !== "connected") {
+    if (isWindows(dm, pick.schedule) && dm.connectionNow.phase !== "connected") {
       waited += RECONNECT_POLL_MS;
       if (waited > RECONNECT_GRACE_MS) return;
       setTimeout(() => void attempt(), RECONNECT_POLL_MS);
@@ -352,7 +352,7 @@ export function startScheduler(dm: DeviceManager): void {
       if (lastFired.get(s.id) === instance) continue;
       // one that names no other streamer waits for the window's connection, as always; one that
       // does is reached on its own (targetOf)
-      if (isWindows(dm, s) && dm.snapshot().connection.phase !== "connected") continue;
+      if (isWindows(dm, s) && dm.connectionNow.phase !== "connected") continue;
       lastFired.set(s.id, instance);
       // commands throw on a half-dead socket — a missed schedule is a log
       // line, never an unhandled rejection
