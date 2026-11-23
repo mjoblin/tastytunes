@@ -17,7 +17,7 @@ export function ConnectionsSection({ settings, save }: SectionProps): React.JSX.
       <SettingsCard>
         <Toggle
           label="Lyrics on Now Playing"
-          hint="Adds a lyrics panel to the Now Playing screen, fetched (when open) from lrclib.net. Sends the current track's title and artist to LRCLIB; off means no requests will be sent."
+          hint="Adds a lyrics panel to the Now Playing screen, fetched (when open) from lrclib.net. Sends the current track's title, artist, album and duration to LRCLIB. Off means no requests will be sent."
           checked={settings.lyrics}
           onChange={(lyrics) => void save({ lyrics })}
         />
@@ -41,7 +41,7 @@ export function ConnectionsSection({ settings, save }: SectionProps): React.JSX.
 
         <Toggle
           label="Missing album art"
-          hint="Fills in art the media server doesn't have: MusicBrainz identifies the album, the Cover Art Archive supplies the image. Server art always wins."
+          hint="Fills in art the media server doesn't have: MusicBrainz identifies the album, the Cover Art Archive supplies the image. Server art always wins. Sends the album's artist and title. Off means no requests will be sent."
           checked={settings.albumArtLookup}
           onChange={(albumArtLookup) => void save({ albumArtLookup })}
         />

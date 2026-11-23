@@ -201,14 +201,14 @@ The tools cover what the app itself does: playback and volume, presets and
 sources, library and radio, favorites, tone and EQ, sleep timers, the listening
 record (plays, last played, what was left unfinished), audio analysis, album art,
 the scenes and Display mode, etc. The editing
-ones, like queue and preset changes, are kept separate and off until you
-turn them on. Every tool can be enabled or disabled in Settings › Integrations.
+ones, like rearranging the queue, saving presets, editing playlists or removing
+favorites, are kept separate and off until you turn them on. Every tool can be enabled or disabled in Settings › Integrations.
 Agents are held to the same limits as the app: the volume limit, the power
 safeguards and the Connections settings. A call to a disabled tool is
 refused. Bind it to localhost, or to your network to reach the streamer from
 another machine. Bound to your network, it requires the token from Settings ›
 Integrations. The setup for each client (Claude Code, Cursor, VS Code, Gemini CLI,
-Codex CLI, Claude Desktop, ChatGPT) is at [tastytunes.app/agents](https://tastytunes.app/agents/).
+Codex CLI, Claude Desktop) is at [tastytunes.app/agents](https://tastytunes.app/agents/).
 
 ### Home Assistant
 
@@ -269,10 +269,10 @@ must be integrated with the desktop for links to work).
 
 ### Audio analysis
 
-- A waveform of the playing track in the seek bar and under the artwork on Now Playing (local media only). Can be disabled in Settings › Appearance (on by default)
+- A waveform of the playing track in the seek bar (local media only, on by default), and optionally under the artwork on Now Playing, set in Settings › Appearance
 - Dynamic range for every analyzed track and album (same as the DR database's TT-DR value), shown on Now Playing, in track rows and in album headers
 - Analyze audio on any album from its menu, or on the tracks shown in the Tracks view
-- Peak and loudness details under the Now Playing waveform, and a Dynamic range row in Info
+- Peak and loudness details under the Now Playing waveform (when it's shown), and a Dynamic range row in Info
 
 ### Scenes
 
@@ -385,7 +385,7 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 
 - ListenBrainz: a listen is submitted after half the track or four minutes of playing
 - Short tracks and radio aren't scrobbled
-- Failed submissions are retried until successful
+- Failed submissions are retried while TastyTunes is running (the most recent 100)
 
 ### History
 
@@ -423,14 +423,14 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 
 - Mini player: frameless, always on top, remembers its position
 - Command palette (<kbd>⌘K</kbd>): transport, sources, presets by name, screens, and much more
-- Keyboard controls throughout: single keys open specific screens, <kbd>space</kbd> toggles play, arrows seek and nudge volume, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the controls overlay
+- Keyboard controls throughout: single keys open specific screens, <kbd>space</kbd> toggles play, the left and right arrows skip tracks, the up and down arrows nudge volume, <kbd>J</kbd> and <kbd>L</kbd> seek, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the controls overlay
 - Back and forward through everywhere you've been, like a browser: <kbd>⌘←</kbd>/<kbd>⌘→</kbd> (Alt+arrows on Windows and Linux), the mouse side buttons, or View › Back/Forward, which also works from inside a text box (<kbd>⌘[</kbd>/<kbd>⌘]</kbd> on macOS)
 - Scroll positions are remembered in the Library, Search and Playlists
 - Every reorderable list (queue, presets, playlists, the navigation panel) can be reordered by keyboard as well as by drag
 - Keyboard focus is shown with a visible ring
 - Notices are announced to screen readers
 - Undo for queue edits, favorites, playlist additions and schedule deletions, from the notice that follows each change
-- OS media keys
+- OS media keys (on macOS, once TastyTunes is allowed in System Settings › Privacy & Security › Accessibility)
 - `tastytunes://` links for programmable keypads, app launchers and automation apps: playback, volume, presets, sources, power and screens
 - A track-change notification with artwork when the window isn't focused
 
@@ -443,13 +443,13 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 
 ### Transparency
 
-- A requests console (<kbd>`</kbd>) listing every outbound request the app makes: service, method, status, timing
+- A requests console (<kbd>`</kbd>) listing the app's requests to online services: service, method, status, timing
 - A SMOIP console showing the raw streamer traffic
 - A diagnostics log saved on your computer, never sent anywhere, for attaching to a problem report
 
 ### Updates & packaging
 
-- An update is downloaded only when you click Download, and installed when you click Restart
+- An update is downloaded only when you click Download, and installed when you click Restart or the next time you quit
 - Favorites, playlists, and settings are protected from damaged files, with a copy of each kept at every update
 - Signed and notarized universal macOS builds (Intel and Apple Silicon); one signed Windows installer covering x64 and arm64 (native on Windows-on-ARM); Linux AppImages for x64 (run on Ubuntu 24.04 for every release) and arm64 (for 64-bit Raspberry Pi OS)
 
@@ -467,7 +467,7 @@ The complete list:
 | Picture suggestions | commons.wikimedia.org · upload.wikimedia.org | with Liner notes on, when you look for an artist's picture |
 | fanart.tv photos | fanart.tv | off until you add your own key |
 | Missing album art | musicbrainz.org · coverartarchive.org · archive.org | on by default; toggleable |
-| Radio directory | radio-browser.info | when you search or browse Radio |
+| Radio directory | radio-browser.info | when you search (in Search or on the Radio screen) or browse Radio; toggleable |
 | Station logos | each station's own website or image host | when a station is shown |
 | Streaming album art | the streaming service's image host | while a streaming source such as Spotify or TIDAL plays |
 | Update check | github.com | on by default; toggleable |
