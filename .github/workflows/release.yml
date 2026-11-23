@@ -350,6 +350,10 @@ jobs:
             exit 1
           fi
 
+      # THE WINDOWS NOW PLAYING HELPER (0.17.0): one exe per architecture, built with MSVC
+      - name: Build the Now Playing helper
+        run: node scripts/build-nowplaying-win.mjs
+
       - name: Package and publish
         if: startsWith(github.ref, 'refs/tags/v')
         run: node scripts/build-win.mjs --publish always

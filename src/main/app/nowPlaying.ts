@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { app } from "electron";
 import type { PushMessage } from "@shared/ipc";
 import { artHostTrust, fetchPicture } from "../lookups/artFetch";
@@ -10,8 +10,9 @@ import { showMainWindow } from "./windows";
 import { NowPlayingBridge } from "./nowPlayingBridge";
 
 /**
- * THE MAC'S NOW PLAYING (0.17.0): with the helper (native/nowplaying) in the app's
- * Contents/Helpers, TastyTunes is the Mac's playing app while the streamer plays one of its own
+ * THE SYSTEM'S NOW PLAYING (0.17.0): with the helper (native/nowplaying in the Mac app's
+ * Contents/Helpers, native/nowplaying-win beside the Windows exe), TastyTunes is the system's
+ * playing app while the streamer plays one of its own
  * plays, so the media keys, Control Center's buttons and a headset's button control the streamer
  * with no Accessibility permission and no global shortcuts (app/mediaKeys uses this in their place
  * when it is available). The rules are app/nowPlayingRules, the process and feed
@@ -27,13 +28,21 @@ export const HELPER_NAME = "TastyTunes Now Playing";
 function helperFile(): string | null {
   const named = process.env["TASTYTUNES_NP_HELPER"];
   if (named) return named;
-  if (process.platform !== "darwin" || !app.isPackaged) return null;
-  const file = join(process.resourcesPath, "..", "Helpers", HELPER_NAME);
-  return existsSync(file) ? file : null;
+  if (!app.isPackaged) return null;
+  // macOS: Contents/Helpers; Windows: beside TastyTunes.exe (native/nowplaying-win)
+  const file =
+    process.platform === "darwin"
+      ? join(process.resourcesPath, "..", "Helpers", HELPER_NAME)
+      : process.platform === "win32"
+        ? join(dirname(process.execPath), `${HELPER_NAME}.exe`)
+        : null;
+  return file && existsSync(file) ? file : null;
 }
 
-/** The app's icon, for a play with no sleeve, so the tile never shows a blank square. */
+/** The app's icon, for a play with no sleeve, so the Mac's tile never shows a blank square
+ *  (Windows shows the app's own icon there by itself). */
 function iconFile(): string | null {
+  if (process.platform === "win32") return null;
   const file = app.isPackaged
     ? join(process.resourcesPath, "icon.icns")
     : join(app.getAppPath(), "build", "icon.png");

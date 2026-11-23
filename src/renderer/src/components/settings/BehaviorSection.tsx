@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { LoginItemState, MediaKeysState } from "@shared/ipc";
 import { type MotionMode } from "@shared/model";
 import { tt } from "@/api";
+import { IS_MAC } from "@/lib/screens";
 import { useStore } from "@/store";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { Segmented } from "@/components/controls/Segmented";
@@ -160,7 +161,9 @@ function MediaKeys({
     };
   }, [checked]);
   const hint = state?.system
-    ? "Control the streamer with the media keys, Control Center, or your headphones."
+    ? IS_MAC
+      ? "Control the streamer with the media keys, Control Center, or your headphones."
+      : "Control the streamer with the media keys, Windows' media controls, or your headphones."
     : !checked
       ? "Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background."
       : state?.needsPermission

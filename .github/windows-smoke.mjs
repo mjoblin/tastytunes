@@ -89,6 +89,20 @@ try {
   await page.locator('[aria-label="Play (space)"]').waitFor({ timeout: 15000 })
   ok('togglePlayback round-trips (Pause → Play)', true)
 
+  // THE NOW PLAYING HELPER (0.17.0, Windows only): the installed app finds the helper beside its
+  // exe, the helper answers in its protocol, and the app claims Windows' media controls for the
+  // demo's track (the helper's own session listing is proven on the same runners by its check)
+  if (process.platform === 'win32') {
+    let np = []
+    for (let i = 0; i < 40; i++) {
+      np = await page.evaluate(async () =>
+        (await window.tastytunes.getSnapshot()).logs.filter((l) => l.scope === 'nowplaying').map((l) => l.text))
+      if (np.some((t) => t.startsWith('claimed Now Playing'))) break
+      await sleep(500)
+    }
+    ok('the Now Playing helper is up and claims the demo track', np.includes('the helper is up') && np.some((t) => t.startsWith('claimed Now Playing')), np.join(' | '))
+  }
+
   // The boot also proves the packaged resources: the tray is ON by default,
   // and a missing resources/ dir (the ?asset trap) breaks tray creation in
   // release builds only. Reaching this line with a live window means the main

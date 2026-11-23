@@ -244,7 +244,8 @@ export class NowPlayingBridge {
     const { file, args = [] } = this.deps.command;
     let child: ChildProcessWithoutNullStreams;
     try {
-      child = spawn(file, args, { stdio: ["pipe", "pipe", "pipe"] });
+      // windowsHide: the Windows helper is a console program, and no console window may flash
+      child = spawn(file, args, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
     } catch (e) {
       this.deps.log(`the helper couldn't start: ${(e as Error).message}`);
       return this.scheduleRestart();

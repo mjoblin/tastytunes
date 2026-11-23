@@ -109,6 +109,11 @@ win:
       arch:
         - x64
         - arm64
+  # the Now Playing helper (native/nowplaying-win, built per architecture by
+  # scripts/build-nowplaying-win.mjs before packaging), beside TastyTunes.exe in each payload
+  extraFiles:
+    - from: "build/nowplaying-win/${arch}/TastyTunes Now Playing.exe"
+      to: "TastyTunes Now Playing.exe"
 nsis:
   # NO arch in this name, deliberately: an artifactName containing the arch
   # placeholder silently switches NSIS from the one dual-arch installer back
