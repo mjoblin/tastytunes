@@ -13,33 +13,48 @@ import { pipeline } from "node:stream/promises";
 
 /** The most one export may write (audio copies included): a hi-res album is gigabytes. */
 export const EXPORT_CAP_BYTES = 2 * 1024 * 1024 * 1024;
+/** Of the cap, what the records and the README may always use: pictures and audio copies stop
+ *  short of it, so an export that fills up still ends with its record. */
+export const RECORD_ROOM_BYTES = 32 * 1024 * 1024;
+/** A name's words at most (a tag, or an export's words before its date). */
+const NAME_MAX = 80;
+/** No byte of an audio copy for this long: the media server stopped sending (the analysis
+ *  read's own rule, media/audioStream). */
+export const COPY_STALL_MS = 20_000;
 
-/** A name for a file or folder from a tag: no path separators or control characters, no leading
- *  dots, nothing reserved on Windows, at most 80 characters; never empty. */
 /** What a file name can't hold on one system or another (control characters are checked apart). */
 const UNSAFE = '\\/:*?"<>|';
 
-export function safeName(raw: string | null | undefined): string {
+/** A name for a file or folder from a tag: no path separators or control characters, no leading
+ *  dots, nothing reserved on Windows, at most `max` characters; never empty. */
+export function safeName(raw: string | null | undefined, max = NAME_MAX): string {
   const cleaned = [...(raw ?? "")]
     .map((ch) => (ch.charCodeAt(0) < 32 || UNSAFE.includes(ch) ? " " : ch))
     .join("")
     .replace(/\s+/g, " ")
     .replace(/^[. ]+/, "")
-    .slice(0, 80)
+    .slice(0, max)
     .replace(/[. ]+$/, "");
   const named = cleaned || "Untitled";
   return /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(named) ? `${named}_` : named;
 }
 
-/** "The Cure - Songs of a Lost World - 08 I Can Never Say Goodbye (2026-11-22 2140)". */
+/** "The Cure - Songs of a Lost World - 08 I Can Never Say Goodbye (2026-11-22 2140)": the one
+ *  place an export's folder is named, its words capped so the date always fits. */
 export function exportDirName(parts: Array<string | null | undefined>, when: Date): string {
   const pad = (n: number): string => String(n).padStart(2, "0");
   const stamp = `${when.getFullYear()}-${pad(when.getMonth() + 1)}-${pad(when.getDate())} ${pad(when.getHours())}${pad(when.getMinutes())}`;
-  const named = parts.filter((p): p is string => !!p && p.trim() !== "").map(safeName);
-  return `${named.join(" - ").slice(0, 160)} (${stamp})`;
+  const words = parts.filter((p): p is string => !!p && p.trim() !== "").join(" - ");
+  return `${safeName(words, NAME_MAX)} (${stamp})`;
 }
 
+/** The longest folder name exportDirName makes: its words and " (YYYY-MM-DD HHMM)". */
+const DIR_NAME_MAX = NAME_MAX + 18;
+
 export class ExportCapReached extends Error {}
+
+/** An audio copy that ended before its declared length, or went silent. */
+export class CopyFailed extends Error {}
 
 /** One export's folder: every write checked to land inside it and counted against the cap. */
 export class ExportWriter {
@@ -47,13 +62,16 @@ export class ExportWriter {
   private total = 0;
   private readonly made: Array<{ path: string; bytes: number }> = [];
 
+  /** `name` is exportDirName's, used as it is: one that isn't already a safe name is refused,
+   *  never cleaned a second time (a second cut once took the date off a long name). */
   constructor(
     root: string,
     name: string,
     private readonly cap = EXPORT_CAP_BYTES,
   ) {
+    if (safeName(name, DIR_NAME_MAX) !== name) throw new Error(`refused a folder name: ${name}`);
     const base = normalize(root);
-    let dir = join(base, safeName(name));
+    let dir = join(base, name);
     // a folder of that name already there (two exports in one minute): a new one beside it
     for (let n = 2; ; n++) {
       try {
@@ -61,10 +79,17 @@ export class ExportWriter {
         break;
       } catch (e) {
         if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e;
-        dir = join(base, `${safeName(name)} ${n}`);
+        dir = join(base, `${name} ${n}`);
       }
     }
     this.dir = dir;
+  }
+
+  /** What a write of `kind` may still use: media stops RECORD_ROOM_BYTES short of the cap. */
+  private room(kind: "record" | "media"): number {
+    const reserve = Math.min(RECORD_ROOM_BYTES, Math.floor(this.cap / 4));
+    const limit = kind === "record" ? this.cap : this.cap - reserve;
+    return limit - this.total;
   }
 
   get bytes(): number {
@@ -84,33 +109,56 @@ export class ExportWriter {
     return full;
   }
 
-  write(rel: string, data: string | Uint8Array): void {
+  /** A file: a picture is "media", the records and the README "record". */
+  write(rel: string, data: string | Uint8Array, kind: "record" | "media" = "media"): void {
     const size = typeof data === "string" ? Buffer.byteLength(data) : data.byteLength;
-    if (this.total + size > this.cap) throw new ExportCapReached(rel);
+    if (size > this.room(kind)) throw new ExportCapReached(rel);
     writeFileSync(this.inside(rel), data);
     this.total += size;
     this.made.push({ path: rel, bytes: size });
   }
 
-  /** A stream (an audio copy) into the folder, stopped at the cap. */
-  async copy(rel: string, body: ReadableStream<Uint8Array>, expected?: number): Promise<void> {
-    if (expected != null && this.total + expected > this.cap) {
+  /** A stream (an audio copy) into the folder, stopped short of the records' room. A body that
+   *  goes silent for COPY_STALL_MS, or ends before the length it declared, is a failed copy:
+   *  what was written goes, and nothing incomplete is ever kept. */
+  async copy(
+    rel: string,
+    body: ReadableStream<Uint8Array>,
+    expected?: number,
+    stallMs = COPY_STALL_MS,
+  ): Promise<void> {
+    const cap = this.room("media");
+    if (expected != null && expected > cap) {
       void body.cancel();
       throw new ExportCapReached(rel);
     }
     const full = this.inside(rel);
     let seen = 0;
-    const cap = this.cap - this.total;
-    const counted = Readable.fromWeb(body as never).on("data", (chunk: Buffer) => {
+    let stall: ReturnType<typeof setTimeout> | undefined;
+    const counted = Readable.fromWeb(body as never);
+    const quiet = (): void => {
+      clearTimeout(stall);
+      stall = setTimeout(
+        () => counted.destroy(new CopyFailed("the media server stopped sending")),
+        stallMs,
+      );
+    };
+    counted.on("data", (chunk: Buffer) => {
       seen += chunk.length;
+      quiet();
       if (seen > cap) counted.destroy(new ExportCapReached(rel));
     });
+    quiet();
     try {
       await pipeline(counted, createWriteStream(full));
+      if (expected != null && seen < expected)
+        throw new CopyFailed(`the media server sent ${seen} of ${expected} bytes`);
     } catch (e) {
       // the part written is this export's own and incomplete: it goes, and the reply says so
       rmSync(full, { force: true });
       throw e;
+    } finally {
+      clearTimeout(stall);
     }
     this.total += seen;
     this.made.push({ path: rel, bytes: seen });

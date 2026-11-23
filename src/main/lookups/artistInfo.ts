@@ -124,6 +124,21 @@ export function artistCacheHasRoom(): boolean {
   return cache.stats().entries < CACHE_MAX * 0.9;
 }
 
+/** The cache's answer for a credit without asking anyone, as fetchArtistInfoForCredit would
+ *  find it: the whole credit's, then for a featured credit that is a settled miss, its lead
+ *  name's. Null is a settled none, undefined nothing known (an export without fill reads only
+ *  this: an answer from before photos is read as it is, never asked again). */
+export function cachedArtistInfoForCredit(credit: string): ArtistInfo | null | undefined {
+  const held = (name: string): ArtistInfo | null | undefined => {
+    const key = nameKey(name);
+    return key && cache.has(key) ? (cache.get(key) ?? null) : undefined;
+  };
+  const whole = held(credit);
+  if (whole !== null || !FEATURED.test(credit)) return whole;
+  const lead = creditNames(credit)[0];
+  return lead && nameKey(lead) !== nameKey(credit) ? held(lead) : null;
+}
+
 /** Whether the artist has been asked about and answered (a photo or a settled none). */
 export function knowsArtist(artist: string): boolean {
   return cache.has(nameKey(artist));

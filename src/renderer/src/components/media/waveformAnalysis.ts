@@ -10,10 +10,11 @@ import { sniffSampleRate } from "@/lib/audioHeader";
 import { fmtDuration } from "@/lib/format";
 import { stripFromStored, stripToStored } from "@/lib/featureStrip";
 import { onsetsFromStored, onsetsToStored } from "@/lib/onsets";
-import { FEATURES_VERSION, featuresFromStored, featuresToStored } from "@/lib/features";
+import { featuresFromStored, featuresToStored } from "@/lib/features";
 import { measureOffThread, measureStreamOffThread } from "@/lib/measureClient";
 import type { Measured } from "@/lib/measure";
 import {
+  analysisOutdated,
   audioAnalysisKey,
   currentFeatures,
   fmtBytes,
@@ -238,16 +239,6 @@ function toStored(a: Analysis): AudioAnalysis {
     features: a.features ? featuresToStored(a.features) : null,
   };
 }
-/** True for a stored analysis written before the loudness fields existed
- *  (the field is absent; a measured-but-null loudness is stored as null). */
-const predatesLoudness = (st: AudioAnalysis): boolean => st.loudHist === undefined;
-/** Likewise for the feature strip (0.8.0's scenes). */
-const predatesStrip = (st: AudioAnalysis): boolean => st.strip === undefined;
-/** And for the drum onsets (display mode's hits). */
-const predatesOnsets = (st: AudioAnalysis): boolean => st.onsets === undefined;
-/** And for the music features, which also re-measure when their version moved on. */
-const predatesFeatures = (st: AudioAnalysis): boolean =>
-  st.features === undefined || (st.features != null && st.features.version !== FEATURES_VERSION);
 
 function fromStored(st: AudioAnalysis): Analysis {
   return {
@@ -265,20 +256,18 @@ function fromStored(st: AudioAnalysis): Analysis {
     onsets: st.onsets ? onsetsFromStored(st.onsets) : null,
     // an older version's features say nothing (shared/model's currentFeatures): a peek (Info,
     // never re-measuring) shows no tempo or key for them until the track is measured again
-    outdated:
-      predatesLoudness(st) || predatesStrip(st) || predatesOnsets(st) || predatesFeatures(st),
+    outdated: analysisOutdated(st),
     features: currentFeatures(st.features)
       ? featuresFromStored(st.features as AnalysisFeatures)
       : null,
   };
 }
 
-/** A stored analysis the current version would write the same: every measurement there, the
- *  features its version. An entry from before loudness (0.7.0's cache shape) is incomplete and
- *  is measured again ONCE, on the next play or Analyze audio, rather than carrying the gap
+/** A stored analysis the current version would write the same (shared/model's analysisOutdated,
+ *  the one home of the rule). An entry from before loudness (0.7.0's cache shape) is incomplete
+ *  and is measured again ONCE, on the next play or Analyze audio, rather than carrying the gap
  *  forever (re-analysis showed only DR); likewise the later measurements. */
-const isCurrent = (st: AudioAnalysis): boolean =>
-  !predatesLoudness(st) && !predatesStrip(st) && !predatesOnsets(st) && !predatesFeatures(st);
+const isCurrent = (st: AudioAnalysis): boolean => !analysisOutdated(st);
 
 /** Whether a track's stored analysis is current (Analyze audio's "is there work to do":
  *  lib/audioAnalysis measures again what is current only when nothing else needs it). */

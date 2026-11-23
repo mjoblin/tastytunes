@@ -6,10 +6,12 @@ import type {
   TrackInfo,
 } from "@shared/model";
 import {
+  analysisOutdated,
   currentFeatures,
   isListen,
   keyFromStored,
   keyName,
+  measuredWaveformOnly,
   PITCH_NAMES,
   tempoBpm,
   trackArtists,
@@ -41,12 +43,51 @@ export type Looked<T> =
   | { kind: "found"; value: T }
   /** The service answered, and has none. */
   | { kind: "none" }
-  /** Not asked: the export was made without fill and nothing was known. */
-  | { kind: "not_asked" }
+  /** Not asked: the export was made without fill and nothing was known, or (late) its time for
+   *  lookups ran out before this one. */
+  | { kind: "not_asked"; late?: boolean }
   /** Its switch in Settings › Connections is off, so it is never asked. */
   | { kind: "off" }
   /** Asked, and the service didn't answer. */
-  | { kind: "unreachable" };
+  | { kind: "unreachable" }
+  /** It can't be asked for this track (no artist tag to ask with). */
+  | { kind: "cannot"; why: string; remedy: string };
+
+/** How a lookup's gap is said: what it is, its switch in Settings › Connections, the service
+ *  asked, and what that service's settled none means. */
+export interface LookupNames {
+  what: string;
+  switchName: string;
+  service: string;
+  none: string;
+}
+
+export const LOOKUPS = {
+  lyrics: {
+    what: "lyrics",
+    switchName: "Lyrics",
+    service: "LRCLIB",
+    none: "LRCLIB has no lyrics for this track.",
+  },
+  credits: {
+    what: "credits",
+    switchName: "Liner notes",
+    service: "MusicBrainz",
+    none: "MusicBrainz has no credits for this recording.",
+  },
+  albumNotes: {
+    what: "album notes",
+    switchName: "Liner notes",
+    service: "MusicBrainz or Wikipedia",
+    none: "MusicBrainz has no such album.",
+  },
+  artistNotes: {
+    what: "artist notes",
+    switchName: "Liner notes",
+    service: "MusicBrainz or Wikipedia",
+    none: "MusicBrainz has no such artist.",
+  },
+} satisfies Record<string, LookupNames>;
 
 export interface Missing {
   what: string;
@@ -63,6 +104,8 @@ export interface TrackInputs {
   analysis: AudioAnalysis | null;
   /** Analysis is switched on in Settings › Appearance, and the file can be read. */
   analysisPossible: { ok: true } | { ok: false; why: string };
+  /** An analysis was started for it by an earlier export, and nothing changed since. */
+  analysisTried?: boolean;
   lyrics: Looked<LyricsResult>;
   credits: Looked<TrackInfo>;
   /** This song's play lines from the listening record, any order. */
@@ -150,31 +193,69 @@ function fileOf(node: MediaNode, serverUdn: string, serverName: string | null) {
 
 const looked = <T>(l: Looked<T>): T | null => (l.kind === "found" ? l.value : null);
 
-/** Why a lookup gave nothing, and what to do about it, or null when it gave something. */
-function gap<T>(l: Looked<T>, what: string, sw: string): Missing | null {
+/** Why a lookup gave nothing, and what to do about it, or null when it gave something: the one
+ *  home for every lookup's gap, a track's and an album's. A settled none is said too, so an
+ *  empty field never reads as "not looked for". */
+export function gapOf<T>(l: Looked<T>, n: LookupNames): Missing | null {
+  const what = n.what;
   switch (l.kind) {
     case "found":
-    case "none":
       return null;
+    case "none":
+      return { what, why: n.none, remedy: "None from TastyTunes." };
     case "not_asked":
-      return {
-        what,
-        why: "Not looked up: the export was made without fill.",
-        remedy: "Export again with fill: true.",
-      };
+      return l.late
+        ? {
+            what,
+            why: "Not looked up: this export's time for lookups ran out first.",
+            remedy:
+              "Export again with fill: true; what was found is kept, so it carries on from there.",
+          }
+        : {
+            what,
+            why: "Not looked up: the export was made without fill.",
+            remedy: "Export again with fill: true.",
+          };
     case "off":
       return {
         what,
-        why: `${sw} is switched off in Settings › Connections.`,
-        remedy: `Ask the user to turn on ${sw} in Settings › Connections, then export again with fill: true.`,
+        why: `${n.switchName} is switched off in Settings › Connections.`,
+        remedy: `Ask the user to turn on ${n.switchName} in Settings › Connections, then export again with fill: true.`,
       };
     case "unreachable":
-      return {
-        what,
-        why: "The service didn't answer.",
-        remedy: "Export again in a moment.",
-      };
+      return { what, why: `${n.service} didn't answer.`, remedy: "Export again in a moment." };
+    case "cannot":
+      return { what, why: l.why, remedy: l.remedy };
   }
+}
+
+/** Why a track's analysis is missing or partial, and what would fill it, or null when whole. */
+function analysisGap(i: TrackInputs): Missing | null {
+  const an = i.analysis;
+  const analyze = i.analysisPossible.ok
+    ? "Call analyze_album with this track's album (the TastyTunes window must be open), then export again when it is measured."
+    : i.analysisPossible.why;
+  if (!an)
+    return i.analysisTried
+      ? {
+          what: "analysis",
+          why: "An analysis was started for it and measured nothing: TastyTunes can't decode the file (DSD, for one), or the server wouldn't hand it over.",
+          remedy: "None from TastyTunes.",
+        }
+      : { what: "analysis", why: "Not analyzed yet.", remedy: analyze };
+  if (analysisOutdated(an))
+    return {
+      what: "analysis",
+      why: "Analyzed by an older version, whose tempo and sections are not given.",
+      remedy: analyze,
+    };
+  if (measuredWaveformOnly(an))
+    return {
+      what: "analysis",
+      why: "TastyTunes couldn't read this file at its own sample rate (it reads FLAC, WAV and MP3 that way), so only its waveform was measured: no DR, loudness, tempo, key or sections.",
+      remedy: "None from TastyTunes.",
+    };
+  return null;
 }
 
 export interface TrackRecord {
@@ -194,21 +275,18 @@ export function buildTrackRecord(i: TrackInputs): TrackRecord {
   const timeline = buildTimeline(features, strip, lines, n.durationSecs);
   const missing: Missing[] = [];
 
-  if (!an || !current) {
-    missing.push({
-      what: "analysis",
-      why: !an
-        ? "Not analyzed yet."
-        : "Analyzed by an older version, whose tempo and sections are not given.",
-      remedy: i.analysisPossible.ok
-        ? "Call analyze_album with this track's album (the TastyTunes window must be open), then export again when it is measured."
-        : i.analysisPossible.why,
-    });
-  }
-  const lyricsGap = gap(i.lyrics, "lyrics", "Lyrics");
+  const analysis = analysisGap(i);
+  if (analysis) missing.push(analysis);
+  const lyricsGap = gapOf(i.lyrics, LOOKUPS.lyrics);
   if (lyricsGap) missing.push(lyricsGap);
-  const creditsGap = gap(i.credits, "credits", "Liner notes");
+  const creditsGap = gapOf(i.credits, LOOKUPS.credits);
   if (creditsGap) missing.push(creditsGap);
+  if (i.listeningOff)
+    missing.push({
+      what: "listening",
+      why: "The listening record is switched off in Settings › History, so no plays are counted.",
+      remedy: "Ask the user to turn on Listening record in Settings › History, then export again.",
+    });
   if (lyrics && !lyrics.instrumental && !synced)
     missing.push({
       what: "synced lyrics",
@@ -243,7 +321,14 @@ export function buildTrackRecord(i: TrackInputs): TrackRecord {
           peak_db: an.peakDb != null ? r(an.peakDb, 1) : null,
           rms_db: an.rmsDb != null ? r(an.rmsDb, 1) : null,
           tempo_bpm: current ? tempoBpm(currentFeatures(an.features)?.beats) : null,
+          tempo_confidence: current && features?.beats ? r(features.beats.confidence, 2) : null,
           key: current ? keyName(keyFromStored(currentFeatures(an.features))) : null,
+          key_confidence: current
+            ? (() => {
+                const k = keyFromStored(currentFeatures(an.features));
+                return k ? r(k.confidence, 2) : null;
+              })()
+            : null,
           details: current ? "analysis.json" : null,
         }
       : null,

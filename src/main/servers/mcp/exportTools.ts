@@ -3,26 +3,28 @@ import { z } from "zod";
 import type { MediaIndexPools, MediaNode } from "@shared/model";
 import {
   albumDrKey,
+  albumTracksOf,
   audioAnalysisKey,
   creditNames,
   playKey,
   usbServer,
   type ListeningPlayEvent,
 } from "@shared/model";
-import { matchesQuery, nameKey, searchFold } from "@shared/keys";
+import { matchesQuery, mediaType, nameKey, searchFold } from "@shared/keys";
 import { getSettings } from "../../data/persist";
 import { getFavorites } from "../../data/favorites";
 import { getPlaylists } from "../../data/playlists";
 import { listeningRecord } from "../../data/listeningRecord";
 import { choiceOf, pickedPath, resolveChoice } from "../../data/artistChoices";
 import { pools as indexPools } from "../../media/mediaIndex";
-import { audioResUrl, refreshServers } from "../../media/upnpBrowser";
+import { audioRes, refreshServers } from "../../media/upnpBrowser";
 import { albumDrMap, audioAnalysisGet } from "../../lookups/audioAnalysis";
 import { artHostTrust, fetchPicture } from "../../lookups/artFetch";
-import { fetchLyrics, lyricsKnown } from "../../lookups/lyrics";
-import { fetchTrackInfo, trackInfoKnown } from "../../lookups/trackInfo";
-import { albumInfoKnown, fetchAlbumInfo } from "../../lookups/albumInfo";
+import { cachedLyrics, fetchLyrics, lyricsKnown } from "../../lookups/lyrics";
+import { cachedTrackInfo, fetchTrackInfo, trackInfoKnown } from "../../lookups/trackInfo";
+import { albumInfoKnown, cachedAlbumInfo, fetchAlbumInfo } from "../../lookups/albumInfo";
 import {
+  cachedArtistInfoForCredit,
   fetchArtistImages,
   fetchArtistInfoForCredit,
   knownArtistImage,
@@ -32,6 +34,7 @@ import { fetchCommonsPhotos } from "../../lookups/commons";
 import { fetchFanartPhotos } from "../../lookups/fanart";
 import { loggedFetch } from "../../netlog";
 import { exportRoot } from "../../app/exportsFolder";
+import { COPY_STALL_MS } from "../../export/exportFolder";
 import {
   exportAlbum,
   exportTrack,
@@ -50,6 +53,13 @@ import { defineTool, err, localTime, ok, type ToolContext, type ToolImpl } from 
 // own lookups, each behind its Connections switch, and the folder the owner chose.
 
 const PICTURE_MAX_BYTES = 16 * 1024 * 1024;
+/** What a copied track's answer may be: audio, as a media server names it. */
+const AUDIO_TYPE = /^(audio\/[\w.+-]+|application\/(x-)?(ogg|flac))$/;
+const NO_ARTIST: Looked<never> = {
+  kind: "cannot",
+  why: "The track has no artist tag, so it can't be looked up.",
+  remedy: "None from TastyTunes: the file's tags would need an artist.",
+};
 
 const OPTION_ARGS = {
   fill: z
@@ -90,16 +100,19 @@ function optionsOf(a: {
   };
 }
 
-/** A lookup behind its switch: off, known, asked under fill, or not asked. */
+/** A lookup behind its switch: off, known (read from the cache alone, never asking anyone),
+ *  asked under fill, or not asked. */
 async function lookup<T>(
   on: boolean,
-  known: boolean,
   fill: boolean,
+  cached: () => T | null | undefined,
   ask: () => Promise<T | null | "unreachable">,
   settledAfter: () => boolean,
 ): Promise<Looked<T>> {
   if (!on) return { kind: "off" };
-  if (!known && !fill) return { kind: "not_asked" };
+  const held = cached();
+  if (held !== undefined) return held != null ? { kind: "found", value: held } : { kind: "none" };
+  if (!fill) return { kind: "not_asked" };
   const got = await ask();
   if (got === "unreachable") return { kind: "unreachable" };
   if (got != null) return { kind: "found", value: got };
@@ -115,7 +128,7 @@ function replyOf(r: ExportReply): ReturnType<typeof ok> {
     files: r.files.map((f) => ({ path: f.path, bytes: f.bytes })),
     missing: r.missing,
     ...(r.left_out.length > 0 ? { left_out: r.left_out } : {}),
-    note: "README.md in the folder explains every file and field.",
+    note: "The folder is on the computer TastyTunes runs on. README.md in it explains every file and field.",
   });
 }
 
@@ -160,10 +173,11 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
         album: n.album,
         duration: n.durationSecs != null ? Math.round(n.durationSecs) : null,
       };
+      if (getSettings().lyrics && !n.artist) return Promise.resolve(NO_ARTIST);
       return lookup(
-        getSettings().lyrics && !!n.artist,
-        lyricsKnown(q),
+        getSettings().lyrics,
         fill,
+        () => cachedLyrics(q),
         () => fetchLyrics(q),
         () => lyricsKnown(q),
       );
@@ -175,10 +189,11 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
         album: n.album,
         duration: n.durationSecs,
       };
+      if (getSettings().artistInfo && !n.artist) return Promise.resolve(NO_ARTIST);
       return lookup(
-        getSettings().artistInfo && !!n.artist,
-        trackInfoKnown(q),
+        getSettings().artistInfo,
         fill,
+        () => cachedTrackInfo(q),
         () => fetchTrackInfo(q),
         () => trackInfoKnown(q),
       );
@@ -187,8 +202,12 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
       const lead = creditNames(artist)[0] ?? artist;
       return lookup(
         getSettings().artistInfo,
-        albumInfoKnown(artist, album),
         fill,
+        // the whole credit's, then (a settled miss) its lead name's, as the ask below goes
+        () => {
+          const whole = cachedAlbumInfo(artist, album);
+          return whole !== null || lead === artist ? whole : cachedAlbumInfo(lead, album);
+        },
         async () =>
           (await fetchAlbumInfo(artist, album, false, true)) ??
           (lead !== artist ? await fetchAlbumInfo(lead, album, false, true) : null),
@@ -198,13 +217,14 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
     artistNotes: (artist, fill) =>
       lookup(
         getSettings().artistInfo,
-        knowsArtist(artist),
         fill,
+        () => cachedArtistInfoForCredit(artist),
         () => fetchArtistInfoForCredit(artist),
         () => knowsArtist(artist),
       ),
     artistPictures: async (artist, fill) => {
       const offers: ArtistPictureOffer[] = [];
+      const online = getSettings().artistInfo;
       const chosen = choiceOf(artist);
       if (chosen) {
         const kept =
@@ -215,9 +235,17 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
               : null;
         const now = resolveChoice(artist, indexPools());
         const url = chosen.kind === "file" ? null : (now?.offered ?? null);
-        offers.push({ source: "chosen", url, file: kept, local: chosen.kind === "cover" });
+        const cover = chosen.kind === "cover";
+        // the window's rule (ipc/lookups artistChoices): a picture from the web is fetched only
+        // with the artist lookups on; a cover, a kept copy or a file either way
+        offers.push({
+          source: "chosen",
+          url,
+          file: kept,
+          local: cover,
+          fetch: cover || (online && fill),
+        });
       }
-      const online = getSettings().artistInfo;
       if (!online)
         return {
           offers,
@@ -230,7 +258,7 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
         };
       if (!fill) {
         const known = knownArtistImage(artist);
-        if (known) offers.push({ source: "wikipedia", url: known });
+        if (known) offers.push({ source: "wikipedia", url: known, fetch: false });
         return {
           offers,
           gap: {
@@ -240,8 +268,8 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
           },
         };
       }
-      for (const url of await fetchArtistImages(artist)) offers.push({ source: "wikipedia", url });
-      for (const url of await fetchFanartPhotos(artist)) offers.push({ source: "fanart.tv", url });
+      // the large photos first (Commons, fanart.tv), the article's thumbnails after, so the
+      // files kept are the ones worth having
       for (const o of await fetchCommonsPhotos(artist))
         offers.push({
           source: "commons",
@@ -249,7 +277,12 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
           page: o.page,
           width: o.width,
           height: o.height,
+          fetch: true,
         });
+      for (const url of await fetchFanartPhotos(artist))
+        offers.push({ source: "fanart.tv", url, fetch: true });
+      for (const url of await fetchArtistImages(artist))
+        offers.push({ source: "wikipedia", url, fetch: true });
       return { offers, gap: null };
     },
     listeningOn: () => getSettings().listeningRecord,
@@ -285,19 +318,50 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
     },
     audioUrl: async (udn, id) => {
       const h = host();
-      return h ? audioResUrl(h, udn, id) : null;
+      const res = h ? await audioRes(h, udn, id) : null;
+      return res ? { url: res.url, serverHost: res.serverHost } : null;
     },
-    audioBody: async (url) => {
+    // ONLY FROM THE MEDIA SERVER ITSELF, ONLY AUDIO: the address is whatever the server's answer
+    // said, so a broken or hostile server on the network can't point a copy elsewhere (no
+    // redirect off its host), nor make one of a page (an audio type only); the answer's headers
+    // within the analysis read's stall time, and the body held to it by the copy
+    audioBody: async (url, serverHost) => {
+      const notGiven = { why: "The media server didn't hand over the file." };
+      const abort = new AbortController();
+      const headers = setTimeout(() => abort.abort(), COPY_STALL_MS);
       try {
-        const res = await loggedFetch("media-audio", url, {});
-        if (!res.ok || !res.body) return null;
-        const declared = Number(res.headers.get("content-length") ?? 0);
-        return {
-          body: res.body as ReadableStream<Uint8Array>,
-          bytes: declared > 0 ? declared : null,
-        };
+        let at = url;
+        for (let hop = 0; hop < 4; hop++) {
+          const where = new URL(at);
+          if (where.hostname !== serverHost || !/^https?:$/.test(where.protocol))
+            return { why: "The track's address isn't on its media server, so it wasn't fetched." };
+          const res = await loggedFetch("media-audio", at, {
+            signal: abort.signal,
+            redirect: "manual",
+          });
+          if (res.status >= 300 && res.status < 400) {
+            const next = res.headers.get("location");
+            if (!next) return notGiven;
+            at = new URL(next, at).toString();
+            continue;
+          }
+          if (!res.ok || !res.body) return notGiven;
+          const type = mediaType(res.headers.get("content-type"));
+          if (!AUDIO_TYPE.test(type)) {
+            void res.body.cancel();
+            return { why: `The media server sent ${type || "something unnamed"}, not audio.` };
+          }
+          const declared = Number(res.headers.get("content-length") ?? 0);
+          return {
+            body: res.body as ReadableStream<Uint8Array>,
+            bytes: declared > 0 ? declared : null,
+          };
+        }
+        return { why: "The media server sent the file round too many redirects." };
       } catch {
-        return null;
+        return notGiven;
+      } finally {
+        clearTimeout(headers);
       }
     },
     localTime,
@@ -393,10 +457,23 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
     const artist = a.artist ?? (a.album ? null : (md?.artist ?? null));
     if (!title) return { error: "Nothing is playing and no album was named." };
     const hits: ExportTarget[] = [];
-    for (const p of pools)
-      for (const n of p.albums)
-        if (nameKey(n.title) === nameKey(title) && (!artist || matchesQuery(artist, [n.artist])))
-          hits.push({ node: n, serverUdn: p.udn, serverName: p.serverName });
+    // THE PLAYING ALBUM is the one holding the playing track: a compilation's or a featured
+    // credit's track artist is never within the album's artist
+    if (md?.title)
+      for (const p of pools)
+        for (const n of p.albums)
+          if (
+            nameKey(n.title) === nameKey(title) &&
+            albumTracksOf(n, p).some(
+              (t) => playKey(t.title, t.artist, t.album) === playKey(md.title, md.artist, md.album),
+            )
+          )
+            hits.push({ node: n, serverUdn: p.udn, serverName: p.serverName });
+    if (hits.length === 0)
+      for (const p of pools)
+        for (const n of p.albums)
+          if (nameKey(n.title) === nameKey(title) && (!artist || matchesQuery(artist, [n.artist])))
+            hits.push({ node: n, serverUdn: p.udn, serverName: p.serverName });
     if (hits.length === 0)
       return { error: `No indexed album "${title}". Use list_albums or search_library.` };
     const distinct = new Map(

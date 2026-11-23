@@ -38,7 +38,8 @@ ${layout}
   the library.
 - \`measured\`: the headline measurements. \`dr\` is dynamic range as the DR database measures it.
   \`lufs\` is EBU R128 integrated loudness, \`loudness_range_lu\` its range, \`true_peak_dbtp\` the
-  true peak. \`tempo_bpm\` and \`key\` are given only when the analysis is confident of them.
+  true peak. \`tempo_bpm\` and \`key\` are given only when the analysis is confident of them;
+  \`tempo_confidence\` and \`key_confidence\` (0 to 1) say how confident it is either way.
 - \`lyrics\`: \`lines\` are the timed lines (\`at_seconds\`, \`text\`), \`plain\` the words as one
   text, \`instrumental\` whether the track is marked as having none. From LRCLIB (lrclib.net).
 - \`credits\`: who performed, produced and wrote the recording, each a role and a name. From
@@ -46,7 +47,8 @@ ${layout}
 - \`album_notes\` and \`artist_notes\`: the album's label, type, genres, credits and summary, and
   the artist's summary, with their Wikipedia and MusicBrainz addresses.
 - \`listening\`: how many times it was played in TastyTunes, how many of those were heard
-  through, the minutes played, and when it was first and last played.${
+  through, the minutes played, and when it was first and last played. It is \`null\` when the
+  owner keeps no listening record.${
     opts.plays && !opts.redact ? " `every_play` lists each play with its date." : ""
   }
 - \`held_by\`: whether the track or its album is a favorite, and the playlists that hold it.
@@ -69,7 +71,8 @@ Measured from the audio file itself, in TastyTunes. \`analysis_version\` names t
 analysis that measured it.
 
 - \`tempo\`: beats per minute, the confidence (0 to 1), which beat is the downbeat (0 to 3), and
-  every beat's time in seconds.
+  every beat's time in seconds. Every fourth beat from \`downbeat_index\` is a downbeat, the
+  first beat of a bar.
 - \`key\`: the key and the confidence. \`chord_changes_seconds\`: where the harmony changes.
 - \`sections\`: the boundaries between sections in seconds, each section's kind and energy.
 - \`silences\`: each silence's start and end. \`drops\`: where each build starts and where it
@@ -94,7 +97,11 @@ copied. A picture with no file is listed with its address only.
 The pictures, lyrics, notes and audio belong to their owners. This export is for the owner's own
 use, as the music in their library is.${
     opts.redact
-      ? "\n\nThis export is redacted: it leaves out addresses on the owner's network, server and device ids, and the dates of plays."
+      ? `\n\nThis export is redacted: it leaves out addresses on the owner's network, server and device ids, and the dates of plays, and its pictures carry none of the details a camera or an editor wrote into them.${
+          opts.audio === "copy"
+            ? " A copied audio file is the file itself, with its own tags (a bought file can carry its buyer's name)."
+            : ""
+        }`
       : ""
   }
 `;

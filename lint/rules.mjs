@@ -542,6 +542,21 @@ export const ONE_HOME = [
     bad: { file: "src/main/lookups/commons.ts", code: "const key = artist.trim().toLowerCase();" },
   },
   {
+    id: "analysis-currency",
+    was: "S68 (a stored analysis re-measures once when a measurement predates it: respelled twice, then the rule moved to shared for the export, so converted)",
+    // a measurement's field compared with undefined: "this analysis predates it"
+    selector:
+      "BinaryExpression[operator=/^[!=]==?$/][left.type='MemberExpression'][left.property.name=/^(loudHist|strip|onsets|features)$/][right.type='Identifier'][right.name='undefined']",
+    files: ["^src/"],
+    allow: ["^src/shared/model/audio\\.ts$", "\\.test\\.tsx?$"],
+    message:
+      "Whether a stored analysis is current is shared/model's analysisOutdated (the window and the export read the one rule), never a field checked for undefined",
+    bad: {
+      file: `${R}components/media/waveformAnalysis.ts`,
+      code: "const old = (st: { strip?: unknown }): boolean => st.strip === undefined;",
+    },
+  },
+  {
     id: "card-hover",
     was: "none (0.15.0, the hygiene pass: a card's hover was written out in six places and its motion in two homes)",
     // the card's grow, as the hover or as its held look

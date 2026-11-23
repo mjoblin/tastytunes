@@ -146,6 +146,13 @@ export function trackInfoKnown(query: TrackInfoQuery): boolean {
   return key != null && cache.has(key);
 }
 
+/** The cache's verdict without asking anyone: the credits, null for a settled none, or
+ *  undefined when nothing is known. */
+export function cachedTrackInfo(query: TrackInfoQuery): TrackInfo | null | undefined {
+  const key = trackKey(query);
+  return key != null && cache.has(key) ? (cache.get(key) ?? null) : undefined;
+}
+
 export async function fetchTrackInfo(
   query: TrackInfoQuery,
   force = false,

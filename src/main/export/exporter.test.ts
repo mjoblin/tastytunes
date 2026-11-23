@@ -70,6 +70,7 @@ function analyzed(): AudioAnalysis {
     lufs: -12.4,
     lra: 6.1,
     truePeakDb: -0.2,
+    loudHist: [0, 3, 9, 4],
     peakQ: Array.from({ length: 1200 }, () => 800),
     rmsQ: Array.from({ length: 1200 }, () => 300),
     strip: stripToStored({
@@ -184,9 +185,9 @@ function fakeEnv(
     credits: (_n, fill) => Promise.resolve(fill ? { kind: "none" } : { kind: "not_asked" }),
     albumNotes: () => Promise.resolve({ kind: "off" }),
     artistNotes: () => Promise.resolve({ kind: "none" }),
-    artistPictures: () =>
+    artistPictures: (_artist, fill) =>
       Promise.resolve({
-        offers: [{ source: "wikipedia", url: "https://upload.wikimedia.org/x.jpg" }],
+        offers: [{ source: "wikipedia", url: "https://upload.wikimedia.org/x.jpg", fetch: fill }],
         gap: null,
       }),
     listeningOn: () => true,
@@ -199,7 +200,8 @@ function fakeEnv(
       return Promise.resolve({ bytes: JPEG, type: "image/jpeg" });
     },
     readFile: () => null,
-    audioUrl: (_u, id) => Promise.resolve(`http://10.0.0.5:9790/audio/${id}.flac`),
+    audioUrl: (_u, id) =>
+      Promise.resolve({ url: `http://10.0.0.5:9790/audio/${id}.flac`, serverHost: "10.0.0.5" }),
     audioBody: () =>
       Promise.resolve({
         body: new Blob([new Uint8Array(4096)]).stream(),
@@ -364,6 +366,121 @@ describe("a track's export", () => {
   });
 });
 
+describe("a track's export, when things go wrong", () => {
+  it("goes ahead for a file measured as far as it can be, and says why it has only a waveform", async () => {
+    const { env, calls } = fakeEnv({
+      analysis: () => ({
+        ...analyzed(),
+        dr: 0,
+        lufs: null,
+        loudHist: null,
+        strip: null,
+        onsets: null,
+        features: null,
+      }),
+    });
+    const r = await exportTrack(env, root(), target(t2), opts({ fill: true }));
+    expect(r.kind).toBe("exported");
+    expect(calls.started).toEqual([]);
+    if (r.kind !== "exported") return;
+    expect(r.missing.find((m) => m.what === "analysis")?.why).toMatch(/at its own sample rate/);
+  });
+
+  it("answers 'analyzing' once for an unchanged state, then exports and says what was tried", async () => {
+    const { env, calls } = fakeEnv({ analysis: () => null });
+    const first = await exportTrack(env, root(), target(t3), opts({ fill: true }));
+    expect(first.kind).toBe("analyzing");
+    const second = await exportTrack(env, root(), target(t3), opts({ fill: true }));
+    expect(second.kind).toBe("exported");
+    expect(calls.started).toEqual(["al-1"]);
+    if (second.kind !== "exported") return;
+    expect(second.missing.find((m) => m.what === "analysis")?.why).toMatch(/measured nothing/);
+  });
+
+  it("keeps the date and the title of a long name", async () => {
+    const long = node({
+      id: "t-long",
+      title: "The Great Gig in the Sky (Live at the Empire Pool, Wembley, 1974) [Remastered]",
+      album: "The Dark Side of the Moon",
+    });
+    const { env } = fakeEnv({ pools: () => [{ ...pools[0], tracks: [long] }] });
+    const r = await exportTrack(env, root(), target(long), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    const name = r.folder.split(sep).at(-1)!;
+    expect(name).toMatch(/ \(2026-11-22 2140\)$/);
+    expect(name.length).toBeLessThanOrEqual(98);
+  });
+
+  it("says a settled none, a record switched off, and what each would need", async () => {
+    const { env } = fakeEnv({ listeningOn: () => false });
+    const r = await exportTrack(env, root(), target(t1), opts({ fill: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(r.missing.find((m) => m.what === "credits")?.why).toBe(
+      "MusicBrainz has no credits for this recording.",
+    );
+    expect(r.missing.find((m) => m.what === "artist notes")?.why).toBe(
+      "MusicBrainz has no such artist.",
+    );
+    expect(r.missing.find((m) => m.what === "listening")?.why).toMatch(/switched off/);
+  });
+
+  it("redacted, takes a picture's own metadata out and says a copied file keeps its tags", async () => {
+    const exif = Uint8Array.from([
+      0xff,
+      0xd8,
+      0xff,
+      0xe1,
+      0,
+      12,
+      ...[..."Exif\0\0home"].map((c) => c.charCodeAt(0)),
+      0xff,
+      0xda,
+      0,
+      2,
+      1,
+      2,
+      0xff,
+      0xd9,
+    ]);
+    const { env } = fakeEnv({
+      picture: () => Promise.resolve({ bytes: exif, type: "image/jpeg" }),
+    });
+    const r = await exportTrack(env, root(), target(t1), opts({ redact: true, audio: "copy" }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    const sleeve = readFileSync(join(r.folder, "pictures/sleeve.jpg"));
+    expect(sleeve.toString("latin1")).not.toContain("Exif");
+    const audio = readJson(r.folder, "track.json")["audio"] as { note?: string };
+    expect(audio.note).toMatch(/carries its own tags/);
+  });
+
+  it("copies audio only as the media server's own answer", async () => {
+    const { env } = fakeEnv({
+      audioBody: () => Promise.resolve({ why: "The media server sent text/html, not audio." }),
+    });
+    const r = await exportTrack(env, root(), target(t1), opts({ audio: "copy" }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(r.files.some((f) => f.path.startsWith("audio."))).toBe(false);
+    expect(r.left_out.join(" ")).toMatch(/not audio/);
+  });
+
+  it("refuses a second export, naming the folder the first is writing", async () => {
+    let release: () => void = () => {};
+    const slow = new Promise<void>((res) => (release = res));
+    const { env } = fakeEnv({
+      artistPictures: async () => {
+        await slow;
+        return { offers: [], gap: null };
+      },
+    });
+    const first = exportTrack(env, root(), target(t1), opts());
+    await new Promise((r) => setTimeout(r, 20));
+    const second = await exportTrack(env, root(), target(t1), opts());
+    expect(second.kind === "refused" && second.message).toMatch(/into .*Lamplighter/);
+    release();
+    expect((await first).kind).toBe("exported");
+  });
+});
+
 describe("an album's export", () => {
   it("writes album.json and a folder per track in running order, the pictures once", async () => {
     const { env } = fakeEnv();
@@ -382,14 +499,109 @@ describe("an album's export", () => {
   });
 
   it("stops the lookups when the time budget is spent and says how to carry on", async () => {
+    // LRCLIB answers slowly, thirty seconds a track; nothing else takes time
     let t = 0;
-    const { env, calls } = fakeEnv({
-      analysis: () => analyzed(),
-      clock: () => (t += 30_000),
-    });
+    const calls: Calls = { lyrics: [], pictures: [], started: [] };
+    const base = fakeEnv({}, calls).env;
+    const { env } = fakeEnv(
+      {
+        analysis: () => analyzed(),
+        clock: () => t,
+        lyrics: (n, fill) => {
+          if (fill) t += 30_000;
+          return base.lyrics(n, fill);
+        },
+      },
+      calls,
+    );
     const r = await exportAlbum(env, root(), target(album), opts({ fill: true }));
     if (r.kind !== "exported") throw new Error(r.kind);
-    expect(calls.lyrics).toEqual([true, false, false]);
+    expect(calls.lyrics).toEqual([true, true, false]);
     expect(r.missing.some((m) => m.what === "lookups for the later tracks")).toBe(true);
+    const late = readJson(r.folder, "tracks/03 - Breakwater/track.json")["missing"] as Array<{
+      what: string;
+      why: string;
+    }>;
+    expect(late.find((m) => m.what === "lyrics")?.why).toMatch(/time for lookups ran out first/);
+  });
+
+  it("ends with its README and record when a track's copy fails part-way", async () => {
+    const { env } = fakeEnv({
+      analysis: () => analyzed(),
+      audioBody: (url) =>
+        Promise.resolve({
+          body: new ReadableStream<Uint8Array>({
+            start(c) {
+              c.enqueue(new Uint8Array(1000));
+              if (url.includes("t-2")) c.error(new Error("connection reset"));
+              else c.close();
+            },
+          }),
+          bytes: 1000,
+        }),
+    });
+    const r = await exportAlbum(env, root(), target(album), opts({ audio: "copy" }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(existsSync(join(r.folder, "README.md"))).toBe(true);
+    expect(existsSync(join(r.folder, "album.json"))).toBe(true);
+    expect(existsSync(join(r.folder, "tracks/02 - Undertow/track.json"))).toBe(true);
+    expect(existsSync(join(r.folder, "tracks/02 - Undertow/audio.flac"))).toBe(false);
+    expect(existsSync(join(r.folder, "tracks/03 - Breakwater/audio.flac"))).toBe(true);
+    expect(r.left_out.join(" ")).toMatch(/02 - Undertow\/audio\.flac: connection reset/);
+  });
+
+  it("keeps room for its records when the cap is reached by the copies", async () => {
+    const { env } = fakeEnv({
+      analysis: () => analyzed(),
+      capBytes: 2_000_000,
+      audioBody: () =>
+        Promise.resolve({ body: new Blob([new Uint8Array(600_000)]).stream(), bytes: 600_000 }),
+    });
+    const r = await exportAlbum(env, root(), target(album), opts({ audio: "copy" }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(r.left_out.some((l) => /audio\.flac: the export reached its size cap/.test(l))).toBe(
+      true,
+    );
+    for (const f of ["README.md", "album.json", "tracks/03 - Breakwater/track.json"])
+      expect(existsSync(join(r.folder, f)), f).toBe(true);
+  });
+
+  it("redacted, leaves the owner's network out of every file of an album", async () => {
+    const { env } = fakeEnv({ analysis: () => analyzed() });
+    const r = await exportAlbum(
+      env,
+      root(),
+      target(album),
+      opts({ fill: true, redact: true, plays: true }),
+    );
+    if (r.kind !== "exported") throw new Error(r.kind);
+    const texts = r.files.filter((f) => /\.(json|md|lrc|txt)$/.test(f.path));
+    expect(texts.length).toBeGreaterThan(8);
+    for (const f of texts)
+      expect(readFileSync(join(r.folder, f.path), "utf-8"), f.path).not.toMatch(
+        /10\.0\.0\.5|uuid:server-1|Shelf NAS|"object_id"|first_played|last_played|every_play/,
+      );
+  });
+
+  it("finds a compilation's artist in each track, never 'Various Artists'", async () => {
+    const asked: string[] = [];
+    const comp = { ...album, id: "al-9", title: "Night Songs", artist: "Various Artists" };
+    const a1 = node({
+      id: "c-1",
+      title: "One",
+      album: "Night Songs",
+      albumArtist: "Various Artists",
+      artist: "Dusk Parade",
+    });
+    const { env } = fakeEnv({
+      pools: () => [{ ...pools[0], albums: [comp], tracks: [a1] }],
+      artistNotes: (artist) => {
+        asked.push(artist);
+        return Promise.resolve({ kind: "none" });
+      },
+    });
+    const r = await exportTrack(env, root(), target(a1), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(asked).toEqual(["Dusk Parade"]);
   });
 });

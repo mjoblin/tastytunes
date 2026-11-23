@@ -12,16 +12,31 @@ import type {
 } from "@shared/model";
 import {
   albumTracksOf,
-  currentFeatures,
+  analysisOutdated,
   favoriteContentKey,
+  isCompilation,
   playKey,
   trackPosition,
 } from "@shared/model";
 import { nameKey } from "@shared/keys";
-import { ExportCapReached, ExportWriter, exportDirName, safeName } from "./exportFolder";
-import { buildTrackRecord, EXPORT_FORMAT, type Looked, type Missing } from "./trackRecord";
+import {
+  CopyFailed,
+  ExportCapReached,
+  ExportWriter,
+  exportDirName,
+  safeName,
+} from "./exportFolder";
+import {
+  buildTrackRecord,
+  EXPORT_FORMAT,
+  gapOf,
+  LOOKUPS,
+  type Looked,
+  type Missing,
+} from "./trackRecord";
 import { buildAlbumRecord } from "./albumRecord";
 import { exportReadme } from "./exportReadme";
+import { withoutMetadata } from "./pictureMeta";
 
 /**
  * THE EXPORTER (0.17.0, export for an agent): a track or an album written to a new dated folder
@@ -29,6 +44,14 @@ import { exportReadme } from "./exportReadme";
  * size). What each source holds comes through ExportEnv, so the rules here (what is asked, what
  * is redacted, what a gap's remedy is) are tested without the app; the agent tools build the env
  * from the app's own lookups (servers/mcp/exportTools).
+ *
+ * - THE README FIRST, THE RECORD LAST, WHATEVER HAPPENS: a file that can't be written (a server
+ *   that drops a stream, the cap) is a line in left_out and the export goes on; even a failure
+ *   part-way ends with the README and track.json or album.json, which say what is there.
+ * - ONE BUDGET FOR THE CALL'S LOOKUPS AND PICTURES (LOOKUP_BUDGET_MS), the audio copies apart:
+ *   past it nothing more is asked, and missing says what a second call would add.
+ * - With fill, an analysis is started once for an unchanged state: called again with nothing
+ *   measured since, the export goes ahead and says what couldn't be measured.
  */
 
 export interface ExportOptions {
@@ -55,9 +78,11 @@ export interface ArtistPictureOffer {
   page?: string | null;
   width?: number | null;
   height?: number | null;
-  /** On the owner's network (a chosen cover): fetched whether or not fill is on, never said
-   *  when redacted. */
+  /** On the owner's network (a chosen cover): never said when redacted, and not held to the
+   *  lookups' budget. */
   local?: boolean;
+  /** Whether it may be fetched at all (the env's rule: fill, and the switch the window obeys). */
+  fetch: boolean;
 }
 
 export interface ExportEnv {
@@ -84,14 +109,22 @@ export interface ExportEnv {
   /** A picture through the app's one picture path. */
   picture(url: string): Promise<PictureGot | null>;
   readFile(path: string): Uint8Array | null;
-  audioUrl(serverUdn: string, objectId: string): Promise<string | null>;
+  /** The track's address as the media server gives it, and that server's own host. */
+  audioUrl(
+    serverUdn: string,
+    objectId: string,
+  ): Promise<{ url: string; serverHost: string } | null>;
+  /** The file's body, only from the media server's own host, as audio; or why not. */
   audioBody(
     url: string,
-  ): Promise<{ body: ReadableStream<Uint8Array>; bytes: number | null } | null>;
+    serverHost: string,
+  ): Promise<{ body: ReadableStream<Uint8Array>; bytes: number | null } | { why: string }>;
   localTime(ms: number, tzOffsetMin?: number | null): string;
   now(): Date;
   /** Milliseconds, for the lookups' time budget. */
   clock(): number;
+  /** The most one export may write; EXPORT_CAP_BYTES unless a test says less. */
+  capBytes?: number;
 }
 
 export interface ExportTarget {
@@ -111,8 +144,8 @@ export type ExportReply =
   | { kind: "analyzing"; message: string }
   | { kind: "refused"; message: string };
 
-/** Lookups for an album's tracks stop after this long, so the answer comes in a tool's time; what
- *  was found is cached, so the next export asks only for the rest. */
+/** A call's lookups and pictures stop after this long of asking, so the answer comes in a tool's
+ *  time; what was found is cached, so the next export asks only for the rest. */
 export const LOOKUP_BUDGET_MS = 45_000;
 /** At most this many of the artist's pictures and other sleeves are fetched. */
 const ARTIST_PICTURES_MAX = 12;
@@ -161,38 +194,89 @@ const AUDIO_EXT: Record<string, string> = {
 
 const json = (v: unknown): string => `${JSON.stringify(v, null, 2)}\n`;
 
-let busy = false;
+/** The export being written, if one is: a second call is refused, never queued, and told where
+ *  the first is going (a client that timed out can find it there). */
+let busy: { folder: string | null } | null = null;
 
-/** One export at a time: a second call while one runs is refused, never queued. */
 async function oneAtATime(run: () => Promise<ExportReply>): Promise<ExportReply> {
   if (busy)
     return {
       kind: "refused",
-      message: "An export is already being written. Call again when it is done.",
+      message: busy.folder
+        ? `An export is already being written, into ${busy.folder}. Call again when it is done.`
+        : "An export is already being written. Call again when it is done.",
     };
-  busy = true;
+  busy = { folder: null };
   try {
     return await run();
   } finally {
-    busy = false;
+    busy = null;
   }
 }
 
-function writerFor(root: string, name: string, now: Date, cap?: number): ExportWriter {
-  return new ExportWriter(root, exportDirName([name], now), cap);
+function writerFor(env: ExportEnv, root: string, parts: Array<string | null>): ExportWriter {
+  const w = new ExportWriter(root, exportDirName(parts, env.now()), env.capBytes);
+  if (busy) busy.folder = w.dir;
+  return w;
 }
 
-/** The album a track belongs to in its pool, when the index has it. */
-function albumOf(t: ExportTarget, pools: readonly MediaIndexPools[]): MediaNode | null {
+/** The album a track belongs to in its pool, when the index has it: by title and artist, else
+ *  the one of that title holding the track (two "Greatest Hits" are two albums), else the only
+ *  one of that title. */
+export function albumOf(t: ExportTarget, pools: readonly MediaIndexPools[]): MediaNode | null {
   const pool = pools.find((p) => p.udn === t.serverUdn);
   if (!pool || !t.node.album) return null;
   const want = nameKey(t.node.album);
   const artist = nameKey(t.node.albumArtist ?? t.node.artist);
+  const titled = pool.albums.filter((a) => nameKey(a.title) === want);
   return (
-    pool.albums.find((a) => nameKey(a.title) === want && nameKey(a.artist) === artist) ??
-    pool.albums.find((a) => nameKey(a.title) === want) ??
-    null
+    titled.find((a) => nameKey(a.artist) === artist) ??
+    titled.find((a) => albumTracksOf(a, pool).some((n) => n.id === t.node.id)) ??
+    (titled.length === 1 ? titled[0] : null)
   );
+}
+
+/** The artist a track's notes, pictures and shelf are for: its album's, unless the album is a
+ *  compilation ("Various Artists"), then its own. */
+function performerOf(n: MediaNode): string | null {
+  const albumArtist = n.albumArtist ?? n.artist;
+  return albumArtist && isCompilation({ artist: albumArtist }) ? n.artist : albumArtist;
+}
+
+/**
+ * THE CALL'S LOOKUP BUDGET: the time spent asking (lookups and pictures, the audio copies
+ * apart), against LOOKUP_BUDGET_MS. Each ask is timed; once spent, nothing more is asked and a
+ * lookup that would have been is said as "ran out first" (Looked's late).
+ */
+class Budget {
+  private spent = 0;
+  constructor(
+    private readonly clock: () => number,
+    private readonly fill: boolean,
+  ) {}
+  /** Whether a lookup may still ask. */
+  get open(): boolean {
+    return this.fill && this.spent < LOOKUP_BUDGET_MS;
+  }
+  /** Whether fill asked for lookups the budget then stopped. */
+  get ranOut(): boolean {
+    return this.fill && this.spent >= LOOKUP_BUDGET_MS;
+  }
+  async time<T>(run: () => Promise<T>): Promise<T> {
+    const at = this.clock();
+    try {
+      return await run();
+    } finally {
+      this.spent += this.clock() - at;
+    }
+  }
+  /** A lookup asked under the budget: with fill and time left it may ask; with fill and none
+   *  left, its "not asked" is said as late. */
+  async look<T>(ask: (fill: boolean) => Promise<Looked<T>>): Promise<Looked<T>> {
+    const may = this.open;
+    const got = await this.time(() => ask(may));
+    return this.fill && !may && got.kind === "not_asked" ? { kind: "not_asked", late: true } : got;
+  }
 }
 
 /** Every copy of the same song across the library (its play key), this one first. */
@@ -241,13 +325,14 @@ async function trackRecordOf(
   t: ExportTarget,
   opts: ExportOptions,
   shared: Shared,
-  askOnline: boolean,
+  budget: Budget,
+  tried: ReadonlySet<string>,
 ) {
   const n = t.node;
   const k = playKey(n.title, n.artist, n.album);
   const [lyrics, credits, possible] = await Promise.all([
-    env.lyrics(n, askOnline),
-    env.credits(n, askOnline),
+    budget.look((fill) => env.lyrics(n, fill)),
+    budget.look((fill) => env.credits(n, fill)),
     shared.possible(t.serverUdn),
   ]);
   return buildTrackRecord({
@@ -257,6 +342,7 @@ async function trackRecordOf(
     copies: copiesOf(t, env.pools()),
     analysis: env.analysis(n),
     analysisPossible: possible,
+    analysisTried: tried.has(n.id),
     lyrics,
     credits,
     plays: shared.plays.filter((p) => playKey(p.title, p.artist, p.album) === k),
@@ -284,36 +370,60 @@ async function trackRecordOf(
   });
 }
 
+/** Writes that never stop an export: a file that can't be written (the cap, a disk error) is a
+ *  line in left_out, and the export goes on to its record. */
+interface Put {
+  (rel: string, data: string | Uint8Array, kind?: "record" | "media"): boolean;
+  leftOut: string[];
+}
+
+function putter(w: ExportWriter): Put {
+  const leftOut: string[] = [];
+  const put = ((rel, data, kind = "media") => {
+    try {
+      w.write(rel, data, kind);
+      return true;
+    } catch (e) {
+      leftOut.push(
+        e instanceof ExportCapReached
+          ? `${rel}: the export reached its size cap`
+          : `${rel}: ${(e as Error).message}`,
+      );
+      return false;
+    }
+  }) as Put;
+  put.leftOut = leftOut;
+  return put;
+}
+
+/** A picture's bytes as the export writes them: without their metadata when redacted. */
+const pictureBytes = (got: PictureGot, opts: ExportOptions): Uint8Array =>
+  opts.redact ? withoutMetadata(got.bytes, got.type) : got.bytes;
+
 /** The pictures: the sleeve, the artist's, the shelf of the artist's other sleeves; pictures.json
- *  says which are files and which are addresses. */
+ *  says which are files and which are addresses. The artist's pictures from the internet and the
+ *  shelf are held to the call's budget; the sleeve always comes. */
 async function writePictures(
   env: ExportEnv,
-  w: ExportWriter,
+  put: Put,
   album: MediaNode | null,
   sleeveUrl: string | null,
   artist: string | null,
   ownTitle: string | null,
   opts: ExportOptions,
-  leftOut: string[],
+  budget: Budget,
 ): Promise<Missing[]> {
   const listed: Array<Record<string, unknown>> = [];
   const missing: Missing[] = [];
   const save = (base: string, got: PictureGot): string | null => {
     const rel = `pictures/${base}.${EXT[got.type] ?? "img"}`;
-    try {
-      w.write(rel, got.bytes);
-      return rel;
-    } catch (e) {
-      if (e instanceof ExportCapReached) {
-        leftOut.push(`${rel}: the export reached its size cap`);
-        return null;
-      }
-      throw e;
-    }
+    return put(rel, pictureBytes(got, opts)) ? rel : null;
   };
+  const fetch = (url: string): Promise<PictureGot | null> =>
+    budget.time(() => env.picture(url).catch(() => null));
 
   if (sleeveUrl) {
-    const got = await env.picture(sleeveUrl);
+    const got = await fetch(sleeveUrl);
     const file = got ? save("sleeve", got) : null;
     listed.push({ what: "sleeve", source: "library", file, local_address: sleeveUrl });
     if (!got)
@@ -330,11 +440,16 @@ async function writePictures(
     });
   }
 
+  let lateOnes = 0;
   if (artist) {
-    const { offers, gap } = await env.artistPictures(artist, opts.fill);
+    const { offers, gap } = await budget.time(() => env.artistPictures(artist, budget.open));
     if (gap) missing.push(gap);
     let n = 0;
+    const seen = new Set<string>();
     for (const o of offers) {
+      // the same photo offered twice (an article's and its Commons page) is listed once
+      if (o.url && seen.has(o.url)) continue;
+      if (o.url) seen.add(o.url);
       const entry: Record<string, unknown> = {
         what: "artist",
         source: o.source,
@@ -346,14 +461,17 @@ async function writePictures(
       else entry["address"] = o.url;
       if (n < ARTIST_PICTURES_MAX) {
         const local = o.file ? env.readFile(o.file) : null;
-        const got: PictureGot | null = local
-          ? { bytes: local, type: sniffType(local) }
-          : o.url && (opts.fill || o.local)
-            ? await env.picture(o.url)
-            : null;
+        let got: PictureGot | null = local ? { bytes: local, type: sniffType(local) } : null;
+        if (!got && o.url && o.fetch) {
+          if (o.local || budget.open) got = await fetch(o.url);
+          else lateOnes += 1;
+        }
         if (got) {
-          n += 1;
-          entry["file"] = save(`artist-${String(n).padStart(2, "0")}`, got);
+          const file = save(`artist-${String(n + 1).padStart(2, "0")}`, got);
+          if (file) {
+            n += 1;
+            entry["file"] = file;
+          }
         }
       }
       listed.push(entry);
@@ -362,8 +480,12 @@ async function writePictures(
     const shelf = otherSleeves(env.pools(), artist, album, ownTitle);
     let s = 0;
     for (const a of shelf.slice(0, SHELF_MAX)) {
-      const got = a.artUrl ? await env.picture(a.artUrl) : null;
-      const file = got ? save(`shelf-${String(++s).padStart(2, "0")}`, got) : null;
+      let file: string | null = null;
+      // the library's own pictures: always without fill, under fill until the budget is spent
+      if (a.artUrl && !budget.ranOut) {
+        const got = await fetch(a.artUrl);
+        file = got ? save(`shelf-${String(++s).padStart(2, "0")}`, got) : null;
+      } else if (a.artUrl) lateOnes += 1;
       listed.push({
         what: "shelf",
         source: "library",
@@ -374,8 +496,14 @@ async function writePictures(
       });
     }
   }
+  if (lateOnes > 0)
+    missing.push({
+      what: `pictures (${lateOnes} listed by address only)`,
+      why: "Not fetched: this export's time for lookups ran out first.",
+      remedy: "Export again with fill: true; what was found is kept, so it carries on from there.",
+    });
   const out = { format: EXPORT_FORMAT, pictures: listed };
-  w.write("pictures/pictures.json", json(opts.redact ? redacted(out) : out));
+  put("pictures/pictures.json", json(opts.redact ? redacted(out) : out), "record");
   return missing;
 }
 
@@ -409,18 +537,21 @@ function sniffType(b: Uint8Array): string {
   return "image/jpeg";
 }
 
-/** The audio: its address, the file copied in, or nothing; said in the record either way. */
+/** The audio: its address, the file copied in, or nothing; said in the record either way. A copy
+ *  that fails (the cap, a server that stops or sends short) is a line in left_out, never a file
+ *  kept half-written. */
 async function writeAudio(
   env: ExportEnv,
   w: ExportWriter,
+  put: Put,
   dir: string,
   t: ExportTarget,
   opts: ExportOptions,
-  leftOut: string[],
 ): Promise<Record<string, unknown>> {
   if (opts.audio === "none") return { mode: "none" };
-  const url = await env.audioUrl(t.serverUdn, t.node.id);
-  if (!url) return { mode: opts.audio, note: "The media server didn't give the track's address." };
+  const at = await env.audioUrl(t.serverUdn, t.node.id).catch(() => null);
+  if (!at) return { mode: opts.audio, note: "The media server didn't give the track's address." };
+  const url = at.url;
   if (opts.audio === "link")
     return opts.redact
       ? {
@@ -435,17 +566,33 @@ async function writeAudio(
   const ext =
     AUDIO_EXT[t.node.format?.codec ?? ""] ?? /\.(\w{2,4})(?:\?|$)/.exec(url)?.[1] ?? "audio";
   const rel = `${dir}audio.${ext}`;
-  const got = await env.audioBody(url);
-  if (!got) return { mode: "copy", note: "The media server didn't hand over the file." };
+  const got = await env.audioBody(url, at.serverHost).catch(() => ({
+    why: "The media server didn't hand over the file.",
+  }));
+  if ("why" in got) {
+    put.leftOut.push(`${rel}: ${got.why}`);
+    return { mode: "copy", note: got.why };
+  }
   try {
     await w.copy(rel, got.body, got.bytes ?? undefined);
-    return { mode: "copy", file: rel.slice(dir.length) };
+    return {
+      mode: "copy",
+      file: rel.slice(dir.length),
+      ...(opts.redact
+        ? {
+            note: "The file carries its own tags (as a bought file can carry its buyer's name), which the redaction doesn't touch.",
+          }
+        : {}),
+    };
   } catch (e) {
-    if (e instanceof ExportCapReached) {
-      leftOut.push(`${rel}: the export reached its size cap`);
-      return { mode: "copy", note: "Left out: the export reached its size cap." };
-    }
-    throw e;
+    const why =
+      e instanceof ExportCapReached
+        ? "Left out: the export reached its size cap."
+        : e instanceof CopyFailed
+          ? `Left out: ${e.message}.`
+          : `Left out: ${(e as Error).message}.`;
+    put.leftOut.push(`${rel}: ${why.replace(/^Left out: /, "")}`);
+    return { mode: "copy", note: why };
   }
 }
 
@@ -457,37 +604,55 @@ function lrcOf(lines: Array<{ at_seconds: number; text: string }>): string {
   return `${lines.map((l) => `[${stamp(l.at_seconds)}] ${l.text}`).join("\n")}\n`;
 }
 
-/** A track's files into `dir` ("" or "tracks/01 - Title/"): track.json, analysis.json, its lyrics. */
+/** A track's files into `dir` ("" or "tracks/01 - Title/"): its lyrics, analysis.json and audio
+ *  first, track.json last, whatever happened before it. */
 async function writeTrackFiles(
   env: ExportEnv,
   w: ExportWriter,
+  put: Put,
   dir: string,
   t: ExportTarget,
   opts: ExportOptions,
   rec: Awaited<ReturnType<typeof trackRecordOf>>,
   extra: Record<string, unknown>,
-  leftOut: string[],
 ): Promise<void> {
-  const audio = await writeAudio(env, w, dir, t, opts, leftOut);
-  const lyrics = rec.track["lyrics"] as {
-    lines?: Array<{ at_seconds: number; text: string }>;
-    plain?: string | null;
-  } | null;
-  if (lyrics?.lines?.length) w.write(`${dir}lyrics.lrc`, lrcOf(lyrics.lines));
-  if (lyrics?.plain) w.write(`${dir}lyrics.txt`, `${lyrics.plain.trim()}\n`);
-  if (rec.analysis)
-    w.write(`${dir}analysis.json`, json(opts.redact ? redacted(rec.analysis) : rec.analysis));
+  let audio: Record<string, unknown> = { mode: opts.audio };
+  try {
+    const lyrics = rec.track["lyrics"] as {
+      lines?: Array<{ at_seconds: number; text: string }>;
+      plain?: string | null;
+    } | null;
+    if (lyrics?.lines?.length) put(`${dir}lyrics.lrc`, lrcOf(lyrics.lines), "record");
+    if (lyrics?.plain) put(`${dir}lyrics.txt`, `${lyrics.plain.trim()}\n`, "record");
+    if (rec.analysis)
+      put(
+        `${dir}analysis.json`,
+        json(opts.redact ? redacted(rec.analysis) : rec.analysis),
+        "record",
+      );
+    audio = await writeAudio(env, w, put, dir, t, opts);
+  } catch (e) {
+    put.leftOut.push(`${dir || "the track"}: stopped early, ${(e as Error).message}`);
+  }
   const track = { ...rec.track, ...extra, audio, missing: rec.missing };
-  w.write(`${dir}track.json`, json(opts.redact ? redacted(track) : track));
+  put(`${dir}track.json`, json(opts.redact ? redacted(track) : track), "record");
 }
 
-/** Notes on the album and the artist, when known or asked for. */
-async function notesOf(env: ExportEnv, artist: string | null, album: string | null, ask: boolean) {
+/** Notes on the album and the artist, when known or asked for under the budget. */
+async function notesOf(
+  env: ExportEnv,
+  albumArtist: string | null,
+  album: string | null,
+  artist: string | null,
+  budget: Budget,
+) {
   const [albumNotes, artistNotes] = await Promise.all([
-    artist && album
-      ? env.albumNotes(artist, album, ask)
+    albumArtist && album
+      ? budget.look((fill) => env.albumNotes(albumArtist, album, fill))
       : Promise.resolve<Looked<AlbumInfo>>({ kind: "none" }),
-    artist ? env.artistNotes(artist, ask) : Promise.resolve<Looked<ArtistInfo>>({ kind: "none" }),
+    artist
+      ? budget.look((fill) => env.artistNotes(artist, fill))
+      : Promise.resolve<Looked<ArtistInfo>>({ kind: "none" }),
   ]);
   const artistOut =
     artistNotes.kind === "found"
@@ -515,52 +680,49 @@ async function notesOf(env: ExportEnv, artist: string | null, album: string | nu
   return { albumNotes, artistNotes, albumOut, artistOut };
 }
 
-function notesGaps(l: Looked<unknown>, what: string): Missing[] {
-  if (l.kind === "not_asked")
-    return [
-      {
-        what,
-        why: "Not looked up: the export was made without fill.",
-        remedy: "Export again with fill: true.",
-      },
-    ];
-  if (l.kind === "off")
-    return [
-      {
-        what,
-        why: "Liner notes is switched off in Settings › Connections.",
-        remedy:
-          "Ask the user to turn on Liner notes in Settings › Connections, then export again with fill: true.",
-      },
-    ];
-  if (l.kind === "unreachable")
-    return [
-      { what, why: "MusicBrainz or Wikipedia didn't answer.", remedy: "Export again in a moment." },
-    ];
-  return [];
-}
+/** The tracks whose analysis an earlier call started, by album, with their state then: called
+ *  again with nothing measured since, the export goes ahead (an AAC file measures its waveform
+ *  only; DSD can't be decoded) instead of answering "analyzing" for good. */
+const startedFor = new Map<string, string>();
+const stateOf = (an: AudioAnalysis | null): string =>
+  an == null ? "none" : analysisOutdated(an) ? "outdated" : "current";
 
-/** With fill, an album with tracks to measure starts its analysis and answers "call again". */
+/** With fill, an album with tracks to measure starts its analysis and answers "call again", once
+ *  for each state of its tracks; `tried` gets the tracks it was started for before. */
 async function analysisFirst(
   env: ExportEnv,
   serverUdn: string,
   album: MediaNode | null,
   tracks: MediaNode[],
+  tried: Set<string>,
 ): Promise<ExportReply | null> {
   if (!album) return null;
   const unmeasured = tracks.filter((n) => !isCurrent(env.analysis(n)));
   if (unmeasured.length === 0) return null;
+  const key = `${serverUdn}|${album.id}`;
+  const state = tracks.map((n) => `${n.id}:${stateOf(env.analysis(n))}`).join(",");
+  if (startedFor.get(key) === state) {
+    for (const n of unmeasured) tried.add(n.id);
+    return null;
+  }
   const possible = await env.analysisPossible(serverUdn);
   if (!possible.ok) return null;
   if ("why" in env.startAnalysis(serverUdn, album.id)) return null;
+  startedFor.set(key, state);
   return {
     kind: "analyzing",
     message: `Analyzing "${album.title}" first (${unmeasured.length} ${unmeasured.length === 1 ? "track" : "tracks"} to measure, one at a time, in the TastyTunes window). Call again in a few minutes with the same arguments; get_track_analysis says when each track is measured.`,
   };
 }
 
-/** The record's own rule for a current analysis (decodedAnalysis), read without decoding. */
-const isCurrent = (an: AudioAnalysis | null): boolean => currentFeatures(an?.features) != null;
+/** Measured as far as it can be, by the window's own rule (shared/model analysisOutdated): a file
+ *  read only for its waveform is settled, not waiting. */
+const isCurrent = (an: AudioAnalysis | null): boolean => an != null && !analysisOutdated(an);
+
+/** The reply: the folder, its files, what is missing, what was left out. */
+function replyOf(w: ExportWriter, put: Put, missing: Missing[]): ExportReply {
+  return { kind: "exported", folder: w.dir, files: w.files(), missing, left_out: put.leftOut };
+}
 
 export function exportTrack(
   env: ExportEnv,
@@ -571,56 +733,62 @@ export function exportTrack(
   return oneAtATime(async () => {
     const pools = env.pools();
     const album = albumOf(t, pools);
+    const tried = new Set<string>();
     if (opts.fill) {
-      const wait = await analysisFirst(env, t.serverUdn, album, [t.node]);
+      const wait = await analysisFirst(env, t.serverUdn, album, [t.node], tried);
       if (wait) return wait;
     }
-    const w = writerFor(
-      root,
-      [t.node.artist, t.node.album, t.node.title].filter(Boolean).join(" - "),
-      env.now(),
-    );
-    const leftOut: string[] = [];
-    const shared = await sharedFrom(env);
-    const rec = await trackRecordOf(env, t, opts, shared, opts.fill);
-    const artist = t.node.albumArtist ?? t.node.artist;
-    const notes = await notesOf(env, artist, t.node.album, opts.fill);
-    const missing = [
-      ...rec.missing,
-      ...notesGaps(notes.albumNotes, "album notes"),
-      ...notesGaps(notes.artistNotes, "artist notes"),
-    ];
-    const pictureGaps = await writePictures(
-      env,
-      w,
-      album,
-      album?.artUrl ?? t.node.artUrl,
-      artist,
-      t.node.album,
-      opts,
-      leftOut,
-    );
-    missing.push(...pictureGaps);
-    const presets = album?.artUrl ? env.presets().filter((p) => p.artUrl === album.artUrl) : [];
-    await writeTrackFiles(
-      env,
-      w,
-      "",
-      t,
-      opts,
-      { ...rec, missing },
-      {
+    const w = writerFor(env, root, [t.node.artist, t.node.album, t.node.title]);
+    const put = putter(w);
+    put("README.md", exportReadme("track", opts), "record");
+    const budget = new Budget(env.clock, opts.fill);
+    const missing: Missing[] = [];
+    const extra: Record<string, unknown> = {
+      exported_at: env.localTime(env.now().getTime()),
+      redacted: opts.redact,
+    };
+    let rec: Awaited<ReturnType<typeof trackRecordOf>> | null = null;
+    try {
+      const shared = await sharedFrom(env);
+      rec = await trackRecordOf(env, t, opts, shared, budget, tried);
+      missing.push(...rec.missing);
+      const albumArtist = t.node.albumArtist ?? t.node.artist;
+      const artist = performerOf(t.node);
+      const notes = await notesOf(env, albumArtist, t.node.album, artist, budget);
+      missing.push(
+        ...[
+          gapOf(notes.albumNotes, LOOKUPS.albumNotes),
+          gapOf(notes.artistNotes, LOOKUPS.artistNotes),
+        ].filter((m): m is Missing => m != null),
+      );
+      missing.push(
+        ...(await writePictures(
+          env,
+          put,
+          album,
+          album?.artUrl ?? t.node.artUrl,
+          artist,
+          t.node.album,
+          opts,
+          budget,
+        )),
+      );
+      const presets = album?.artUrl ? env.presets().filter((p) => p.artUrl === album.artUrl) : [];
+      Object.assign(extra, {
         album_notes: notes.albumOut,
         artist_notes: notes.artistOut,
         presets_holding_album: presets.map((p) => ({ slot: p.id, name: p.name })),
         pictures: "pictures/pictures.json",
-        exported_at: env.localTime(env.now().getTime()),
-        redacted: opts.redact,
-      },
-      leftOut,
-    );
-    w.write("README.md", exportReadme("track", opts));
-    return { kind: "exported", folder: w.dir, files: w.files(), missing, left_out: leftOut };
+      });
+    } catch (e) {
+      put.leftOut.push(`the export stopped early: ${(e as Error).message}`);
+    }
+    if (rec) await writeTrackFiles(env, w, put, "", t, opts, { ...rec, missing }, extra);
+    else {
+      const partial = { format: EXPORT_FORMAT, ...extra, missing };
+      put("track.json", json(opts.redact ? redacted(partial) : partial), "record");
+    }
+    return replyOf(w, put, missing);
   });
 }
 
@@ -641,72 +809,101 @@ export function exportAlbum(
     const tracks = albumTracksOf(a.node, pool);
     if (tracks.length === 0)
       return { kind: "refused", message: `The index holds no tracks for "${a.node.title}".` };
+    const tried = new Set<string>();
     if (opts.fill) {
-      const wait = await analysisFirst(env, a.serverUdn, a.node, tracks);
+      const wait = await analysisFirst(env, a.serverUdn, a.node, tracks, tried);
       if (wait) return wait;
     }
-    const w = writerFor(root, [a.node.artist, a.node.title].filter(Boolean).join(" - "), env.now());
-    const leftOut: string[] = [];
-    const shared = await sharedFrom(env);
-    const started = env.clock();
+    const w = writerFor(env, root, [a.node.artist, a.node.title]);
+    const put = putter(w);
+    put("README.md", exportReadme("album", opts), "record");
+    const budget = new Budget(env.clock, opts.fill);
+    const missing: Missing[] = [];
     const done: Array<{
       folder: string;
       node: MediaNode;
       record: Awaited<ReturnType<typeof trackRecordOf>>;
     }> = [];
-    let budgetSpent = false;
-    for (const [i, n] of tracks.entries()) {
-      // the lookups stop when the budget is spent; what is cached is still read
-      const ask = opts.fill && env.clock() - started < LOOKUP_BUDGET_MS;
-      if (opts.fill && !ask) budgetSpent = true;
-      const t = { node: n, serverUdn: a.serverUdn, serverName: a.serverName };
-      const rec = await trackRecordOf(env, t, opts, shared, ask);
-      const pos = trackPosition(n);
-      const folder = `tracks/${String(i + 1).padStart(2, "0")} - ${safeName(n.title)}/`;
-      await writeTrackFiles(env, w, folder, t, opts, rec, { position: pos }, leftOut);
-      done.push({ folder: folder.slice(0, -1), node: n, record: rec });
+    const compilation = isCompilation(a.node, tracks);
+    const artist = compilation ? null : a.node.artist;
+    let notes: Awaited<ReturnType<typeof notesOf>> | null = null;
+    let shared: Shared | null = null;
+    try {
+      shared = await sharedFrom(env);
+      // the album's own lookups and pictures first, so a long album's tracks can't spend them
+      notes = await notesOf(env, a.node.artist, a.node.title, artist, budget);
+      const artistGap = gapOf(notes.artistNotes, LOOKUPS.artistNotes);
+      if (artistGap) missing.push(artistGap);
+      if (compilation)
+        missing.push({
+          what: "artist notes and pictures",
+          why: "A compilation has no one artist.",
+          remedy: "Export one of its tracks for its artist's.",
+        });
+      missing.push(
+        ...(await writePictures(
+          env,
+          put,
+          a.node,
+          a.node.artUrl,
+          artist,
+          a.node.title,
+          opts,
+          budget,
+        )),
+      );
+      for (const [i, n] of tracks.entries()) {
+        const t = { node: n, serverUdn: a.serverUdn, serverName: a.serverName };
+        const folder = `tracks/${String(i + 1).padStart(2, "0")} - ${safeName(n.title)}/`;
+        try {
+          const rec = await trackRecordOf(env, t, opts, shared, budget, tried);
+          await writeTrackFiles(env, w, put, folder, t, opts, rec, {
+            position: trackPosition(n),
+          });
+          done.push({ folder: folder.slice(0, -1), node: n, record: rec });
+        } catch (e) {
+          put.leftOut.push(`${folder.slice(0, -1)}: ${(e as Error).message}`);
+        }
+      }
+    } catch (e) {
+      put.leftOut.push(`the export stopped early: ${(e as Error).message}`);
     }
-    const artist = a.node.artist;
-    const notes = await notesOf(env, artist, a.node.title, opts.fill);
     const albumRec = buildAlbumRecord({
       album: a.node,
       serverUdn: a.serverUdn,
       serverName: a.serverName,
       tracks: done,
-      notes: notes.albumNotes,
+      notes: notes?.albumNotes ?? { kind: "not_asked" },
       measured: env.albumMeasured(a.node),
-      hearted: shared.favorites.has(
-        favoriteContentKey({
-          kind: "album",
-          title: a.node.title,
-          artist: a.node.artist,
-          album: null,
-        }),
-      ),
+      hearted:
+        shared?.favorites.has(
+          favoriteContentKey({
+            kind: "album",
+            title: a.node.title,
+            artist: a.node.artist,
+            album: null,
+          }),
+        ) ?? false,
     });
-    const missing = [...albumRec.missing, ...notesGaps(notes.artistNotes, "artist notes")];
-    if (budgetSpent)
+    missing.unshift(...albumRec.missing);
+    if (budget.ranOut)
       missing.push({
         what: "lookups for the later tracks",
-        why: `The lookups stopped after ${LOOKUP_BUDGET_MS / 1000} seconds, so the answer comes in time.`,
+        why: `The lookups stopped after ${LOOKUP_BUDGET_MS / 1000} seconds of asking, so the answer comes in time.`,
         remedy:
           "Export again with fill: true; what was found is kept, so it carries on from there.",
       });
-    missing.push(
-      ...(await writePictures(env, w, a.node, a.node.artUrl, artist, a.node.title, opts, leftOut)),
-    );
     const presets = a.node.artUrl ? env.presets().filter((p) => p.artUrl === a.node.artUrl) : [];
     const album = {
       ...albumRec.album,
-      artist_notes: notes.artistOut,
+      artist_notes: notes?.artistOut ?? null,
       presets_holding_album: presets.map((p) => ({ slot: p.id, name: p.name })),
       pictures: "pictures/pictures.json",
       exported_at: env.localTime(env.now().getTime()),
       redacted: opts.redact,
       missing,
     };
-    w.write("album.json", json(opts.redact ? redacted(album) : album));
-    w.write("README.md", exportReadme("album", opts));
-    return { kind: "exported", folder: w.dir, files: w.files(), missing, left_out: leftOut };
+    put("album.json", json(opts.redact ? redacted(album) : album), "record");
+    return replyOf(w, put, missing);
   });
 }

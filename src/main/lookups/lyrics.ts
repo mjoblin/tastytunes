@@ -65,6 +65,13 @@ export function lyricsKnown(q: LyricsQuery): boolean {
   return cache.has(lyricsKey(q));
 }
 
+/** The cache's answer without asking anyone: the lyrics, null for LRCLIB's settled none, or
+ *  undefined when nothing is known (an export without fill reads only this). */
+export function cachedLyrics(q: LyricsQuery): LyricsResult | null | undefined {
+  const key = lyricsKey(q);
+  return cache.has(key) ? (cache.get(key) ?? null) : undefined;
+}
+
 export function fetchLyrics(
   q: LyricsQuery,
   force = false,

@@ -199,6 +199,27 @@ export function currentFeatures<F extends { version: number }>(f: F | null | und
   return f != null && f.version === FEATURES_VERSION ? f : null;
 }
 
+/**
+ * WHETHER A STORED ANALYSIS IS AS THE CURRENT VERSION WOULD WRITE IT (the window's rule, one home;
+ * the export for an agent reads it too): every measurement present, the features their version.
+ * An entry from before a measurement existed (the field absent) is measured again once. A
+ * measurement stored as null is not outdated: the file couldn't be read at its own rate (the
+ * honesty rule: only a FLAC, WAV or MP3 decode is), so it is measured as far as it can be.
+ */
+export function analysisOutdated(st: AudioAnalysis): boolean {
+  return (
+    st.loudHist === undefined ||
+    st.strip === undefined ||
+    st.onsets === undefined ||
+    st.features === undefined ||
+    (st.features != null && st.features.version !== FEATURES_VERSION)
+  );
+}
+
+/** Measured as far as the file allows, but not at its own rate: only its waveform is there. */
+export const measuredWaveformOnly = (st: AudioAnalysis): boolean =>
+  !analysisOutdated(st) && st.features === null;
+
 export const TEMPO_CONFIDENCE_FLOOR = 0.35;
 export const KEY_CONFIDENCE_FLOOR = 0.3;
 /** The pitch classes as a key is named, C = 0, with the usual sharps and flats. */

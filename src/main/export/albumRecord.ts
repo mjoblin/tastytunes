@@ -1,6 +1,13 @@
 import type { AlbumInfo, MediaNode } from "@shared/model";
 import { trackPosition } from "@shared/model";
-import { EXPORT_FORMAT, type Looked, type Missing, type TrackRecord } from "./trackRecord";
+import {
+  EXPORT_FORMAT,
+  gapOf,
+  LOOKUPS,
+  type Looked,
+  type Missing,
+  type TrackRecord,
+} from "./trackRecord";
 
 /**
  * AN ALBUM AS AN AGENT READS IT (0.17.0, export for an agent): album.json, the album's identity,
@@ -25,25 +32,8 @@ export function buildAlbumRecord(i: AlbumInputs): {
 } {
   const missing: Missing[] = [];
   const notes = i.notes.kind === "found" ? i.notes.value : null;
-  if (i.notes.kind === "not_asked")
-    missing.push({
-      what: "album notes",
-      why: "Not looked up: the export was made without fill.",
-      remedy: "Export again with fill: true.",
-    });
-  if (i.notes.kind === "off")
-    missing.push({
-      what: "album notes",
-      why: "Liner notes is switched off in Settings › Connections.",
-      remedy:
-        "Ask the user to turn on Liner notes in Settings › Connections, then export again with fill: true.",
-    });
-  if (i.notes.kind === "unreachable")
-    missing.push({
-      what: "album notes",
-      why: "MusicBrainz didn't answer.",
-      remedy: "Export again in a moment.",
-    });
+  const notesGap = gapOf(i.notes, LOOKUPS.albumNotes);
+  if (notesGap) missing.push(notesGap);
   // a gap every track shares is said once here, with how many tracks it touches
   const byWhat = new Map<string, { m: Missing; tracks: string[] }>();
   for (const t of i.tracks)

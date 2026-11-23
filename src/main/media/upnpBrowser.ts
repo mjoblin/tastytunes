@@ -946,12 +946,15 @@ export async function audioRes(
   { analysis = false }: { analysis?: boolean } = {},
 ): Promise<{
   url: string;
+  /** The media server's own host, which its files should come from. */
+  serverHost: string;
   secs: number | null;
   rate: number | null;
   channels: number | null;
 } | null> {
   try {
     const entry = await entryFor(host, serverUdn);
+    const serverHost = new URL(entry.controlUrl).hostname;
     const r = await soapBrowse(entry, objectId, "BrowseMetadata", 0, 1);
     if (typeof r === "string") return null;
     const audio = [...r.didl.matchAll(/<res\b([^>]*audio[^>]*)>\s*(http[^<\s]+)\s*<\/res>/gi)].map(
@@ -966,9 +969,9 @@ export async function audioRes(
     // with every measure. The analysis only: embedded art is read from the file itself.
     if (analysis && /audio\/(mp4|x-m4a|m4a|aac)/i.test(first.attrs)) {
       const wav = audio.find((x) => /audio\/(x-)?wav/i.test(x.attrs));
-      if (wav) return { url: wav.url, ...info };
+      if (wav) return { url: wav.url, serverHost, ...info };
     }
-    return { url: first.url, ...info };
+    return { url: first.url, serverHost, ...info };
   } catch {
     return null;
   }

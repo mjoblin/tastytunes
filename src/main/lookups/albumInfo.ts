@@ -34,6 +34,13 @@ export function albumKey(artist: string, album: string): string {
 export function albumInfoKnown(artist: string, album: string): boolean {
   return cache.has(albumKey(artist, album));
 }
+
+/** The cache's answer without asking anyone: the notes, null for a settled none, or undefined
+ *  when nothing is known. */
+export function cachedAlbumInfo(artist: string, album: string): AlbumInfo | null | undefined {
+  const key = albumKey(artist, album);
+  return cache.has(key) ? (cache.get(key) ?? null) : undefined;
+}
 const MAX_GENRES = 4;
 const MAX_CREDITS = 6;
 
