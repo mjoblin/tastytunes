@@ -234,8 +234,8 @@ tools the Home Assistant automation needs, copy the token into the
 ## Action links
 
 A `tastytunes://` link controls the streamer from anything that can open a link,
-such as an Elgato Stream Deck's Website action, Raycast, Alfred, Keyboard Maestro,
-Shortcuts, or a browser bookmark. `tastytunes://preset/3` recalls preset 3,
+such as a programmable keypad, an app launcher, an automation app, or a browser
+bookmark. `tastytunes://preset/3` recalls preset 3,
 `tastytunes://volume/up` turns the volume up a step, and
 `tastytunes://toggle-play` plays or pauses. To keep the focus where it is, open
 links in the background where the launcher allows it, such as `open -g` in
@@ -431,7 +431,7 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 - Notices are announced to screen readers
 - Undo for queue edits, favorites, playlist additions and schedule deletions, from the notice that follows each change
 - OS media keys
-- `tastytunes://` links for an Elgato Stream Deck and launchers: playback, volume, presets, sources, power and screens
+- `tastytunes://` links for programmable keypads, app launchers and automation apps: playback, volume, presets, sources, power and screens
 - A track-change notification with artwork when the window isn't focused
 
 ### Appearance
