@@ -24,7 +24,7 @@ import {
   artHostOf,
   boundedPlayedSeconds,
 } from "@shared/model";
-import { isRadioMetadata, radioTrackTitle, trackTitle, type ZonePlayState } from "@shared/smoip";
+import { playKindOf, radioTrackTitle, trackTitle, type ZonePlayState } from "@shared/smoip";
 import { getSettings } from "./persist";
 import { nameKey } from "@shared/keys";
 
@@ -456,7 +456,9 @@ export const listeningRecord = {
       return;
     }
     const md = ps.metadata;
-    const isRadio = md != null && isRadioMetadata(md);
+    // what the play is, by who drives it (shared/smoip playKindOf, Now Playing's test too)
+    const playKind = playKindOf(ps);
+    const isRadio = playKind === "radio" && md != null;
     const sourceId = md?.source ?? null;
     // a disc's table of contents is no track (a stopped CD's title)
     const title = trackTitle(md);
@@ -475,7 +477,7 @@ export const listeningRecord = {
         radioId: md.radio_id ?? null,
         streamer,
       };
-    } else if (md && title && ps.queue_id != null) {
+    } else if (playKind === "queue" && md && title) {
       kind = "play";
       key = `play|${title}|${md.artist ?? ""}|${md.album ?? ""}|${ps.queue_id}`;
       payload = {
@@ -496,7 +498,7 @@ export const listeningRecord = {
           md.art_url && !isDeviceArt(md.art_url, streamerHost) ? artAddress(md.art_url) : null,
         streamer,
       };
-    } else if (md && title) {
+    } else if (playKind === "external" && md && title) {
       kind = "external";
       key = `ext|${sourceId ?? ""}|${title}|${md.artist ?? ""}`;
       payload = {

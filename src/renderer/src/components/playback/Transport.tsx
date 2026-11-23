@@ -2,7 +2,8 @@ import { Loader2, Pause, Play, Repeat } from "lucide-react";
 import { type RepeatMode, nextRepeatMode, repeatModeOf } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { controlSet, cx } from "@/lib/format";
+import { cx } from "@/lib/format";
+import { transportAbilities } from "@shared/transport";
 
 /**
  * The shared transport layer: ONE derivation of "what can the transport do
@@ -67,7 +68,6 @@ export function useTransport(
   const connected = connection.phase === "connected";
   const powered = systemPower?.power === "ON";
   const active = connected && powered;
-  const controls = controlSet(nowPlaying);
   const state = playState?.state;
   // Gated on `active`: play_state SURVIVES a disconnect and a drop into
   // standby, so an ungated check shows a PAUSE button while the surface
@@ -84,13 +84,8 @@ export function useTransport(
     active,
     playing,
     busy,
-    canToggle: controls.has("play_pause") || controls.has("play") || controls.has("pause"),
-    canPrev: controls.has("track_previous"),
-    canNext: controls.has("track_next"),
-    canSeek: controls.has("seek") && duration != null && duration > 0,
-    canShuffle: controls.has("toggle_shuffle"),
-    canRepeat: controls.has("toggle_repeat"),
-    canStop: controls.has("stop"),
+    // what the source allows, the one home the system's media commands use too (shared/transport)
+    ...transportAbilities(nowPlaying?.controls, duration),
     shuffleOn,
     repeatOn,
     repeatMode,

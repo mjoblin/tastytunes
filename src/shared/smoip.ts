@@ -89,6 +89,23 @@ export const trackTitle = (
 ): string | null =>
   md?.title != null && !(md.class === "md.track.cd" && cdToc(md.title)) ? md.title : null;
 
+/** What a play is, by who drives it: radio; a play from the streamer's own queue (the Library and
+ *  its USB drive; a queue_id is the tell); or a source another app or the streamer's own services
+ *  drive (AirPlay, cast, Spotify Connect, TIDAL), with a title but no queue. Null for no title
+ *  yet (an external play's title can lag) or an input with no metadata (Bluetooth, analog, the
+ *  TV). ONE HOME: the listening record files plays by it, and the system's Now Playing decides by
+ *  it whether to claim the media keys. */
+export type PlayKind = "radio" | "queue" | "external";
+
+export function playKindOf(ps: ZonePlayState | null | undefined): PlayKind | null {
+  const md = ps?.metadata;
+  if (md == null) return null;
+  if (isRadioMetadata(md)) return "radio";
+  const title = trackTitle(md);
+  if (!title) return null;
+  return ps?.queue_id != null ? "queue" : "external";
+}
+
 /** The MusicBrainz release a disc was found as, from its Cover Art Archive address
  *  (…/release/<id>/…); null for any other picture. */
 export function cdReleaseId(artUrl: string | null | undefined): string | null {

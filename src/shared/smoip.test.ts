@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cdReleaseId, cdToc, trackTitle } from "./smoip";
+import { cdReleaseId, cdToc, playKindOf, trackTitle, type ZonePlayState } from "./smoip";
 
 const TOC = "Tracks: 10 Length: 37:39";
 const ART =
@@ -28,5 +28,18 @@ describe("trackTitle", () => {
     expect(trackTitle({ class: "md.track.cd", title: TOC })).toBeNull();
     expect(trackTitle({ class: "md.track.cd", title: "Liberation" })).toBe("Liberation");
     expect(trackTitle({ class: "stream.media.upnp", title: TOC })).toBe(TOC);
+  });
+});
+
+describe("what a play is, by who drives it", () => {
+  const ps = (md: Record<string, unknown> | null, queueId: number | null = null): ZonePlayState =>
+    ({ state: "play", queue_id: queueId, metadata: md }) as unknown as ZonePlayState;
+  it("is radio, a queue play, or another app's, and unknown without a title", () => {
+    expect(playKindOf(ps({ class: "stream.radio", station: "FIP", title: null }))).toBe("radio");
+    expect(playKindOf(ps({ class: "md.track", title: "Song" }, 12))).toBe("queue");
+    expect(playKindOf(ps({ class: "stream.service.airplay", title: "Song" }))).toBe("external");
+    expect(playKindOf(ps({ class: "stream.service.airplay", title: null }))).toBeNull();
+    expect(playKindOf(ps(null))).toBeNull();
+    expect(playKindOf(null)).toBeNull();
   });
 });
