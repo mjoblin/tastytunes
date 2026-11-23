@@ -3,6 +3,7 @@ import { shell } from "electron";
 import { hasLocalNetworkPrivacy } from "../app/localNetwork";
 import { revealLog } from "../app/appLog";
 import { loginItemState, setOpenAtLogin } from "../app/loginItem";
+import { openAccessibilitySettings, refreshMediaKeys } from "../app/mediaKeys";
 import { deviceManager, mcpBridge } from "../app/runtime";
 import { checkUpdatesOnDemand, downloadUpdate, installUpdate } from "../app/updater";
 import {
@@ -22,6 +23,9 @@ export function registerAppIpc(): void {
   });
   // Open at login: the system's login item, read fresh for each showing of the row
   handle(IPC.getLoginItem, () => Promise.resolve(loginItemState()));
+  // the media keys: bound again when they can be now, then where they stand (app/mediaKeys)
+  handle(IPC.getMediaKeys, () => Promise.resolve(refreshMediaKeys()));
+  handle(IPC.openAccessibilitySettings, () => openAccessibilitySettings());
   handle(IPC.revealLogFile, () => {
     // a line first, so the file is there to show even before anything else was logged
     deviceManager.log("info", "app", "the log file was shown");

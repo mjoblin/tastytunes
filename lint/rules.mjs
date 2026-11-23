@@ -667,4 +667,17 @@ export const ONE_HOME = [
       code: "function hslToRgb(h, s, l) { return [h, s, l]; }",
     },
   },
+  {
+    id: "accessibility-never-asks",
+    was: "app/mediaKeys (0.16.0-rc.9: the media keys' permission is checked, and Settings opens the pane)",
+    // the prompting form shows a system dialog, which no launch (and no test run) may raise
+    selector:
+      "CallExpression[callee.property.name='isTrustedAccessibilityClient']:not([arguments.0.value=false])",
+    message:
+      "isTrustedAccessibilityClient only checks (false): asking shows a system dialog; Settings opens the Accessibility pane instead",
+    bad: {
+      file: "src/main/app/mediaKeys.ts",
+      code: "systemPreferences.isTrustedAccessibilityClient(true);",
+    },
+  },
 ];

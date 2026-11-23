@@ -7,7 +7,7 @@ import { serveArtProtocol } from "./app/artProtocol";
 import { denyPermissionsByDefault, keepNoCookies, logWindowPictures } from "./app/permissions";
 import { lateStep, startupFailed } from "./app/bootFailure";
 import { broadcastSettings, wireListeningPushes } from "./app/broadcast";
-import { syncMediaKeys } from "./app/mediaKeys";
+import { syncMediaKeys, watchMediaKeys } from "./app/mediaKeys";
 import { installAppMenu } from "./app/menu";
 import { deviceManager, mcpBridge } from "./app/runtime";
 import { catchUpOnResume, noteSuspend, startScheduler } from "./app/scheduler";
@@ -112,6 +112,7 @@ if (!gotLock) {
       const inTray = startsInTray(openedAtLogin(), getSettings().tray);
       if (!inTray) createWindow();
       syncMediaKeys();
+      watchMediaKeys();
       syncTray(getSettings().tray, trayDeps);
       if (inTray && !hasTray()) createWindow();
       // THE HEAL AHEAD (0.10.0): the USB index heals on its own a few seconds after the
