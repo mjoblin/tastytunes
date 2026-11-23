@@ -1,7 +1,7 @@
 // THE BEHAVIOR TAB (moved out of SettingsScreen.tsx as it was, 0.16.0's tidy: each tab its own
 // section, as Libraries, History, Updates, Schedules and AI agents already were).
 import { useEffect, useState } from "react";
-import type { LoginItemState } from "@shared/ipc";
+import type { LoginItemState, MediaKeysState } from "@shared/ipc";
 import { type MotionMode } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -46,12 +46,7 @@ export function BehaviorSection({ settings, save }: SectionProps): React.JSX.Ele
           />
         </SettingRow>
 
-        <Toggle
-          label="Media keys"
-          hint="Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background."
-          checked={settings.mediaKeys}
-          onChange={(mediaKeys) => void save({ mediaKeys })}
-        />
+        <MediaKeys checked={settings.mediaKeys} save={save} />
 
         <Toggle
           label="Track-change notifications"
@@ -131,5 +126,62 @@ function OpenAtLogin({ tray }: { tray: boolean }): React.JSX.Element | null {
       disabled={state.available !== "yes"}
       onChange={(on) => void tt.setLoginItem(on).then(setState)}
     />
+  );
+}
+
+/**
+ * MEDIA KEYS (main/app/mediaKeys): on a Mac the keys work only with the Accessibility permission,
+ * and without it they did nothing while the switch read on. The row reads where the keys stand
+ * each time it shows and when the window comes back to the front (main binds them again then, if
+ * the permission was granted meanwhile), says why they aren't working, and opens the pane.
+ */
+function MediaKeys({
+  checked,
+  save,
+}: {
+  checked: boolean;
+  save: SectionProps["save"];
+}): React.JSX.Element {
+  const [state, setState] = useState<MediaKeysState | null>(null);
+  useEffect(() => {
+    let live = true;
+    const read = (): void => {
+      void tt.getMediaKeys().then((s) => {
+        if (live) setState(s);
+      });
+    };
+    read();
+    window.addEventListener("focus", read);
+    return () => {
+      live = false;
+      window.removeEventListener("focus", read);
+    };
+  }, [checked]);
+  const hint = !checked
+    ? "Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background."
+    : state?.needsPermission
+      ? "On a Mac, the media keys work only once TastyTunes is allowed in System Settings › Privacy & Security › Accessibility."
+      : state && !state.bound
+        ? "TastyTunes couldn't use the media keys. Another app may be using them."
+        : "Play/pause, next, and previous keys control the streamer even when TastyTunes is in the background.";
+  return (
+    <div className="space-y-2">
+      <Toggle
+        label="Media keys"
+        hint={hint}
+        checked={checked}
+        onChange={(mediaKeys) => void save({ mediaKeys })}
+      />
+      {checked && state?.needsPermission && (
+        <div className="flex justify-end" data-media-keys-permission>
+          <HeaderChip
+            onClick={() => void tt.openAccessibilitySettings()}
+            className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
+          >
+            Open System Settings
+          </HeaderChip>
+        </div>
+      )}
+    </div>
   );
 }

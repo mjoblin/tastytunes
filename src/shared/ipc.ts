@@ -333,6 +333,15 @@ export interface LoginItemState {
   needsApproval: boolean;
 }
 
+/** The OS media keys (main/app/mediaKeys): the setting, whether the keys are bound, and whether
+ *  macOS needs the Accessibility permission for them. Bound false with no permission needed is
+ *  another app holding the keys. */
+export interface MediaKeysState {
+  on: boolean;
+  bound: boolean;
+  needsPermission: boolean;
+}
+
 export interface TastyTunesApi {
   getSnapshot(): Promise<Snapshot>;
   /** Cover Art Archive fallback for an album the server has no art for (null when off or unknown). */
@@ -359,6 +368,10 @@ export interface TastyTunesApi {
   /** Show the log file (main/app/logFile) in Finder or Explorer. */
   revealLogFile(): Promise<void>;
   setLoginItem(on: boolean): Promise<LoginItemState>;
+  /** The media keys as they stand, bound again first if they can be now (main/app/mediaKeys). */
+  getMediaKeys(): Promise<MediaKeysState>;
+  /** macOS: System Settings' Accessibility pane, where the media keys' permission is given. */
+  openAccessibilitySettings(): Promise<void>;
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
   fetchArt(url: string): Promise<{ dataUrl: string } | null>;
   /** The picture embedded in a track's audio file, for surfaces the server's
@@ -658,6 +671,8 @@ export const IPC = {
   getLoginItem: "tt:getLoginItem",
   revealLogFile: "tt:revealLogFile",
   setLoginItem: "tt:setLoginItem",
+  getMediaKeys: "tt:getMediaKeys",
+  openAccessibilitySettings: "tt:openAccessibilitySettings",
   fetchArt: "tt:fetchArt",
   embeddedArt: "tt:embeddedArt",
   fetchLyrics: "tt:fetchLyrics",
