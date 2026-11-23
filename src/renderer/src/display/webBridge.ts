@@ -1,4 +1,4 @@
-import type { PushMessage, Snapshot, TastyTunesApi } from "@shared/ipc";
+import { INVOKE_METHODS, type PushMessage, type Snapshot, type TastyTunesApi } from "@shared/ipc";
 import type { AppSettings, LyricsQuery } from "@shared/model";
 
 /**
@@ -8,7 +8,7 @@ import type { AppSettings, LyricsQuery } from "@shared/model";
  * reads (main/servers/displayServer): the snapshot, the live channel and the lyrics. It has no
  * way back: a command does nothing, and a settings change (a scene picked, the lyrics hidden)
  * stays in this page. Every other method answers as if there were nothing: an empty list or
- * null, and a listener that never fires.
+ * null.
  */
 
 const LISTS = new Set([
@@ -66,11 +66,10 @@ export function webBridge(): TastyTunesApi {
     },
     command: () => Promise.resolve(),
   };
-  return new Proxy(known as TastyTunesApi, {
-    get(target, name: string) {
-      if (name in target) return target[name as keyof TastyTunesApi];
-      if (/^on[A-Z]/.test(name)) return () => () => {};
-      return () => Promise.resolve(LISTS.has(name) ? [] : null);
-    },
-  });
+  // EVERY method, written out from the channel table as the preload does, since the window's
+  // wrapper (@/api) copies the methods it is given: the ones above answer, the rest answer empty
+  const nothing = Object.fromEntries(
+    INVOKE_METHODS.map((m) => [m, () => Promise.resolve(LISTS.has(m) ? [] : null)]),
+  );
+  return { ...nothing, reportDisplayMode: () => {}, ...known } as unknown as TastyTunesApi;
 }
