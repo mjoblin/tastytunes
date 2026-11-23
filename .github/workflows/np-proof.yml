@@ -1,0 +1,25 @@
+name: Windows Now Playing proof
+
+# THROWAWAY (spike/windows-np): runs .github/np-proof on GitHub's Windows machines, x64 and arm64,
+# without and with the app's identity, and prints what Windows reports. Not for merging.
+on:
+  push:
+    branches: [spike/windows-np]
+
+jobs:
+  proof:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-latest, windows-11-arm]
+        aumid: ["", "com.redactedcat.tastytunes"]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+      - name: Run the proof
+        shell: pwsh
+        env:
+          NP_AUMID: ${{ matrix.aumid }}
+        run: |
+          dotnet --info | Select-Object -First 8
+          dotnet run --project .github/np-proof -c Release
