@@ -21,6 +21,8 @@ static class Proof
 
     static async Task<int> Main()
     {
+        var helper = Environment.GetEnvironmentVariable("NP_HELPER");
+        if (!string.IsNullOrEmpty(helper)) return await DriveHelper(helper);
         var withId = Environment.GetEnvironmentVariable("NP_AUMID");
         if (!string.IsNullOrEmpty(withId))
             Console.WriteLine($"AUMID set: {SetCurrentProcessExplicitAppUserModelID(withId) == 0} ({withId})");
@@ -73,5 +75,60 @@ static class Proof
         var found = ours != null;
         Console.WriteLine($"RESULT session listed: {found}; presses received: {presses.Count}");
         return found ? 0 : 1;
+    }
+
+    /// The real helper, driven as the app drives it: hello, an info line, the session as Windows
+    /// lists it, a key and a flyout press read back as commands, then a release.
+    static async Task<int> DriveHelper(string exe)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo(exe)
+        {
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        using var p = System.Diagnostics.Process.Start(psi)!;
+        var heard = new List<string>();
+        p.OutputDataReceived += (_, e) => { if (e.Data != null) lock (heard) heard.Add(e.Data); };
+        p.BeginOutputReadLine();
+        await Task.Delay(1500);
+        lock (heard) Console.WriteLine($"first lines: [{string.Join(" | ", heard)}]");
+        var art = Path.Combine(AppContext.BaseDirectory, "sleeve.png");
+        await File.WriteAllBytesAsync(art, Convert.FromBase64String(
+            "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="));
+        var info = "{\"t\":\"info\",\"title\":\"Helper track\",\"artist\":\"Helper band\",\"album\":\"LP\","
+            + "\"duration\":240,\"elapsed\":12,\"playing\":true,\"live\":false,\"art\":"
+            + System.Text.Json.JsonSerializer.Serialize(art)
+            + ",\"can\":{\"toggle\":true,\"next\":true,\"previous\":true,\"seek\":true,\"stop\":false}}";
+        await p.StandardInput.WriteLineAsync(info);
+        await p.StandardInput.FlushAsync();
+        await Task.Delay(2000);
+        var mgr = await GlobalSystemMediaTransportControlsSessionManager.RequestAsync();
+        GlobalSystemMediaTransportControlsSession? ours = null;
+        foreach (var s in mgr.GetSessions())
+        {
+            var props = await s.TryGetMediaPropertiesAsync();
+            var tl = s.GetTimelineProperties();
+            Console.WriteLine($"  session app={s.SourceAppUserModelId} title={props?.Title} artist={props?.Artist} thumbnail={props?.Thumbnail != null} end={tl.EndTime} status={s.GetPlaybackInfo()?.PlaybackStatus}");
+            if (props?.Title == "Helper track") ours = s;
+        }
+        keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, UIntPtr.Zero);
+        keybd_event(VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+        await Task.Delay(1500);
+        if (ours != null) { await ours.TrySkipNextAsync(); await Task.Delay(1500); }
+        await p.StandardInput.WriteLineAsync("{\"t\":\"release\"}");
+        await p.StandardInput.FlushAsync();
+        await Task.Delay(2000);
+        var after = mgr.GetSessions().Count;
+        p.StandardInput.Close();
+        var exited = p.WaitForExit(5000);
+        lock (heard) Console.WriteLine($"heard: [{string.Join(" | ", heard)}]");
+        Console.WriteLine($"sessions after release: {after}; exited on the pipe's close: {exited}");
+        bool ok;
+        lock (heard) ok = heard.Contains("hello tastytunes-nowplaying 1") && ours != null
+            && heard.Exists(h => h.StartsWith("cmd ")) && heard.Contains("cmd next") && exited;
+        Console.WriteLine($"RESULT helper: {(ok ? "PASS" : "FAIL")}");
+        return ok ? 0 : 1;
     }
 }

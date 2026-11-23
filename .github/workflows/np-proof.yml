@@ -1,25 +1,33 @@
 name: Windows Now Playing proof
 
-# THROWAWAY (spike/windows-np): runs .github/np-proof on GitHub's Windows machines, x64 and arm64,
-# without and with the app's identity, and prints what Windows reports. Not for merging.
+# THROWAWAY (spike/windows-np): builds the Windows Now Playing helper (native/nowplaying-win) for
+# x64 and arm64 and drives the native one through .github/np-proof on GitHub's Windows machines.
 on:
   push:
     branches: [spike/windows-np]
 
 jobs:
-  proof:
+  helper:
     strategy:
       fail-fast: false
       matrix:
-        runner: [windows-latest, windows-11-arm]
-        aumid: ["", "com.redactedcat.tastytunes"]
+        include:
+          - runner: windows-latest
+            arch: x64
+          - runner: windows-11-arm
+            arch: arm64
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
-      - name: Run the proof
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+      - name: Build the helper, both architectures
+        run: node scripts/build-nowplaying-win.mjs
+      - name: Drive the native one
         shell: pwsh
         env:
-          NP_AUMID: ${{ matrix.aumid }}
+          NP_HELPER: ${{ github.workspace }}\build\nowplaying-win\${{ matrix.arch }}\TastyTunes Now Playing.exe
         run: |
-          dotnet --info | Select-Object -First 8
+          Get-ChildItem -Recurse build\nowplaying-win | Select-Object Length, FullName | Format-Table -AutoSize | Out-String -Width 200
           dotnet run --project .github/np-proof -c Release
