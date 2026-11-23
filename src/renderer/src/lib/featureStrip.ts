@@ -1,5 +1,8 @@
-import { STRIP_BANDS, type AnalysisStrip } from "@shared/model";
+import { STRIP_BANDS } from "@shared/model";
 import { fed, Tape, type Sink } from "./stream/tape";
+import type { Strip } from "@shared/analysisCodec";
+// the packed format and the decoded shape live in shared/analysisCodec (main reads them too)
+export { b64, stripFromStored, stripToStored, unb64, type Strip } from "@shared/analysisCodec";
 
 /**
  * THE FEATURE STRIP (0.8.0, display mode's scenes). The app never hears the
@@ -16,12 +19,6 @@ import { fed, Tape, type Sink } from "./stream/tape";
  * the mono mix. Scenes normalize per track (lib/display/feed), so the
  * absolute scale only has to be consistent.
  */
-export interface Strip {
-  fps: number;
-  /** STRIP_BANDS values per frame, frame-major. */
-  bands: Uint8Array;
-  loud: Uint8Array;
-}
 
 export const STRIP_FPS = 10;
 /** Band edges in Hz: bass, low, low-mid, mid, presence, air. */
@@ -120,25 +117,6 @@ export class StripSink implements Sink {
     return this.f;
   }
 }
-
-export const b64 = (u8: Uint8Array): string => {
-  let s = "";
-  for (let i = 0; i < u8.length; i += 0x8000)
-    s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
-  return btoa(s);
-};
-export const unb64 = (s: string): Uint8Array => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-
-export const stripToStored = (s: Strip): AnalysisStrip => ({
-  fps: s.fps,
-  bands: b64(s.bands),
-  loud: b64(s.loud),
-});
-export const stripFromStored = (st: AnalysisStrip): Strip => ({
-  fps: st.fps,
-  bands: unb64(st.bands),
-  loud: unb64(st.loud),
-});
 
 /** In-place iterative radix-2 complex FFT, twiddles precomputed once (the onsets share it). */
 export class Fft {

@@ -1,5 +1,14 @@
-import type { AnalysisOnsets } from "@shared/model";
-import { Fft, b64, unb64 } from "./featureStrip";
+import { Fft } from "./featureStrip";
+import { ONSET_HOP_MS, type Onsets } from "@shared/analysisCodec";
+// the packed format and the decoded shape live in shared/analysisCodec (main reads them too)
+export {
+  ONSET_HOP_MS,
+  ONSET_TYPES,
+  onsetsFromStored,
+  onsetsToStored,
+  type OnsetType,
+  type Onsets,
+} from "@shared/analysisCodec";
 import { fed, type Sink, type Tape } from "./stream/tape";
 
 /**
@@ -16,20 +25,6 @@ import { fed, type Sink, type Tape } from "./stream/tape";
  * otherwise; brushes and walls of distorted guitar confuse any detector.
  * Stored four bytes an onset beside the analysis (lib/audioAnalysis).
  */
-export const ONSET_TYPES = ["kick", "snare", "hat"] as const;
-export type OnsetType = (typeof ONSET_TYPES)[number];
-
-export interface Onsets {
-  /** Seconds, ascending, on a 10 ms grid. */
-  at: Float32Array;
-  /** 0..1 against the track's own strongest hits. */
-  strength: Float32Array;
-  /** Index into ONSET_TYPES. */
-  type: Uint8Array;
-}
-
-/** The analysis grid: 10 ms steps, a 1024-point window (2048 above 60 kHz). */
-export const ONSET_HOP_MS = 10;
 /** Frames the flux looks back (20 ms): a drum's rise, not a swell's. */
 const LAG = 2;
 /** Log compression of a magnitude whose full scale is 1. */
@@ -262,33 +257,3 @@ function typeAt(bank: Bank, rise: (t: number, b: number) => number, t: number): 
 }
 
 /** Disk shape: four bytes an onset (u16 gap in 10 ms steps, u8 strength, u8 type), base64. */
-export function onsetsToStored(o: Onsets): AnalysisOnsets {
-  const bytes = new Uint8Array(o.at.length * 4);
-  let prev = 0;
-  for (let i = 0; i < o.at.length; i++) {
-    const step = Math.round((o.at[i] * 1000) / ONSET_HOP_MS);
-    const gap = Math.max(0, Math.min(65_535, step - prev));
-    prev += gap;
-    bytes[i * 4] = gap & 0xff;
-    bytes[i * 4 + 1] = gap >> 8;
-    bytes[i * 4 + 2] = Math.round(Math.max(0, Math.min(1, o.strength[i])) * 255);
-    bytes[i * 4 + 3] = o.type[i];
-  }
-  return { count: o.at.length, data: b64(bytes) };
-}
-
-export function onsetsFromStored(st: AnalysisOnsets): Onsets {
-  const bytes = unb64(st.data);
-  const count = Math.min(st.count, Math.floor(bytes.length / 4));
-  const at = new Float32Array(count);
-  const strength = new Float32Array(count);
-  const type = new Uint8Array(count);
-  let step = 0;
-  for (let i = 0; i < count; i++) {
-    step += bytes[i * 4] | (bytes[i * 4 + 1] << 8);
-    at[i] = (step * ONSET_HOP_MS) / 1000;
-    strength[i] = bytes[i * 4 + 2] / 255;
-    type[i] = Math.min(ONSET_TYPES.length - 1, bytes[i * 4 + 3]);
-  }
-  return { at, strength, type };
-}

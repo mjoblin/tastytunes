@@ -1,12 +1,26 @@
-import {
-  FEATURES_VERSION,
-  KEY_VERSION,
-  TEMPO_CONFIDENCE_FLOOR,
-  keyFromStored,
-  keyOfChroma,
-  type AnalysisFeatures,
-} from "@shared/model";
-import { Fft, b64, unb64, type Strip } from "./featureStrip";
+import { FEATURES_VERSION, TEMPO_CONFIDENCE_FLOOR, keyOfChroma } from "@shared/model";
+import { Fft, type Strip } from "./featureStrip";
+import type {
+  Beats,
+  Chroma,
+  Drops,
+  Features,
+  Sections,
+  Stereo,
+  Timbre,
+} from "@shared/analysisCodec";
+// the packed format and the decoded shapes live in shared/analysisCodec (main reads them too)
+export type {
+  Beats,
+  Chroma,
+  Drops,
+  Features,
+  Key,
+  Sections,
+  Stereo,
+  Timbre,
+} from "@shared/analysisCodec";
+export { featuresFromStored, featuresToStored } from "@shared/analysisCodec";
 import { feed, type Sink, type Tape } from "./stream/tape";
 import { ONSET_HOP_MS, type Onsets } from "./onsets";
 
@@ -26,73 +40,6 @@ import { ONSET_HOP_MS, type Onsets } from "./onsets";
  * next play.
  */
 export { FEATURES_VERSION };
-
-export interface Beats {
-  bpm: number;
-  confidence: number;
-  /** Which beat (mod 4) is the downbeat, or −1 when the kicks did not say. */
-  downbeat: number;
-  /** Seconds, ascending. */
-  times: Float32Array;
-}
-export interface Sections {
-  /** Boundaries in seconds, ascending, between sections (not 0, not the end). */
-  bounds: Float32Array;
-  /** Per section (bounds.length + 1): 0 other, 1 chorus-like (the most repeated loud kind). */
-  kinds: Uint8Array;
-  /** Per section: mean energy 0..1. */
-  energy: Float32Array;
-}
-export interface Chroma {
-  fps: number;
-  /** frames × 12, each frame normalized to a max of 1. */
-  data: Float32Array;
-}
-export interface Key {
-  /** 0 = C … 11 = B. */
-  tonic: number;
-  mode: "major" | "minor";
-  confidence: number;
-}
-export interface Stereo {
-  fps: number;
-  /** −1 left … +1 right. */
-  pan: Float32Array;
-  /** 0 mono … 1 wide. */
-  width: Float32Array;
-}
-export interface Timbre {
-  fps: number;
-  /** 0 dark … 1 bright (log spectral centroid, 100 Hz to 10 kHz). */
-  brightness: Float32Array;
-  /** 0 tonal … 1 noise (spectral flatness, log-scaled). */
-  noisiness: Float32Array;
-}
-export interface Drops {
-  buildFrom: Float32Array;
-  at: Float32Array;
-  strength: Float32Array;
-  /** Seconds of notable reduction (the beat or the level down) before each drop, and seconds
-   *  of definite reduction (near silence); the display picks the tier it wants. */
-  chill: Float32Array;
-  breath: Float32Array;
-  /** Seconds of near-total cut-out right before the slam (a tenth of a second or two is the
-   *  classic gasp before a drop), measured at frame resolution. */
-  cut: Float32Array;
-}
-export interface Features {
-  beats: Beats | null;
-  sections: Sections | null;
-  chroma: Chroma | null;
-  key: Key | null;
-  /** Chord changes, seconds. */
-  changes: Float32Array;
-  stereo: Stereo | null;
-  timbre: Timbre | null;
-  /** Start, end pairs in seconds. */
-  silences: Float32Array;
-  drops: Drops;
-}
 
 const CHROMA_FPS = 2;
 
@@ -1097,206 +1044,4 @@ export function dropClears(d: Drops, i: number, tier: DropTier): boolean {
     (d.breath[i] ?? 0) >= t.breath - 0.01 ||
     ((d.cut[i] ?? 0) >= t.cut - 0.01 && chill >= t.cutChill - 0.01)
   );
-}
-
-// ---------------------------------------------------------------- disk shape
-
-const u16s = (values: ArrayLike<number>): Uint8Array => {
-  const out = new Uint8Array(values.length * 2);
-  for (let i = 0; i < values.length; i++) {
-    const v = Math.max(0, Math.min(65_535, Math.round(values[i])));
-    out[i * 2] = v & 0xff;
-    out[i * 2 + 1] = v >> 8;
-  }
-  return out;
-};
-const fromU16s = (bytes: Uint8Array): Float32Array => {
-  const out = new Float32Array(Math.floor(bytes.length / 2));
-  for (let i = 0; i < out.length; i++) out[i] = bytes[i * 2] | (bytes[i * 2 + 1] << 8);
-  return out;
-};
-/** Seconds to tenths, as u16 gaps. */
-const tenthsGaps = (secs: ArrayLike<number>): Uint8Array => {
-  const gaps: number[] = [];
-  let prev = 0;
-  for (let i = 0; i < secs.length; i++) {
-    const t = Math.round(secs[i] * 10);
-    gaps.push(Math.max(0, t - prev));
-    prev += Math.max(0, t - prev);
-  }
-  return u16s(gaps);
-};
-const fromTenthsGaps = (bytes: Uint8Array): Float32Array => {
-  const gaps = fromU16s(bytes);
-  const out = new Float32Array(gaps.length);
-  let t = 0;
-  for (let i = 0; i < gaps.length; i++) {
-    t += gaps[i];
-    out[i] = t / 10;
-  }
-  return out;
-};
-/** Seconds to hundredths, as u16 gaps (a beat grid: no two beats 655 s apart). */
-const centiGaps = (secs: ArrayLike<number>): Uint8Array => {
-  const gaps: number[] = [];
-  let prev = 0;
-  for (let i = 0; i < secs.length; i++) {
-    const t = Math.round(secs[i] * 100);
-    gaps.push(Math.max(0, t - prev));
-    prev += Math.max(0, t - prev);
-  }
-  return u16s(gaps);
-};
-const fromCentiGaps = (bytes: Uint8Array): Float32Array => {
-  const gaps = fromU16s(bytes);
-  const out = new Float32Array(gaps.length);
-  let t = 0;
-  for (let i = 0; i < gaps.length; i++) {
-    t += gaps[i];
-    out[i] = t / 100;
-  }
-  return out;
-};
-/** Each drop's build-up start, from its drop's tenth and its distance back in tenths. */
-const buildFromBack = (at: Uint8Array, back: Uint8Array): Float32Array => {
-  const tenths = fromU32s(at);
-  const backs = fromU16s(back);
-  return Float32Array.from(tenths, (t, i) => (t - (backs[i] ?? 0)) / 10);
-};
-const u32s = (values: ArrayLike<number>): Uint8Array => {
-  const out = new Uint8Array(values.length * 4);
-  const view = new DataView(out.buffer);
-  for (let i = 0; i < values.length; i++)
-    view.setUint32(i * 4, Math.max(0, Math.min(0xffffffff, Math.round(values[i]))), true);
-  return out;
-};
-const fromU32s = (bytes: Uint8Array): Float64Array => {
-  const out = new Float64Array(Math.floor(bytes.length / 4));
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  for (let i = 0; i < out.length; i++) out[i] = view.getUint32(i * 4, true);
-  return out;
-};
-const bytes01 = (values: ArrayLike<number>): Uint8Array =>
-  Uint8Array.from({ length: values.length }, (_, i) =>
-    Math.round(Math.max(0, Math.min(1, values[i])) * 255),
-  );
-const from01 = (bytes: Uint8Array): Float32Array => Float32Array.from(bytes, (b) => b / 255);
-
-export function featuresToStored(f: Features): AnalysisFeatures {
-  return {
-    version: FEATURES_VERSION,
-    beats: f.beats
-      ? {
-          bpm: Math.round(f.beats.bpm * 100) / 100,
-          confidence: Math.round(f.beats.confidence * 1000) / 1000,
-          downbeat: f.beats.downbeat,
-          count: f.beats.times.length,
-          // gaps, in hundredths (0.14.0): absolute hundredths stopped at 655.35 s, so every beat
-          // after 10:55 of a long track read 10:55
-          times: b64(centiGaps(f.beats.times)),
-        }
-      : null,
-    sections: f.sections
-      ? {
-          count: f.sections.kinds.length,
-          bounds: b64(tenthsGaps(f.sections.bounds)),
-          kinds: b64(f.sections.kinds),
-          energy: b64(bytes01(f.sections.energy)),
-        }
-      : null,
-    chroma: f.chroma ? { fps: f.chroma.fps, data: b64(bytes01(f.chroma.data)) } : null,
-    key: f.key
-      ? {
-          tonic: f.key.tonic,
-          mode: f.key.mode,
-          confidence: Math.round(f.key.confidence * 1000) / 1000,
-          v: KEY_VERSION,
-        }
-      : null,
-    changes: b64(tenthsGaps(f.changes)),
-    stereo: f.stereo
-      ? {
-          fps: f.stereo.fps,
-          pan: b64(bytes01(Array.from(f.stereo.pan, (p) => (p + 1) / 2))),
-          width: b64(bytes01(f.stereo.width)),
-        }
-      : null,
-    timbre: f.timbre
-      ? {
-          fps: f.timbre.fps,
-          brightness: b64(bytes01(f.timbre.brightness)),
-          noisiness: b64(bytes01(f.timbre.noisiness)),
-        }
-      : null,
-    silences: b64(tenthsGaps(f.silences)),
-    drops: {
-      count: f.drops.at.length,
-      // the drops in u32 tenths and each build-up as its distance back from its drop (0.14.0):
-      // u16 tenths stopped at 6553.5 s, a long mix's
-      buildFrom: b64(
-        u16s(
-          Array.from(f.drops.at, (t, i) =>
-            Math.max(0, Math.round(t * 10) - Math.round(f.drops.buildFrom[i] * 10)),
-          ),
-        ),
-      ),
-      at: b64(u32s(Array.from(f.drops.at, (t) => Math.round(t * 10)))),
-      strength: b64(bytes01(f.drops.strength)),
-      chill: b64(Uint8Array.from(f.drops.chill, (c) => Math.min(255, Math.round(c * 4)))),
-      breath: b64(Uint8Array.from(f.drops.breath, (c) => Math.min(255, Math.round(c * 4)))),
-      cut: b64(Uint8Array.from(f.drops.cut, (c) => Math.min(255, Math.round(c * 10)))),
-    },
-  };
-}
-
-export function featuresFromStored(st: AnalysisFeatures): Features {
-  const beats = st.beats
-    ? {
-        bpm: st.beats.bpm,
-        confidence: st.beats.confidence,
-        downbeat: st.beats.downbeat,
-        times: fromCentiGaps(unb64(st.beats.times)),
-      }
-    : null;
-  const sections = st.sections
-    ? {
-        bounds: fromTenthsGaps(unb64(st.sections.bounds)),
-        kinds: unb64(st.sections.kinds),
-        energy: from01(unb64(st.sections.energy)),
-      }
-    : null;
-  const chroma = st.chroma ? { fps: st.chroma.fps, data: from01(unb64(st.chroma.data)) } : null;
-  const stereo = st.stereo
-    ? {
-        fps: st.stereo.fps,
-        pan: Float32Array.from(from01(unb64(st.stereo.pan)), (v) => v * 2 - 1),
-        width: from01(unb64(st.stereo.width)),
-      }
-    : null;
-  const timbre = st.timbre
-    ? {
-        fps: st.timbre.fps,
-        brightness: from01(unb64(st.timbre.brightness)),
-        noisiness: from01(unb64(st.timbre.noisiness)),
-      }
-    : null;
-  return {
-    beats,
-    sections,
-    chroma,
-    // a key the older estimator made is estimated again from the chroma beside it
-    key: keyFromStored(st),
-    changes: fromTenthsGaps(unb64(st.changes)),
-    stereo,
-    timbre,
-    silences: fromTenthsGaps(unb64(st.silences)),
-    drops: {
-      buildFrom: buildFromBack(unb64(st.drops.at), unb64(st.drops.buildFrom)),
-      at: Float32Array.from(fromU32s(unb64(st.drops.at)), (t) => t / 10),
-      strength: from01(unb64(st.drops.strength)),
-      chill: Float32Array.from(unb64(st.drops.chill ?? ""), (c) => c / 4),
-      breath: Float32Array.from(unb64(st.drops.breath ?? ""), (c) => c / 4),
-      cut: Float32Array.from(unb64(st.drops.cut ?? ""), (c) => c / 10),
-    },
-  };
 }
