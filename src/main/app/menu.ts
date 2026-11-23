@@ -246,8 +246,12 @@ export function installAppMenu(deps: MenuDeps): void {
     ],
   };
 
+  // macOS's File menu carries Close Window (⌘W), the Mac's own way to close the window in front;
+  // the app menu holds settings and quit there, so this File menu holds only that
+  const macFileMenu: MenuItemConstructorOptions = { label: "File", submenu: [{ role: "close" }] };
+
   const template: MenuItemConstructorOptions[] = [
-    ...(isMac ? [appMenu] : [fileMenu]),
+    ...(isMac ? [appMenu, macFileMenu] : [fileMenu]),
     editMenu,
     playbackMenu,
     viewMenu,
