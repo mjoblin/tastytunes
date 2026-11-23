@@ -177,6 +177,7 @@ export function parseUrlAction(raw: string, screens: Readonly<Record<string, str
       return ok({ kind: "source", name });
     }
     case "screen": {
+      if (!arg) return { ok: false, reason: "Screen takes the name of a screen, such as Queue." };
       // the object's own names only: screen/constructor or screen/__proto__ is no screen
       const name = arg.toLowerCase();
       const screen = parts.length === 2 && Object.hasOwn(screens, name) ? screens[name] : undefined;
