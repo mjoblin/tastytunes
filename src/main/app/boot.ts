@@ -1,6 +1,7 @@
 import { app, protocol } from "electron";
 import { join } from "node:path";
 import { installNavigationGuard } from "./guard";
+import { adoptAppIdentity } from "./loginItem";
 import { keepVersionCopy } from "../data/savedFiles";
 import { version as appVersion } from "../../../package.json";
 // tastytunes:// URLs: listened for before ready, held until whenReady takes them (app/urlInbox)
@@ -36,6 +37,8 @@ for (const stream of [process.stdout, process.stderr]) stream?.on?.("error", () 
 // Display casing: app.name feeds menu role labels ("Hide/Quit TastyTunes");
 // the settings path stays lowercase via the explicit setPath below.
 app.setName("TastyTunes");
+// Windows: the app's own identity, before any window or notification (app/loginItem)
+adoptAppIdentity();
 app.setPath(
   "userData",
   process.env["TASTYTUNES_USER_DATA"] ?? join(app.getPath("appData"), "tastytunes"),

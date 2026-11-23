@@ -12,6 +12,32 @@ import type { LoginItemState } from "@shared/ipc";
 /** Marks a launch by the Windows login item (its argument); macOS says so itself. */
 export const LOGIN_ARG = "--opened-at-login";
 
+/** The app's identity on Windows: electron-builder.yml's appId, which the installer gives its
+ *  shortcuts. A notification shows only for an identity a Start menu shortcut carries, and the
+ *  taskbar groups the window with its pinned icon by it. */
+export const APP_USER_MODEL_ID = "com.redactedcat.tastytunes";
+
+/** The name the Windows login item was written under before the app set its own identity:
+ *  Electron's default, "electron.app." and the executable's product name. */
+export const LEGACY_LOGIN_NAME = "electron.app.TastyTunes";
+
+/** Windows: takes the app's own identity, before any window or notification. The login item's
+ *  registry value is named by the identity, so one written under the old name is read first,
+ *  removed, and written again under the new one (switched off as it was, if Task Manager had
+ *  turned it off); left alone, it would still open the app while the switch read off. */
+export function adoptAppIdentity(): void {
+  if (process.platform !== "win32") return;
+  const legacy = app.isPackaged && !TEST ? app.getLoginItemSettings({ args: [LOGIN_ARG] }) : null;
+  app.setAppUserModelId(APP_USER_MODEL_ID);
+  if (!legacy?.openAtLogin) return;
+  app.setLoginItemSettings({ openAtLogin: false, name: LEGACY_LOGIN_NAME, args: [LOGIN_ARG] });
+  app.setLoginItemSettings({
+    openAtLogin: true,
+    args: [LOGIN_ARG],
+    enabled: legacy.executableWillLaunchAtLogin,
+  });
+}
+
 /** The suite's stand-in for the system's login item: no test touches the real one. */
 const TEST = process.env["TASTYTUNES_LOGIN_ITEM_TEST"] === "1";
 let testOn = false;
