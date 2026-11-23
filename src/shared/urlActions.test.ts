@@ -104,6 +104,12 @@ describe("parseUrlAction", () => {
       screen: "recently-played",
     });
     expect(parse("tastytunes://screen/nowhere").ok).toBe(false);
+    // a bare screen is refused with a reason, not thrown (it named no screen to read)
+    expect(parse("tastytunes://screen")).toEqual({
+      ok: false,
+      reason: "Screen takes the name of a screen, such as Queue.",
+    });
+    expect(parse("tastytunes://screen/").ok).toBe(false);
     // an object's own names only: the names every object carries are no screen
     expect(parse("tastytunes://screen/constructor").ok).toBe(false);
     expect(parse("tastytunes://screen/__proto__").ok).toBe(false);
