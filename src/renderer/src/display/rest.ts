@@ -21,6 +21,10 @@ export const DRIFT_PX = 18;
 export const REST_OPACITY = 0.35;
 /** How long the dimming takes; a light page turns dark once it is done. */
 export const REST_FADE_MS = 3_000;
+/** After the turn, how long the scene keeps drawing before it holds still: the dark theme's
+ *  tokens land at once, the cover's accents for it a moment later, and a scene shows them only
+ *  in a frame it draws. */
+export const TURN_SETTLE_MS = 1_500;
 
 /** Whether the streamer is making music, or about to (a track change passes through these). */
 export const musicGoing = (state: ZonePlayStateState | null | undefined): boolean =>
@@ -32,16 +36,18 @@ export function driftTo(random: () => number = Math.random): [number, number] {
   return [at(), at()];
 }
 
-/** Whether the page rests, where its picture has drifted to, and whether its fade is done (when a
- *  light page shows the dark theme). */
+/** Whether the page rests, where its picture has drifted to, whether its fade is done (when a
+ *  light page shows the dark theme), and whether its scene may hold still (the turn drawn). */
 export function useRest(going: boolean): {
   resting: boolean;
   offset: [number, number];
   dark: boolean;
+  still: boolean;
 } {
   const [resting, setResting] = useState(false);
   const [offset, setOffset] = useState<[number, number]>([0, 0]);
   const [dark, setDark] = useState(false);
+  const [still, setStill] = useState(false);
   useEffect(() => {
     if (going) {
       setResting(false);
@@ -60,10 +66,15 @@ export function useRest(going: boolean): {
   useEffect(() => {
     if (!resting) {
       setDark(false);
+      setStill(false);
       return;
     }
-    const t = setTimeout(() => setDark(true), REST_FADE_MS);
-    return () => clearTimeout(t);
+    const turn = setTimeout(() => setDark(true), REST_FADE_MS);
+    const hold = setTimeout(() => setStill(true), REST_FADE_MS + TURN_SETTLE_MS);
+    return () => {
+      clearTimeout(turn);
+      clearTimeout(hold);
+    };
   }, [resting]);
-  return { resting, offset, dark };
+  return { resting, offset, dark, still };
 }

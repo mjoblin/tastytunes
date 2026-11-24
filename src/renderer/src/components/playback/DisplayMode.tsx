@@ -157,6 +157,8 @@ export function DisplayMode(): React.JSX.Element {
 
   const artLoadable = useArtLoadable(art);
   const lyricsToggleable = settings.lyrics && !meta.isRadio && !!meta.subtitle;
+  // the lyric's room follows the switch, never the song, so the art keeps its place across tracks
+  const lyricRoom = settings.lyrics && settings.displayLyrics;
   const toggleLyrics = async (): Promise<void> => {
     await saveSettings({ displayLyrics: !settings.displayLyrics });
   };
@@ -309,18 +311,21 @@ export function DisplayMode(): React.JSX.Element {
       {(!stage || standIn) && lyricsToggleable && settings.displayLyrics && <DisplayLyric />}
 
       {(!stage || standIn) && (
-        <div className="relative h-full flex flex-col items-center justify-center px-16">
+        <div
+          className="relative h-full flex flex-col items-center justify-center px-16"
+          style={lyricRoom ? LYRIC_ROOM : undefined}
+        >
           {/* Lock the art in place across track changes: it's a fixed size, so
             we center it (nudged up to leave room for the text) and hang the
             text absolutely beneath it — a longer/shorter title, a missing
             subtitle, or a changing badge count then grow downward instead of
             re-centering the whole group and shifting the art. */}
-          <div className="relative -translate-y-[7vmin]">
+          <div className="relative -translate-y-[var(--display-lift,7vmin)]">
             <CrossfadeArt
               src={art}
-              className="w-[46vmin] h-[46vmin] object-cover rounded-2xl art-glow"
+              className="w-[var(--display-art,46vmin)] h-[var(--display-art,46vmin)] object-cover rounded-2xl art-glow"
               fallback={
-                <div className="w-[46vmin] h-[46vmin] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
+                <div className="w-[var(--display-art,46vmin)] h-[var(--display-art,46vmin)] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
                   {meta.isRadio ? (
                     <RadioTower size={90} strokeWidth={1} className="text-faint" />
                   ) : (
@@ -381,6 +386,21 @@ export function DisplayMode(): React.JSX.Element {
     </div>
   );
 }
+
+/**
+ * THE LYRIC'S ROOM (a short screen: a tablet in landscape under a browser's bars, a short window):
+ * with the lyrics switched on, the art and the text hung beneath it keep clear of the lyric's two
+ * lines above the bottom. The art rises only as far as it must (never less than today's 7vmin)
+ * and shrinks only when rising isn't enough, keeping 24px above it; on a tall screen nothing
+ * moves. The text's height is its usual one-line title, the artist and the format chips: a title
+ * that wraps to two lines can still meet a two-line lyric on the shortest screens.
+ */
+const TEXT_H = "(90px + 1.25 * clamp(26px, 4.5vmin, 52px) + 1.25 * clamp(15px, 2.2vmin, 24px))";
+const LYRIC_H = "(64px + 2.75 * clamp(17px, 2.8vmin, 30px))";
+const LYRIC_ROOM = {
+  "--display-art": `min(46vmin, max(120px, calc(100dvh - ${TEXT_H} - ${LYRIC_H} - 40px)))`,
+  "--display-lift": `max(7vmin, calc(var(--display-art) / 2 + ${TEXT_H} + ${LYRIC_H} + 16px - 50dvh))`,
+} as React.CSSProperties;
 
 /**
  * The current synced line, floating above the progress bar. Absolutely

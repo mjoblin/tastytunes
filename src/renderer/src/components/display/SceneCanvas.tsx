@@ -25,8 +25,11 @@ import type * as THREE from "three";
 
 /** A PAGE LEFT RESTING (display/rest, a screen with the music stopped): every stage holds its
  *  last picture and draws nothing, as while the window is hidden, so a tablet's GPU isn't kept
- *  working all night behind a dimmed picture; the music starting again wakes them. */
+ *  working all night behind a dimmed picture; the music starting again wakes them. A held stage
+ *  still draws for HELD_DRAW_MS when it is mounted or resized, since a new or resized canvas is
+ *  blank until a frame is drawn on it. */
 let held = false;
+const HELD_DRAW_MS = 500;
 const heldListeners = new Set<() => void>();
 export function holdStages(on: boolean): void {
   if (held === on) return;
@@ -134,6 +137,12 @@ export function SceneCanvas({
     let w = 0;
     let h = 0;
     let dpr = 1;
+    let raf = 0;
+    let lastFrame = 0;
+    // a held stage draws until then: a new canvas, or one a resize cleared, is blank until it does
+    let awakeUntil = performance.now() + HELD_DRAW_MS;
+    // the stage as the loop (a hoisted function) sees it, already known to be there
+    const stage: HTMLDivElement = wrap;
     const size = (): void => {
       const r = wrap.getBoundingClientRect();
       dpr = Math.min(window.devicePixelRatio || 1, mini ? 1 : 1.5);
@@ -150,14 +159,14 @@ export function SceneCanvas({
         renderer.setSize(w, h, false);
         inst.resize?.(w, h);
       }
+      awakeUntil = performance.now() + HELD_DRAW_MS;
+      if (held && !raf && !document.hidden) raf = requestAnimationFrame(loop);
     };
     size();
     const ro = new ResizeObserver(size);
     ro.observe(wrap);
-    let raf = 0;
-    let lastFrame = 0;
-    const loop = (now: number): void => {
-      if (document.hidden || held) {
+    function loop(now: number): void {
+      if (document.hidden || (held && performance.now() >= awakeUntil)) {
         // the stage sleeps while the document is hidden (or the page rests): no frame is
         // scheduled, and wake below starts it with a fresh clock so the first frame back
         // does not carry the whole absence as its delta
@@ -175,7 +184,7 @@ export function SceneCanvas({
       const dt = lastFrame ? frameDelta((now - lastFrame) / 1000) : 0;
       lastFrame = now;
       const f = feed.frame(now, w, h, mini, dt, wordsRef.current);
-      if (f.hits.length > 0) countHits(wrap, f.hits);
+      if (f.hits.length > 0) countHits(stage, f.hits);
       if (isThreeScene(inst) && renderer) {
         inst.draw(renderer, f);
         if (octx && inst.overlay) {
@@ -197,7 +206,7 @@ export function SceneCanvas({
       }
       // THE FINISH: the cathode glass over whatever was just drawn, never on the tiles
       if (!mini && !cathodeFailed && finishRef.current.finish === "cathode") {
-        cathode ??= new CathodeFinish(wrap);
+        cathode ??= new CathodeFinish(stage);
         if (cathode.ok)
           cathode.render(
             canvas,
@@ -217,9 +226,9 @@ export function SceneCanvas({
         cathode.dispose();
         cathode = null;
       }
-    };
+    }
     const onVisibility = (): void => {
-      if (document.hidden || held) {
+      if (document.hidden || (held && performance.now() >= awakeUntil)) {
         cancelAnimationFrame(raf);
         raf = 0;
         return;

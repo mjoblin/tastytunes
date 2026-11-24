@@ -86,9 +86,10 @@ function Page(): React.JSX.Element {
   const connected = useStore((s) => s.connection.phase === "connected");
   const going = useStore((s) => musicGoing(s.playState?.state));
   // a screen left on: dimmed and drifting while the music is stopped (display/rest)
-  const { resting, offset, dark } = useRest(going);
-  // and its scene holds its last picture rather than drawing every frame behind the dimming
-  useEffect(() => holdStages(resting), [resting]);
+  const { resting, offset, dark, still } = useRest(going);
+  // and its scene holds its last picture rather than drawing every frame behind the dimming, once
+  // a light page's turn to dark has been drawn (a held scene keeps the picture it last drew)
+  useEffect(() => holdStages(still), [still]);
   // a light page turns dark once its dimming is done (display/rest)
   const theme = useTheme(dark ? "dark" : settings.theme);
   useDisplayFont(settings.displayFont);
