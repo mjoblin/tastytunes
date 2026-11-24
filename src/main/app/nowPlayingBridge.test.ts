@@ -193,6 +193,24 @@ describe("the Now Playing bridge", () => {
     await vi.waitFor(() => expect(r.lines().at(-1)).toEqual({ t: "release" }), { timeout: 5_000 });
   });
 
+  it("lets go at the hold's check even when the timer fires before the clock says it's time", async () => {
+    const r = rig({});
+    r.bridge.start();
+    await vi.waitFor(() => expect(r.lines().length).toBe(1), { timeout: 5_000 });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      r.view.playState = playing({ title: null });
+      r.bridge.update();
+      // a busy main process: the callback reads a little less wall time than its delay
+      r.clock.offset = -50;
+      vi.advanceTimersByTime(HOLD_MS);
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() => expect(r.lines().at(-1)).toEqual({ t: "release" }), { timeout: 5_000 });
+    expect(r.logs.join(" ")).toContain("let go of Now Playing");
+  });
+
   it("lets go when the streamer moves to an input with nothing to steer", async () => {
     const r = rig({});
     r.bridge.start();

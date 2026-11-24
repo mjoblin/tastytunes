@@ -97,6 +97,8 @@ export class NowPlayingBridge {
   private artWaiting: { until: number; timer: ReturnType<typeof setTimeout> } | null = null;
   private holdingSince: number | null = null;
   private holdTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The hold's check came: it is over, whatever the clock reads (a timer can fire a little early). */
+  private holdOver = false;
   private claimedSource: string | null = null;
   private givenUp = false;
   private readonly started = new StartedHere();
@@ -174,7 +176,7 @@ export class NowPlayingBridge {
       steerable: can.canToggle || can.canNext || can.canPrev,
       source,
       claimedSource: this.claimedSource,
-      heldMs: this.holdingSince != null ? now - this.holdingSince : 0,
+      heldMs: this.holdingSince == null ? 0 : this.holdOver ? HOLD_MS : now - this.holdingSince,
     });
     if (verdict === "release-now") return this.release("now");
     if (verdict === "release-soon") {
@@ -197,6 +199,7 @@ export class NowPlayingBridge {
         this.holdingSince = now;
         this.holdTimer = setTimeout(() => {
           this.holdTimer = null;
+          this.holdOver = true;
           this.update();
         }, HOLD_MS);
       }
@@ -303,6 +306,7 @@ export class NowPlayingBridge {
     if (this.holdTimer) clearTimeout(this.holdTimer);
     this.holdTimer = null;
     this.holdingSince = null;
+    this.holdOver = false;
   }
 
   private clearArtWait(): void {
