@@ -67,11 +67,11 @@ describe("what a screen on the network may see", () => {
     expect(out.nowPlaying?.display?.art_file).toBeNull();
   });
 
-  it("carries Display's own settings and the look, the rest at their defaults, the scene the Sleeve", () => {
+  it("carries Display's own settings and the look, the owner's scene, the rest at their defaults", () => {
     const s = displaySettings(snap.settings);
     expect(s.displayLyrics).toBe(false);
     expect(s.theme).toBe("light");
-    expect(s.displayScene).toBe("sleeve");
+    expect(s.displayScene).toBe("tide");
     expect(s.lastHost).toBe(DEFAULT_SETTINGS.lastHost);
     expect(s.knownDevices).toEqual(DEFAULT_SETTINGS.knownDevices);
     expect(s.displayServer).toEqual(DEFAULT_SETTINGS.displayServer);

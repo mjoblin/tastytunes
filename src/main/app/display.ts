@@ -3,6 +3,8 @@ import type { DisplayStatus } from "@shared/ipc";
 import type { AppSettings } from "@shared/model";
 import { artHostTrust, fetchPicture } from "../lookups/artFetch";
 import { fetchLyrics } from "../lookups/lyrics";
+import { audioAnalysisGet } from "../lookups/audioAnalysis";
+import { lookupMediaInfo } from "../media/mediaInfo";
 import { displayToken, getSettings, newDisplayToken } from "../data/persist";
 import { DisplayServer } from "../servers/displayServer";
 import { lanAddress } from "../servers/mcpServer";
@@ -30,6 +32,9 @@ export const displayServer = new DisplayServer({
       timeoutMs: 8_000,
       logged: false,
     }),
+  // the window's own question, a show: a page never rebuilds an index
+  trackInfo: (query) => lookupMediaInfo(connectedHost(), query, "show"),
+  analysis: (key) => audioAnalysisGet(key),
   token: () => displayToken(),
   pageDir: join(__dirname, "../renderer"),
   log: (text) => deviceManager.log("info", "display", text),

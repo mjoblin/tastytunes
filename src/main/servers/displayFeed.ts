@@ -37,6 +37,8 @@ export const SHOWN_SETTINGS = [
   "ambientArt",
   "motion",
   "lyrics",
+  // the audio analysis switch: off, the scenes draw nothing measured, as in the window
+  "waveforms",
   "displayFont",
   "displayHintSeen",
   "displayWaveform",
@@ -59,12 +61,12 @@ export const SHOWN_SETTINGS = [
 /** Display settings a page never sees: the server's own switch and port. */
 export const HELD_SETTINGS = ["displayServer"] as const satisfies readonly (keyof AppSettings)[];
 
-/** Display's own settings and the look they draw with, over the defaults; scenes stay the Sleeve
- *  until the page can run them (stage 2). */
+/** Display's own settings and the look they draw with, over the defaults. The scene is the
+ *  owner's: the page draws it where the browser can (WebGL2), the Sleeve's face elsewhere
+ *  (display/page). */
 export function displaySettings(s: AppSettings): AppSettings {
   const out: Record<string, unknown> = { ...DEFAULT_SETTINGS };
   for (const k of SHOWN_SETTINGS) out[k] = s[k];
-  out["displayScene"] = "sleeve";
   return out as unknown as AppSettings;
 }
 

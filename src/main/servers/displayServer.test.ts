@@ -58,6 +58,29 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
           setTimeout(() => r({ bytes: Buffer.from("img"), type: "image/jpeg" }), 20),
         );
       }),
+    trackInfo: (q) =>
+      Promise.resolve(
+        q.title === "Song"
+          ? {
+              node: {
+                id: "obj-77",
+                parentId: "parent-9",
+                title: "Song",
+                upnpClass: "object.item.audioItem.musicTrack",
+                isContainer: false,
+                artUrl: "http://192.168.1.5/a.jpg",
+                artist: "Band",
+                album: "Record",
+                year: "2001",
+                trackNumber: 3,
+                durationSecs: 200,
+                serverUdn: "uuid:nas-1",
+              },
+              serverName: "Shelf NAS",
+            }
+          : null,
+      ),
+    analysis: (key) => (key === "band|record|song|200" ? ({ dr: 9 } as never) : null),
     token: () => Promise.resolve(token),
     pageDir: page,
     log: (text) => logged.push(text),
@@ -239,6 +262,30 @@ describe("Display on other screens' server", () => {
     expect(String((await get("/assets/a.js", { cookie })).headers["cache-control"])).toContain(
       "immutable",
     );
+  });
+});
+
+describe("the scenes' analysis on a page", () => {
+  it("names the playing file with an opaque id and none of its server's, and only that file", async () => {
+    const { get } = await rig();
+    const res = await get("/api/track?title=Song&artist=Band&album=Record&duration=200", {
+      cookie,
+    });
+    const node = (JSON.parse(res.body) as { node: Record<string, unknown> }).node;
+    expect(node).toMatchObject({ title: "Song", artist: "Band", durationSecs: 200 });
+    expect(res.body).not.toMatch(/obj-77|parent-9|uuid:nas-1|Shelf NAS|192\.168/);
+    const other = await get("/api/track?title=Anything&artist=Someone", { cookie });
+    expect(JSON.parse(other.body)).toBeNull();
+  });
+
+  it("hands over a stored analysis only by a key it gave out with the playing file", async () => {
+    const { get } = await rig();
+    const key = encodeURIComponent("band|record|song|200");
+    expect(JSON.parse((await get(`/api/analysis?key=${key}`, { cookie })).body)).toBeNull();
+    await get("/api/track?title=Song&artist=Band&album=Record&duration=200", { cookie });
+    expect(JSON.parse((await get(`/api/analysis?key=${key}`, { cookie })).body)).toEqual({
+      dr: 9,
+    });
   });
 });
 

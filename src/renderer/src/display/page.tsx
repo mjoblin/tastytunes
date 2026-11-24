@@ -10,6 +10,7 @@ import "@fontsource-variable/schibsted-grotesk";
 import "../styles.css";
 
 import { useEffect, useState } from "react";
+import type { AppSettings } from "@shared/model";
 import ReactDOM from "react-dom/client";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -26,13 +27,36 @@ import { followApp } from "./live";
  * restart or a wake. Its own controls (the close button, the scene picker) are hidden: a page on
  * another screen shows, it doesn't steer. While the streamer sleeps, or the app hasn't been
  * heard for a few seconds, the page goes dark.
+ *
+ * SCENES WHERE THEY CAN RUN (stage 2): the owner's scene is drawn where the browser has WebGL2,
+ * the Sleeve's face everywhere else (asked once, by the browser itself, never by a GPU's name).
+ * A scene draws from the playing track's stored analysis, which the page is handed and never
+ * measures.
  */
+
+/** Whether this browser can draw the scenes: a WebGL2 context it will hand out. */
+function canDrawScenes(): boolean {
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    gl?.getExtension("WEBGL_lose_context")?.loseContext();
+    return gl != null;
+  } catch {
+    return false;
+  }
+}
+
+const SCENES_HERE = canDrawScenes();
+
+/** The settings as this page draws them: without WebGL2, every scene is the Sleeve. */
+const forThisPage = (s: AppSettings): AppSettings =>
+  SCENES_HERE ? s : { ...s, displayScene: "sleeve" };
 function Page(): React.JSX.Element {
   const [heard, setHeard] = useState(false);
   useEffect(
     () =>
       followApp({
-        snapshot: (snap) => useStore.getState().init(snap),
+        snapshot: (snap) =>
+          useStore.getState().init({ ...snap, settings: forThisPage(snap.settings) }),
         reachable: setHeard,
       }),
     [],
@@ -47,7 +71,10 @@ function Page(): React.JSX.Element {
     document.documentElement.classList.add("display-page");
   }, []);
   return (
-    <div className="h-screen w-screen overflow-hidden">
+    <div
+      data-display-scenes={SCENES_HERE ? "on" : "off"}
+      className="h-screen w-screen overflow-hidden"
+    >
       {heard && connected && powered ? (
         <DisplayMode />
       ) : (
@@ -57,5 +84,9 @@ function Page(): React.JSX.Element {
   );
 }
 
-tt.onPush((msg) => useStore.getState().applyPush(msg));
+tt.onPush((msg) =>
+  useStore
+    .getState()
+    .applyPush(msg.kind === "settings" ? { ...msg, settings: forThisPage(msg.settings) } : msg),
+);
 ReactDOM.createRoot(document.getElementById("root")!).render(<Page />);

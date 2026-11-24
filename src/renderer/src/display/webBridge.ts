@@ -1,5 +1,11 @@
 import { INVOKE_METHODS, type PushMessage, type Snapshot, type TastyTunesApi } from "@shared/ipc";
-import type { AppSettings, LyricsQuery } from "@shared/model";
+import type {
+  AppSettings,
+  AudioAnalysis,
+  LyricsQuery,
+  MediaInfoQuery,
+  MediaInfoTarget,
+} from "@shared/model";
 import { listenPushes } from "./live";
 
 /**
@@ -61,6 +67,27 @@ export function webBridge(): TastyTunesApi {
       return res.ok
         ? ((await res.json()) as Awaited<ReturnType<TastyTunesApi["fetchLyrics"]>>)
         : null;
+    },
+    // THE SCENES' ANALYSIS (stage 2): the window's question for the playing file, answered by
+    // the server for the playing track only, then its stored analysis by the key that came
+    // with it; nothing on the page ever measures (the stream calls answer empty below)
+    mediaNodeInfo: async (q: MediaInfoQuery) => {
+      if (q.kind !== "track") return null;
+      const p = new URLSearchParams({
+        title: q.title,
+        artist: q.artist ?? "",
+        album: q.album ?? "",
+        duration: q.durationSecs != null ? String(q.durationSecs) : "",
+        art: q.artUrl ?? "",
+      });
+      const res = await fetch(`/api/track?${p.toString()}`, { credentials: "same-origin" });
+      return res.ok ? ((await res.json()) as MediaInfoTarget | null) : null;
+    },
+    audioAnalysisGet: async (key: string) => {
+      const res = await fetch(`/api/analysis?key=${encodeURIComponent(key)}`, {
+        credentials: "same-origin",
+      });
+      return res.ok ? ((await res.json()) as AudioAnalysis | null) : null;
     },
     command: () => Promise.resolve(),
   };

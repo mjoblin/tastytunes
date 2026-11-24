@@ -3,7 +3,15 @@ import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, join, normalize, sep } from "node:path";
 import type { PushMessage, Snapshot } from "@shared/ipc";
-import type { LyricsQuery, LyricsResult } from "@shared/model";
+import {
+  audioAnalysisKey,
+  type AudioAnalysis,
+  type LyricsQuery,
+  type LyricsResult,
+  type MediaInfoQuery,
+  type MediaInfoTarget,
+  type MediaNode,
+} from "@shared/model";
 import { artIdOf, displayPush, displaySnapshot } from "./displayFeed";
 import { hostAllowed } from "./hostCheck";
 
@@ -23,6 +31,10 @@ import { hostAllowed } from "./hostCheck";
  *   reconnect after a wake or a restart never shows the old track, and a ping every few seconds
  *   lets the page tell a quiet app from a lost one.
  * - Lyrics only for the track that is playing: the page can't make the app look anything up.
+ * - THE SCENES' ANALYSIS, FINISHED (stage 2): the page asks which library file is playing (the
+ *   window's own question, answered only for the playing track, with the file's ids left out)
+ *   and then that file's stored analysis, by a key this server handed out; it never measures
+ *   anything, so a track the app hasn't analyzed shows the Sleeve's face, as in the window.
  * - The page is the app's own Display tree (one home), built as a second entry of the renderer
  *   (display.html), with a web bridge in place of the window's API.
  */
@@ -32,6 +44,10 @@ export interface DisplayDeps {
   lyrics(query: LyricsQuery): Promise<LyricsResult | null | "unreachable">;
   lyricsAllowed(): boolean;
   picture(url: string): Promise<{ bytes: Buffer; type: string } | null>;
+  /** The library file a query names, as the window's Info finds it (a show: no index rebuilt). */
+  trackInfo(query: MediaInfoQuery): Promise<MediaInfoTarget | null>;
+  /** A stored analysis by its content key. */
+  analysis(contentKey: string): AudioAnalysis | null;
   token(): Promise<string>;
   /** The built renderer (out/renderer): display.html and its assets. */
   pageDir: string;
@@ -42,6 +58,8 @@ export interface DisplayDeps {
 
 const COOKIE = "tt_display";
 const MAX_ART_IDS = 200;
+/** The analysis keys handed out with the playing file, kept for its next few asks. */
+const MAX_TRACK_KEYS = 20;
 /** A ping this often; the page counts the app lost after a few missed (display/live). */
 export const PING_MS = 5_000;
 /** Screens at once; more is someone else's loop, not a household. */
@@ -127,6 +145,7 @@ export class DisplayServer {
   private http: Server | null = null;
   private readonly clients = new Set<ServerResponse>();
   private readonly artIds = new Map<string, string>();
+  private readonly trackKeys = new Set<string>();
   private readonly kept = new Map<string, { bytes: Buffer; type: string }>();
   private readonly fetching = new Map<string, Promise<{ bytes: Buffer; type: string } | null>>();
   private ping: ReturnType<typeof setInterval> | null = null;
@@ -270,6 +289,8 @@ export class DisplayServer {
         return this.json(res, displaySnapshot(this.deps.snapshot(), this.art));
       if (path === "/api/live") return this.live(req, res);
       if (path === "/api/lyrics") return await this.lyrics(res, url);
+      if (path === "/api/track") return await this.track(res, url);
+      if (path === "/api/analysis") return this.storedAnalysis(res, url);
       const art = /^\/art\/([0-9a-f]{24})$/.exec(path);
       if (art) return await this.picture(res, art[1]);
       if (path.startsWith("/assets/"))
@@ -319,6 +340,59 @@ export class DisplayServer {
     };
     if (!asksForPlaying(query, this.deps.snapshot())) return this.json(res, null);
     this.json(res, await this.deps.lyrics(query));
+  }
+
+  /** The playing library file, as the window's mediaNodeInfo answers it, but only for the track
+   *  that is playing and with only what the scenes read: its tags, its length, its class. Its ids
+   *  stand in as one opaque id, and its analysis key is noted so /api/analysis may answer it. */
+  private async track(res: ServerResponse, url: URL): Promise<void> {
+    const p = url.searchParams;
+    const duration = Number(p.get("duration"));
+    const asked: LyricsQuery = {
+      artist: p.get("artist") ?? "",
+      title: p.get("title") ?? "",
+      album: p.get("album") || null,
+      duration: p.get("duration") && Number.isFinite(duration) && duration > 0 ? duration : null,
+    };
+    if (!asksForPlaying(asked, this.deps.snapshot())) return this.json(res, null);
+    // the page's picture address is an id this server handed out: the query gets the real one
+    const art = /^\/art\/([0-9a-f]{24})$/.exec(p.get("art") ?? "");
+    const found = await this.deps.trackInfo({
+      kind: "track",
+      title: asked.title,
+      artist: asked.artist,
+      album: asked.album,
+      durationSecs: asked.duration,
+      artUrl: art ? (this.artIds.get(art[1]) ?? null) : null,
+    });
+    const n = found?.node;
+    if (!n || n.isContainer) return this.json(res, null);
+    const key = audioAnalysisKey(n);
+    this.trackKeys.delete(key);
+    this.trackKeys.add(key);
+    while (this.trackKeys.size > MAX_TRACK_KEYS)
+      this.trackKeys.delete(this.trackKeys.keys().next().value!);
+    const node: MediaNode = {
+      id: artIdOf(key),
+      parentId: null,
+      title: n.title,
+      upnpClass: n.upnpClass,
+      isContainer: false,
+      artUrl: null,
+      artist: n.artist,
+      album: n.album,
+      year: n.year ?? null,
+      trackNumber: n.trackNumber ?? null,
+      durationSecs: n.durationSecs,
+      serverUdn: "display",
+    };
+    this.json(res, { node });
+  }
+
+  /** A stored analysis, only by a key handed out with the playing file. */
+  private storedAnalysis(res: ServerResponse, url: URL): void {
+    const key = url.searchParams.get("key") ?? "";
+    this.json(res, this.trackKeys.has(key) ? this.deps.analysis(key) : null);
   }
 
   private async picture(res: ServerResponse, id: string): Promise<void> {
