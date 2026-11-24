@@ -272,17 +272,8 @@ export const SIGNAL_LABELS: Record<SignalQuality, string> = {
   unknown: "unknown",
 };
 
-/**
- * The device's active source id. Zone state is authoritative; now_playing is
- * the fallback for the beat where only one feed has updated during a source
- * switch. Screens used to disagree on precedence, so the queue's "audible"
- * highlight and the presets/sources highlight could briefly point at
- * different sources.
- */
-export const activeSourceId = (
-  zoneState: { source: string | null } | null,
-  nowPlaying: { source: { id: string | null } | null } | null,
-): string | null => zoneState?.source ?? nowPlaying?.source?.id ?? null;
+// the device's active source id: one home in shared (main reads it too)
+export { activeSourceId } from "@shared/smoip";
 
 /** A count in the user's locale style — "4,590 tracks";
  *  one home, so every large number the app prints agrees. */

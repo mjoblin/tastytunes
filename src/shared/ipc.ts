@@ -35,6 +35,7 @@ import type {
   ZonePosition,
   ZoneState,
 } from "./smoip";
+import type { DisplayScreens } from "./displayControl";
 import type {
   AlbumInfo,
   AppSettings,
@@ -196,6 +197,8 @@ export type PushMessage =
   | { kind: "mcpStatus"; status: McpStatus }
   /** Display on other screens started, stopped or failed (main/app/display); windows only. */
   | { kind: "displayStatus"; status: DisplayStatus }
+  /** The screens allowed to control, and the one being asked about (main/app/display). */
+  | { kind: "displayScreens"; screens: DisplayScreens }
   | { kind: "scheduleMissed"; missed: MissedSchedule | null }
   | { kind: "mediaIndex"; statuses: MediaIndexStatus[] }
   /** A menu command; `delivery` marks the copies of one click sent to a window still loading
@@ -399,6 +402,12 @@ export interface TastyTunesApi {
   getDisplayStatus(): Promise<DisplayStatus>;
   /** A new address for Display on other screens: screens on the old one need the new one. */
   displayNewAddress(): Promise<DisplayStatus>;
+  /** The screens that asked to control playback, and the one being asked about now. */
+  getDisplayScreens(): Promise<DisplayScreens>;
+  /** Allow a screen to control playback, or not now (the prompt, or Settings' list). */
+  displayScreenAllow(id: string, allowed: boolean): Promise<DisplayScreens>;
+  /** Forget a screen: its next tap asks again. */
+  displayScreenRemove(id: string): Promise<DisplayScreens>;
   /** The folder the agent tools export into (main/app/exportsFolder). */
   getExportFolder(): Promise<ExportFolderStatus>;
   /** The folder dialog: the only way the export folder is set. */
@@ -713,6 +722,9 @@ export const IPC = {
   openAccessibilitySettings: "tt:openAccessibilitySettings",
   getDisplayStatus: "tt:getDisplayStatus",
   displayNewAddress: "tt:displayNewAddress",
+  getDisplayScreens: "tt:getDisplayScreens",
+  displayScreenAllow: "tt:displayScreenAllow",
+  displayScreenRemove: "tt:displayScreenRemove",
   getExportFolder: "tt:getExportFolder",
   chooseExportFolder: "tt:chooseExportFolder",
   revealExportFolder: "tt:revealExportFolder",

@@ -4,7 +4,7 @@ import { hasLocalNetworkPrivacy } from "../app/localNetwork";
 import { revealLog } from "../app/appLog";
 import { loginItemState, setOpenAtLogin } from "../app/loginItem";
 import { openAccessibilitySettings, refreshMediaKeys } from "../app/mediaKeys";
-import { displayStatus, newDisplayAddress } from "../app/display";
+import { displayStatus, newDisplayAddress, screenBook } from "../app/display";
 import { chooseExportFolder, exportFolderStatus, revealExportFolder } from "../app/exportsFolder";
 import { deviceManager, mcpBridge } from "../app/runtime";
 import { checkUpdatesOnDemand, downloadUpdate, installUpdate } from "../app/updater";
@@ -31,6 +31,16 @@ export function registerAppIpc(): void {
   // Display on other screens: its status and a new address (app/display)
   handle(IPC.getDisplayStatus, () => displayStatus());
   handle(IPC.displayNewAddress, () => newDisplayAddress());
+  // the screens that may control playback (app/display's screenBook)
+  handle(IPC.getDisplayScreens, () => Promise.resolve(screenBook.list()));
+  handle(IPC.displayScreenAllow, (_e, id: unknown, allowed: unknown) => {
+    if (typeof id === "string" && typeof allowed === "boolean") screenBook.answer(id, allowed);
+    return Promise.resolve(screenBook.list());
+  });
+  handle(IPC.displayScreenRemove, (_e, id: unknown) => {
+    if (typeof id === "string") screenBook.remove(id);
+    return Promise.resolve(screenBook.list());
+  });
   // where the agent tools' exports go: set only by this dialog (app/exportsFolder)
   handle(IPC.getExportFolder, () => Promise.resolve(exportFolderStatus()));
   handle(IPC.chooseExportFolder, (e) =>

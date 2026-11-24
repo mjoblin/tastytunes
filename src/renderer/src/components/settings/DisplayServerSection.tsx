@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import type { DisplayScreen, DisplayScreens } from "@shared/displayControl";
 import type { DisplayStatus } from "@shared/ipc";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { QrCode } from "@/components/settings/QrCode";
 import { maskedAddress } from "@/lib/displayAddress";
+import { fmtRelative } from "@/lib/format";
 import {
   CopyRow,
   NumberField,
@@ -20,9 +22,15 @@ import {
  * computer's browser opens (with its token), a new address when one has been shared too widely,
  * and the port. The status is read fresh when the card shows (the computer's address can have
  * changed), then follows main's pushes as the server starts, stops or fails.
+ *
+ * CONTROLS ON THE OTHER SCREENS: a switch of its own, off by default (turning on viewing never
+ * grants control), the volume under it, and the screens that asked, each allowed or not, with
+ * Remove (main/servers/displayScreens).
  */
 const setDisplayStatus = (displayStatus: DisplayStatus): void =>
   useStore.setState({ displayStatus });
+const setDisplayScreens = (displayScreens: DisplayScreens): void =>
+  useStore.setState({ displayScreens });
 
 export function DisplayServerSection({ settings, save }: SectionProps): React.JSX.Element {
   const status = useStore((s) => s.displayStatus);
@@ -90,6 +98,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
             )}
           </div>
         )}
+        {on && <ControlRows settings={settings} save={save} />}
         {on && (
           <SettingRow label="Port" hint="Change this if another app is using the same port.">
             <NumberField
@@ -105,5 +114,79 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
         )}
       </div>
     </SettingsCard>
+  );
+}
+
+/** The controls' switch, the volume's under it, and the screens that asked. */
+function ControlRows({ settings, save }: SectionProps): React.JSX.Element {
+  const screens = useStore((s) => s.displayScreens?.screens ?? []);
+  useEffect(() => {
+    void tt.getDisplayScreens().then(setDisplayScreens);
+  }, []);
+  const control = settings.displayControl;
+  return (
+    <div data-display-control className="space-y-3 border-t border-edge/60 pt-3">
+      <Toggle
+        label="Playback controls"
+        hint="Show play, pause and skip buttons on these screens. Each screen asks here before its buttons work."
+        checked={control}
+        onChange={(displayControl) => void save({ displayControl })}
+      />
+      {control && (
+        <div className="pl-4 ml-1 border-l-2 border-edge/50 space-y-2">
+          <Toggle
+            label="Volume buttons"
+            hint="Change the volume one step for each tap, up to the volume limit."
+            checked={settings.displayControlVolume}
+            onChange={(displayControlVolume) => void save({ displayControlVolume })}
+          />
+          {settings.displayControlVolume && settings.volumeLimitPercent == null && (
+            <div data-display-volume-limit className="text-[11.5px] text-faint max-w-sm">
+              No volume limit is set. You can set one in Settings › Behavior.
+            </div>
+          )}
+        </div>
+      )}
+      {control && screens.length > 0 && (
+        <div data-display-screens className="space-y-1">
+          <div className="text-[12px] text-dim">Screens</div>
+          {screens.map((s) => (
+            <ScreenRow key={s.id} screen={s} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ScreenRow({ screen }: { screen: DisplayScreen }): React.JSX.Element {
+  return (
+    <div
+      data-display-screen={screen.id}
+      className="flex items-center gap-3 rounded-lg bg-veil px-3 py-2 ring-1 ring-edge"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[12.5px] text-ink">{screen.name}</div>
+        <div className="text-[11.5px] text-faint">
+          {screen.allowed ? "Allowed" : "Not allowed"} · First asked {fmtRelative(screen.firstSeen)}
+        </div>
+      </div>
+      {!screen.allowed && (
+        <HeaderChip
+          data-display-screen-allow
+          onClick={() => void tt.displayScreenAllow(screen.id, true).then(setDisplayScreens)}
+          className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
+        >
+          Allow
+        </HeaderChip>
+      )}
+      <HeaderChip
+        data-display-screen-remove
+        onClick={() => void tt.displayScreenRemove(screen.id).then(setDisplayScreens)}
+        className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
+      >
+        Remove
+      </HeaderChip>
+    </div>
   );
 }

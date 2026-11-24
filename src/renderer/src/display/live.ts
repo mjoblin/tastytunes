@@ -1,3 +1,4 @@
+import type { DisplayControl } from "@shared/displayControl";
 import type { PushMessage, Snapshot } from "@shared/ipc";
 
 /**
@@ -7,7 +8,8 @@ import type { PushMessage, Snapshot } from "@shared/ipc";
  * the last track; the app pings every few seconds, so a page that hears nothing for a while
  * knows it has lost the app (it goes dark) and opens the channel again. A channel the app
  * refuses (a new address was made) asks once whether this page is still let in, and if not,
- * reloads into the app's "open the address" page.
+ * reloads into the app's "open the address" page. Beside the app's pushes, the screen's own line:
+ * where it stands with the controls (`event: control`, display/control), sent to this screen alone.
  */
 
 /** About two missed pings (PING_MS, 5 s). */
@@ -24,6 +26,8 @@ export function listenPushes(cb: (msg: PushMessage) => void): () => void {
 
 export interface Follow {
   snapshot(snap: Snapshot): void;
+  /** Where this screen stands with the controls, at every connection and when it changes. */
+  control?(control: DisplayControl): void;
   /** Whether the app is heard: false after LOST_MS of silence, true at the next word. */
   reachable(heard: boolean): void;
 }
@@ -63,6 +67,10 @@ export function followApp(follow: Follow): () => void {
       for (const l of listeners) l({ kind: "settings", settings: snap.settings });
     });
     live.addEventListener("ping", hear);
+    live.addEventListener("control", (e: MessageEvent<string>) => {
+      hear();
+      follow.control?.(JSON.parse(e.data) as DisplayControl);
+    });
     live.onmessage = (e: MessageEvent<string>) => {
       hear();
       const msg = JSON.parse(e.data) as PushMessage;

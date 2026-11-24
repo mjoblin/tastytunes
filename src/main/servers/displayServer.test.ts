@@ -5,7 +5,8 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Snapshot } from "@shared/ipc";
 import { DEFAULT_SETTINGS } from "@shared/model";
-import { asksForPlaying, DisplayServer, PING_MS } from "./displayServer";
+import type { DisplayControl, DisplayVerb } from "@shared/displayControl";
+import { asksForPlaying, CONTROL_RATE, DisplayServer, PING_MS, VOLUME_RATE } from "./displayServer";
 
 const TOKEN = "tok-123";
 let token = TOKEN;
@@ -43,6 +44,10 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
   const fetched: string[] = [];
   const asked: string[] = [];
   const logged: string[] = [];
+  const steered: Array<{ screen: string; name: string; verb: DisplayVerb }> = [];
+  const control: { now: DisplayControl } = {
+    now: { state: "allowed", volume: null, next: null },
+  };
   server = new DisplayServer({
     snapshot: () => snapshot,
     lyrics: (q) => {
@@ -84,10 +89,24 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
     token: () => Promise.resolve(token),
     pageDir: page,
     log: (text) => logged.push(text),
+    controlFor: () => control.now,
+    steer: (screen, name, verb) => {
+      steered.push({ screen, name, verb });
+      return { done: true };
+    },
   });
   await server.start(0, "127.0.0.1");
   const port = server.port!;
-  const get = (path: string, opts: { cookie?: string; method?: string; host?: string } = {}) =>
+  const get = (
+    path: string,
+    opts: {
+      cookie?: string;
+      method?: string;
+      host?: string;
+      headers?: Record<string, string>;
+      body?: string;
+    } = {},
+  ) =>
     new Promise<{
       status: number;
       headers: Record<string, string | string[] | undefined>;
@@ -104,6 +123,7 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
           headers: {
             ...(opts.cookie ? { cookie: opts.cookie } : {}),
             ...(opts.host ? { host: opts.host } : {}),
+            ...opts.headers,
           },
         },
         (res) => {
@@ -113,11 +133,29 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
         },
       );
       req.on("error", reject);
-      req.end();
+      req.end(opts.body);
+    });
+  /** A screen's verb, as the page sends it: its own origin, the header, a JSON body. */
+  const steer = (
+    verb: unknown,
+    opts: { cookie?: string; headers?: Record<string, string>; origin?: string | null } = {},
+  ) =>
+    get("/api/control", {
+      method: "POST",
+      cookie: opts.cookie ?? `${cookie}; tt_screen=${SCREEN}`,
+      headers: {
+        ...(opts.origin === null ? {} : { origin: opts.origin ?? `http://127.0.0.1:${port}` }),
+        "x-tastytunes": "control",
+        "content-type": "application/json",
+        "user-agent":
+          "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+        ...opts.headers,
+      },
+      body: JSON.stringify({ verb, touch: true }),
     });
   /** /api/live's first bytes, then whether the stream ended. */
   const live = (cookieHeader: string) =>
-    new Promise<{ first: string; ended: Promise<void> }>((resolve, reject) => {
+    new Promise<{ first: string; ended: Promise<void>; more(): string }>((resolve, reject) => {
       const req = request(
         {
           host: "127.0.0.1",
@@ -135,7 +173,7 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
           });
           res.on("data", (c: Buffer) => {
             text += c.toString();
-            if (text.includes("event: snapshot")) resolve({ first: text, ended });
+            if (text.includes("event: control")) resolve({ first: text, ended, more: () => text });
           });
         },
       );
@@ -143,10 +181,11 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
       req.on("error", (e) => (e.message === "socket hang up" ? undefined : reject(e)));
       req.end();
     });
-  return { get, live, fetched, asked, logged };
+  return { get, live, steer, fetched, asked, logged, steered, control, server };
 }
 
 const cookie = `tt_display=${TOKEN}`;
+const SCREEN = "0123456789abcdef0123456789abcdef";
 
 describe("Display on other screens' server", () => {
   it("lets in only the address's token, trades it for a cookie, and takes it out of the address", async () => {
@@ -164,10 +203,83 @@ describe("Display on other screens' server", () => {
     expect(String(page.headers["content-security-policy"])).toContain("default-src 'self'");
   });
 
-  it("answers GET only", async () => {
+  it("answers GET, and one POST route alone", async () => {
     const { get } = await rig();
     expect((await get("/api/snapshot", { cookie, method: "POST" })).status).toBe(405);
     expect((await get("/api/snapshot", { cookie, method: "PUT" })).status).toBe(405);
+    expect((await get("/api/control?x=1", { cookie, method: "POST" })).status).toBe(405);
+    expect((await get("/api/control", { cookie, method: "PUT" })).status).toBe(405);
+    expect((await get("/api/control", { cookie })).status).toBe(404);
+  });
+
+  it("gives each browser an id of its own at its first visit, and keeps the one it has", async () => {
+    const { get } = await rig();
+    const first = await get(`/?t=${TOKEN}`);
+    const cookies = first.headers["set-cookie"] as string[];
+    const id = /tt_screen=([0-9a-f]{32}); Path=\/; HttpOnly; SameSite=Strict/.exec(
+      cookies.join("\n"),
+    );
+    expect(id).not.toBeNull();
+    const again = await get(`/?t=${TOKEN}`, { cookie: `tt_screen=${id![1]}` });
+    expect(String(again.headers["set-cookie"])).not.toContain("tt_screen");
+    // a screen opened before screens had ids is given one with the page
+    expect(String((await get("/", { cookie })).headers["set-cookie"])).toMatch(
+      /tt_screen=[0-9a-f]{32}/,
+    );
+    expect(
+      (await get("/", { cookie: `${cookie}; tt_screen=${SCREEN}` })).headers["set-cookie"],
+    ).toBeUndefined();
+  });
+
+  it("takes a verb only from its own page: the origin, the header, JSON, the token and the id", async () => {
+    const { steer, steered } = await rig();
+    expect((await steer("next", { origin: "http://evil.example" })).status).toBe(403);
+    expect((await steer("next", { origin: null })).status).toBe(403);
+    expect((await steer("next", { origin: "null" })).status).toBe(403);
+    expect((await steer("next", { headers: { "x-tastytunes": "nope" } })).status).toBe(403);
+    expect((await steer("next", { headers: { "content-type": "text/plain" } })).status).toBe(415);
+    expect((await steer("next", { cookie: `tt_screen=${SCREEN}` })).status).toBe(401);
+    expect((await steer("next", { cookie })).status).toBe(403);
+    expect((await steer("next", { cookie: `${cookie}; tt_screen=short` })).status).toBe(403);
+    expect(steered).toEqual([]);
+    const done = await steer("next");
+    expect(done.status).toBe(200);
+    expect(JSON.parse(done.body)).toEqual({ done: true });
+    // named from its browser: an iPad's Safari says it is a Mac, and the page says it has touch
+    expect(steered).toEqual([{ screen: SCREEN, name: "iPad · Safari", verb: "next" }]);
+  });
+
+  it("knows a fixed list of verbs and nothing else, seek among them", async () => {
+    const { steer, steered } = await rig();
+    for (const v of ["seek", "setVolumePercent", "recallPreset", 7, null])
+      expect((await steer(v)).status).toBe(400);
+    expect(steered).toEqual([]);
+  });
+
+  it("caps one screen's commands, the volume's more tightly", async () => {
+    const { steer, steered } = await rig();
+    for (let i = 0; i < VOLUME_RATE.count; i++) expect((await steer("volumeUp")).status).toBe(200);
+    expect((await steer("volumeUp")).status).toBe(429);
+    for (let i = VOLUME_RATE.count; i < CONTROL_RATE.count; i++)
+      expect((await steer("next")).status).toBe(200);
+    expect((await steer("next")).status).toBe(429);
+    expect(steered).toHaveLength(CONTROL_RATE.count);
+  });
+
+  it("tells each open screen where it stands when it opens, and again when that changes", async () => {
+    const { live, control, server } = await rig();
+    control.now = { state: "ask", volume: null, next: null };
+    const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
+    expect(opened.first).toContain('event: control\ndata: {"state":"ask"');
+    control.now = { state: "off", volume: null, next: null };
+    server.pushControl();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(opened.more()).toContain('event: control\ndata: {"state":"off"');
+    // said once: the same again sends nothing
+    const before = opened.more().length;
+    server.pushControl();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(opened.more().length).toBe(before);
   });
 
   it("serves the reduced snapshot, with pictures by id", async () => {

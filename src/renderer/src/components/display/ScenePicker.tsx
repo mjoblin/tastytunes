@@ -349,14 +349,19 @@ function RangeSlider({
 }
 
 /** The All scenes rows (the finish, the corners, the drops, the sync), also the page's on another
- *  screen (display/ScenePanel), where a change stays on that screen. */
+ *  screen (display/ScenePanel), where a change stays on that screen. There they are sized for a
+ *  finger (`touch`): the same rows and words, each control on its own line under its label. */
 export function SyncRow({
   host,
   sleeveOnly = false,
+  touch = false,
 }: {
   host: PickerHost;
   /** A page on a screen that can't draw scenes: the Show row alone (the rest shape scenes). */
   sleeveOnly?: boolean;
+  /** A page on a tablet: 44px controls, larger words, the glass's controls on a line of their
+   *  own (zoomed, the window's rows wrapped into each other in a tablet's panel). */
+  touch?: boolean;
 }): React.JSX.Element {
   const value = useStore((s) => s.settings.displaySyncMs ?? 0);
   const drops = useStore((s) => s.settings.displayDrops ?? "normal");
@@ -380,13 +385,61 @@ export function SyncRow({
     if (final) void saveSettings({ displaySyncMs: v });
     else syncTimer.current = setTimeout(() => void saveSettings({ displaySyncMs: v }), 150);
   };
+  const seg = touch ? "touch" : "md";
+  const sw = touch ? "lg" : "sm";
+  const labelled = touch ? "flex items-center gap-2.5" : "flex items-center gap-1.5";
+  const curveRow = (
+    <>
+      <Segmented
+        size={seg}
+        value={curve}
+        options={[
+          { value: "gentle", label: "Gentle", disabled: !cathode },
+          { value: "deep", label: "Deep", disabled: !cathode },
+        ]}
+        onChange={(v) => void saveSettings({ displayCathodeCurve: v })}
+      />
+      <label className={cx(labelled, !cathode && "opacity-40")}>
+        <Switch
+          size={sw}
+          checked={fill}
+          disabled={!cathode}
+          onChange={(v) => void saveSettings({ displayCathodeFill: v })}
+        />
+        Fill
+      </label>
+      {/* the mains hum in the brightness, ten hertz: its own switch (2026-09-15, an
+          accessibility concern); off already under reduced motion */}
+      <label className={cx(labelled, !cathode && "opacity-40")}>
+        <Switch
+          size={sw}
+          checked={flicker}
+          disabled={!cathode}
+          onChange={(v) => void saveSettings({ displayCathodeFlicker: v })}
+        />
+        Flicker
+      </label>
+    </>
+  );
   return (
-    <div data-display-sync className="flex flex-col gap-y-2 text-[11.5px] text-dim">
+    <div
+      data-display-sync
+      className={
+        touch
+          ? "@container flex flex-col divide-y divide-edge text-[14px] text-dim"
+          : "flex flex-col gap-y-2 text-[11.5px] text-dim"
+      }
+    >
       {/* the glass is the fullscreen view's alone: the tile draws no cathode finish, so its
           picker shows the drops and the sync, which shape what the tile draws through the feed */}
       {host === "display" && !sleeveOnly && (
-        <SettingLine label="Finish" hint="A simulated cathode tube's glass over every scene.">
+        <SettingLine
+          label="Finish"
+          hint="A simulated cathode tube's glass over every scene."
+          touch={touch}
+        >
           <Segmented
+            size={seg}
             value={finish}
             options={[
               { value: "plain", label: "Plain" },
@@ -396,61 +449,44 @@ export function SyncRow({
           />
           {/* the glass's controls are always in the row, dimmed when Plain: a control that appears
               rearranges everything beside it */}
-          <span className={cx(!cathode && "opacity-40")}>Curve</span>
-          <Segmented
-            value={curve}
-            options={[
-              { value: "gentle", label: "Gentle", disabled: !cathode },
-              { value: "deep", label: "Deep", disabled: !cathode },
-            ]}
-            onChange={(v) => void saveSettings({ displayCathodeCurve: v })}
-          />
-          <label className={cx("flex items-center gap-1.5", !cathode && "opacity-40")}>
-            <Switch
-              size="sm"
-              checked={fill}
-              disabled={!cathode}
-              onChange={(v) => void saveSettings({ displayCathodeFill: v })}
-            />
-            Fill
-          </label>
-          {/* the mains hum in the brightness, ten hertz: its own switch (2026-09-15, an
-              accessibility concern); off already under reduced motion */}
-          <label className={cx("flex items-center gap-1.5", !cathode && "opacity-40")}>
-            <Switch
-              size="sm"
-              checked={flicker}
-              disabled={!cathode}
-              onChange={(v) => void saveSettings({ displayCathodeFlicker: v })}
-            />
-            Flicker
-          </label>
+          {!touch && (
+            <>
+              <span className={cx(!cathode && "opacity-40")}>Curve</span>
+              {curveRow}
+            </>
+          )}
+        </SettingLine>
+      )}
+      {touch && host === "display" && !sleeveOnly && (
+        <SettingLine touch label="Curve" dim={!cathode}>
+          {curveRow}
         </SettingLine>
       )}
       {host === "display" && (
         <SettingLine
           label="Show"
           hint="The track's name, the time, and the track's progress along the bottom."
+          touch={touch}
         >
-          <label className="flex items-center gap-1.5">
+          <label className={labelled}>
             <Switch
-              size="sm"
+              size={sw}
               checked={cornerTitle}
               onChange={(v) => void saveSettings({ displayCornerTitle: v })}
             />
             Title
           </label>
-          <label className="flex items-center gap-1.5">
+          <label className={labelled}>
             <Switch
-              size="sm"
+              size={sw}
               checked={cornerClock}
               onChange={(v) => void saveSettings({ displayCornerClock: v })}
             />
             Clock
           </label>
-          <label className="flex items-center gap-1.5">
+          <label className={labelled}>
             <Switch
-              size="sm"
+              size={sw}
               checked={progress}
               onChange={(v) => void saveSettings({ displayProgress: v })}
             />
@@ -463,8 +499,10 @@ export function SyncRow({
           <SettingLine
             label="Drops"
             hint='"Loose" counts small lulls as a drop, "Strict" requires a real breakdown.'
+            touch={touch}
           >
             <Segmented
+              size={seg}
               value={drops}
               options={[
                 { value: "loose", label: "Loose" },
@@ -477,6 +515,7 @@ export function SyncRow({
           <SettingLine
             label="Sync"
             hint='Choose "early" if the flashes and lyrics appear after the sound.'
+            touch={touch}
           >
             <RangeSlider
               value={sync}
@@ -484,17 +523,25 @@ export function SyncRow({
               max={1000}
               step={10}
               ariaLabel="Sync"
-              className="w-36"
+              className={touch ? "w-44" : "w-36"}
               onChange={(v, final) => nudge(v, final)}
             />
-            <span className="w-24 text-right font-mono tabular-nums text-faint">
+            <span
+              className={cx(
+                "text-right font-mono tabular-nums text-faint",
+                touch ? "w-28 text-[13px]" : "w-24",
+              )}
+            >
               {sync === 0 ? "in step" : sync > 0 ? `${sync} ms early` : `${-sync} ms late`}
             </span>
             <HeaderChip
               type="button"
               onClick={() => nudge(0, true)}
               disabled={sync === 0}
-              className="px-2 py-0.5 text-[11.5px] motion-safe:active:scale-90 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-panel/70 disabled:hover:text-dim disabled:hover:ring-edge"
+              className={cx(
+                "motion-safe:active:scale-90 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-panel/70 disabled:hover:text-dim disabled:hover:ring-edge",
+                touch ? "h-11 px-4 text-[14px]" : "px-2 py-0.5 text-[11.5px]",
+              )}
             >
               Reset
             </HeaderChip>
@@ -510,16 +557,35 @@ export function SyncRow({
  *  read clearly enough). The sentence sits UNDER the control (beside it, the controls'
  *  differing widths left the sentences starting at different places with a run of whitespace
  *  before each; under, every row reads the same way, label, control, then what it does). The
- *  label is centred on the control's row. */
-function SettingLine({
+ *  label is centred on the control's row. On a tablet's page (`touch`) the rows are a list with
+ *  a rule between them and room for a finger, the label above the control where the panel is
+ *  narrow (a phone). */
+export function SettingLine({
   label,
   hint,
+  touch = false,
+  dim = false,
   children,
 }: {
   label: string;
-  hint: string;
+  hint?: string;
+  touch?: boolean;
+  /** The label dimmed with its controls (the glass's, while the finish is Plain). */
+  dim?: boolean;
   children: React.ReactNode;
 }): React.JSX.Element {
+  if (touch)
+    return (
+      <div className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-2 py-3.5 first:pt-1 last:pb-1 @max-[26rem]:grid-cols-1">
+        <span className={cx("text-ink", dim && "opacity-40")}>{label}</span>
+        <div className="flex min-h-11 flex-wrap items-center gap-x-5 gap-y-3">{children}</div>
+        {hint && (
+          <span className="col-start-2 text-[13px] leading-snug text-faint @max-[26rem]:col-start-1">
+            {hint}
+          </span>
+        )}
+      </div>
+    );
   return (
     <div className="grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1">
       <span>{label}</span>

@@ -328,6 +328,18 @@ export const isCbusMode = (z: Pick<ZoneState, "cbus"> | null | undefined): boole
   z?.cbus === "amplifier" || z?.cbus === "receiver";
 
 /**
+ * The device's active source id. Zone state is authoritative; now_playing is
+ * the fallback for the beat where only one feed has updated during a source
+ * switch. Screens used to disagree on precedence, so the queue's "audible"
+ * highlight and the presets/sources highlight could briefly point at
+ * different sources.
+ */
+export const activeSourceId = (
+  zoneState: { source: string | null } | null,
+  nowPlaying: { source: { id: string | null } | null } | null,
+): string | null => zoneState?.source ?? nowPlaying?.source?.id ?? null;
+
+/**
  * Pre-amp mode: the streamer holds an absolute volume it can set. Requires
  * pre_amp_mode AND pre_amp_state === "on" — matching punytunes
  * (`isPreAmpModeEnabled`); a mode-enabled-but-not-"on" pre-amp can't take an

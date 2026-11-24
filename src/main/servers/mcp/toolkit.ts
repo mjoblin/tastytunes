@@ -18,7 +18,7 @@ import {
   resumeRun,
   trackArtists,
 } from "@shared/model";
-import { audioCaps, type ZonePlayState } from "@shared/smoip";
+import { activeSourceId, audioCaps, type ZonePlayState } from "@shared/smoip";
 import type { DeviceManager } from "../../device/deviceManager";
 import { getSettings } from "../../data/persist";
 import { pools as indexPools, revalidate } from "../../media/mediaIndex";
@@ -892,11 +892,9 @@ export const status = (ctx: ToolContext, t?: Target): unknown => {
     };
   }
   const md = s.playState?.metadata;
-  const activeSourceId = s.zoneState?.source ?? s.nowPlaying?.source?.id ?? null;
+  const sourceId = activeSourceId(s.zoneState, s.nowPlaying);
   const sourceName =
-    s.sources?.sources?.find((x) => x.id === activeSourceId)?.name ??
-    s.nowPlaying?.source?.name ??
-    null;
+    s.sources?.sources?.find((x) => x.id === sourceId)?.name ?? s.nowPlaying?.source?.name ?? null;
   return {
     ...clock,
     connection: "connected",
@@ -908,7 +906,7 @@ export const status = (ctx: ToolContext, t?: Target): unknown => {
       shown_in_window: t ? t.window : true,
     },
     power: s.systemPower?.power ?? null,
-    source: activeSourceId ? { id: activeSourceId, name: sourceName } : null,
+    source: sourceId ? { id: sourceId, name: sourceName } : null,
     ...appState(ctx),
     playback: {
       state: s.playState?.state ?? null,

@@ -19,7 +19,8 @@ import type {
  *   empty: no device book, no addresses, no logs, no history, no library, no favorites.
  * - Pictures by id, never by address: an art URL becomes /art/<id>, and the server serves only
  *   ids it handed out (a route that fetched an address would fetch anything for anyone).
- * - Read only: nothing here carries a way back.
+ * - Nothing here carries a way back: the one write route and what a screen is told of it are the
+ *   server's (displayServer, shared/displayControl).
  */
 
 /** A picture's id: its address hashed, so the page never sees the address. */
@@ -59,8 +60,13 @@ export const SHOWN_SETTINGS = [
   "displayShuffleExclude",
 ] as const satisfies readonly (keyof AppSettings)[];
 
-/** Display settings a page never sees: the server's own switch and port. */
-export const HELD_SETTINGS = ["displayServer"] as const satisfies readonly (keyof AppSettings)[];
+/** Display settings a page never sees: the server's own switch and port, and the controls'
+ *  switches (a screen hears only where it stands itself, over its own line: displayServer). */
+export const HELD_SETTINGS = [
+  "displayServer",
+  "displayControl",
+  "displayControlVolume",
+] as const satisfies readonly (keyof AppSettings)[];
 
 /** Display's own settings and the look they draw with, over the defaults. The scene is the
  *  owner's: the page draws it where the browser can (WebGL2), the Sleeve's face elsewhere

@@ -27,6 +27,11 @@ const OWN = {
   displaySyncMs: (v: unknown) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 1000,
 } satisfies Partial<Record<keyof AppSettings, (v: unknown) => boolean>>;
 export type OwnKey = keyof typeof OWN;
+
+/** What a screen keeps that the app has no setting for: its controls locked (display/
+ *  PageTransport), so a touch shows only the corner buttons and the keys do nothing. */
+const HERE = { lockControls: isBool } as const;
+type Here = { lockControls?: boolean };
 /** Every setting a screen may keep. */
 export const OWN_KEYS = Object.keys(OWN) as OwnKey[];
 type Own = Partial<Pick<AppSettings, OwnKey>>;
@@ -35,10 +40,10 @@ export const ALL_SCENES_KEYS = OWN_KEYS.filter((k) => k !== "displayScene");
 
 // what this screen keeps when the browser's storage refuses it (a private window), for the
 // page's life
-let memory: Own | null = null;
+let memory: (Own & Here) | null = null;
 
-/** What this screen keeps: only known settings, each a value it may have. */
-export function ownSettings(): Own {
+/** Everything kept, each key checked against what it may be; anything else is dropped. */
+function kept(): Own & Here {
   let raw: unknown = memory;
   if (memory == null)
     try {
@@ -48,20 +53,41 @@ export function ownSettings(): Own {
     }
   const out: Record<string, unknown> = {};
   if (raw && typeof raw === "object")
-    for (const [k, ok] of Object.entries(OWN)) {
+    for (const [k, ok] of [...Object.entries(OWN), ...Object.entries(HERE)]) {
       const v = (raw as Record<string, unknown>)[k];
       if (v !== undefined && ok(v)) out[k] = v;
     }
   return out;
 }
 
-function store(own: Own): void {
+/** What this screen keeps of the app's settings: only known settings, each a value it may have. */
+export function ownSettings(): Own {
+  const { lockControls: _here, ...own } = kept();
+  return own;
+}
+
+function write(own: Own & Here): void {
   try {
     localStorage.setItem(KEY, JSON.stringify(own));
     memory = null;
   } catch {
     memory = own;
   }
+}
+
+/** The app's settings this screen keeps, beside what it keeps of its own. */
+function store(own: Own): void {
+  write({ ...own, lockControls: kept().lockControls });
+}
+
+/** Whether this screen's controls are locked. */
+export function controlsLocked(): boolean {
+  return kept().lockControls === true;
+}
+
+/** Lock this screen's controls, or let them be used again. */
+export function lockControls(on: boolean): void {
+  write({ ...ownSettings(), lockControls: on });
 }
 
 /** Keep, for this screen, the settings of `patch` a screen may keep (the rest are dropped). */

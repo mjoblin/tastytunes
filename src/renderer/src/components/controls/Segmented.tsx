@@ -25,6 +25,7 @@ export function Segmented<T extends string | number | boolean>({
   onChange,
   className,
   modal = false,
+  size = "md",
 }: {
   value: T;
   options: Array<SegmentedOption<T>>;
@@ -32,10 +33,18 @@ export function Segmented<T extends string | number | boolean>({
   className?: string;
   /** Inside a ModalShell: no hover transition (its note: they crawl over the blur). */
   modal?: boolean;
+  /** "touch": a finger's size, for a page on a tablet (display/ScenePanel), 44px tall. */
+  size?: "md" | "touch";
 }): React.JSX.Element {
+  const touch = size === "touch";
   return (
     <div
-      className={cx("no-drag flex h-8 rounded-lg ring-1 ring-edge bg-panel/70 p-0.5", className)}
+      className={cx(
+        touch
+          ? "no-drag flex h-11 rounded-lg ring-1 ring-edge bg-panel/70 p-0.5"
+          : "no-drag flex h-8 rounded-lg ring-1 ring-edge bg-panel/70 p-0.5",
+        className,
+      )}
     >
       {options.map((opt) => (
         <button
@@ -48,7 +57,9 @@ export function Segmented<T extends string | number | boolean>({
           data-tip={opt.tip}
           className={cx(
             // one line always: a two-word label ("All songs") broke in two in a narrow header
-            "flex items-center gap-1.5 px-3 rounded-md text-[12px] whitespace-nowrap",
+            touch
+              ? "flex items-center justify-center gap-1.5 px-4 rounded-md text-[14px] whitespace-nowrap motion-safe:active:scale-95"
+              : "flex items-center gap-1.5 px-3 rounded-md text-[12px] whitespace-nowrap",
             !modal && "transition-colors",
             opt.tip && "tip-top",
             opt.disabled

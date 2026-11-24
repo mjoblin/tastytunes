@@ -24,8 +24,11 @@ export function ConfirmActions({
   tone = "alert",
   start,
   busy = false,
+  cancel = "Cancel",
 }: {
   verb: string;
+  /** The safe answer's word ("Not now", where the question is a request, not a command). */
+  cancel?: string;
   onCancel(): void;
   onConfirm(): void;
   modal?: boolean;
@@ -45,7 +48,7 @@ export function ConfirmActions({
           !modal && "transition-colors",
         )}
       >
-        Cancel
+        {cancel}
       </button>
       <button
         onClick={onConfirm}

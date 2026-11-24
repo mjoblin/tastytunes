@@ -23,6 +23,7 @@ import { deriveNowPlaying } from "@/lib/format";
 import { DisplayMode } from "@/components/playback/DisplayMode";
 import { holdStages } from "@/components/display/SceneCanvas";
 import { askAgainForStored } from "@/components/media/waveformAnalysis";
+import { hearControl, useControl } from "./control";
 import { followApp } from "./live";
 import {
   drawsScenes,
@@ -32,17 +33,21 @@ import {
   ownSettings,
   type OwnKey,
 } from "./pageSettings";
+import { ControlsSetting, PageTransport, useLocked } from "./PageTransport";
 import { ScenePanel } from "./ScenePanel";
 import { musicGoing, REST_FADE_MS, REST_OPACITY, useRest } from "./rest";
+import { useTouchShown } from "./touch";
 
 /**
  * DISPLAY ON OTHER SCREENS, THE PAGE (0.17.0): the app's own Display mode, full screen, always on,
  * for a tablet or another computer. It follows the streamer through the display server's live
  * channel (display/live), which opens with what is playing now and opens again by itself after a
  * restart or a wake. The window's corner controls are hidden; at a touch the page shows its own
- * (display/ScenePanel: a scene, settings, full screen), which change this screen alone and never
- * steer the streamer. While the streamer sleeps, or the app hasn't been heard for a few seconds,
- * the page goes dark. A touch wakes a resting page, so a screen can be set up in silence.
+ * (display/ScenePanel: a scene, settings, full screen), which change this screen alone. With the
+ * app's Playback controls on, the same touch shows previous, play or pause and next
+ * (display/PageTransport), which steer the streamer once the app has allowed this screen. While
+ * the streamer sleeps, or the app hasn't been heard for a few seconds, the page goes dark. A
+ * touch wakes a resting page, so a screen can be set up in silence.
  *
  * A SCREEN LEFT ON: with the music stopped for a while, the page dims and drifts, a light page
  * turning dark once dimmed (display/rest).
@@ -106,6 +111,7 @@ function Page(): React.JSX.Element {
           useStore.getState().init({ ...snap, settings: forThisPage(snap.settings) });
         },
         reachable: setHeard,
+        control: hearControl,
       }),
     [],
   );
@@ -113,6 +119,16 @@ function Page(): React.JSX.Element {
   const powered = useStore((s) => s.systemPower?.power === "ON");
   const connected = useStore((s) => s.connection.phase === "connected");
   const going = useStore((s) => musicGoing(s.playState?.state));
+  // the page's own buttons, at a touch (display/touch), held while the panel is open
+  const [panelOpen, setPanelOpen] = useState(false);
+  const shown = useTouchShown(panelOpen);
+  // the playback buttons, where this screen may have them (display/PageTransport)
+  const control = useControl();
+  const [locked] = useLocked();
+  const transport =
+    !locked &&
+    (control.state === "ask" || control.state === "asking" || control.state === "allowed");
+  const transportShown = transport && shown && !panelOpen;
   // the panel in use (a touch in the last few seconds, or open) keeps the page awake, so a
   // resting screen can be set up
   const [inUse, setInUse] = useState(false);
@@ -151,6 +167,7 @@ function Page(): React.JSX.Element {
     <div
       data-display-scenes={SCENES_HERE ? "on" : "off"}
       data-display-resting={resting || undefined}
+      data-controls-shown={transportShown || undefined}
       className="h-dvh w-screen overflow-hidden"
       style={{
         opacity: resting ? REST_OPACITY : 1,
@@ -166,13 +183,21 @@ function Page(): React.JSX.Element {
       {heard && connected && powered ? (
         <>
           <DisplayMode />
+          <PageTransport
+            shown={transportShown}
+            shade={SCENES_HERE && settings.displayScene !== "sleeve"}
+          />
           <ScenePanel
             own={own}
             appScene={appScene}
             onPick={pickScene}
             onAppSettings={backToApp}
             scenes={SCENES_HERE}
+            shown={shown}
+            open={panelOpen}
+            onOpen={setPanelOpen}
             onAwake={setInUse}
+            extra={<ControlsSetting />}
           />
         </>
       ) : (

@@ -15,10 +15,12 @@ export function Switch({
 }: {
   checked: boolean;
   onChange(next: boolean): void;
-  size?: "md" | "sm";
+  /** "lg": a finger's size, for a page on a tablet (display/ScenePanel). */
+  size?: "md" | "sm" | "lg";
   disabled?: boolean;
 }): React.JSX.Element {
   const sm = size === "sm";
+  const lg = size === "lg";
   return (
     <button
       role="switch"
@@ -30,7 +32,7 @@ export function Switch({
       }}
       className={cx(
         "relative shrink-0 rounded-full transition-colors",
-        sm ? "h-4 w-7" : "h-5 w-9",
+        sm ? "h-4 w-7" : lg ? "h-7 w-12" : "h-5 w-9",
         checked ? "bg-accent" : "bg-veil2 ring-1 ring-edge",
         disabled && "opacity-40 pointer-events-none",
       )}
@@ -38,8 +40,8 @@ export function Switch({
       <span
         className={cx(
           "absolute top-0.5 rounded-full bg-bg transition-all",
-          sm ? "h-3 w-3" : "h-4 w-4",
-          checked ? (sm ? "left-[14px]" : "left-[18px]") : "left-0.5",
+          sm ? "h-3 w-3" : lg ? "h-6 w-6" : "h-4 w-4",
+          checked ? (sm ? "left-[14px]" : lg ? "left-[22px]" : "left-[18px]") : "left-0.5",
         )}
       />
     </button>

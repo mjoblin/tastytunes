@@ -1308,9 +1308,31 @@ img {
   color: var(--color-dim);
 }
 
-/* DISPLAY ON OTHER SCREENS (0.17.0, display.html): a page on another screen shows, it doesn't
-   steer, so Display mode's corner controls (the scene picker, the waveform and lyrics switches,
-   the exit) are not drawn there */
+/* DISPLAY ON OTHER SCREENS (0.17.0, display.html): the window's corner controls (the scene
+   picker, the waveform and lyrics switches, the exit) are the window's, so Display mode doesn't
+   draw them there; the page has its own (display/ScenePanel, display/PageTransport) */
 .display-page [data-display-corner] {
   display: none;
+}
+/* while the page's playback buttons show (display/PageTransport), they sit over the picture and
+   never move it: the Sleeve's lyric line, in the same band, steps back until they go, the scene's
+   name lifts clear of them, and on a narrow screen (a phone) the corners' chips step back too */
+.display-page [data-display-lyric] {
+  transition: opacity 300ms ease;
+}
+.display-page [data-controls-shown] [data-display-lyric] {
+  opacity: 0;
+}
+.display-page [data-controls-shown] [data-display-scene-toast] {
+  bottom: 13rem;
+}
+@media (max-width: 640px) {
+  .display-page [data-display-caption],
+  .display-page [data-display-clock] {
+    transition: opacity 300ms ease;
+  }
+  .display-page [data-controls-shown] [data-display-caption],
+  .display-page [data-controls-shown] [data-display-clock] {
+    opacity: 0;
+  }
 }

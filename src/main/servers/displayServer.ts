@@ -1,7 +1,14 @@
-import { timingSafeEqual } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, join, normalize, sep } from "node:path";
+import {
+  isDisplayVerb,
+  screenName,
+  type DisplayControl,
+  type DisplayControlAnswer,
+  type DisplayVerb,
+} from "@shared/displayControl";
 import type { PushMessage, Snapshot } from "@shared/ipc";
 import {
   audioAnalysisKey,
@@ -13,12 +20,14 @@ import {
   type MediaNode,
 } from "@shared/model";
 import { artIdOf, displayPush, displaySnapshot } from "./displayFeed";
+import { SCREEN_ID } from "./displayScreens";
 import { hostAllowed } from "./hostCheck";
 
 /**
  * DISPLAY ON OTHER SCREENS (0.17.0): while its switch is on, the app serves its Display mode to any
  * browser on the local network, on its own port, for a tablet or another computer beside the
- * hi-fi. Display only: GET and the live channel, nothing that changes anything.
+ * hi-fi. GET and the live channel, and ONE WRITE ROUTE (POST /api/control): a fixed list of verbs
+ * (shared/displayControl), from a screen the app has allowed, nothing else reachable.
  *
  * - A TOKEN in the address (the one Settings shows): the first visit presents it as ?t=, the
  *   server answers with a cookie and sends the browser to the bare address, so the token never
@@ -37,6 +46,15 @@ import { hostAllowed } from "./hostCheck";
  *   anything, so a track the app hasn't analyzed shows the Sleeve's face, as in the window.
  * - The page is the app's own Display tree (one home), built as a second entry of the renderer
  *   (display.html), with a web bridge in place of the window's API.
+ * - EACH SCREEN ITS OWN ID (controls on the other screens): every browser is given an id of its own
+ *   at its first visit (the tt_screen cookie, beside the token's), and the app's approvals are
+ *   kept by it (displayScreens). Each open screen hears where it stands over its own line of the
+ *   live channel (`event: control`), so it draws only what it may do.
+ * - THE WRITE ROUTE'S CHECKS, in order: the Host as everywhere; an Origin equal to the page's own
+ *   (a missing or null one refused); a header a form can't send, with a JSON body (a cross-site
+ *   page would need a preflight this server never answers); the token's cookie; the screen's id; a
+ *   known verb; a small rate cap per screen (volume steps a stricter one). Then the app decides
+ *   (deps.steer): the switch, the screen's approval, what the source can do.
  */
 
 export interface DisplayDeps {
@@ -54,9 +72,24 @@ export interface DisplayDeps {
   log(text: string): void;
   /** The server stopped on its own (an error after it was listening). */
   failed?(message: string): void;
+  /** Where a screen stands and what it may see of the controls, by its id. */
+  controlFor(screen: string | null): DisplayControl;
+  /** A screen's verb, past the route's checks: what the app did with it. */
+  steer(screen: string, name: string, verb: DisplayVerb): DisplayControlAnswer;
 }
 
 const COOKIE = "tt_display";
+/** Each browser's own id, given at its first visit: the app's approvals are kept by it. */
+const SCREEN_COOKIE = "tt_screen";
+/** The one write route, and the header its requests carry (a form can't send one). */
+export const CONTROL_PATH = "/api/control";
+export const CONTROL_HEADER = "x-tastytunes";
+/** A verb's body is a few bytes; anything longer isn't one. */
+const MAX_CONTROL_BODY = 512;
+/** At most this many commands from one screen in a few seconds, volume steps fewer: a screen's
+ *  runaway repeat stops here as well as on the page. */
+export const CONTROL_RATE = { count: 8, ms: 4_000 } as const;
+export const VOLUME_RATE = { count: 4, ms: 1_000 } as const;
 const MAX_ART_IDS = 200;
 /** The analysis keys handed out with the playing file, kept for its next few asks. */
 const MAX_TRACK_KEYS = 20;
@@ -98,6 +131,19 @@ const TYPES: Record<string, string> = {
 };
 const NO_ADDRESS = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TastyTunes</title><body style="font:16px system-ui;background:#111;color:#ddd;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><p>Open the address shown in TastyTunes, in Settings › Integrations › Display on other screens.</p></body>`;
 
+/** The pushes that can change what a screen may do: the switches (settings), the source and its
+ *  controls, the volume, the queue's next track, the connection. */
+const CONTROL_KINDS: ReadonlySet<PushMessage["kind"]> = new Set([
+  "settings",
+  "connection",
+  "playState",
+  "nowPlaying",
+  "zoneState",
+  "queue",
+]);
+
+const newScreenId = (): string => randomBytes(16).toString("hex");
+
 function sameToken(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
@@ -116,6 +162,41 @@ function cookieOf(req: IncomingMessage, name: string): string | null {
     }
   }
   return null;
+}
+
+/** A cookie that lasts a year, sent only to this server's own pages. */
+const cookieLine = (name: string, value: string): string =>
+  `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`;
+
+/** The screen's own id, or null without a well-formed one. */
+function screenOf(req: IncomingMessage): string | null {
+  const id = cookieOf(req, SCREEN_COOKIE);
+  return id != null && SCREEN_ID.test(id) ? id : null;
+}
+
+/** A JSON body of at most `max` bytes, or null (too long, or not JSON). */
+function bodyOf(req: IncomingMessage, max: number): Promise<unknown> {
+  return new Promise((resolve) => {
+    const parts: Buffer[] = [];
+    let size = 0;
+    req.on("data", (c: Buffer) => {
+      size += c.length;
+      if (size > max) {
+        resolve(null);
+        req.destroy();
+        return;
+      }
+      parts.push(c);
+    });
+    req.on("end", () => {
+      try {
+        resolve(JSON.parse(Buffer.concat(parts).toString("utf8")));
+      } catch {
+        resolve(null);
+      }
+    });
+    req.on("error", () => resolve(null));
+  });
 }
 
 function urlOf(req: IncomingMessage): URL | null {
@@ -150,8 +231,13 @@ export function asksForPlaying(
 
 export class DisplayServer {
   private http: Server | null = null;
-  /** Each open screen, with the token it was let in under. */
-  private readonly clients = new Map<ServerResponse, string>();
+  /** Each open screen: the token it was let in under, its id, and the control line it last heard. */
+  private readonly clients = new Map<
+    ServerResponse,
+    { token: string; screen: string | null; control: string | null }
+  >();
+  /** Each screen's last few commands, for the rate cap. */
+  private readonly sent = new Map<string, number[]>();
   private readonly artIds = new Map<string, string>();
   private readonly trackKeys = new Set<string>();
   private readonly kept = new Map<string, { bytes: Buffer; type: string }>();
@@ -214,6 +300,7 @@ export class DisplayServer {
     if (this.listening) this.deps.log("Display on other screens is off");
     this.listening = null;
     this.kept.clear();
+    this.sent.clear();
   }
 
   /** Every open screen let go, the server still listening: after a new address, each screen's
@@ -229,6 +316,18 @@ export class DisplayServer {
     if (this.clients.size === 0) return;
     const out = displayPush(msg, this.art);
     if (out) this.send(`data: ${JSON.stringify(out)}\n\n`);
+    // what a screen may do follows the switches, the source and the queue
+    if (CONTROL_KINDS.has(msg.kind)) this.pushControl();
+  }
+
+  /** Each open screen hears where it stands, when that changed since it last heard. */
+  pushControl(): void {
+    for (const [c, client] of this.clients) {
+      const line = JSON.stringify(this.deps.controlFor(client.screen));
+      if (line === client.control) continue;
+      client.control = line;
+      if (!this.write(c, `event: control\ndata: ${line}\n\n`)) this.clients.delete(c);
+    }
   }
 
   /** Every few seconds: a screen let in under an address since replaced (its request read the
@@ -236,7 +335,7 @@ export class DisplayServer {
   private async pingScreens(): Promise<void> {
     const token = await this.deps.token().catch(() => null);
     if (token == null) return;
-    for (const [c, under] of this.clients)
+    for (const [c, { token: under }] of this.clients)
       if (!sameToken(under, token)) {
         this.clients.delete(c);
         c.end();
@@ -245,14 +344,17 @@ export class DisplayServer {
   }
 
   private send(line: string): void {
-    for (const c of this.clients.keys()) {
-      if (c.writableLength > MAX_UNREAD_BYTES) {
-        this.clients.delete(c);
-        c.destroy();
-        continue;
-      }
-      c.write(line);
+    for (const c of this.clients.keys()) if (!this.write(c, line)) this.clients.delete(c);
+  }
+
+  /** One screen's line, or false for a screen that stopped reading (it is let go). */
+  private write(c: ServerResponse, line: string): boolean {
+    if (c.writableLength > MAX_UNREAD_BYTES) {
+      c.destroy();
+      return false;
     }
+    c.write(line);
+    return true;
   }
 
   /** A picture's page address: the id is noted so /art/<id> can serve it, the address never. */
@@ -264,7 +366,11 @@ export class DisplayServer {
     return `/art/${id}`;
   };
 
-  private base(res: ServerResponse, status: number, headers: Record<string, string> = {}): void {
+  private base(
+    res: ServerResponse,
+    status: number,
+    headers: Record<string, string | string[]> = {},
+  ): void {
     res.writeHead(status, {
       "x-content-type-options": "nosniff",
       "referrer-policy": "no-referrer",
@@ -284,6 +390,8 @@ export class DisplayServer {
     // window and a file append): only a request let in can fail out loud
     let admitted = false;
     try {
+      // the one write route, with its own checks
+      if (req.method === "POST" && req.url === CONTROL_PATH) return await this.control(req, res);
       if (req.method !== "GET" && req.method !== "HEAD") {
         this.base(res, 405, { allow: "GET, HEAD" });
         return void res.end();
@@ -295,9 +403,13 @@ export class DisplayServer {
       // the first visit: the token from the address becomes a cookie, and the address loses it
       if (given != null) {
         if (!sameToken(given, token)) return this.refuse(res, 401, NO_ADDRESS);
+        // and the browser's own id, kept when it already has one
         this.base(res, 303, {
           location: "/",
-          "set-cookie": `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`,
+          "set-cookie": [
+            `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`,
+            ...(screenOf(req) ? [] : [cookieLine(SCREEN_COOKIE, newScreenId())]),
+          ],
         });
         return void res.end();
       }
@@ -305,7 +417,11 @@ export class DisplayServer {
       admitted = true;
       const path = url.pathname;
       if (path === "/" || path === "/index.html")
-        return this.file(res, "display.html", { "content-security-policy": PAGE_CSP });
+        return this.file(res, "display.html", {
+          "content-security-policy": PAGE_CSP,
+          // a screen opened before screens had ids is given one now
+          ...(screenOf(req) ? {} : { "set-cookie": cookieLine(SCREEN_COOKIE, newScreenId()) }),
+        });
       if (path === "/api/snapshot")
         return this.json(res, displaySnapshot(this.deps.snapshot(), this.art));
       if (path === "/api/live") return this.live(req, res, token);
@@ -330,9 +446,50 @@ export class DisplayServer {
     }
   }
 
-  private json(res: ServerResponse, body: unknown): void {
-    this.base(res, 200, { "content-type": "application/json" });
+  private json(res: ServerResponse, body: unknown, status = 200): void {
+    this.base(res, status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
+  }
+
+  /** THE ONE WRITE ROUTE: a screen's verb, past every check (the header comment's list). */
+  private async control(req: IncomingMessage, res: ServerResponse): Promise<void> {
+    if (!hostAllowed(req.headers.host, "network")) return this.refuse(res, 400);
+    const origin = req.headers.origin;
+    if (!origin || origin !== `http://${req.headers.host}`) return this.refuse(res, 403);
+    if (req.headers[CONTROL_HEADER] !== "control") return this.refuse(res, 403);
+    if (!/^application\/json(;|$)/.test(req.headers["content-type"] ?? ""))
+      return this.refuse(res, 415);
+    if (!sameToken(cookieOf(req, COOKIE) ?? "", await this.deps.token()))
+      return this.refuse(res, 401);
+    const screen = screenOf(req);
+    if (!screen) return this.refuse(res, 403);
+    const body = (await bodyOf(req, MAX_CONTROL_BODY)) as {
+      verb?: unknown;
+      touch?: unknown;
+    } | null;
+    if (!body || !isDisplayVerb(body.verb)) return this.refuse(res, 400);
+    const verb = body.verb;
+    if (!this.withinRate(screen, verb)) return this.json(res, { refused: "busy" }, 429);
+    const name = screenName(req.headers["user-agent"] ?? "", body.touch === true);
+    const answer = this.deps.steer(screen, name, verb);
+    this.json(res, answer, "done" in answer ? 200 : answer.refused === "nothing" ? 409 : 403);
+    // the screen hears where it stands now (an ask raised, say)
+    this.pushControl();
+  }
+
+  /** Within the rate cap: CONTROL_RATE for every verb, VOLUME_RATE for a volume step. */
+  private withinRate(screen: string, verb: DisplayVerb): boolean {
+    const now = Date.now();
+    const volume = verb === "volumeUp" || verb === "volumeDown";
+    const kinds = volume ? [`${screen}`, `${screen}:volume`] : [`${screen}`];
+    const caps = volume ? [CONTROL_RATE, VOLUME_RATE] : [CONTROL_RATE];
+    const recent = kinds.map((k, i) =>
+      (this.sent.get(k) ?? []).filter((at) => now - at < caps[i].ms),
+    );
+    if (recent.some((r, i) => r.length >= caps[i].count)) return false;
+    kinds.forEach((k, i) => this.sent.set(k, [...recent[i], now]));
+    if (this.sent.size > 4 * MAX_SCREENS) this.sent.delete(this.sent.keys().next().value!);
+    return true;
   }
 
   private live(req: IncomingMessage, res: ServerResponse, token: string): void {
@@ -344,7 +501,10 @@ export class DisplayServer {
     res.write("retry: 3000\n\n");
     const snap = displaySnapshot(this.deps.snapshot(), this.art);
     res.write(`event: snapshot\ndata: ${JSON.stringify(snap)}\n\n`);
-    this.clients.set(res, token);
+    const screen = screenOf(req);
+    const control = JSON.stringify(this.deps.controlFor(screen));
+    res.write(`event: control\ndata: ${control}\n\n`);
+    this.clients.set(res, { token, screen, control });
     req.on("close", () => this.clients.delete(res));
   }
 

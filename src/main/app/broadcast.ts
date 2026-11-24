@@ -1,4 +1,5 @@
 import { BrowserWindow } from "electron";
+import type { DisplayScreens } from "@shared/displayControl";
 import { IPC, type DisplayStatus } from "@shared/ipc";
 import type { AlbumDr, AppSettings } from "@shared/model";
 import { listeningRecord } from "../data/listeningRecord";
@@ -30,6 +31,13 @@ export function alsoHearSettings(hear: (settings: AppSettings) => void): void {
 export function broadcastDisplayStatus(status: DisplayStatus): void {
   for (const w of BrowserWindow.getAllWindows())
     w.webContents.send(IPC.push, { kind: "displayStatus", status });
+}
+
+/** The screens that asked to control playback, and the one being asked about: Settings' list and
+ *  the window's prompt follow it. */
+export function broadcastDisplayScreens(screens: DisplayScreens): void {
+  for (const w of BrowserWindow.getAllWindows())
+    w.webContents.send(IPC.push, { kind: "displayScreens", screens });
 }
 
 /** Every window hears an album DR main recorded from its tracks (a track measured in the mini

@@ -501,6 +501,14 @@ export interface AppSettings {
    *  browser on the local network, off by default, on its own port; the address carries a token
    *  (the secrets store's displayToken). */
   displayServer: { enabled: boolean; port: number };
+  /** Controls on the other screens (main/app/display, shared/displayControl): whether a screen
+   *  showing Display on other screens may steer what is playing (previous, play or pause, next),
+   *  each screen approved once in the app. Off by default, and apart from the switch above:
+   *  turning on viewing never grants control. */
+  displayControl: boolean;
+  /** Under displayControl: whether an allowed screen may also step the volume, one step a tap,
+   *  under the volume limit. Off by default. */
+  displayControlVolume: boolean;
   /** Where the agent tools' exports go (main/app/exportsFolder): chosen in a dialog when the Exports
    *  group is first switched on, null until then. Set only by that dialog. */
   agentExportFolder: string | null;
@@ -688,6 +696,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presetVolumeNames: {},
   queueSignatures: {},
   displayServer: { enabled: false, port: 8556 },
+  displayControl: false,
+  displayControlVolume: false,
   agentExportFolder: null,
   mcp: {
     enabled: false,

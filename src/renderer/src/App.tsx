@@ -31,6 +31,7 @@ import { useArtistChoicesKept } from "@/lib/artistPictures";
 import { useStopSkippedAnalysis } from "@/components/media/waveformAnalysis";
 import { useAnalyzeAlbumOnPlay } from "@/lib/albumOnPlay";
 import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
+import { DisplayAskPrompt } from "@/components/overlays/DisplayAskPrompt";
 import { SurfaceBoundary } from "@/components/chrome/SurfaceBoundary";
 import { DisplayMode } from "@/components/playback/DisplayMode";
 import { NowPlayingScreen } from "@/screens/NowPlayingScreen";
@@ -228,6 +229,7 @@ export default function App(): React.JSX.Element {
         </SurfaceBoundary>
         <SurfaceBoundary surface="the large queue confirm" shape="quiet">
           <LargeQueueConfirm />
+          <DisplayAskPrompt />
         </SurfaceBoundary>
       </div>
     </div>
