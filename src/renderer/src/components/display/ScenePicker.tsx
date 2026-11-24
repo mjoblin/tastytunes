@@ -528,8 +528,8 @@ export function SyncRow({
             />
             <span
               className={cx(
-                "text-right font-mono tabular-nums text-faint",
-                touch ? "w-28 text-[13px]" : "w-24",
+                "font-mono tabular-nums text-faint",
+                touch ? "w-28 text-[13px]" : "w-24 text-right",
               )}
             >
               {sync === 0 ? "in step" : sync > 0 ? `${sync} ms early` : `${-sync} ms late`}

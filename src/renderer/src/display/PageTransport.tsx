@@ -109,7 +109,7 @@ export function PageTransport({
           aria-hidden
           data-page-transport-shade
           className={cx(
-            "pointer-events-none absolute inset-x-0 bottom-0 z-30 h-64 bg-gradient-to-t from-panel/80 via-panel/35 to-transparent transition-opacity duration-300",
+            "pointer-events-none absolute inset-x-0 bottom-0 z-30 h-72 bg-gradient-to-t from-panel/90 via-panel/55 to-transparent transition-opacity duration-300",
             shown ? "opacity-100" : "opacity-0",
           )}
         />
@@ -117,9 +117,18 @@ export function PageTransport({
       <div
         data-page-transport={control.state}
         className={cx(
-          "absolute inset-x-0 bottom-14 z-40 flex flex-col items-center gap-2 px-4 transition-opacity duration-300 select-none",
+          "absolute inset-x-0 z-40 flex flex-col items-center gap-1.5 px-4 transition-opacity duration-300 select-none",
           showing,
         )}
+        // just above the bottom edge (and an iPad's home bar), inside the band the Sleeve keeps for
+        // the lyric's two lines: higher, on a short screen under a browser's bars, the discs and
+        // the next track met the format chips. Over a scene a little higher, inside the cathode
+        // glass's curved bottom edge
+        style={{
+          bottom: shade
+            ? "calc(env(safe-area-inset-bottom, 0px) + 2.5rem)"
+            : "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
+        }}
       >
         {asking ? (
           <div
@@ -133,7 +142,7 @@ export function PageTransport({
             {control.next && (
               <div
                 data-page-transport-next
-                className="max-w-[min(36rem,90vw)] truncate rounded-full bg-panel/70 px-3 py-1 text-[13px] text-dim backdrop-blur"
+                className="max-w-[min(36rem,90vw)] truncate rounded-full bg-panel/75 px-3 py-0.5 text-[13px] text-dim backdrop-blur"
               >
                 <span className="text-faint">Next</span> {control.next.title}
                 {control.next.artist && ` · ${control.next.artist}`}
@@ -213,7 +222,7 @@ function Disc({
       data-page-verb={verb}
       aria-label={label}
       onClick={() => void steer(verb)}
-      className="group grid touch-manipulation place-items-center p-1.5 [-webkit-tap-highlight-color:transparent]"
+      className="group grid touch-manipulation place-items-center p-1 [-webkit-tap-highlight-color:transparent]"
     >
       <span
         className={cx(
