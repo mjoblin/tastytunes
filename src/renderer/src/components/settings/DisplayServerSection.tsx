@@ -39,7 +39,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
       <div data-display-server className="space-y-3">
         <Toggle
           label="Display on other screens"
-          hint="Show full-screen display mode in a web browser on a tablet, TV or another computer on your network. Each screen can have its own scene and settings."
+          hint="Show full-screen display mode in a web browser on a tablet or another computer on your network. Each screen can have its own scene and settings. Lyrics are looked up for each track, as on this computer."
           checked={on}
           onChange={(enabled) =>
             void save({ displayServer: { ...settings.displayServer, enabled } })
