@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { isDisplayVerb, screenName } from "./displayControl";
+import type { QueueListItem } from "./smoip";
+import {
+  isDisplayVerb,
+  QUEUE_AFTER,
+  QUEUE_BEFORE,
+  queueWindow,
+  screenName,
+} from "./displayControl";
 
 describe("a screen's name and verbs", () => {
   it("names a screen by its device and browser, an iPad's Safari by its touch", () => {
@@ -35,5 +42,31 @@ describe("a screen's name and verbs", () => {
     expect(isDisplayVerb("volumeUp")).toBe(true);
     expect(isDisplayVerb("seek")).toBe(false);
     expect(isDisplayVerb({})).toBe(false);
+  });
+
+  it("sends the queue around the playing track: a few before, about fifty after", () => {
+    const items: QueueListItem[] = Array.from({ length: 200 }, (_, i) => ({
+      id: 1000 + i,
+      position: i,
+      metadata: {
+        title: `T${i}`,
+        artist: "A",
+        album: "B",
+        duration: 100,
+        art_url: null,
+        class: null,
+        source: null,
+        name: null,
+        track_number: null,
+        genre: null,
+      },
+    }));
+    const rows = queueWindow(items, 1100);
+    expect(rows[0].id).toBe(1100 - QUEUE_BEFORE);
+    expect(rows).toHaveLength(QUEUE_BEFORE + 1 + QUEUE_AFTER);
+    expect(rows.filter((r) => r.playing).map((r) => r.id)).toEqual([1100]);
+    expect(queueWindow(items, 1001)[0].id).toBe(1000);
+    expect(queueWindow(items, null)).toHaveLength(QUEUE_AFTER + 1);
+    expect(queueWindow(items.slice(0, 5), 1004)).toHaveLength(QUEUE_BEFORE + 1);
   });
 });

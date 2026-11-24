@@ -12,7 +12,7 @@ import type { DisplayControl, DisplayControlAnswer, DisplayVerb } from "@shared/
  * asking, declined or allowed, with the volume and the next track when allowed.
  */
 
-const OFF: DisplayControl = { state: "off", volume: null, next: null };
+const OFF: DisplayControl = { state: "off", volume: null, next: null, queue: null };
 let control: DisplayControl = OFF;
 const heard = new Set<() => void>();
 
@@ -34,15 +34,15 @@ export function useControl(): DisplayControl {
 /** Whether this browser has a touch screen: an iPad's Safari says it is a Mac otherwise. */
 const touch = (): boolean => typeof navigator !== "undefined" && navigator.maxTouchPoints > 1;
 
-/** One verb to the app. The answer says whether it was done, or why not (the screen asked the
+/** One verb to the app (`id`: the queue row playQueue plays). The answer says whether it was done, or why not (the screen asked the
  *  app, the app said not now, the source can't do it); null when the app couldn't be reached. */
-export async function steer(verb: DisplayVerb): Promise<DisplayControlAnswer | null> {
+export async function steer(verb: DisplayVerb, id?: number): Promise<DisplayControlAnswer | null> {
   try {
     const res = await fetch("/api/control", {
       method: "POST",
       credentials: "same-origin",
       headers: { "content-type": "application/json", "x-tastytunes": "control" },
-      body: JSON.stringify({ verb, touch: touch() }),
+      body: JSON.stringify({ verb, touch: touch(), ...(id != null ? { id } : {}) }),
     });
     const body = (await res.json().catch(() => null)) as DisplayControlAnswer | null;
     // the screen asked: it hears "asking" on its line too, but the tap's own answer is sooner

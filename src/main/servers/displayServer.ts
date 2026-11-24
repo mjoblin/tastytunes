@@ -19,7 +19,7 @@ import {
   type MediaInfoTarget,
   type MediaNode,
 } from "@shared/model";
-import { artIdOf, displayPush, displaySnapshot } from "./displayFeed";
+import { artIdOf, displayControlLine, displayPush, displaySnapshot } from "./displayFeed";
 import { SCREEN_ID } from "./displayScreens";
 import { hostAllowed } from "./hostCheck";
 
@@ -74,8 +74,9 @@ export interface DisplayDeps {
   failed?(message: string): void;
   /** Where a screen stands and what it may see of the controls, by its id. */
   controlFor(screen: string | null): DisplayControl;
-  /** A screen's verb, past the route's checks: what the app did with it. */
-  steer(screen: string, name: string, verb: DisplayVerb): DisplayControlAnswer;
+  /** A screen's verb, past the route's checks: what the app did with it (`id`, playQueue's
+   *  queue id). */
+  steer(screen: string, name: string, verb: DisplayVerb, id?: number): DisplayControlAnswer;
 }
 
 const COOKIE = "tt_display";
@@ -323,7 +324,7 @@ export class DisplayServer {
   /** Each open screen hears where it stands, when that changed since it last heard. */
   pushControl(): void {
     for (const [c, client] of this.clients) {
-      const line = JSON.stringify(this.deps.controlFor(client.screen));
+      const line = this.controlLine(client.screen);
       if (line === client.control) continue;
       client.control = line;
       if (!this.write(c, `event: control\ndata: ${line}\n\n`)) this.clients.delete(c);
@@ -345,6 +346,11 @@ export class DisplayServer {
 
   private send(line: string): void {
     for (const c of this.clients.keys()) if (!this.write(c, line)) this.clients.delete(c);
+  }
+
+  /** Where a screen stands, as sent: its queue's pictures by an id this server handed out. */
+  private controlLine(screen: string | null): string {
+    return JSON.stringify(displayControlLine(this.deps.controlFor(screen), this.art));
   }
 
   /** One screen's line, or false for a screen that stopped reading (it is let go). */
@@ -465,13 +471,17 @@ export class DisplayServer {
     if (!screen) return this.refuse(res, 403);
     const body = (await bodyOf(req, MAX_CONTROL_BODY)) as {
       verb?: unknown;
+      id?: unknown;
       touch?: unknown;
     } | null;
     if (!body || !isDisplayVerb(body.verb)) return this.refuse(res, 400);
     const verb = body.verb;
+    // a queue row is played by its id, a whole number, and no other verb takes one
+    const id = typeof body.id === "number" && Number.isSafeInteger(body.id) ? body.id : undefined;
+    if (verb === "playQueue" && id === undefined) return this.refuse(res, 400);
     if (!this.withinRate(screen, verb)) return this.json(res, { refused: "busy" }, 429);
     const name = screenName(req.headers["user-agent"] ?? "", body.touch === true);
-    const answer = this.deps.steer(screen, name, verb);
+    const answer = this.deps.steer(screen, name, verb, verb === "playQueue" ? id : undefined);
     this.json(res, answer, "done" in answer ? 200 : answer.refused === "nothing" ? 409 : 403);
     // the screen hears where it stands now (an ask raised, say)
     this.pushControl();
@@ -502,7 +512,7 @@ export class DisplayServer {
     const snap = displaySnapshot(this.deps.snapshot(), this.art);
     res.write(`event: snapshot\ndata: ${JSON.stringify(snap)}\n\n`);
     const screen = screenOf(req);
-    const control = JSON.stringify(this.deps.controlFor(screen));
+    const control = this.controlLine(screen);
     res.write(`event: control\ndata: ${control}\n\n`);
     this.clients.set(res, { token, screen, control });
     req.on("close", () => this.clients.delete(res));

@@ -44,9 +44,9 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
   const fetched: string[] = [];
   const asked: string[] = [];
   const logged: string[] = [];
-  const steered: Array<{ screen: string; name: string; verb: DisplayVerb }> = [];
+  const steered: Array<{ screen: string; name: string; verb: DisplayVerb; id?: number }> = [];
   const control: { now: DisplayControl } = {
-    now: { state: "allowed", volume: null, next: null },
+    now: { state: "allowed", volume: null, next: null, queue: null },
   };
   server = new DisplayServer({
     snapshot: () => snapshot,
@@ -90,8 +90,8 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
     pageDir: page,
     log: (text) => logged.push(text),
     controlFor: () => control.now,
-    steer: (screen, name, verb) => {
-      steered.push({ screen, name, verb });
+    steer: (screen, name, verb, id) => {
+      steered.push({ screen, name, verb, ...(id !== undefined ? { id } : {}) });
       return { done: true };
     },
   });
@@ -138,7 +138,12 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
   /** A screen's verb, as the page sends it: its own origin, the header, a JSON body. */
   const steer = (
     verb: unknown,
-    opts: { cookie?: string; headers?: Record<string, string>; origin?: string | null } = {},
+    opts: {
+      cookie?: string;
+      headers?: Record<string, string>;
+      origin?: string | null;
+      id?: unknown;
+    } = {},
   ) =>
     get("/api/control", {
       method: "POST",
@@ -151,7 +156,7 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
         ...opts.headers,
       },
-      body: JSON.stringify({ verb, touch: true }),
+      body: JSON.stringify({ verb, touch: true, ...("id" in opts ? { id: opts.id } : {}) }),
     });
   /** /api/live's first bytes, then whether the stream ended. */
   const live = (cookieHeader: string) =>
@@ -256,6 +261,44 @@ describe("Display on other screens' server", () => {
     expect(steered).toEqual([]);
   });
 
+  it("plays a queue row by a whole-number id only, and passes no id with any other verb", async () => {
+    const { steer, steered } = await rig();
+    expect((await steer("playQueue")).status).toBe(400);
+    expect((await steer("playQueue", { id: "7" })).status).toBe(400);
+    expect((await steer("playQueue", { id: 7.5 })).status).toBe(400);
+    expect((await steer("playQueue", { id: 7 })).status).toBe(200);
+    expect((await steer("next", { id: 7 })).status).toBe(200);
+    expect(steered.map((x) => [x.verb, x.id])).toEqual([
+      ["playQueue", 7],
+      ["next", undefined],
+    ]);
+  });
+
+  it("sends a screen its queue with pictures by an id it handed out, never the address", async () => {
+    const { live, control, get } = await rig();
+    control.now = {
+      state: "allowed",
+      volume: null,
+      next: null,
+      queue: [
+        {
+          id: 4,
+          title: "Song",
+          artist: "Band",
+          album: "Record",
+          duration: 200,
+          art: "http://192.168.1.5/q.jpg",
+          playing: true,
+        },
+      ],
+    };
+    const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
+    expect(opened.first).not.toContain("192.168.1.5");
+    const id = /"art":"\/art\/([0-9a-f]{24})"/.exec(opened.first)?.[1];
+    expect(id).toBeDefined();
+    expect((await get(`/art/${id}`, { cookie })).status).toBe(200);
+  });
+
   it("caps one screen's commands, the volume's more tightly", async () => {
     const { steer, steered } = await rig();
     for (let i = 0; i < VOLUME_RATE.count; i++) expect((await steer("volumeUp")).status).toBe(200);
@@ -268,10 +311,10 @@ describe("Display on other screens' server", () => {
 
   it("tells each open screen where it stands when it opens, and again when that changes", async () => {
     const { live, control, server } = await rig();
-    control.now = { state: "ask", volume: null, next: null };
+    control.now = { state: "ask", volume: null, next: null, queue: null };
     const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
     expect(opened.first).toContain('event: control\ndata: {"state":"ask"');
-    control.now = { state: "off", volume: null, next: null };
+    control.now = { state: "off", volume: null, next: null, queue: null };
     server.pushControl();
     await new Promise((r) => setTimeout(r, 50));
     expect(opened.more()).toContain('event: control\ndata: {"state":"off"');

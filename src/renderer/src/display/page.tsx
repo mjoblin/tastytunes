@@ -121,7 +121,13 @@ function Page(): React.JSX.Element {
   const going = useStore((s) => musicGoing(s.playState?.state));
   // the page's own buttons, at a touch (display/touch), held while the panel is open
   const [panelOpen, setPanelOpen] = useState(false);
-  const shown = useTouchShown(panelOpen);
+  // the queue view (display/PageTransport), held open like the panel; one of the two at a time
+  const [queueOpen, setQueueOpen] = useState(false);
+  const shown = useTouchShown(panelOpen || queueOpen);
+  const openPanel = (open: boolean): void => {
+    setPanelOpen(open);
+    if (open) setQueueOpen(false);
+  };
   // the playback buttons, where this screen may have them (display/PageTransport)
   const control = useControl();
   const [locked] = useLocked();
@@ -129,6 +135,11 @@ function Page(): React.JSX.Element {
     !locked &&
     (control.state === "ask" || control.state === "asking" || control.state === "allowed");
   const transportShown = transport && shown && !panelOpen;
+  // the queue closes when there is none to show (another source, the controls off or locked)
+  const queueHere = transport && control.queue != null;
+  useEffect(() => {
+    if (!queueHere) setQueueOpen(false);
+  }, [queueHere]);
   // the panel in use (a touch in the last few seconds, or open) keeps the page awake, so a
   // resting screen can be set up
   const [inUse, setInUse] = useState(false);
@@ -186,6 +197,8 @@ function Page(): React.JSX.Element {
           <PageTransport
             shown={transportShown}
             scene={SCENES_HERE && settings.displayScene !== "sleeve"}
+            queueOpen={queueOpen}
+            onQueue={setQueueOpen}
           />
           <ScenePanel
             own={own}
@@ -195,7 +208,7 @@ function Page(): React.JSX.Element {
             scenes={SCENES_HERE}
             shown={shown}
             open={panelOpen}
-            onOpen={setPanelOpen}
+            onOpen={openPanel}
             onAwake={setInUse}
             extra={<ControlsSetting />}
           />

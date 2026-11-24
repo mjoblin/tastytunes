@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { DisplayControl } from "@shared/displayControl";
 import type { PushMessage, Snapshot } from "@shared/ipc";
 import { DEFAULT_SETTINGS, type AppSettings } from "@shared/model";
 import type {
@@ -199,6 +200,12 @@ export function displaySnapshot(snap: Snapshot, art: ArtRegistry): Snapshot {
     logs: [],
     netRequests: [],
   };
+}
+
+/** A screen's control line as it is sent: the queue's pictures by id, never by address. */
+export function displayControlLine(c: DisplayControl, art: ArtRegistry): DisplayControl {
+  if (!c.queue) return c;
+  return { ...c, queue: c.queue.map((r) => ({ ...r, art: r.art ? art(r.art) : null })) };
 }
 
 /** A push the page may hear, reduced; null for any other kind. */

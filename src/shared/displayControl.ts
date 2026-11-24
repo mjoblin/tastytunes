@@ -1,10 +1,13 @@
+import type { QueueListItem } from "./smoip";
+
 /**
  * CONTROLS ON THE OTHER SCREENS (0.17.0, Display on other screens): what a screen may ask of the
  * streamer, and what it is told it may do. Shared by the display server (main/servers/
  * displayServer, the one write route) and the page (display/PageTransport).
  *
- * - A FIXED LIST OF VERBS, the system's media commands (shared/transport MediaCommand) and a volume
- *   step up or down. Nothing else is reachable: no seek, no level, no queue, no settings.
+ * - A FIXED LIST OF VERBS, the system's media commands (shared/transport MediaCommand), a volume
+ *   step up or down, and playing a track already in the queue (the queue view, step two: view
+ *   and select). Nothing else is reachable: no seek, no level, no queue edits, no settings.
  * - Each screen is told where it stands (DisplayControl), over its own line of the live channel,
  *   so it draws only what it may do.
  */
@@ -19,6 +22,7 @@ export const DISPLAY_VERBS = [
   "stop",
   "volumeUp",
   "volumeDown",
+  "playQueue",
 ] as const;
 export type DisplayVerb = (typeof DISPLAY_VERBS)[number];
 
@@ -43,6 +47,51 @@ export interface DisplayControl {
   /** The next track in the queue, by name, for a screen allowed to control; null otherwise or
    *  when the queue doesn't know it. */
   next: { title: string; artist: string | null } | null;
+  /** The queue around the playing track (queueWindow), for a screen allowed to control while the
+   *  queue is what plays; null otherwise. Pictures by the display server's id, never by address. */
+  queue: DisplayQueueRow[] | null;
+}
+
+/** One track of the queue as a screen sees it. */
+export interface DisplayQueueRow {
+  /** The streamer's queue id: the only thing a screen sends back (playQueue). */
+  id: number;
+  title: string;
+  artist: string | null;
+  album: string | null;
+  duration: number | null;
+  art: string | null;
+  playing: boolean;
+}
+
+/** The rows sent around the playing track: a few before it, about fifty after. A queue can run to
+ *  thousands, and a screen needs what is coming, not the whole evening at once. */
+export const QUEUE_BEFORE = 3;
+export const QUEUE_AFTER = 50;
+
+/** The window of the queue a screen is sent, around `playId` (from the start without one). */
+export function queueWindow(
+  items: readonly QueueListItem[],
+  playId: number | null,
+): DisplayQueueRow[] {
+  const at = playId == null ? -1 : items.findIndex((i) => i.id === playId);
+  const from = Math.max(0, at - QUEUE_BEFORE);
+  const to = Math.min(items.length, Math.max(at, 0) + QUEUE_AFTER + 1);
+  const rows: DisplayQueueRow[] = [];
+  for (const item of items.slice(from, to)) {
+    if (item.id == null) continue;
+    const md = item.metadata;
+    rows.push({
+      id: item.id,
+      title: md?.title ?? md?.name ?? "—",
+      artist: md?.artist ?? null,
+      album: md?.album ?? null,
+      duration: md?.duration ?? null,
+      art: md?.art_url ?? null,
+      playing: item.id === playId,
+    });
+  }
+  return rows;
 }
 
 /** What the route answers: done, or why not. */

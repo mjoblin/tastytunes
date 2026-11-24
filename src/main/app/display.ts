@@ -1,10 +1,11 @@
 import { join } from "node:path";
 import { app } from "electron";
-import type {
-  DisplayControl,
-  DisplayControlAnswer,
-  DisplayScreen,
-  DisplayVerb,
+import {
+  queueWindow,
+  type DisplayControl,
+  type DisplayControlAnswer,
+  type DisplayScreen,
+  type DisplayVerb,
 } from "@shared/displayControl";
 import type { DisplayStatus } from "@shared/ipc";
 import type { AppSettings } from "@shared/model";
@@ -75,34 +76,54 @@ function volumeHere(): DisplayControl["volume"] {
   return null;
 }
 
+/** Whether the queue is what plays (the media player): the only source with a queue to show. */
+function queueAudible(): boolean {
+  const s = deviceManager.streamerNow;
+  return activeSourceId(s.zoneState, s.nowPlaying) === "MEDIA_PLAYER";
+}
+
+/** The queue's playing row: the streamer's pointer. */
+const playingQueueId = (): number | null => {
+  const s = deviceManager.streamerNow;
+  return s.queue?.play_id ?? s.playState?.queue_id ?? null;
+};
+
 /** The next track by name, when the queue is what plays and knows it (not shuffled, not the last). */
 function nextInQueue(): DisplayControl["next"] {
   const s = deviceManager.streamerNow;
-  if (activeSourceId(s.zoneState, s.nowPlaying) !== "MEDIA_PLAYER") return null;
+  if (!queueAudible()) return null;
   if (s.playState?.mode_shuffle === "all") return null;
   const items = s.queue?.items ?? [];
-  const at = s.queue?.play_id ?? s.playState?.queue_id ?? null;
+  const at = playingQueueId();
   const i = at == null ? -1 : items.findIndex((it) => it.id === at);
   const md = i >= 0 ? items[i + 1]?.metadata : null;
   return md?.title ? { title: md.title, artist: md.artist ?? null } : null;
+}
+
+/** The queue around the playing track, while the queue is what plays and has anything in it. */
+function queueHere(): DisplayControl["queue"] {
+  const items = deviceManager.streamerNow.queue?.items ?? [];
+  if (!queueAudible() || items.length === 0) return null;
+  return queueWindow(items, playingQueueId());
 }
 
 /** Where a screen stands, and what it may see of the controls. */
 function controlFor(screen: string | null): DisplayControl {
   const s = getSettings();
   const state = screenBook.stateOf(screen, s.displayControl);
-  if (state !== "allowed") return { state, volume: null, next: null };
+  if (state !== "allowed") return { state, volume: null, next: null, queue: null };
   return {
     state,
     volume: s.displayControlVolume ? volumeHere() : null,
     next: nextInQueue(),
+    queue: queueHere(),
   };
 }
 
 const log = (text: string): void => deviceManager.log("info", "display", text);
 
 /** A screen's verb, past the route's checks. */
-function steer(screen: string, name: string, verb: DisplayVerb): DisplayControlAnswer {
+function steer(screen: string, name: string, verb: DisplayVerb, id?: number): DisplayControlAnswer {
   const s = getSettings();
   const state = screenBook.stateOf(screen, s.displayControl);
   if (state === "ask") {
@@ -114,6 +135,16 @@ function steer(screen: string, name: string, verb: DisplayVerb): DisplayControlA
     if (!s.displayControlVolume || volumeHere() == null) return { refused: "volume" };
     log(`volume ${verb === "volumeUp" ? "up" : "down"} from ${name}`);
     deviceManager.fire({ type: "volumeStepChange", delta: verb === "volumeUp" ? 1 : -1 });
+    return { done: true };
+  }
+  // a track already in the queue, while the queue is what plays: view and select, nothing edited
+  if (verb === "playQueue") {
+    const there = (deviceManager.streamerNow.queue?.items ?? []).some((it) => it.id === id);
+    log(
+      `play queue row ${id} from ${name}: ${there && queueAudible() ? "playQueueId" : "nothing to do"}`,
+    );
+    if (id == null || !there || !queueAudible()) return { refused: "nothing" };
+    deviceManager.fire({ type: "playQueueId", queueId: id });
     return { done: true };
   }
   const v = deviceManager.streamerNow;
