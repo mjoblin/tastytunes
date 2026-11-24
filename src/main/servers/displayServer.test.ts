@@ -2,10 +2,10 @@ import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
 import { request } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Snapshot } from "@shared/ipc";
 import { DEFAULT_SETTINGS } from "@shared/model";
-import { asksForPlaying, DisplayServer } from "./displayServer";
+import { asksForPlaying, DisplayServer, PING_MS } from "./displayServer";
 
 const TOKEN = "tok-123";
 let token = TOKEN;
@@ -218,6 +218,27 @@ describe("Display on other screens' server", () => {
     expect((await get("/api/snapshot", { cookie: "tt_display=tok-456" })).status).toBe(200);
   });
 
+  it("lets a screen go at the next ping when it was let in under an address since replaced", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+    try {
+      const { live } = await rig();
+      const stale = await live(cookie);
+      // its request read the old token a moment before the new one was stored: still open
+      token = "tok-456";
+      const fresh = await live("tt_display=tok-456");
+      expect(server!.screens).toBe(2);
+      vi.advanceTimersByTime(PING_MS);
+      await stale.ended;
+      expect(server!.screens).toBe(1);
+      let ended = false;
+      void fresh.ended.then(() => (ended = true));
+      await new Promise((r) => setTimeout(r, 50));
+      expect(ended).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("looks up lyrics only for the track that is playing", async () => {
     const { get, asked } = await rig();
     const playing = await get("/api/lyrics?artist=Band&title=Song&album=Record&duration=200", {
@@ -306,6 +327,21 @@ describe("a lyrics request for the playing track", () => {
       asksForPlaying({ artist: "Band", title: "Song", album: null, duration: 199 }, snap),
     ).toBe(false);
     expect(asksForPlaying({ artist: "", title: "", album: null, duration: null }, snap)).toBe(
+      false,
+    );
+  });
+
+  it("takes a title alone for the playing file only when the streamer names no artist", () => {
+    const bare = {
+      playState: { metadata: { title: "Field Recording", artist: null, album: "Tapes" } },
+      nowPlaying: { display: { line1: "Field Recording", line2: null } },
+    } as unknown as Snapshot;
+    const q = { artist: "", title: "Field Recording", album: "Tapes", duration: null };
+    expect(asksForPlaying(q, bare, { noArtist: true })).toBe(true);
+    // lyrics keep their rule: never without an artist
+    expect(asksForPlaying(q, bare)).toBe(false);
+    // a track with an artist is never asked for without one
+    expect(asksForPlaying({ ...q, title: "Song", album: null }, snap, { noArtist: true })).toBe(
       false,
     );
   });

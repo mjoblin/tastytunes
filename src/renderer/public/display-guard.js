@@ -1,7 +1,8 @@
 // The browser floor for Display on other screens: the page's built styles use color-mix (Chrome
-// 111, Safari 16.2), @property (Safari 16.4) and cascade layers, and no nested rules, so the
-// floor is Safari 16.4 and Chrome 111. Below that the page would be blank, so this plain script,
-// run before the page, says so instead. No module syntax, nothing newer.
+// 111, Safari 16.2, Firefox 113), @property (Safari 16.4, Firefox 128) and cascade layers, and no
+// nested rules, so the floor is Safari 16.4, Chrome 111 and Firefox 128. Below that the page would
+// be blank, so this plain script, run before the page, says so instead. No module syntax, nothing
+// newer.
 (function () {
   var ok =
     typeof CSS !== "undefined" &&
@@ -19,5 +20,5 @@
     "font:18px system-ui,sans-serif;color:#ddd;background:#111;position:fixed;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:2em",
   );
   note.textContent =
-    "This browser is too old for TastyTunes' display. It needs Safari 16.4, Chrome 111 or newer.";
+    "This browser is too old for TastyTunes' display. It needs Safari 16.4, Chrome 111, Firefox 128 or newer.";
 })();

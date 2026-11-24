@@ -390,6 +390,19 @@ export function analyzeTrack(
   return settled;
 }
 
+/**
+ * ASKED AGAIN FOR THE STORED ONE (0.17.0, Display on other screens): a page on another screen
+ * never measures, and the window measures a track a few seconds into its first play, so a page
+ * that found nothing stored asks again a few times while the same file shows none (from its
+ * first none), and draws it once it is stored. Off in the window, which measures for itself.
+ */
+let askAgainMs: readonly number[] = [];
+export function askAgainForStored(ms: readonly number[]): void {
+  askAgainMs = ms;
+}
+// one ask a moment for a file, however many surfaces are waiting on it
+const askedAt = new Lru<string, number>(50);
+
 export function usePeaks(
   serverUdn: string | null,
   objectId: string | null,
@@ -414,6 +427,27 @@ export function usePeaks(
       stale = true;
     };
   }, [serverUdn, objectId, contentKey, attempt]);
+  useEffect(() => {
+    if (state !== null || !serverUdn || !objectId || !contentKey || askAgainMs.length === 0) return;
+    let gone = false;
+    const timers = askAgainMs.map((ms) =>
+      setTimeout(() => {
+        const key = `${serverUdn}|${objectId}`;
+        if (Date.now() - (askedAt.get(key) ?? 0) < 1_000) return;
+        askedAt.set(key, Date.now());
+        void tt
+          .audioAnalysisGet(contentKey)
+          .catch(() => null)
+          .then((stored) => {
+            if (!gone && stored && isCurrent(stored)) retryAnalysis(serverUdn, objectId);
+          });
+      }, ms),
+    );
+    return () => {
+      gone = true;
+      for (const t of timers) clearTimeout(t);
+    };
+  }, [state, serverUdn, objectId, contentKey]);
   return state === "loading" && partial ? partial : state;
 }
 

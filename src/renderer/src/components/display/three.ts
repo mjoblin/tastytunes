@@ -96,6 +96,8 @@ export function projectToScreen(
  */
 export interface RecordTexture {
   texture: THREE.DataTexture;
+  /** The levels as the GPU holds them (half floats, read back), for reading on the CPU. */
+  levels: Float32Array;
   columns: number;
   /** Seconds of track per column. */
   secondsPerColumn: number;
@@ -157,20 +159,30 @@ export function recordTexture(record: SceneRecord, columns: number): RecordTextu
       const r = raw[band * cols + Math.min(cols - 1, c + 1)];
       data[band * cols + c] = 0.25 * l + 0.5 * m + 0.25 * r;
     }
-  const texture = new THREE.DataTexture(data, cols, 6, THREE.RedFormat, THREE.FloatType);
+  // HALF FLOATS, which WebGL2 filters on every GPU: a 32-bit float texture filters only where
+  // the GPU offers OES_texture_float_linear (many phones' and tablets' don't), and without it a
+  // linear-filtered one samples as zero, so the walls would lie flat. The levels run 0 to 1, so
+  // half precision loses nothing a wall shows; the CPU reads the same rounded values.
+  const half = new Uint16Array(data.length);
+  const levels = new Float32Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    half[i] = THREE.DataUtils.toHalfFloat(data[i]);
+    levels[i] = THREE.DataUtils.fromHalfFloat(half[i]);
+  }
+  const texture = new THREE.DataTexture(half, cols, 6, THREE.RedFormat, THREE.HalfFloatType);
   texture.minFilter = THREE.LinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.needsUpdate = true;
-  return { texture, columns: cols, secondsPerColumn: per / fps, seconds: frames / fps };
+  return { texture, levels, columns: cols, secondsPerColumn: per / fps, seconds: frames / fps };
 }
 
 /** The level the wall shader reads at (u along the track, 0..1; lane 0..1), sampled from the
  *  record texture's own data the way the GPU does (bilinear, clamped to the edges): anything
  *  that must sit ON a displaced wall asks this rather than the raw strip, or it sinks in. */
 export function recordLevel(tex: RecordTexture, u: number, lane: number): number {
-  const data = tex.texture.image.data as Float32Array;
+  const data = tex.levels;
   const cols = tex.columns;
   const x = Math.min(1, Math.max(0, u)) * cols - 0.5;
   const y = Math.min(1, Math.max(0, lane)) * 6 - 0.5;

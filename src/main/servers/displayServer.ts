@@ -128,14 +128,21 @@ function urlOf(req: IncomingMessage): URL | null {
 
 /** The asked track is the one playing: its title and artist as the page derives them (either
  *  play_state's or now_playing's lines, a station's on the radio), its album and length if asked. */
-export function asksForPlaying(q: LyricsQuery, snap: Snapshot): boolean {
+export function asksForPlaying(
+  q: LyricsQuery,
+  snap: Snapshot,
+  { noArtist = false }: { noArtist?: boolean } = {},
+): boolean {
   const md = snap.playState?.metadata;
   const d = snap.nowPlaying?.display;
   const is = (v: string | null | undefined, ...of: Array<string | null | undefined>): boolean =>
     v != null && v !== "" && of.some((o) => o === v);
+  // `noArtist`: a file with no artist tag is asked for by its title alone, when the streamer
+  // names no artist either (the playing file's route; lyrics are never asked without one)
+  const artistless = noArtist && q.artist === "" && !md?.artist && !d?.line2;
   return (
     is(q.title, md?.title, md?.station, d?.line1) &&
-    is(q.artist, md?.artist, md?.title, d?.line2) &&
+    (artistless || is(q.artist, md?.artist, md?.title, d?.line2)) &&
     (q.album == null || is(q.album, md?.album, d?.line3)) &&
     (q.duration == null || q.duration === md?.duration)
   );
@@ -143,7 +150,8 @@ export function asksForPlaying(q: LyricsQuery, snap: Snapshot): boolean {
 
 export class DisplayServer {
   private http: Server | null = null;
-  private readonly clients = new Set<ServerResponse>();
+  /** Each open screen, with the token it was let in under. */
+  private readonly clients = new Map<ServerResponse, string>();
   private readonly artIds = new Map<string, string>();
   private readonly trackKeys = new Set<string>();
   private readonly kept = new Map<string, { bytes: Buffer; type: string }>();
@@ -190,7 +198,7 @@ export class DisplayServer {
         });
         const a = server.address();
         this.listening = { port: typeof a === "object" && a ? a.port : port, host };
-        this.ping = setInterval(() => this.send("event: ping\ndata: 1\n\n"), PING_MS);
+        this.ping = setInterval(() => void this.pingScreens(), PING_MS);
         this.deps.log(`Display on other screens is on, port ${this.listening.port}`);
         resolve();
       });
@@ -211,7 +219,7 @@ export class DisplayServer {
   /** Every open screen let go, the server still listening: after a new address, each screen's
    *  reconnect meets the "open the address" page. */
   closeScreens(): void {
-    for (const c of this.clients) c.end();
+    for (const c of this.clients.keys()) c.end();
     this.clients.clear();
     this.http?.closeAllConnections();
   }
@@ -223,8 +231,21 @@ export class DisplayServer {
     if (out) this.send(`data: ${JSON.stringify(out)}\n\n`);
   }
 
+  /** Every few seconds: a screen let in under an address since replaced (its request read the
+   *  old token a moment before the new one was stored) is let go; the rest hear the ping. */
+  private async pingScreens(): Promise<void> {
+    const token = await this.deps.token().catch(() => null);
+    if (token == null) return;
+    for (const [c, under] of this.clients)
+      if (!sameToken(under, token)) {
+        this.clients.delete(c);
+        c.end();
+      }
+    this.send("event: ping\ndata: 1\n\n");
+  }
+
   private send(line: string): void {
-    for (const c of this.clients) {
+    for (const c of this.clients.keys()) {
       if (c.writableLength > MAX_UNREAD_BYTES) {
         this.clients.delete(c);
         c.destroy();
@@ -287,7 +308,7 @@ export class DisplayServer {
         return this.file(res, "display.html", { "content-security-policy": PAGE_CSP });
       if (path === "/api/snapshot")
         return this.json(res, displaySnapshot(this.deps.snapshot(), this.art));
-      if (path === "/api/live") return this.live(req, res);
+      if (path === "/api/live") return this.live(req, res, token);
       if (path === "/api/lyrics") return await this.lyrics(res, url);
       if (path === "/api/track") return await this.track(res, url);
       if (path === "/api/analysis") return this.storedAnalysis(res, url);
@@ -314,7 +335,7 @@ export class DisplayServer {
     res.end(JSON.stringify(body));
   }
 
-  private live(req: IncomingMessage, res: ServerResponse): void {
+  private live(req: IncomingMessage, res: ServerResponse, token: string): void {
     if (this.clients.size >= MAX_SCREENS) {
       this.base(res, 503, { "retry-after": "30" });
       return void res.end();
@@ -323,7 +344,7 @@ export class DisplayServer {
     res.write("retry: 3000\n\n");
     const snap = displaySnapshot(this.deps.snapshot(), this.art);
     res.write(`event: snapshot\ndata: ${JSON.stringify(snap)}\n\n`);
-    this.clients.add(res);
+    this.clients.set(res, token);
     req.on("close", () => this.clients.delete(res));
   }
 
@@ -354,13 +375,14 @@ export class DisplayServer {
       album: p.get("album") || null,
       duration: p.get("duration") && Number.isFinite(duration) && duration > 0 ? duration : null,
     };
-    if (!asksForPlaying(asked, this.deps.snapshot())) return this.json(res, null);
+    if (!asksForPlaying(asked, this.deps.snapshot(), { noArtist: true }))
+      return this.json(res, null);
     // the page's picture address is an id this server handed out: the query gets the real one
     const art = /^\/art\/([0-9a-f]{24})$/.exec(p.get("art") ?? "");
     const found = await this.deps.trackInfo({
       kind: "track",
       title: asked.title,
-      artist: asked.artist,
+      artist: asked.artist || null,
       album: asked.album,
       durationSecs: asked.duration,
       artUrl: art ? (this.artIds.get(art[1]) ?? null) : null,

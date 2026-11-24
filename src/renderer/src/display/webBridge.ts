@@ -12,8 +12,8 @@ import { listenPushes } from "./live";
  * THE WINDOW'S API, AS A PAGE ON THE NETWORK HAS IT (0.17.0, Display on other screens). The
  * Display tree is the app's own (one home), and it reaches the app through window.tastytunes; in a
  * browser there is no preload, so this stands in for it, answering from the display server's
- * reads (main/servers/displayServer): the snapshot, the live channel (display/live) and the
- * playing track's lyrics. It has no
+ * reads (main/servers/displayServer): the snapshot, the live channel (display/live), the
+ * playing track's lyrics, its analysis and its cover. It has no
  * way back: a command does nothing, and a settings change (a scene picked, the lyrics hidden)
  * stays in this page. Every other method answers as if there were nothing: an empty list or
  * null.
@@ -32,6 +32,40 @@ const LISTS = new Set([
   "radioByTags",
   "listeningYears",
 ]);
+
+/** The largest picture handed back as a data URL: the window's own cap (main/lookups/artFetch). */
+export const ART_MAX_BYTES = 3_000_000;
+/** The only pictures a page asks for: the server's own, by the id it handed out. */
+const OWN_ART = /^\/art\/[0-9a-f]{24}$/;
+
+function dataUrlOf(bytes: Uint8Array, type: string): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return `data:${type};base64,${btoa(bin)}`;
+}
+
+/** THE COVER, as the window's fetchArt gives it: the scenes take their colors from its pixels
+ *  (components/display/palette) and the Turntable draws it (feed), each from a data URL so the
+ *  cathode finish can read their canvases back. Same origin, the server's /art/<id> only, capped
+ *  as the window caps it; anything else is null. */
+export async function pageArt(url: string): Promise<{ dataUrl: string } | null> {
+  if (!OWN_ART.test(url)) return null;
+  try {
+    const res = await fetch(url, { credentials: "same-origin" });
+    if (!res.ok) return null;
+    const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
+    const length = Number(res.headers.get("content-length") ?? NaN);
+    if (!/^image\/[\w.+-]+$/.test(type) || length > ART_MAX_BYTES) {
+      await res.body?.cancel();
+      return null;
+    }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    return bytes.length > ART_MAX_BYTES ? null : { dataUrl: dataUrlOf(bytes, type) };
+  } catch {
+    return null;
+  }
+}
 
 export function webBridge(): TastyTunesApi {
   let settings: AppSettings | null = null;
@@ -89,6 +123,7 @@ export function webBridge(): TastyTunesApi {
       });
       return res.ok ? ((await res.json()) as AudioAnalysis | null) : null;
     },
+    fetchArt: pageArt,
     command: () => Promise.resolve(),
   };
   // EVERY method, written out from the channel table as the preload does, since the window's

@@ -17,7 +17,12 @@ import { useStore } from "@/store";
 import { useTheme } from "@/hooks/useTheme";
 import { useDisplayFont } from "@/hooks/useDisplayFont";
 import { useMotionPreference } from "@/hooks/useMotionPreference";
+import { useAccentChoice } from "@/hooks/useAccentChoice";
+import { useArtAccent } from "@/hooks/useArtAccent";
+import { deriveNowPlaying } from "@/lib/format";
 import { DisplayMode } from "@/components/playback/DisplayMode";
+import { holdStages } from "@/components/display/SceneCanvas";
+import { askAgainForStored } from "@/components/media/waveformAnalysis";
 import { followApp } from "./live";
 import { musicGoing, REST_OPACITY, useRest } from "./rest";
 
@@ -31,16 +36,22 @@ import { musicGoing, REST_OPACITY, useRest } from "./rest";
  *
  * A SCREEN LEFT ON: with the music stopped for a while, the page dims and drifts (display/rest).
  *
- * SCENES WHERE THEY CAN RUN (stage 2): the owner's scene is drawn where the browser has WebGL2,
- * the Sleeve's face everywhere else (asked once, by the browser itself, never by a GPU's name).
+ * SCENES WHERE THEY CAN RUN (stage 2): the owner's scene is drawn where the browser has WebGL2
+ * on its GPU, the Sleeve's face everywhere else (asked once, by the browser itself, never by a
+ * GPU's name).
  * A scene draws from the playing track's stored analysis, which the page is handed and never
- * measures.
+ * measures, and takes its colors from the cover, as in the window (display/webBridge's fetchArt).
+ * The owner's accent is worn here too.
  */
 
-/** Whether this browser can draw the scenes: a WebGL2 context it will hand out. */
+/** Whether this browser can draw the scenes: a WebGL2 context it will hand out, and not one it
+ *  would draw in software (the browser itself refuses that, asked so; no GPU is named), where a
+ *  scene would crawl. */
 function canDrawScenes(): boolean {
   try {
-    const gl = document.createElement("canvas").getContext("webgl2");
+    const gl = document
+      .createElement("canvas")
+      .getContext("webgl2", { failIfMajorPerformanceCaveat: true });
     gl?.getExtension("WEBGL_lose_context")?.loseContext();
     return gl != null;
   } catch {
@@ -49,6 +60,11 @@ function canDrawScenes(): boolean {
 }
 
 const SCENES_HERE = canDrawScenes();
+
+/** A track's first play: the window measures it a few seconds in, so a page that found nothing
+ *  stored asks again at these times from its first none (components/media/waveformAnalysis). */
+const ASK_AGAIN_MS = [20_000, 60_000, 180_000] as const;
+askAgainForStored(ASK_AGAIN_MS);
 
 /** The settings as this page draws them: without WebGL2, every scene is the Sleeve. */
 const forThisPage = (s: AppSettings): AppSettings =>
@@ -70,17 +86,19 @@ function Page(): React.JSX.Element {
   const going = useStore((s) => musicGoing(s.playState?.state));
   // a screen left on: dimmed and drifting while the music is stopped (display/rest)
   const { resting, offset } = useRest(going);
-  const [reduced, setReduced] = useState(false);
-  useTheme(settings.theme);
+  // and its scene holds its last picture rather than drawing every frame behind the dimming
+  useEffect(() => holdStages(resting), [resting]);
+  const theme = useTheme(settings.theme);
   useDisplayFont(settings.displayFont);
-  useMotionPreference(settings.motion);
+  // the drift glides unless motion is reduced, when it steps (the dimming fades either way)
+  const reduced = useMotionPreference(settings.motion);
+  // the owner's accent, From album art included, as the window wears it (its progress line)
+  const artUrl = useStore((s) => deriveNowPlaying(s.playState, s.nowPlaying).artUrl);
+  useAccentChoice(settings.accent);
+  useArtAccent(settings.accent === "art" && heard ? (artUrl ?? null) : null, theme);
   useEffect(() => {
     document.documentElement.classList.add("display-page");
   }, []);
-  // the drift glides unless motion is reduced, when it steps (the dimming fades either way)
-  useEffect(() => {
-    setReduced(document.documentElement.classList.contains("reduce-motion"));
-  }, [settings.motion]);
   return (
     <div
       data-display-scenes={SCENES_HERE ? "on" : "off"}

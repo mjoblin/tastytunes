@@ -23,6 +23,17 @@ import type * as THREE from "three";
  * Dream) and StrictMode's double mount both need fresh elements.
  */
 
+/** A PAGE LEFT RESTING (display/rest, a screen with the music stopped): every stage holds its
+ *  last picture and draws nothing, as while the window is hidden, so a tablet's GPU isn't kept
+ *  working all night behind a dimmed picture; the music starting again wakes them. */
+let held = false;
+const heldListeners = new Set<() => void>();
+export function holdStages(on: boolean): void {
+  if (held === on) return;
+  held = on;
+  for (const l of heldListeners) l();
+}
+
 /** The hits each stage has been handed, by drum, kept on the stage as data-scene-hits (0.15.0):
  *  what a scene got to draw, whichever way the hits were made (the file's onsets, else the
  *  feed's own), readable from outside the loop. A few writes a second, only on a hit. */
@@ -146,9 +157,9 @@ export function SceneCanvas({
     let raf = 0;
     let lastFrame = 0;
     const loop = (now: number): void => {
-      if (document.hidden) {
-        // the stage sleeps while the document is hidden: no frame is scheduled, and
-        // visibilitychange below wakes it with a fresh clock so the first frame back
+      if (document.hidden || held) {
+        // the stage sleeps while the document is hidden (or the page rests): no frame is
+        // scheduled, and wake below starts it with a fresh clock so the first frame back
         // does not carry the whole absence as its delta
         raf = 0;
         return;
@@ -208,7 +219,7 @@ export function SceneCanvas({
       }
     };
     const onVisibility = (): void => {
-      if (document.hidden) {
+      if (document.hidden || held) {
         cancelAnimationFrame(raf);
         raf = 0;
         return;
@@ -217,6 +228,7 @@ export function SceneCanvas({
       if (!raf) raf = requestAnimationFrame(loop);
     };
     document.addEventListener("visibilitychange", onVisibility);
+    heldListeners.add(onVisibility);
     // A LOST GRAPHICS CONTEXT (a GPU process restart, a driver reset, a remote session) left
     // Display mode black until it was reopened: the scene, and the finish with it, mount again on
     // fresh canvases a beat later. Heard in the capture phase, so the finish's own canvas counts.
@@ -230,6 +242,7 @@ export function SceneCanvas({
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", onVisibility);
+      heldListeners.delete(onVisibility);
       wrap.removeEventListener("webglcontextlost", onLost, true);
       if (remount) clearTimeout(remount);
       ro.disconnect();

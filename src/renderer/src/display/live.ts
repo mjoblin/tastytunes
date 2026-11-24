@@ -31,6 +31,7 @@ export interface Follow {
 export function followApp(follow: Follow): () => void {
   let source: EventSource | null = null;
   let heardAt = 0;
+  let openedAt = 0;
   let heard = false;
   let ended = false;
   let again: ReturnType<typeof setTimeout> | undefined;
@@ -52,6 +53,7 @@ export function followApp(follow: Follow): () => void {
   };
   function open(): void {
     drop();
+    openedAt = Date.now();
     const live = new EventSource("/api/live");
     source = live;
     live.addEventListener("snapshot", (e: MessageEvent<string>) => {
@@ -79,11 +81,18 @@ export function followApp(follow: Follow): () => void {
   }
 
   const watch = setInterval(() => {
-    if (!heard || Date.now() - heardAt < LOST_MS) return;
-    heard = false;
-    follow.reachable(false);
-    // a connection that went quiet (the computer slept, the network moved) is opened afresh
-    open();
+    const now = Date.now();
+    if (heard) {
+      if (now - heardAt < LOST_MS) return;
+      heard = false;
+      follow.reachable(false);
+      // a connection that went quiet (the computer slept, the network moved) is opened afresh
+      open();
+      return;
+    }
+    // and while nothing is heard, again every LOST_MS: a connection that opened and died before
+    // its snapshot would otherwise wait on the browser's own timeout
+    if (now - openedAt >= LOST_MS) open();
   }, 2_000);
   open();
   return () => {
