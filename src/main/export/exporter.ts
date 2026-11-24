@@ -36,6 +36,7 @@ import {
 } from "./trackRecord";
 import { buildAlbumRecord } from "./albumRecord";
 import { exportReadme } from "./exportReadme";
+import type { ReleaseArt } from "../lookups/releaseArt";
 import { withoutMetadata } from "./pictureMeta";
 
 /**
@@ -97,6 +98,13 @@ export interface ExportEnv {
   credits(node: MediaNode, fill: boolean): Promise<Looked<TrackInfo>>;
   albumNotes(artist: string, album: string, fill: boolean): Promise<Looked<AlbumInfo>>;
   artistNotes(artist: string, fill: boolean): Promise<Looked<ArtistInfo>>;
+  /** One release's scans on the Cover Art Archive (back cover, booklet...), chosen from the
+   *  album's release group by its track count. */
+  releaseArt(
+    releaseGroup: string,
+    tracks: number | null,
+    fill: boolean,
+  ): Promise<Looked<ReleaseArt>>;
   artistPictures(
     artist: string,
     fill: boolean,
@@ -412,6 +420,7 @@ async function writePictures(
   ownTitle: string | null,
   opts: ExportOptions,
   budget: Budget,
+  release: Looked<ReleaseArt> | null,
 ): Promise<Missing[]> {
   const listed: Array<Record<string, unknown>> = [];
   const missing: Missing[] = [];
@@ -441,6 +450,35 @@ async function writePictures(
   }
 
   let lateOnes = 0;
+  // THE RELEASE'S SCANS (the Cover Art Archive step): files under fill and the budget, listed by
+  // address otherwise; the release they come from is named on each
+  if (release) {
+    const gap = gapOf(release, LOOKUPS.releaseArt);
+    if (gap) missing.push(gap);
+    if (release.kind === "found") {
+      const r = release.value;
+      for (const [i, img] of r.images.entries()) {
+        let file: string | null = null;
+        if (opts.fill && budget.open) {
+          const got = await fetch(img.url);
+          const kind = safeName(img.types[0].toLowerCase()).replace(/\s+/g, "-");
+          file = got ? save(`release-${String(i + 1).padStart(2, "0")}-${kind}`, got) : null;
+        } else if (opts.fill) lateOnes += 1;
+        listed.push({
+          what: "release",
+          source: "Cover Art Archive",
+          types: img.types,
+          comment: img.comment,
+          release: r.release,
+          release_country: r.country,
+          release_date: r.date,
+          release_formats: r.formats,
+          address: img.url,
+          file,
+        });
+      }
+    }
+  }
   if (artist) {
     const { offers, gap } = await budget.time(() => env.artistPictures(artist, budget.open));
     if (gap) missing.push(gap);
@@ -638,6 +676,23 @@ async function writeTrackFiles(
   put(`${dir}track.json`, json(opts.redact ? redacted(track) : track), "record");
 }
 
+/** The album's release group on MusicBrainz, from its notes' address. */
+const releaseGroupOf = (notes: Looked<AlbumInfo>): string | null =>
+  notes.kind === "found"
+    ? (/\/release-group\/([0-9a-f-]{36})/.exec(notes.value.musicbrainzUrl ?? "")?.[1] ?? null)
+    : null;
+
+/** The release's scans for an album whose notes name its release group; null with no notes. */
+function releaseArtOf(
+  env: ExportEnv,
+  notes: Looked<AlbumInfo>,
+  tracks: number | null,
+  budget: Budget,
+): Promise<Looked<ReleaseArt>> | null {
+  const group = releaseGroupOf(notes);
+  return group ? budget.look((fill) => env.releaseArt(group, tracks, fill)) : null;
+}
+
 /** Notes on the album and the artist, when known or asked for under the budget. */
 async function notesOf(
   env: ExportEnv,
@@ -761,6 +816,9 @@ export function exportTrack(
           gapOf(notes.artistNotes, LOOKUPS.artistNotes),
         ].filter((m): m is Missing => m != null),
       );
+      const pool = env.pools().find((p) => p.udn === t.serverUdn);
+      const albumTracks = album && pool ? albumTracksOf(album, pool).length || null : null;
+      const release = await releaseArtOf(env, notes.albumNotes, albumTracks, budget);
       missing.push(
         ...(await writePictures(
           env,
@@ -771,6 +829,7 @@ export function exportTrack(
           t.node.album,
           opts,
           budget,
+          release,
         )),
       );
       const presets = album?.artUrl ? env.presets().filter((p) => p.artUrl === album.artUrl) : [];
@@ -840,6 +899,7 @@ export function exportAlbum(
           why: "A compilation has no one artist.",
           remedy: "Export one of its tracks for its artist's.",
         });
+      const release = await releaseArtOf(env, notes.albumNotes, tracks.length, budget);
       missing.push(
         ...(await writePictures(
           env,
@@ -850,6 +910,7 @@ export function exportAlbum(
           a.node.title,
           opts,
           budget,
+          release,
         )),
       );
       for (const [i, n] of tracks.entries()) {

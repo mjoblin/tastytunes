@@ -13,7 +13,7 @@ import { DiskCache } from "./diskCache";
 import { loggedFetch } from "../netlog";
 import { albumInfoKnown, albumKey } from "./albumInfo";
 
-const CAA = process.env["TASTYTUNES_CAA_URL"] ?? "https://coverartarchive.org";
+export const CAA = process.env["TASTYTUNES_CAA_URL"] ?? "https://coverartarchive.org";
 /** Bounded low: entries are whole images as data URLs (~100 KB each). */
 const CACHE_MAX = 120;
 const cache = new DiskCache<string | null>("coverart", CACHE_MAX);

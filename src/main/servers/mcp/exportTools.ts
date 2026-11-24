@@ -31,6 +31,7 @@ import {
   knowsArtist,
 } from "../../lookups/artistInfo";
 import { fetchCommonsPhotos } from "../../lookups/commons";
+import { cachedReleaseArt, fetchReleaseArt } from "../../lookups/releaseArt";
 import { fetchFanartPhotos } from "../../lookups/fanart";
 import { loggedFetch } from "../../netlog";
 import { exportRoot } from "../../app/exportsFolder";
@@ -222,6 +223,23 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
         () => fetchArtistInfoForCredit(artist),
         () => knowsArtist(artist),
       ),
+    // the archive is asked only with Missing album art on, as for a missing cover (the switch
+    // that names it), and its release group comes from Liner notes' answer
+    releaseArt: (group, tracks, fill) =>
+      getSettings().artistInfo && !getSettings().albumArtLookup
+        ? Promise.resolve({
+            kind: "cannot",
+            why: "Missing album art is switched off in Settings › Connections, so the Cover Art Archive isn't asked.",
+            remedy:
+              "Ask the user to turn on Missing album art in Settings › Connections, then export again with fill: true.",
+          })
+        : lookup(
+            getSettings().artistInfo,
+            fill,
+            () => cachedReleaseArt(group, tracks),
+            () => fetchReleaseArt(group, tracks),
+            () => cachedReleaseArt(group, tracks) !== undefined,
+          ),
     artistPictures: async (artist, fill) => {
       const offers: ArtistPictureOffer[] = [];
       const online = getSettings().artistInfo;

@@ -88,9 +88,11 @@ analysis that measured it.
 
 ## pictures
 
-\`pictures.json\` lists each picture: what it is (\`sleeve\`, \`artist\`, or \`shelf\` for the
-artist's other albums in the library), where it came from, and its \`file\` here when it was
-copied. A picture with no file is listed with its address only.
+\`pictures.json\` lists each picture: what it is (\`sleeve\`; \`release\`, a scan of one pressing
+of the album from the Cover Art Archive, its \`types\` saying which, such as Back or Booklet, and
+\`release\` naming the pressing on MusicBrainz; \`artist\`; or \`shelf\` for the artist's other
+albums in the library), where it came from, and its \`file\` here when it was copied. A picture
+with no file is listed with its address only.
 
 ## Rights
 

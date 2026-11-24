@@ -184,6 +184,7 @@ function fakeEnv(
     },
     credits: (_n, fill) => Promise.resolve(fill ? { kind: "none" } : { kind: "not_asked" }),
     albumNotes: () => Promise.resolve({ kind: "off" }),
+    releaseArt: () => Promise.resolve({ kind: "none" }),
     artistNotes: () => Promise.resolve({ kind: "none" }),
     artistPictures: (_artist, fill) =>
       Promise.resolve({
@@ -478,6 +479,98 @@ describe("a track's export, when things go wrong", () => {
     expect(second.kind === "refused" && second.message).toMatch(/into .*Lamplighter/);
     release();
     expect((await first).kind).toBe("exported");
+  });
+});
+
+describe("the release's scans (the Cover Art Archive step)", () => {
+  const RG = "b1392450-e666-3926-a536-22c65f834433";
+  const notes = {
+    kind: "found" as const,
+    value: {
+      title: "Harbour Lights",
+      year: "2019",
+      type: "Album",
+      label: null,
+      genres: [],
+      credits: [],
+      summary: null,
+      wikipediaUrl: null,
+      musicbrainzUrl: `https://musicbrainz.org/release-group/${RG}`,
+    },
+  };
+  const scans = {
+    release: "https://musicbrainz.org/release/r-1",
+    country: "GB",
+    date: "2019-03-01",
+    formats: ["CD"],
+    tracks: 3,
+    images: [
+      {
+        types: ["Front"],
+        comment: null,
+        url: "https://coverartarchive.org/release/r-1/1-1200.jpg",
+      },
+      { types: ["Back"], comment: null, url: "https://coverartarchive.org/release/r-1/2-1200.jpg" },
+      {
+        types: ["Booklet"],
+        comment: "pages 2-3",
+        url: "https://coverartarchive.org/release/r-1/3-1200.jpg",
+      },
+    ],
+  };
+
+  it("with fill, copies the chosen release's scans in, each named for what it is", async () => {
+    const asked: Array<[string, number | null, boolean]> = [];
+    const { env } = fakeEnv({
+      analysis: () => analyzed(),
+      albumNotes: () => Promise.resolve(notes as never),
+      releaseArt: (group, tracks, fill) => {
+        asked.push([group, tracks, fill]);
+        return Promise.resolve(fill ? { kind: "found", value: scans } : { kind: "not_asked" });
+      },
+    });
+    const r = await exportAlbum(env, root(), target(album), opts({ fill: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(asked).toEqual([[RG, 3, true]]);
+    const files = r.files.map((f) => f.path);
+    for (const f of [
+      "pictures/release-01-front.jpg",
+      "pictures/release-02-back.jpg",
+      "pictures/release-03-booklet.jpg",
+    ])
+      expect(files).toContain(f);
+    const listed = readJson(r.folder, "pictures/pictures.json")["pictures"] as Array<
+      Record<string, unknown>
+    >;
+    expect(listed.filter((p) => p["what"] === "release")[2]).toMatchObject({
+      types: ["Booklet"],
+      comment: "pages 2-3",
+      release: "https://musicbrainz.org/release/r-1",
+      file: "pictures/release-03-booklet.jpg",
+    });
+  });
+
+  it("without fill asks nothing and says how to get them; with no notes, nothing is asked", async () => {
+    const { env } = fakeEnv({
+      albumNotes: () => Promise.resolve(notes as never),
+      releaseArt: (_g, _t, fill) =>
+        Promise.resolve(fill ? { kind: "found", value: scans } : { kind: "not_asked" }),
+    });
+    const r = await exportTrack(env, root(), target(t1), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(r.files.some((f) => f.path.includes("release-"))).toBe(false);
+    expect(r.missing.find((m) => m.what.startsWith("the release's scans"))?.remedy).toBe(
+      "Export again with fill: true.",
+    );
+    let asked = 0;
+    const { env: bare } = fakeEnv({
+      releaseArt: () => {
+        asked++;
+        return Promise.resolve({ kind: "none" });
+      },
+    });
+    await exportTrack(bare, root(), target(t1), opts({ fill: true }));
+    expect(asked).toBe(0);
   });
 });
 

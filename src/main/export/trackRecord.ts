@@ -87,6 +87,12 @@ export const LOOKUPS = {
     service: "MusicBrainz or Wikipedia",
     none: "MusicBrainz has no such artist.",
   },
+  releaseArt: {
+    what: "the release's scans (back cover, booklet)",
+    switchName: "Liner notes",
+    service: "MusicBrainz or the Cover Art Archive",
+    none: "The Cover Art Archive has no scans of a release of this album.",
+  },
 } satisfies Record<string, LookupNames>;
 
 export interface Missing {
