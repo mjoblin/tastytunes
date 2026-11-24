@@ -301,7 +301,7 @@ export function DisplayMode(): React.JSX.Element {
       <button
         data-display-corner
         onClick={() => setDisplayMode(false)}
-        title="Exit display mode (F)"
+        title="Exit full-screen display mode (F)"
         className={cx(
           "absolute top-4 right-4 z-20 p-2 rounded-full text-dim hover:text-ink hover:bg-veil2 transition-opacity",
           cursorIdle ? "opacity-0" : "opacity-100",

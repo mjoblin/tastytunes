@@ -1,8 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Maximize, Minimize, Sparkles } from "lucide-react";
+import { Check, Layers, Maximize, Minimize, Sparkles } from "lucide-react";
 import type { DisplayScene } from "@shared/model";
 import { cx } from "@/lib/format";
 import { SCENES_ORDERED, sceneDef } from "@/components/display/scenes";
+import { SyncRow } from "@/components/display/ScenePicker";
+import { HeaderChip } from "@/components/chrome/Chrome";
+import { ALL_SCENES_KEYS, ownSettings, type OwnKey } from "./pageSettings";
 
 /** How long the buttons stay after a touch. */
 const SHOWN_MS = 4_000;
@@ -35,8 +38,10 @@ const FS = typeof document !== "undefined" ? fullScreen() : null;
 
 /**
  * THE PAGE'S SCENE PICKER (0.17.0, Display on other screens): a touch shows a scene button in the
- * corner, and the button opens the scenes by name, "Same as TastyTunes" first. Beside it, full
- * screen, where the browser lets a page have it (a page may ask only on a touch). Not the window's
+ * corner, and the button opens the scenes by name, "Same as TastyTunes" first, and the window's
+ * All scenes rows (the glass, the corners, the drops, the sync), set for this screen alone until
+ * "Use TastyTunes' settings". Beside it, full screen, where the browser lets a page have it (a
+ * page may ask only on a touch). Not the window's
  * picker: its live tiles are a graphics context each, more than a tablet's browser hands out
  * beside the stage, and its settings would change nothing the app keeps. Touch-sized (44px rows).
  */
@@ -44,14 +49,19 @@ export function ScenePanel({
   own,
   appScene,
   onPick,
+  onAppSettings,
 }: {
   /** This screen's scene, or null when it shows the app's. */
   own: DisplayScene | null;
   appScene: DisplayScene;
   onPick(id: DisplayScene | null): void;
+  /** Let these settings go: the screen shows the app's again. */
+  onAppSettings(keys: readonly OwnKey[]): void;
 }): React.JSX.Element {
   const [shown, setShown] = useState(false);
   const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const keptHere = ALL_SCENES_KEYS.some((k) => k in ownSettings());
   const [full, setFull] = useState(() => FS?.on() ?? false);
   useEffect(() => {
     if (!FS) return;
@@ -118,7 +128,7 @@ export function ScenePanel({
           <div className="absolute inset-0 z-40" onClick={() => setOpen(false)} />
           <div
             data-page-scenes
-            className="absolute top-[4.25rem] right-4 z-50 w-[min(26rem,calc(100%_-_2rem))] max-h-[calc(100%_-_5.5rem)] overflow-y-auto rounded-2xl bg-panel/85 p-2 shadow-2xl ring-1 ring-edge backdrop-blur-md"
+            className="absolute top-[4.25rem] right-4 z-50 w-[min(30rem,calc(100%_-_2rem))] max-h-[calc(100%_-_5.5rem)] overflow-y-auto rounded-2xl bg-panel/85 p-2 shadow-2xl ring-1 ring-edge backdrop-blur-md"
           >
             <button
               type="button"
@@ -152,9 +162,43 @@ export function ScenePanel({
                 );
               })}
             </div>
-            <div className="mt-1 border-t border-edge px-3 pt-2 pb-1 text-[12.5px] text-dim">
-              <span className="text-ink">{chosen.label}</span> · {chosen.blurb}
+            <div className="mt-1 flex items-center gap-3 border-t border-edge px-3 pt-2 pb-1 text-[12.5px] text-dim">
+              <div className="min-w-0 flex-1">
+                <span className="text-ink">{chosen.label}</span> · {chosen.blurb}
+              </div>
+              <HeaderChip
+                type="button"
+                data-page-all-scenes
+                active={settingsOpen}
+                aria-expanded={settingsOpen}
+                onClick={() => setSettingsOpen((o) => !o)}
+                className="flex h-9 shrink-0 items-center gap-1.5 px-3 text-[13px]"
+              >
+                <Layers size={14} />
+                All scenes
+              </HeaderChip>
             </div>
+            {settingsOpen && (
+              <div
+                data-page-scene-settings
+                className="mt-2 space-y-3 border-t border-edge px-3 pt-3 pb-1"
+              >
+                {/* the window's own rows, a little larger for a finger */}
+                <div className="[zoom:1.15]">
+                  <SyncRow host="display" />
+                </div>
+                {keptHere && (
+                  <HeaderChip
+                    type="button"
+                    data-page-app-settings
+                    onClick={() => onAppSettings(ALL_SCENES_KEYS)}
+                    className="h-9 px-3 text-[13px]"
+                  >
+                    Use TastyTunes' settings
+                  </HeaderChip>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}

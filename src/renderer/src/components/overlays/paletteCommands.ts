@@ -488,7 +488,7 @@ export function buildCommands(ctx: CommandContext): Command[] {
   if (connected && !inStandby) {
     cmds.push({
       id: "view:display",
-      label: displayMode ? "Exit display mode" : "Full-screen display mode",
+      label: displayMode ? "Exit full-screen display mode" : "Full-screen display mode",
       group: "View",
       hint: "F",
       icon: Maximize2,

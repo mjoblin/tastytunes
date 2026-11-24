@@ -348,7 +348,9 @@ function RangeSlider({
   );
 }
 
-function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
+/** The All scenes rows (the finish, the corners, the drops, the sync), also the page's on another
+ *  screen (display/ScenePanel), where a change stays on that screen. */
+export function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
   const value = useStore((s) => s.settings.displaySyncMs ?? 0);
   const drops = useStore((s) => s.settings.displayDrops ?? "normal");
   const finish = useStore((s) => s.settings.displayFinish ?? "cathode");

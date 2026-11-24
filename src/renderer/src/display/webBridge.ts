@@ -7,6 +7,7 @@ import type {
   MediaInfoTarget,
 } from "@shared/model";
 import { listenPushes } from "./live";
+import { forThisPage, keepOwn, OWN_KEYS } from "./pageSettings";
 
 /**
  * THE WINDOW'S API, AS A PAGE ON THE NETWORK HAS IT (0.17.0, Display on other screens). The
@@ -83,10 +84,14 @@ export function webBridge(): TastyTunesApi {
       if (!settings) await known.getSnapshot!();
       return settings!;
     },
-    // a change made on this page stays on this page
+    // a change made on this page stays on this page: the settings a screen may keep (its scene,
+    // the scenes' display-wide settings) are kept in its browser and outlast the app's pushes
+    // (display/pageSettings); anything else lasts until the app's next word
     setSettings: (patch: Partial<AppSettings>): Promise<AppSettings> => {
-      settings = { ...settings!, ...patch };
-      return Promise.resolve(settings);
+      keepOwn(patch);
+      const rest = Object.entries(patch).filter(([k]) => !(OWN_KEYS as string[]).includes(k));
+      settings = { ...settings!, ...Object.fromEntries(rest) };
+      return Promise.resolve(forThisPage(settings));
     },
     // the page's one live channel (display/live), which the page opens
     onPush: (cb: (msg: PushMessage) => void): (() => void) => listenPushes(cb),

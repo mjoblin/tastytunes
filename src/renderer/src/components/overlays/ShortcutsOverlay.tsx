@@ -59,7 +59,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
         "Now Playing · Queue · Search · lIbrary · Presets · plAylists · faVorites · Radio · History · Device · sEttings",
       ],
       ["F", "Full-screen display mode"],
-      ["Tab", "Next display scene, in display mode (⇧Tab steps back)"],
+      ["Tab", "Next scene, in full-screen display mode (⇧Tab steps back)"],
       [
         `${MOD}← / ${MOD}→`,
         "Back / forward through everywhere you've been (mouse side buttons too; Backspace goes up a level in the Library)",

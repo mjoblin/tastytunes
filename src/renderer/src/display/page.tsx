@@ -24,7 +24,14 @@ import { DisplayMode } from "@/components/playback/DisplayMode";
 import { holdStages } from "@/components/display/SceneCanvas";
 import { askAgainForStored } from "@/components/media/waveformAnalysis";
 import { followApp } from "./live";
-import { ownScene, sceneHere, setOwnScene } from "./sceneChoice";
+import {
+  drawsScenes,
+  forgetOwn,
+  forThisPage,
+  keepOwn,
+  ownSettings,
+  type OwnKey,
+} from "./pageSettings";
 import { ScenePanel } from "./ScenePanel";
 import { musicGoing, REST_FADE_MS, REST_OPACITY, useRest } from "./rest";
 
@@ -45,7 +52,8 @@ import { musicGoing, REST_FADE_MS, REST_OPACITY, useRest } from "./rest";
  * A scene draws from the playing track's stored analysis, which the page is handed and never
  * measures, and takes its colors from the cover, as in the window (display/webBridge's fetchArt).
  * The owner's accent is worn here too. A screen may show a scene of its own, chosen on it
- * (display/ScenePanel) and kept in its browser.
+ * (display/ScenePanel) with the scenes' display-wide settings, all kept in its browser
+ * (display/pageSettings).
  */
 
 /** Whether this browser can draw the scenes: a WebGL2 context it will hand out, and not one it
@@ -64,6 +72,7 @@ function canDrawScenes(): boolean {
 }
 
 const SCENES_HERE = canDrawScenes();
+drawsScenes(SCENES_HERE);
 
 /** A track's first play: the window measures it a few seconds in, so a page that found nothing
  *  stored asks again at these times from its first none (components/media/waveformAnalysis). */
@@ -86,12 +95,6 @@ const useAppScene = (): DisplayScene =>
     () => appSettings?.displayScene ?? "sleeve",
   );
 
-/** The settings as this page draws them: this screen's own scene when it has one
- *  (display/sceneChoice), and without WebGL2 every scene is the Sleeve. */
-const forThisPage = (s: AppSettings): AppSettings =>
-  SCENES_HERE
-    ? { ...s, displayScene: sceneHere(s.displayScene) }
-    : { ...s, displayScene: "sleeve" };
 function Page(): React.JSX.Element {
   const [heard, setHeard] = useState(false);
   useEffect(
@@ -122,14 +125,22 @@ function Page(): React.JSX.Element {
   const artUrl = useStore((s) => deriveNowPlaying(s.playState, s.nowPlaying).artUrl);
   useAccentChoice(settings.accent);
   useArtAccent(settings.accent === "art" && heard ? (artUrl ?? null) : null, theme);
-  // a scene for this screen: kept in this browser, the app never told
+  // a scene for this screen, and its own scene settings: kept in this browser, the app never told
   const appScene = useAppScene();
-  const [own, setOwn] = useState<DisplayScene | null>(ownScene);
-  const pickScene = (id: DisplayScene | null): void => {
-    setOwnScene(id);
-    setOwn(id);
+  const [own, setOwn] = useState<DisplayScene | null>(() => ownSettings().displayScene ?? null);
+  const redraw = (): void => {
     if (appSettings)
       useStore.getState().applyPush({ kind: "settings", settings: forThisPage(appSettings) });
+  };
+  const pickScene = (id: DisplayScene | null): void => {
+    if (id == null) forgetOwn(["displayScene"]);
+    else keepOwn({ displayScene: id });
+    setOwn(id);
+    redraw();
+  };
+  const backToApp = (keys: readonly OwnKey[]): void => {
+    forgetOwn(keys);
+    redraw();
   };
   return (
     <div
@@ -150,7 +161,14 @@ function Page(): React.JSX.Element {
       {heard && connected && powered ? (
         <>
           <DisplayMode />
-          {SCENES_HERE && <ScenePanel own={own} appScene={appScene} onPick={pickScene} />}
+          {SCENES_HERE && (
+            <ScenePanel
+              own={own}
+              appScene={appScene}
+              onPick={pickScene}
+              onAppSettings={backToApp}
+            />
+          )}
         </>
       ) : (
         <div data-display-asleep className="h-full w-full bg-black" />
