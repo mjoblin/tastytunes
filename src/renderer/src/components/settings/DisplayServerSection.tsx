@@ -87,7 +87,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
               <div className="flex items-center gap-4 pt-1">
                 <QrCode text={status.url} label="QR code for the display's address" />
                 <div className="text-[11.5px] text-faint max-w-[16rem] space-y-2">
-                  <p>Point the tablet's camera at the code to open the address.</p>
+                  <p>Point the tablet's camera at the QR code to open the address.</p>
                   <p>Turn off auto-lock on the tablet to keep its screen on.</p>
                   <p>
                     If the address stops working after a restart, give this computer a fixed address
@@ -128,7 +128,7 @@ function ControlRows({ settings, save }: SectionProps): React.JSX.Element {
     <div data-display-control className="space-y-3 border-t border-edge/60 pt-3">
       <Toggle
         label="Playback controls"
-        hint="Show play, pause and skip buttons on these screens. Each screen asks here before its buttons work."
+        hint="Show play, pause and skip buttons on other screens. You will be asked here in TastyTunes to confirm each screen's request to enable these buttons."
         checked={control}
         onChange={(displayControl) => void save({ displayControl })}
       />

@@ -14,8 +14,9 @@ import { controlsLocked, lockControls } from "./pageSettings";
  * CONTROLS ON THE OTHER SCREENS, THE PAGE'S HALF (0.17.0): previous, play or pause, and next, low
  * in the centre, shown at the same touch and for the same four seconds as the corner buttons
  * (display/touch: the first touch only shows them). They sit over the picture and never move it:
- * the Sleeve's lyric line steps back while they show, and over a scene a soft shade in the panel's
- * colour keeps the discs readable (styles.css, .display-page[data-controls-shown]).
+ * the picture dims a little while they show, a little more under them, so the discs read on any
+ * scene and the screen says it is listening; the Sleeve's lyric line steps back until they go
+ * (styles.css, .display-page[data-controls-shown]).
  *
  * - A screen draws only what it may do: nothing while the app's switch is off or this screen was
  *   turned down, and only the buttons the source offers (shared/transport, the window's own
@@ -73,12 +74,12 @@ function useAbilities(): ReturnType<typeof transportAbilities> {
 
 export function PageTransport({
   shown,
-  shade,
+  scene,
 }: {
   /** The page's buttons show (display/touch). */
   shown: boolean;
-  /** A scene is drawn under them: a soft shade keeps the discs readable on a bright one. */
-  shade: boolean;
+  /** A scene is drawn under them (not the Sleeve): they sit inside the cathode glass's edge. */
+  scene: boolean;
 }): React.JSX.Element | null {
   const control = useControl();
   const [lockedHere] = useLocked();
@@ -104,16 +105,16 @@ export function PageTransport({
   const showing = shown ? "opacity-100" : "pointer-events-none opacity-0";
   return (
     <>
-      {shade && (
-        <div
-          aria-hidden
-          data-page-transport-shade
-          className={cx(
-            "pointer-events-none absolute inset-x-0 bottom-0 z-30 h-72 bg-gradient-to-t from-panel/90 via-panel/55 to-transparent transition-opacity duration-300",
-            shown ? "opacity-100" : "opacity-0",
-          )}
-        />
-      )}
+      {/* the picture dims while the buttons show, deepest under them; black in either theme (a
+          light page dimmed toward its paper only washed out) */}
+      <div
+        aria-hidden
+        data-page-dim
+        className={cx(
+          "pointer-events-none absolute inset-0 z-30 bg-gradient-to-t from-black/55 via-black/30 to-black/25 transition-opacity duration-300",
+          shown ? "opacity-100" : "opacity-0",
+        )}
+      />
       <div
         data-page-transport={control.state}
         className={cx(
@@ -125,7 +126,7 @@ export function PageTransport({
         // the next track met the format chips. Over a scene a little higher, inside the cathode
         // glass's curved bottom edge
         style={{
-          bottom: shade
+          bottom: scene
             ? "calc(env(safe-area-inset-bottom, 0px) + 2.5rem)"
             : "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)",
         }}

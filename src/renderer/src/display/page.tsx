@@ -185,7 +185,7 @@ function Page(): React.JSX.Element {
           <DisplayMode />
           <PageTransport
             shown={transportShown}
-            shade={SCENES_HERE && settings.displayScene !== "sleeve"}
+            scene={SCENES_HERE && settings.displayScene !== "sleeve"}
           />
           <ScenePanel
             own={own}
