@@ -131,8 +131,10 @@ export function DisplayMode(): React.JSX.Element {
   }));
 
   // Enter OS fullscreen while mounted; leave on unmount. If the user exits
-  // fullscreen (Esc), close display mode too.
+  // fullscreen (Esc), close display mode too. Not on a page on another screen (display/page),
+  // where full screen is the viewer's to choose with a tap (display/ScenePanel).
   useEffect(() => {
+    if (document.documentElement.classList.contains("display-page")) return;
     void document.documentElement.requestFullscreen?.().catch(() => {});
     const onChange = (): void => {
       if (!document.fullscreenElement) setDisplayMode(false);
@@ -350,7 +352,7 @@ export function DisplayMode(): React.JSX.Element {
                 </div>
               )}
               {shownText.badges.length > 0 && (
-                <div className="flex justify-center flex-wrap gap-1.5 pt-6">
+                <div data-display-badges className="flex justify-center flex-wrap gap-1.5 pt-6">
                   {shownText.badges.map((b) => (
                     <span key={b} className="badge">
                       {b}
@@ -415,7 +417,10 @@ function DisplayLyric(): React.JSX.Element | null {
   if (!synced) return null;
   const placeholder = shown === "♪";
   return (
-    <div className="absolute inset-x-0 bottom-16 px-16 text-center pointer-events-none">
+    <div
+      data-display-lyric
+      className="absolute inset-x-0 bottom-16 px-16 text-center pointer-events-none"
+    >
       <div
         className={cx(
           "font-display text-[clamp(17px,2.8vmin,30px)] leading-snug line-clamp-2 text-balance transition-opacity duration-200",

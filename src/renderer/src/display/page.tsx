@@ -9,8 +9,8 @@ import "@fontsource/instrument-serif/400.css";
 import "@fontsource-variable/schibsted-grotesk";
 import "../styles.css";
 
-import { useEffect, useState } from "react";
-import type { AppSettings } from "@shared/model";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import type { AppSettings, DisplayScene } from "@shared/model";
 import ReactDOM from "react-dom/client";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -24,6 +24,8 @@ import { DisplayMode } from "@/components/playback/DisplayMode";
 import { holdStages } from "@/components/display/SceneCanvas";
 import { askAgainForStored } from "@/components/media/waveformAnalysis";
 import { followApp } from "./live";
+import { ownScene, sceneHere, setOwnScene } from "./sceneChoice";
+import { ScenePanel } from "./ScenePanel";
 import { musicGoing, REST_FADE_MS, REST_OPACITY, useRest } from "./rest";
 
 /**
@@ -42,7 +44,8 @@ import { musicGoing, REST_FADE_MS, REST_OPACITY, useRest } from "./rest";
  * GPU's name).
  * A scene draws from the playing track's stored analysis, which the page is handed and never
  * measures, and takes its colors from the cover, as in the window (display/webBridge's fetchArt).
- * The owner's accent is worn here too.
+ * The owner's accent is worn here too. A screen may show a scene of its own, chosen on it
+ * (display/ScenePanel) and kept in its browser.
  */
 
 /** Whether this browser can draw the scenes: a WebGL2 context it will hand out, and not one it
@@ -67,16 +70,37 @@ const SCENES_HERE = canDrawScenes();
 const ASK_AGAIN_MS = [20_000, 60_000, 180_000] as const;
 askAgainForStored(ASK_AGAIN_MS);
 
-/** The settings as this page draws them: without WebGL2, every scene is the Sleeve. */
+/** The app's settings as last heard, for the scene it shows (this screen may show another). */
+let appSettings: AppSettings | null = null;
+const appHeard = new Set<() => void>();
+const hearApp = (s: AppSettings): void => {
+  appSettings = s;
+  for (const l of appHeard) l();
+};
+const useAppScene = (): DisplayScene =>
+  useSyncExternalStore(
+    (l) => {
+      appHeard.add(l);
+      return () => appHeard.delete(l);
+    },
+    () => appSettings?.displayScene ?? "sleeve",
+  );
+
+/** The settings as this page draws them: this screen's own scene when it has one
+ *  (display/sceneChoice), and without WebGL2 every scene is the Sleeve. */
 const forThisPage = (s: AppSettings): AppSettings =>
-  SCENES_HERE ? s : { ...s, displayScene: "sleeve" };
+  SCENES_HERE
+    ? { ...s, displayScene: sceneHere(s.displayScene) }
+    : { ...s, displayScene: "sleeve" };
 function Page(): React.JSX.Element {
   const [heard, setHeard] = useState(false);
   useEffect(
     () =>
       followApp({
-        snapshot: (snap) =>
-          useStore.getState().init({ ...snap, settings: forThisPage(snap.settings) }),
+        snapshot: (snap) => {
+          hearApp(snap.settings);
+          useStore.getState().init({ ...snap, settings: forThisPage(snap.settings) });
+        },
         reachable: setHeard,
       }),
     [],
@@ -98,14 +122,20 @@ function Page(): React.JSX.Element {
   const artUrl = useStore((s) => deriveNowPlaying(s.playState, s.nowPlaying).artUrl);
   useAccentChoice(settings.accent);
   useArtAccent(settings.accent === "art" && heard ? (artUrl ?? null) : null, theme);
-  useEffect(() => {
-    document.documentElement.classList.add("display-page");
-  }, []);
+  // a scene for this screen: kept in this browser, the app never told
+  const appScene = useAppScene();
+  const [own, setOwn] = useState<DisplayScene | null>(ownScene);
+  const pickScene = (id: DisplayScene | null): void => {
+    setOwnScene(id);
+    setOwn(id);
+    if (appSettings)
+      useStore.getState().applyPush({ kind: "settings", settings: forThisPage(appSettings) });
+  };
   return (
     <div
       data-display-scenes={SCENES_HERE ? "on" : "off"}
       data-display-resting={resting || undefined}
-      className="h-screen w-screen overflow-hidden"
+      className="h-dvh w-screen overflow-hidden"
       style={{
         opacity: resting ? REST_OPACITY : 1,
         transform: `translate(${offset[0]}px, ${offset[1]}px)`,
@@ -118,7 +148,10 @@ function Page(): React.JSX.Element {
       }}
     >
       {heard && connected && powered ? (
-        <DisplayMode />
+        <>
+          <DisplayMode />
+          {SCENES_HERE && <ScenePanel own={own} appScene={appScene} onPick={pickScene} />}
+        </>
       ) : (
         <div data-display-asleep className="h-full w-full bg-black" />
       )}
@@ -126,9 +159,13 @@ function Page(): React.JSX.Element {
   );
 }
 
-tt.onPush((msg) =>
+// before the first render: Display mode reads it as it mounts (it asks for full screen only in
+// the app's window)
+document.documentElement.classList.add("display-page");
+tt.onPush((msg) => {
+  if (msg.kind === "settings") hearApp(msg.settings);
   useStore
     .getState()
-    .applyPush(msg.kind === "settings" ? { ...msg, settings: forThisPage(msg.settings) } : msg),
-);
+    .applyPush(msg.kind === "settings" ? { ...msg, settings: forThisPage(msg.settings) } : msg);
+});
 ReactDOM.createRoot(document.getElementById("root")!).render(<Page />);
