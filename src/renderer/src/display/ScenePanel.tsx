@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Layers, Maximize, Minimize, Sparkles } from "lucide-react";
+import { Check, Maximize, Minimize, SlidersHorizontal, Sparkles } from "lucide-react";
 import type { DisplayScene } from "@shared/model";
 import { cx } from "@/lib/format";
 import { SCENES_ORDERED, sceneDef } from "@/components/display/scenes";
@@ -38,12 +38,14 @@ const FS = typeof document !== "undefined" ? fullScreen() : null;
 
 /**
  * THE PAGE'S SCENE PICKER (0.17.0, Display on other screens): a touch shows a scene button in the
- * corner, and the button opens the scenes by name, "Same as TastyTunes" first, and the window's
- * All scenes rows (the glass, the corners, the drops, the sync), set for this screen alone until
- * "Use TastyTunes' settings". Beside it, full screen, where the browser lets a page have it (a
- * page may ask only on a touch). Not the window's
- * picker: its live tiles are a graphics context each, more than a tablet's browser hands out
- * beside the stage, and its settings would change nothing the app keeps. Touch-sized (44px rows).
+ * corner, and the button opens the scenes by name, "Same as TastyTunes" first, and behind
+ * "Settings" the window's All scenes rows (the glass, Show, the drops, the sync), set for this
+ * screen alone until "Use TastyTunes' settings". The window's picker calls them "All scenes"
+ * beside "Reading" and "This scene"; here, the only section, beside a scene's description, that
+ * read as "show all the scenes". Beside the button, full screen, where the browser lets a page
+ * have it (a page may ask only on a touch). Not the window's picker: its live tiles are a
+ * graphics context each, more than a tablet's browser hands out beside the stage. Touch-sized
+ * (44px rows).
  */
 export function ScenePanel({
   own,
@@ -168,14 +170,14 @@ export function ScenePanel({
               </div>
               <HeaderChip
                 type="button"
-                data-page-all-scenes
+                data-page-settings
                 active={settingsOpen}
                 aria-expanded={settingsOpen}
                 onClick={() => setSettingsOpen((o) => !o)}
                 className="flex h-9 shrink-0 items-center gap-1.5 px-3 text-[13px]"
               >
-                <Layers size={14} />
-                All scenes
+                <SlidersHorizontal size={14} />
+                Settings
               </HeaderChip>
             </div>
             {settingsOpen && (
