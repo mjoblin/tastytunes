@@ -22,6 +22,7 @@ const OWN = {
   displayCathodeFlicker: isBool,
   displayCornerTitle: isBool,
   displayCornerClock: isBool,
+  displayProgress: isBool,
   displayDrops: (v: unknown) => v === "loose" || v === "normal" || v === "strict",
   displaySyncMs: (v: unknown) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 1000,
 } satisfies Partial<Record<keyof AppSettings, (v: unknown) => boolean>>;

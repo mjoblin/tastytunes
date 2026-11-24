@@ -52,6 +52,7 @@ export const SHOWN_SETTINGS = [
   "displayCathodeFill",
   "displayCornerTitle",
   "displayCornerClock",
+  "displayProgress",
   "displayCathodeFlicker",
   "displayShuffleOrder",
   "displayShuffleEvery",

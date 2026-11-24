@@ -365,7 +365,7 @@ export function DisplayMode(): React.JSX.Element {
         </div>
       )}
 
-      {duration != null && duration > 0 && (
+      {(settings.displayProgress ?? true) && duration != null && duration > 0 && (
         /* EXPERIMENT (0.7 exploration): the waveform stands in for the
            progress strip when the playing track's peaks exist; the plain
            bar is the fallback for radio, casts and unanalyzed tracks. */

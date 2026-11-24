@@ -422,6 +422,9 @@ export interface AppSettings {
    *  beside Finish. The tile has no corners. */
   displayCornerTitle: boolean;
   displayCornerClock: boolean;
+  /** The track's progress along the bottom (the waveform, or the line where there is none): off
+   *  for a scene that should fill the screen alone. On by default. In-mode, beside the corners. */
+  displayProgress: boolean;
   /** The glass's flicker (an accessibility concern): the cathode finish
    *  breathes a mains hum into the brightness at ten hertz, three percent either way, which
    *  sits in the band photosensitive people are warned about; its own switch, on by default,
@@ -666,6 +669,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   displayCathodeFill: false,
   displayCornerTitle: true,
   displayCornerClock: true,
+  displayProgress: true,
   displayCathodeFlicker: true,
   displayShuffleOrder: "random",
   displayShuffleEvery: 1,

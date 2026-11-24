@@ -361,6 +361,7 @@ export function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
   const flicker = useStore((s) => s.settings.displayCathodeFlicker ?? true);
   const cornerTitle = useStore((s) => s.settings.displayCornerTitle ?? true);
   const cornerClock = useStore((s) => s.settings.displayCornerClock ?? true);
+  const progress = useStore((s) => s.settings.displayProgress ?? true);
   // the slider is answered locally: a save is an IPC round trip to disk, and a controlled value
   // that waits for it drags behind the thumb
   const [sync, setSync] = useState(value);
@@ -421,8 +422,8 @@ export function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
       )}
       {host === "display" && (
         <SettingLine
-          label="Corners"
-          hint="The track's name at the bottom left and the time at the bottom right."
+          label="Show"
+          hint="The track's name, the time, and the track's progress along the bottom."
         >
           <label className="flex items-center gap-1.5">
             <Switch
@@ -439,6 +440,14 @@ export function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
               onChange={(v) => void saveSettings({ displayCornerClock: v })}
             />
             Clock
+          </label>
+          <label className="flex items-center gap-1.5">
+            <Switch
+              size="sm"
+              checked={progress}
+              onChange={(v) => void saveSettings({ displayProgress: v })}
+            />
+            Progress
           </label>
         </SettingLine>
       )}
