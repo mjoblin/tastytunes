@@ -29,6 +29,13 @@ import {
 import { parseLrc } from "@shared/lrc";
 import { buildTimeline, type LyricLine, type Moment, type TimelineSection } from "./timeline";
 
+/** What to do about what an export's time for lookups ran out before: one home for the sentence
+ *  (it was in four places). A second export writes a new folder, and the one in hand stays as it
+ *  is (nothing in a folder is ever written over); the lookups already made are kept by the app,
+ *  so the second is quick. "Carries on from there" had read as finishing the folder in hand. */
+export const AGAIN_FOR_THE_REST =
+  "Export again with fill: true. The new export's folder will have them, and this one stays as it is. The lookups already made are kept, so the second export is quick.";
+
 /**
  * A TRACK AS AN AGENT READS IT (0.17.0, export for an agent): everything TastyTunes knows about
  * one song, as track.json and analysis.json. Pure: the exporter gathers what each source holds
@@ -214,8 +221,7 @@ export function gapOf<T>(l: Looked<T>, n: LookupNames): Missing | null {
         ? {
             what,
             why: "Not looked up: this export's time for lookups ran out first.",
-            remedy:
-              "Export again with fill: true; what was found is kept, so it carries on from there.",
+            remedy: AGAIN_FOR_THE_REST,
           }
         : {
             what,

@@ -246,7 +246,8 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
               <div className="font-display font-bold text-[16px] tracking-tight">Tools</div>
               <div className="text-[11.5px] text-faint max-w-sm">
                 What connected agents are allowed to do. Switch off whole clusters, or click
-                individual tools to toggle them. Changes apply to the next agent request.
+                individual tools to toggle them. Changes apply to the next agent request. An agent
+                that's already connected may need to reconnect to see tools you turn on.
               </div>
             </div>
             {MCP_GROUPS.map((g) => {

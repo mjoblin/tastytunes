@@ -92,7 +92,8 @@ analysis that measured it.
 of the album from the Cover Art Archive, its \`types\` saying which, such as Back or Booklet, and
 \`release\` naming the pressing on MusicBrainz; \`artist\`; or \`shelf\` for the artist's other
 albums in the library), where it came from, and its \`file\` here when it was copied. A picture
-with no file is listed with its address only.
+with no file is listed with its address only. Exporting again with fill makes a new folder that
+has it, and this one stays as it is.
 
 ## Rights
 

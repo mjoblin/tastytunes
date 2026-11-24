@@ -596,7 +596,8 @@ describe("the release's scans (the Cover Art Archive step)", () => {
     expect(r.missing.find((m) => m.what.startsWith("release scans"))).toEqual({
       what: "release scans (1 of 3 listed by address only)",
       why: "The Cover Art Archive didn't hand them over.",
-      remedy: "Export again in a moment with fill: true.",
+      remedy:
+        "Export again in a moment with fill: true. The new export's folder will have them, and this one stays as it is.",
     });
     const listed = readJson(r.folder, "pictures/pictures.json")["pictures"] as Array<
       Record<string, unknown>

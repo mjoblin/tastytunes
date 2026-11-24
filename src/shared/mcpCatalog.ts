@@ -798,7 +798,7 @@ export const MCP_CLUSTERS: McpClusterInfo[] = [
         title: "Export album",
         hints: { openWorld: true },
         description:
-          "export_track for a whole album: album.json (the album, its notes, what was measured across it, its tracks in order), one folder per track under tracks/ with the track's own files, and the pictures once. The playing album by default, or one named by server_udn and object_id (list_albums), or by album and artist. The same fill, audio, redact and plays arguments; lookups for a long album stop after 45 seconds so the answer comes in time, and a second call carries on from what was found.",
+          "export_track for a whole album: album.json (the album, its notes, what was measured across it, its tracks in order), one folder per track under tracks/ with the track's own files, and the pictures once. The playing album by default, or one named by server_udn and object_id (list_albums), or by album and artist. The same fill, audio, redact and plays arguments; lookups for a long album stop after 45 seconds so the answer comes in time. A second call writes a new folder with the rest, leaving the first as it is, and is quick, since the lookups already made are kept.",
       },
     ],
   },

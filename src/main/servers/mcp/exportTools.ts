@@ -37,6 +37,7 @@ import { loggedFetch } from "../../netlog";
 import { exportRoot } from "../../app/exportsFolder";
 import { analysisAsked, analysisRunning } from "../../app/analysisRuns";
 import { COPY_STALL_MS } from "../../export/exportFolder";
+import { AGAIN_FOR_THE_REST } from "../../export/trackRecord";
 import {
   exportAlbum,
   exportTrack,
@@ -294,8 +295,7 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
             ? {
                 what: "the artist's pictures from Wikipedia, Wikimedia Commons and fanart.tv",
                 why: "Not looked up: this export's time for lookups ran out first. Any already known are listed by address.",
-                remedy:
-                  "Export again with fill: true; what was found is kept, so it carries on from there.",
+                remedy: AGAIN_FOR_THE_REST,
               }
             : {
                 what: "the artist's pictures from Wikipedia, Wikimedia Commons and fanart.tv",

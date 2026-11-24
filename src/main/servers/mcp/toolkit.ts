@@ -967,13 +967,24 @@ export const status = (ctx: ToolContext, t?: Target): unknown => {
  * THE TOOLS THAT ARE OFF, by name (0.16.0): with Playlist editing off, an agent saw no playlist
  * tools and told the user it could not make playlists. Now it can say where to turn them on.
  */
-export function toolsOff(): { tools_off?: { groups: string[]; tools: string[]; where: string } } {
+export function toolsOff(): {
+  tools_off?: { groups: string[]; tools: string[]; where: string; then: string };
+} {
   const mcp = getSettings().mcp;
   const groups = MCP_CLUSTERS.filter((c) => !mcpClusterEnabled(c, mcp)).map((c) => c.title);
   const tools = mcp.disabledTools ?? [];
   return groups.length === 0 && tools.length === 0
     ? {}
-    : { tools_off: { groups, tools, where: "Settings › Integrations" } };
+    : {
+        tools_off: {
+          groups,
+          tools,
+          where: "Settings › Integrations",
+          // a client reads the tool list when it connects and keeps it (the server can't say it
+          // changed: a fresh server every request), so one turned on shows only after a reconnect
+          then: "After the user turns one on, reconnect to TastyTunes to see its tools.",
+        },
+      };
 }
 
 /** The state an agent's next question is about (0.16.0): what plays, how loud, where in the

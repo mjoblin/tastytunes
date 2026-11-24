@@ -33,6 +33,7 @@ import {
   LOOKUPS,
   type Looked,
   type Missing,
+  AGAIN_FOR_THE_REST,
 } from "./trackRecord";
 import { buildAlbumRecord } from "./albumRecord";
 import { exportReadme } from "./exportReadme";
@@ -490,7 +491,8 @@ async function writePictures(
         missing.push({
           what: `release scans (${refused} of ${asked} listed by address only)`,
           why: "The Cover Art Archive didn't hand them over.",
-          remedy: "Export again in a moment with fill: true.",
+          remedy:
+            "Export again in a moment with fill: true. The new export's folder will have them, and this one stays as it is.",
         });
     }
   }
@@ -554,7 +556,7 @@ async function writePictures(
     missing.push({
       what: `pictures (${lateOnes} listed by address only)`,
       why: "Not fetched: this export's time for lookups ran out first.",
-      remedy: "Export again with fill: true; what was found is kept, so it carries on from there.",
+      remedy: AGAIN_FOR_THE_REST,
     });
   const out = { format: EXPORT_FORMAT, pictures: listed };
   put("pictures/pictures.json", json(opts.redact ? redacted(out) : out), "record");
@@ -987,8 +989,7 @@ export function exportAlbum(
       missing.push({
         what: "lookups for the later tracks",
         why: `The lookups stopped after ${LOOKUP_BUDGET_MS / 1000} seconds of asking, so the answer comes in time.`,
-        remedy:
-          "Export again with fill: true; what was found is kept, so it carries on from there.",
+        remedy: AGAIN_FOR_THE_REST,
       });
     const presets = a.node.artUrl ? env.presets().filter((p) => p.artUrl === a.node.artUrl) : [];
     const album = {

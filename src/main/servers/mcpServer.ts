@@ -90,7 +90,7 @@ const INSTRUCTIONS = [
   "Don't replace the queue unless the user asks.",
   "A tool that takes device acts on that streamer, by its name from list_devices, without moving the TastyTunes window; a tool that doesn't acts on the window's streamer, and connect_device is the one tool that moves the window.",
   "The history tools take local days (YYYY-MM-DD) or a named period.",
-  "Some editing tools are off until the user turns them on in Settings › Integrations.",
+  "Some editing tools are off until the user turns them on in Settings › Integrations, and an agent that was already connected may need to reconnect to TastyTunes before they appear.",
 ].join(" ");
 
 /** A JSON-RPC request is a few kilobytes; a megabyte is room for any of them. */
