@@ -33,7 +33,7 @@ import {
   ownSettings,
   type OwnKey,
 } from "./pageSettings";
-import { ControlsSetting, PageTransport, useLocked } from "./PageTransport";
+import { ControlsSetting, PageTransport, SleepControls, useLocked } from "./PageTransport";
 import { ScenePanel } from "./ScenePanel";
 import { musicGoing, REST_FADE_MS, REST_OPACITY, useRest } from "./rest";
 import { useTouchShown } from "./touch";
@@ -135,14 +135,17 @@ function Page(): React.JSX.Element {
     !locked &&
     (control.state === "ask" || control.state === "asking" || control.state === "allowed");
   const transportShown = transport && shown && !panelOpen;
-  // the queue closes when there is none to show (another source, the controls off or locked)
-  const queueHere = transport && control.queue != null;
+  // the list closes when there is nothing to show (another source with no presets, the controls
+  // off or locked)
+  const listHere = transport && (control.queue != null || control.presets != null);
   useEffect(() => {
-    if (!queueHere) setQueueOpen(false);
-  }, [queueHere]);
+    if (!listHere) setQueueOpen(false);
+  }, [listHere]);
   // the panel in use (a touch in the last few seconds, or open) keeps the page awake, so a
-  // resting screen can be set up
-  const [inUse, setInUse] = useState(false);
+  // resting screen can be set up; so does a touch or an open list on the sleeping screen, where
+  // the panel isn't drawn
+  const [panelInUse, setPanelInUse] = useState(false);
+  const inUse = panelInUse || shown || queueOpen;
   // a screen left on: dimmed and drifting while the music is stopped and nobody is at it
   // (display/rest)
   const { resting, offset, dark, still } = useRest(going || inUse);
@@ -209,12 +212,14 @@ function Page(): React.JSX.Element {
             shown={shown}
             open={panelOpen}
             onOpen={openPanel}
-            onAwake={setInUse}
+            onAwake={setPanelInUse}
             extra={<ControlsSetting />}
           />
         </>
       ) : (
-        <div data-display-asleep className="h-full w-full bg-black" />
+        <div data-display-asleep className="relative h-full w-full bg-black">
+          {heard && <SleepControls shown={shown} listOpen={queueOpen} onList={setQueueOpen} />}
+        </div>
       )}
     </div>
   );

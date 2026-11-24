@@ -6,8 +6,10 @@ import type { QueueListItem } from "./smoip";
  * displayServer, the one write route) and the page (display/PageTransport).
  *
  * - A FIXED LIST OF VERBS, the system's media commands (shared/transport MediaCommand), a volume
- *   step up or down, and playing a track already in the queue (the queue view, step two: view
- *   and select). Nothing else is reachable: no seek, no level, no queue edits, no settings.
+ *   step up or down, playing a track already in the queue (the queue view, step two: view and
+ *   select), and with their own switch the controls that start music (step three): a preset,
+ *   Wake, picking up where it left off. Nothing else is reachable: no seek, no level, no queue
+ *   or preset edits, no settings.
  * - Each screen is told where it stands (DisplayControl), over its own line of the live channel,
  *   so it draws only what it may do.
  */
@@ -23,6 +25,9 @@ export const DISPLAY_VERBS = [
   "volumeUp",
   "volumeDown",
   "playQueue",
+  "playPreset",
+  "wake",
+  "resume",
 ] as const;
 export type DisplayVerb = (typeof DISPLAY_VERBS)[number];
 
@@ -50,6 +55,27 @@ export interface DisplayControl {
   /** The queue around the playing track (queueWindow), for a screen allowed to control while the
    *  queue is what plays; null otherwise. Pictures by the display server's id, never by address. */
   queue: DisplayQueueRow[] | null;
+  /** The presets, for a screen allowed to control with Presets and wake on; null otherwise. */
+  presets: DisplayPresetRow[] | null;
+  /** With Presets and wake on, while the streamer isn't playing for the page: "ready", the app is
+   *  connected to a streamer in standby, so Wake works; "unreachable", the app isn't connected (in
+   *  Cambridge's default Eco standby the streamer leaves the network), so the screen says so and
+   *  draws no button that does nothing; null otherwise. */
+  wake: "ready" | "unreachable" | null;
+  /** What TastyTunes holds to pick up where it left off (with Presets and wake on), or null. */
+  resume: { title: string; detail: string | null } | null;
+}
+
+/** One preset as a screen sees it: view and select, nothing edited. */
+export interface DisplayPresetRow {
+  /** Its slot: the only thing a screen sends back (playPreset). */
+  id: number;
+  name: string;
+  art: string | null;
+  /** Playing now (shared/litPresets, the window's own rule). */
+  lit: boolean;
+  /** Its last recall came to nothing (main/device/recallWatch). */
+  dead: boolean;
 }
 
 /** One track of the queue as a screen sees it. */
@@ -96,7 +122,7 @@ export function queueWindow(
 
 /** What the route answers: done, or why not. */
 export type DisplayControlAnswer =
-  { done: true } | { refused: DisplayControlState | "busy" | "nothing" | "volume" };
+  { done: true } | { refused: DisplayControlState | "busy" | "nothing" | "volume" | "presets" };
 
 /** A screen as Settings lists it, and as the app asks about it. */
 export interface DisplayScreen {

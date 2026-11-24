@@ -9,6 +9,7 @@ import {
 } from "@shared/displayControl";
 import type { DisplayStatus } from "@shared/ipc";
 import type { AppSettings } from "@shared/model";
+import { litPresetIds } from "@shared/litPresets";
 import { activeSourceId, isCbusMode, isPreAmpMode } from "@shared/smoip";
 import { commandForMedia, transportAbilities } from "@shared/transport";
 import { jsonFileStore } from "../data/jsonStore";
@@ -107,16 +108,85 @@ function queueHere(): DisplayControl["queue"] {
   return queueWindow(items, playingQueueId());
 }
 
+/** The presets, each lit by the window's own rule (shared/litPresets). */
+function presetsHere(): DisplayControl["presets"] {
+  const v = deviceManager.streamerNow;
+  const items = (v.presets?.presets ?? []).filter((p) => p.id != null);
+  if (items.length === 0) return null;
+  const r = deviceManager.recallsNow;
+  const lit = litPresetIds(items, {
+    zoneState: v.zoneState,
+    nowPlaying: v.nowPlaying,
+    playState: v.playState,
+    queue: v.queue,
+    systemInfo: v.systemInfo,
+    systemPower: v.systemPower,
+    waking: r.waking,
+    lastRecalledPresetId: r.lastRecalled,
+    deadPresets: r.dead,
+    queueSignatures: getSettings().queueSignatures,
+  });
+  return items.map((p) => {
+    const id = p.id as number;
+    return {
+      id,
+      name: p.name ?? `Preset ${id}`,
+      art: p.art_url ?? p.art_urls?.[0] ?? null,
+      lit: lit.has(id),
+      dead: r.dead.includes(id),
+    };
+  });
+}
+
+/** A wake can work: the app is connected to a streamer in standby. In Cambridge's default Eco
+ *  standby the streamer leaves the network and the app isn't connected, so a screen says it
+ *  can't reach it instead of drawing a button that does nothing. */
+function wakeCanWork(): boolean {
+  const power = deviceManager.streamerNow.systemPower?.power;
+  return deviceManager.connectionNow.phase === "connected" && power != null && power !== "ON";
+}
+
+/** What TastyTunes holds to pick up where it left off, while the streamer sleeps: a queue's track
+ *  or a station (another app's or an input is the window's to offer), unless it was dismissed. */
+function resumeHere(): DisplayControl["resume"] {
+  if (!wakeCanWork()) return null;
+  const h = deviceManager.heldNow;
+  if (!h || (h.kind !== "queue" && h.kind !== "radio")) return null;
+  if (h.at === getSettings().resumeDismissedAt) return null;
+  const title = h.title ?? h.sourceName;
+  if (!title) return null;
+  return { title, detail: h.kind === "queue" ? h.artist : h.sourceName };
+}
+
 /** Where a screen stands, and what it may see of the controls. */
 function controlFor(screen: string | null): DisplayControl {
   const s = getSettings();
   const state = screenBook.stateOf(screen, s.displayControl);
-  if (state !== "allowed") return { state, volume: null, next: null, queue: null };
+  if (state !== "allowed")
+    return {
+      state,
+      volume: null,
+      next: null,
+      queue: null,
+      presets: null,
+      wake: null,
+      resume: null,
+    };
+  const starts = s.displayControlPresets;
   return {
     state,
     volume: s.displayControlVolume ? volumeHere() : null,
     next: nextInQueue(),
     queue: queueHere(),
+    presets: starts ? presetsHere() : null,
+    wake: !starts
+      ? null
+      : wakeCanWork()
+        ? "ready"
+        : deviceManager.connectionNow.phase !== "connected"
+          ? "unreachable"
+          : null,
+    resume: starts ? resumeHere() : null,
   };
 }
 
@@ -145,6 +215,31 @@ function steer(screen: string, name: string, verb: DisplayVerb, id?: number): Di
     );
     if (id == null || !there || !queueAudible()) return { refused: "nothing" };
     deviceManager.fire({ type: "playQueueId", queueId: id });
+    return { done: true };
+  }
+  // THE CONTROLS THAT START MUSIC (step three), with their own switch: a preset (a recall on a
+  // sleeping streamer wakes it first, as in the window), Wake, picking up where it left off
+  if (verb === "playPreset" || verb === "wake" || verb === "resume") {
+    if (!s.displayControlPresets) return { refused: "presets" };
+    if (verb === "playPreset") {
+      const items = deviceManager.streamerNow.presets?.presets ?? [];
+      const there = id != null && items.some((p) => p.id === id);
+      log(`preset ${id} from ${name}: ${there ? "recallPreset" : "nothing to do"}`);
+      if (!there || id == null) return { refused: "nothing" };
+      const lit = presetsHere()?.find((p) => p.id === id)?.lit ?? false;
+      deviceManager.fire({ type: "recallPreset", presetId: id, alreadyPlaying: lit });
+      return { done: true };
+    }
+    if (verb === "wake") {
+      log(`wake from ${name}: ${wakeCanWork() ? "power ON" : "nothing to do"}`);
+      if (!wakeCanWork()) return { refused: "nothing" };
+      deviceManager.fire({ type: "power", power: "ON" });
+      return { done: true };
+    }
+    const held = resumeHere();
+    log(`pick up where it left off from ${name}: ${held ? "resumeHeld" : "nothing to do"}`);
+    if (!held) return { refused: "nothing" };
+    deviceManager.fire({ type: "resumeHeld" });
     return { done: true };
   }
   const v = deviceManager.streamerNow;

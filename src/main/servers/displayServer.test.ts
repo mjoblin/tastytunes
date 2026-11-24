@@ -46,7 +46,15 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
   const logged: string[] = [];
   const steered: Array<{ screen: string; name: string; verb: DisplayVerb; id?: number }> = [];
   const control: { now: DisplayControl } = {
-    now: { state: "allowed", volume: null, next: null, queue: null },
+    now: {
+      state: "allowed",
+      volume: null,
+      next: null,
+      queue: null,
+      presets: null,
+      wake: null,
+      resume: null,
+    },
   };
   server = new DisplayServer({
     snapshot: () => snapshot,
@@ -291,12 +299,32 @@ describe("Display on other screens' server", () => {
           playing: true,
         },
       ],
+      presets: [
+        { id: 3, name: "Radio", art: "http://192.168.1.5/p3.jpg", lit: false, dead: false },
+      ],
+      wake: null,
+      resume: null,
     };
     const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
     expect(opened.first).not.toContain("192.168.1.5");
+    expect(opened.first).not.toContain("p3.jpg");
     const id = /"art":"\/art\/([0-9a-f]{24})"/.exec(opened.first)?.[1];
     expect(id).toBeDefined();
     expect((await get(`/art/${id}`, { cookie })).status).toBe(200);
+  });
+
+  it("plays a preset by a whole-number id only; Wake and picking up take none", async () => {
+    const { steer, steered } = await rig();
+    expect((await steer("playPreset")).status).toBe(400);
+    expect((await steer("playPreset", { id: "2" })).status).toBe(400);
+    expect((await steer("playPreset", { id: 2 })).status).toBe(200);
+    expect((await steer("wake", { id: 2 })).status).toBe(200);
+    expect((await steer("resume")).status).toBe(200);
+    expect(steered.map((x) => [x.verb, x.id])).toEqual([
+      ["playPreset", 2],
+      ["wake", undefined],
+      ["resume", undefined],
+    ]);
   });
 
   it("caps one screen's commands, the volume's more tightly", async () => {
@@ -311,10 +339,26 @@ describe("Display on other screens' server", () => {
 
   it("tells each open screen where it stands when it opens, and again when that changes", async () => {
     const { live, control, server } = await rig();
-    control.now = { state: "ask", volume: null, next: null, queue: null };
+    control.now = {
+      state: "ask",
+      volume: null,
+      next: null,
+      queue: null,
+      presets: null,
+      wake: null,
+      resume: null,
+    };
     const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
     expect(opened.first).toContain('event: control\ndata: {"state":"ask"');
-    control.now = { state: "off", volume: null, next: null, queue: null };
+    control.now = {
+      state: "off",
+      volume: null,
+      next: null,
+      queue: null,
+      presets: null,
+      wake: null,
+      resume: null,
+    };
     server.pushControl();
     await new Promise((r) => setTimeout(r, 50));
     expect(opened.more()).toContain('event: control\ndata: {"state":"off"');

@@ -133,7 +133,8 @@ const TYPES: Record<string, string> = {
 const NO_ADDRESS = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TastyTunes</title><body style="font:16px system-ui;background:#111;color:#ddd;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><p>Open the address shown in TastyTunes, in Settings › Integrations › Display on other screens.</p></body>`;
 
 /** The pushes that can change what a screen may do: the switches (settings), the source and its
- *  controls, the volume, the queue's next track, the connection. */
+ *  controls, the volume, the queue, the connection, and for presets and the sleeping screen the
+ *  presets, the power, what is held, a recall's answer and a wake. */
 const CONTROL_KINDS: ReadonlySet<PushMessage["kind"]> = new Set([
   "settings",
   "connection",
@@ -141,6 +142,12 @@ const CONTROL_KINDS: ReadonlySet<PushMessage["kind"]> = new Set([
   "nowPlaying",
   "zoneState",
   "queue",
+  "presets",
+  "systemPower",
+  "held",
+  "recalledPreset",
+  "presetRecallDead",
+  "waking",
 ]);
 
 const newScreenId = (): string => randomBytes(16).toString("hex");
@@ -476,12 +483,13 @@ export class DisplayServer {
     } | null;
     if (!body || !isDisplayVerb(body.verb)) return this.refuse(res, 400);
     const verb = body.verb;
-    // a queue row is played by its id, a whole number, and no other verb takes one
+    // a queue row or a preset is played by its id, a whole number, and no other verb takes one
     const id = typeof body.id === "number" && Number.isSafeInteger(body.id) ? body.id : undefined;
-    if (verb === "playQueue" && id === undefined) return this.refuse(res, 400);
+    const takesId = verb === "playQueue" || verb === "playPreset";
+    if (takesId && id === undefined) return this.refuse(res, 400);
     if (!this.withinRate(screen, verb)) return this.json(res, { refused: "busy" }, 429);
     const name = screenName(req.headers["user-agent"] ?? "", body.touch === true);
-    const answer = this.deps.steer(screen, name, verb, verb === "playQueue" ? id : undefined);
+    const answer = this.deps.steer(screen, name, verb, takesId ? id : undefined);
     this.json(res, answer, "done" in answer ? 200 : answer.refused === "nothing" ? 409 : 403);
     // the screen hears where it stands now (an ask raised, say)
     this.pushControl();

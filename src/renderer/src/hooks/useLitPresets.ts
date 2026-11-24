@@ -1,58 +1,13 @@
 import { useMemo } from "react";
-import { presetVolumeKey } from "@shared/model";
-import { isRadioMetadata, queueContentHash, type PresetItem } from "@shared/smoip";
+import { litPresetIds } from "@shared/litPresets";
+import type { PresetItem } from "@shared/smoip";
 import { useStore } from "@/store";
-import { activeSourceId } from "@/lib/format";
-import { nameKey } from "@shared/keys";
-
-/** Same art object regardless of scheme/query differences. */
-function urlsMatch(a: string, b: string): boolean {
-  if (a === b) return true;
-  try {
-    const ua = new URL(a);
-    const ub = new URL(b);
-    return ua.host === ub.host && ua.pathname === ub.pathname;
-  } catch {
-    return false;
-  }
-}
 
 /**
- * Which presets are PLAYING — derived from what's actually playing, never from
- * the device's own flags.
- *
- * THE STREAMER'S `is_playing` CANNOT BE TRUSTED, and this is the memo of why:
- *  - radio presets aren't cleared when you switch to local media (vibin hit
- *    this too — its `_fix_stale_preset_is_playing`), and
- *  - media (album) presets only report `is_playing` transiently around the
- *    recall; any later read returns false (vibinui's own TODO: "When the UI is
- *    refreshed, a stream.media.upnp preset will have an is_playing of false,
- *    even if it was playing"), and
- *  - a recall the firmware IGNORES (a preset whose album the server no longer
- *    has) sets the flag and keeps it: a preset read is_playing true while
- *    another album played (0.15.0-rc.2, 2026-11-08). So the flag lights an album
- *    preset only while what plays has no art or album to compare (mid-recall,
- *    before the words), and a preset main has said came to nothing never lights.
- * So the answer is derived statelessly: radio_id is authoritative for
- * stations, saved queues match on an exact signature or an art fingerprint,
- * album presets match by art URL or name against the current track. Stateless
- * also means it works at startup, when every flag reads false.
- *
- * Lifted out of PresetsScreen 2026-07-28 so the tray panel gets the same
- * answer — it was lighting tiles straight off `is_playing` and therefore
- * mostly not lighting them at all. A rule this hard-won must not exist twice.
- *
- * ONE preset lights, in this priority:
- *  1. The preset most recently recalled through this app, while a content
- *     check confirms its stuff is still what's playing — the check is the
- *     validity guard, so a stale recall goes dark on its own. This is what
- *     disambiguates duplicate saved queues and stops an album preset stealing
- *     the lamp while its album plays inside a recalled queue.
- *  2. Stateless fallback (startup, recalls from other controllers): radio_id
- *     is authoritative; a saved queue lights only on a UNIQUE fingerprint
- *     match; album matching is suppressed while the queue is itself a
- *     recognised saved queue (the queue explains the track better than the
- *     album does); input presets trust the flag only off local media.
+ * Which presets are PLAYING, for the window: the store's state handed to the one rule
+ * (shared/litPresets, where its memo of why lives; the display server lights another screen's
+ * presets with it too). Lifted out of PresetsScreen 2026-07-28 so the tray panel gets the same
+ * answer, and out of the window 2026-11-24 so main does.
  */
 export function useLitPresets(
   items: PresetItem[],
@@ -71,144 +26,34 @@ export function useLitPresets(
   const deadPresets = useStore((s) => s.deadPresets);
   const queueSignatures = useStore((s) => s.settings.queueSignatures);
 
-  const activeSource = activeSourceId(zoneState, nowPlaying);
-  const radioId = playState?.metadata?.radio_id ?? null;
-  const md = playState?.metadata ?? null;
-  // A LIT PRESET MEANS "THIS IS PLAYING" — so nothing lights while the
-  // streamer is asleep or on its way back. A waking device re-announces its
-  // RETAINED pre-standby play_state, so the old preset's content check passes
-  // again mid-wake and follow glides at it, then glides again when the real
-  // recall lands. Suppressing the lamp for the whole not-ON window removes the
-  // transition rather than racing it.
-  const asleep = (systemPower != null && systemPower.power !== "ON") || waking;
-
-  // The live queue's leading distinct-album art sequence — the same
-  // fingerprint the firmware bakes into a MediaQueue preset's art_urls.
-  const queueArts = useMemo(() => {
-    const seen: string[] = [];
-    for (const it of queue?.items ?? []) {
-      const a = it.metadata?.art_url;
-      if (a && !seen.some((s) => urlsMatch(s, a))) seen.push(a);
-    }
-    return seen;
-  }, [queue]);
-
-  // Exact identity of the live queue (all tracks, in order).
-  const liveQueueHash = useMemo(
-    () => (queue?.items?.length ? queueContentHash(queue.items) : null),
-    [queue],
-  );
-
-  const derived = useMemo(() => {
-    const lit = new Set<number>();
-    if (asleep) return lit;
-    const mediaOk = activeSource == null || activeSource === "MEDIA_PLAYER";
-
-    const sigOf = (p: PresetItem): string | undefined =>
-      p.id != null ? queueSignatures[presetVolumeKey(systemInfo?.udn, p.id)] : undefined;
-    const sigMatch = (p: PresetItem): boolean =>
-      mediaOk && liveQueueHash != null && sigOf(p) === liveQueueHash;
-    const fingerprint = (p: PresetItem): boolean => {
-      if (!mediaOk) return false;
-      const want = p.art_urls ?? [];
-      if (want.length === 0 || want.length > queueArts.length) return false;
-      return want.every((u, i) => urlsMatch(u, queueArts[i]));
-    };
-    const mqContent = (p: PresetItem): boolean => (sigOf(p) != null ? sigMatch(p) : fingerprint(p));
-    const albumMatch = (p: PresetItem): boolean => {
-      if (!mediaOk) return false;
-      // the flag only while there is nothing to compare: what plays overrules it (see above)
-      if (md?.art_url == null && md?.album == null) return p.is_playing === true;
-      if (p.art_url != null && md.art_url != null && urlsMatch(p.art_url, md.art_url)) return true;
-      if (p.name != null && md.album != null) {
-        if (p.name === md.album) return true;
-        if (md.artist != null && p.name.includes(md.album) && p.name.includes(md.artist))
-          return true;
-      }
-      return false;
-    };
-    // Raw-URL radio presets (saved from the Radio screen) carry no airable id
-    // — the station NAME is their identity.
-    const isRadioPreset = (p: PresetItem): boolean =>
-      /radio/i.test(p.class ?? "") || p.type === "Radio";
-    const stationMatch = (p: PresetItem): boolean => {
-      const station = md?.station != null ? nameKey(md.station) : null;
-      return station != null && p.name != null && nameKey(p.name) === station;
-    };
-    /** null = this preset type has no content to check (inputs etc.) */
-    const contentCheck = (p: PresetItem): boolean | null => {
-      if (p.airable_radio_id != null && radioId != null) return p.airable_radio_id === radioId;
-      if (p.type === "MediaQueue") return mqContent(p);
-      if ((p.class ?? "").startsWith("stream.media")) return albumMatch(p);
-      if (isRadioPreset(p)) return stationMatch(p);
-      return null;
-    };
-
-    const recalled = items.find((p) => p.id === lastRecalledPresetId);
-    if (recalled?.id != null && contentCheck(recalled) === true) {
-      lit.add(recalled.id);
-      return lit;
-    }
-
-    // Signature matches are exact (all tracks, in order) — light the first one
-    // even without a recall on record. Collage fingerprints stay a fallback:
-    // only an unambiguous single match lights.
-    const sigFirst = items.find((p) => p.type === "MediaQueue" && sigMatch(p));
-    const mqMatches = items.filter((p) => p.type === "MediaQueue" && mqContent(p));
-    if (sigFirst?.id != null) lit.add(sigFirst.id);
-    else if (mqMatches.length === 1 && mqMatches[0].id != null) lit.add(mqMatches[0].id);
-    for (const p of items) {
-      if (p.id == null || p.type === "MediaQueue") continue;
-      if (p.airable_radio_id != null && radioId != null) {
-        if (p.airable_radio_id === radioId) lit.add(p.id);
-        continue;
-      }
-      if ((p.class ?? "").startsWith("stream.media")) {
-        if (mqMatches.length === 0 && sigFirst == null && albumMatch(p)) lit.add(p.id);
-        continue;
-      }
-      if (isRadioPreset(p) && stationMatch(p)) {
-        lit.add(p.id);
-        continue;
-      }
-      // Radio/input presets with nothing to match: trust the flag except while
-      // local media is the active source. NEVER for a radio preset while a
-      // station is playing: the firmware leaves a recalled station's flag on
-      // when another station is streamed by URL (a raw stream carries no
-      // radio_id, so the id check above never runs), and the old preset stayed
-      // lit through the whole new station. A radio preset
-      // lights by id or by name, or not at all, once radio metadata is present.
-      if (
-        p.is_playing === true &&
-        activeSource !== "MEDIA_PLAYER" &&
-        !(isRadioPreset(p) && md != null && isRadioMetadata(md))
-      )
-        lit.add(p.id);
-    }
-    // A recall made from standby owns the lamp until it lands.
-    if (wakeRecallId != null) {
-      return lit.has(wakeRecallId) ? new Set([wakeRecallId]) : new Set<number>();
-    }
-    return lit;
-  }, [
-    items,
-    lastRecalledPresetId,
-    queueArts,
-    queueSignatures,
-    liveQueueHash,
-    systemInfo,
-    radioId,
-    md,
-    activeSource,
-    asleep,
-    wakeRecallId,
-  ]);
-  // a preset main has said came to nothing is not playing, whatever matched it
   return useMemo(
     () =>
-      deadPresets.some((id) => derived.has(id))
-        ? new Set([...derived].filter((id) => !deadPresets.includes(id)))
-        : derived,
-    [derived, deadPresets],
+      litPresetIds(items, {
+        zoneState,
+        nowPlaying,
+        playState,
+        queue,
+        systemInfo,
+        systemPower,
+        waking,
+        lastRecalledPresetId,
+        deadPresets,
+        queueSignatures,
+        wakeRecallId,
+      }),
+    [
+      items,
+      zoneState,
+      nowPlaying,
+      playState,
+      queue,
+      systemInfo,
+      systemPower,
+      waking,
+      lastRecalledPresetId,
+      deadPresets,
+      queueSignatures,
+      wakeRecallId,
+    ],
   );
 }

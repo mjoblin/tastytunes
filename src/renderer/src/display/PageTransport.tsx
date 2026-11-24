@@ -5,18 +5,21 @@ import {
   Pause,
   Play,
   Plus,
+  Power,
+  Radio,
   SkipBack,
   SkipForward,
   Square,
   X,
 } from "lucide-react";
-import type { DisplayVerb } from "@shared/displayControl";
+import type { DisplayPresetRow, DisplayQueueRow, DisplayVerb } from "@shared/displayControl";
 import { transportAbilities } from "@shared/transport";
 import { cx } from "@/lib/format";
 import { onScreenKey } from "@/lib/keyboardOwner";
 import { useStore } from "@/store";
 import { Switch } from "@/components/controls/Switch";
 import { MediaRow } from "@/components/media/MediaRow";
+import { TtMark } from "@/components/chrome/TtMark";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { scrollToVisible } from "@/lib/scroll";
 import { SettingLine } from "@/components/display/ScenePicker";
@@ -46,6 +49,13 @@ import { controlsLocked, lockControls } from "./pageSettings";
  *   display server sends allowed screens a window of it); a tap on a row plays that track. Nothing
  *   here adds, removes, reorders or clears. It opens only from its button, never from a swipe (a
  *   tap on a row jumps the music), and holds the buttons up while it is open.
+ * - PRESETS AND WAKE (step three, with their own switch in the app): the presets beside the queue,
+ *   as tabs in the one list (Presets alone where there is no queue, a station playing or the
+ *   streamer asleep); a tap plays that preset, shows it tuning, and the row says so when the
+ *   recall came to nothing. While the streamer sleeps the page is black, and a touch brings up,
+ *   low where the buttons always are, Wake, the presets, and "Pick up where you left off" when
+ *   there is something to return to, with the TastyTunes mark faint in the middle (SleepControls).
+ *   Wake only where a wake can work; in Eco standby, a line saying the streamer is out of reach.
  */
 
 /** The dim's fade down as the buttons show, and back up as they go (the comment where it is drawn). */
@@ -113,16 +123,9 @@ export function PageTransport({
   const can = useAbilities();
   const playing = useStore((s) => s.playState?.state === "play");
   const usable = !lockedHere && (control.state === "ask" || control.state === "allowed");
-  // the buttons' height, which the queue keeps above: two rows on a phone, the volume wrapping
+  // the buttons' height, which the list keeps above: two rows on a phone, the volume wrapping
   const strip = useRef<HTMLDivElement | null>(null);
-  const [stripH, setStripH] = useState(112);
-  useEffect(() => {
-    const el = strip.current;
-    if (!el || !queueOpen) return;
-    const seen = new ResizeObserver(() => setStripH(el.offsetHeight));
-    seen.observe(el);
-    return () => seen.disconnect();
-  }, [queueOpen]);
+  const stripH = useHeightWhile(strip, queueOpen);
   // the keys, with the buttons hidden too
   useEffect(() => {
     if (!usable) return;
@@ -141,6 +144,8 @@ export function PageTransport({
   const level = vol?.percent ?? vol?.step ?? null;
   const showing = shown ? "opacity-100" : "pointer-events-none opacity-0";
   const queue = control.queue;
+  const presets = control.presets;
+  const list = queue != null || presets != null;
   const bottom = scene
     ? "calc(env(safe-area-inset-bottom, 0px) + 2.5rem)"
     : "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)";
@@ -162,9 +167,10 @@ export function PageTransport({
         )}
         style={{ transition: shown ? DIM_IN : DIM_OUT }}
       />
-      {queue && queueOpen && (
-        <QueuePanel
-          rows={queue}
+      {list && queueOpen && (
+        <ListPanel
+          queue={queue}
+          presets={presets}
           bottom={`calc(${bottom} + ${stripH + 12}px)`}
           onClose={() => onQueue(false)}
         />
@@ -205,19 +211,20 @@ export function PageTransport({
               </button>
             )}
             <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-2">
+              {/* the list stands apart from the transport by the same gap as the volume does */}
+              {list && (
+                <Disc
+                  label={queueOpen ? "Close the list" : queue ? "Queue" : "Presets"}
+                  size="side"
+                  active={queueOpen}
+                  onPress={() => onQueue(!queueOpen)}
+                  attrs={{ "data-page-queue-button": "" }}
+                >
+                  {queue ? <ListMusic size={22} /> : <Radio size={22} />}
+                </Disc>
+              )}
               {anyButton && (
                 <div className="flex items-center gap-2">
-                  {queue && (
-                    <Disc
-                      label={queueOpen ? "Close the queue" : "Queue"}
-                      size="side"
-                      active={queueOpen}
-                      onPress={() => onQueue(!queueOpen)}
-                      attrs={{ "data-page-queue-button": "" }}
-                    >
-                      <ListMusic size={22} />
-                    </Disc>
-                  )}
                   {can.canPrev && (
                     <Disc verb="previous" label="Previous" size="side">
                       <SkipBack size={24} fill="currentColor" />
@@ -314,59 +321,275 @@ function Disc({
   );
 }
 
+/** An element's height, measured while `on` (the buttons, which a list keeps above). */
+function useHeightWhile(ref: React.RefObject<HTMLDivElement | null>, on: boolean): number {
+  const [h, setH] = useState(112);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !on) return;
+    const seen = new ResizeObserver(() => setH(el.offsetHeight));
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, [ref, on]);
+  return h;
+}
+
+type ListTab = "queue" | "presets";
+
 /**
- * THE QUEUE, VIEWED (step two): the window the display server sent, the playing track marked and
- * in view when it opens, each row the app's own (components/media/MediaRow, the menu bar panel's
- * queue rows: one home) at its full, finger-sized height. A tap plays that track; nothing edits.
- * Above the buttons, so play and pause stay in reach; a touch outside closes it.
+ * THE LIST, VIEWED (steps two and three): the queue's window the display server sent and the
+ * presets, as tabs when there are both (Presets alone where there is no queue), the playing one
+ * marked and in view when it opens, each row the app's own (components/media/MediaRow, the menu
+ * bar panel's rows: one home) at its full, finger-sized height. A tap plays that row; nothing
+ * edits. Above the buttons, so play and pause stay in reach; a touch outside closes it.
  */
-function QueuePanel({
-  rows,
+function ListPanel({
+  queue,
+  presets,
   bottom,
   onClose,
 }: {
-  rows: NonNullable<ReturnType<typeof useControl>["queue"]>;
+  queue: DisplayQueueRow[] | null;
+  presets: DisplayPresetRow[] | null;
   /** The top of the buttons: the panel keeps above them. */
   bottom: string;
   onClose(): void;
 }): React.JSX.Element {
-  const playingRow = useRef<HTMLDivElement | null>(null);
-  // the playing track in view as it opens (container-scoped, never the page)
-  useEffect(() => scrollToVisible(playingRow.current, 8), []);
+  const [tab, setTab] = useState<ListTab>(queue ? "queue" : "presets");
+  const showing: ListTab = tab === "queue" && queue ? "queue" : presets ? "presets" : "queue";
+  const tabClass = (on: boolean): string =>
+    cx(
+      "flex h-11 flex-1 items-center justify-center gap-2 rounded-md text-[14px] transition-colors motion-safe:active:scale-[0.97]",
+      on ? "bg-accentdim text-accent" : "text-dim",
+    );
   return (
     <>
       <div className="absolute inset-0 z-[45]" onClick={onClose} />
       <div
         data-page-queue
+        data-page-list={showing}
         className="absolute top-[4.25rem] left-1/2 z-50 flex w-[min(36rem,calc(100%_-_2rem))] -translate-x-1/2 flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
         style={{ bottom }}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 py-1 pr-1 pl-4">
-          <span className="text-[14px] text-ink">Queue</span>
+        <div className="flex shrink-0 items-center justify-between gap-3 py-1 pr-1 pl-2">
+          {queue && presets ? (
+            <div role="tablist" className="flex flex-1 rounded-lg bg-veil p-0.5 ring-1 ring-edge">
+              <button
+                type="button"
+                role="tab"
+                data-page-list-tab="queue"
+                aria-selected={showing === "queue"}
+                onClick={() => setTab("queue")}
+                className={tabClass(showing === "queue")}
+              >
+                <ListMusic size={15} />
+                Queue
+              </button>
+              <button
+                type="button"
+                role="tab"
+                data-page-list-tab="presets"
+                aria-selected={showing === "presets"}
+                onClick={() => setTab("presets")}
+                className={tabClass(showing === "presets")}
+              >
+                <Radio size={15} />
+                Presets
+              </button>
+            </div>
+          ) : (
+            <span className="pl-2 text-[14px] text-ink">{queue ? "Queue" : "Presets"}</span>
+          )}
           <button
             type="button"
-            aria-label="Close the queue"
+            aria-label="Close the list"
             onClick={onClose}
-            className="grid h-11 w-11 place-items-center rounded-full text-dim motion-safe:active:scale-90 [-webkit-tap-highlight-color:transparent]"
+            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-dim motion-safe:active:scale-90 [-webkit-tap-highlight-color:transparent]"
           >
             <X size={20} />
           </button>
         </div>
-        <div className="min-h-0 space-y-1 overflow-y-auto overscroll-contain px-2 pb-2">
-          {rows.map((r) => (
-            <div key={r.id} ref={r.playing ? playingRow : undefined}>
-              <MediaRow
-                attrs={{ "data-page-queue-row": String(r.id) }}
-                title={r.title}
-                subtitle={[r.artist, r.album].filter(Boolean).join(FACT_SEP) || undefined}
-                kind="track"
-                artUrl={r.art}
-                playing={r.playing}
-                duration={r.duration}
-                onClick={() => void steer("playQueue", r.id)}
-              />
-            </div>
-          ))}
+        {showing === "queue" && queue ? (
+          <QueueRows key="queue" rows={queue} />
+        ) : (
+          <PresetRows key="presets" rows={presets ?? []} />
+        )}
+      </div>
+    </>
+  );
+}
+
+const listBody = "min-h-0 space-y-1 overflow-y-auto overscroll-contain px-2 pb-2";
+
+/** The queue's rows: the playing track marked and in view as they open. */
+function QueueRows({ rows }: { rows: DisplayQueueRow[] }): React.JSX.Element {
+  const playingRow = useRef<HTMLDivElement | null>(null);
+  // the playing track in view as it opens (container-scoped, never the page)
+  useEffect(() => scrollToVisible(playingRow.current, 8), []);
+  return (
+    <div className={listBody}>
+      {rows.map((r) => (
+        <div key={r.id} ref={r.playing ? playingRow : undefined}>
+          <MediaRow
+            attrs={{ "data-page-queue-row": String(r.id) }}
+            title={r.title}
+            subtitle={[r.artist, r.album].filter(Boolean).join(FACT_SEP) || undefined}
+            kind="track"
+            artUrl={r.art}
+            playing={r.playing}
+            duration={r.duration}
+            onClick={() => void steer("playQueue", r.id)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** How long a tapped preset shows it is tuning before the app's answer: recallWatch's clock. */
+const TUNING_MS = 8_000;
+
+/** The presets' rows, as the menu bar panel draws them (their slot numbers, the playing one lit):
+ *  a tap recalls at once, the row tuning until it lights, or says it came to nothing. */
+function PresetRows({ rows }: { rows: DisplayPresetRow[] }): React.JSX.Element {
+  const playingRow = useRef<HTMLDivElement | null>(null);
+  useEffect(() => scrollToVisible(playingRow.current, 8), []);
+  const [tuning, setTuning] = useState<number | null>(null);
+  const answered = rows.find((p) => p.id === tuning && (p.lit || p.dead)) != null;
+  useEffect(() => {
+    if (tuning == null) return;
+    if (answered) {
+      setTuning(null);
+      return;
+    }
+    const t = setTimeout(() => setTuning(null), TUNING_MS);
+    return () => clearTimeout(t);
+  }, [tuning, answered]);
+  return (
+    <div className={listBody}>
+      {rows.map((p) => {
+        const isTuning = tuning === p.id;
+        return (
+          <div key={p.id} ref={p.lit ? playingRow : undefined}>
+            <MediaRow
+              attrs={{ "data-page-preset-row": String(p.id) }}
+              slot={p.id}
+              title={p.name}
+              subtitle={p.dead && !isTuning ? "Nothing played" : undefined}
+              kind="preset"
+              artUrl={p.art}
+              playing={p.lit}
+              tuning={isTuning && !p.lit}
+              onClick={() => {
+                setTuning(p.id);
+                void steer("playPreset", p.id);
+              }}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/**
+ * THE SLEEPING SCREEN'S CONTROLS (step three): while the streamer sleeps the page is black, and a
+ * touch brings these up, low where the playback buttons always are: "Pick up where you
+ * left off" with what it would play, and below it the presets' list and Wake, apart by the gap
+ * the volume keeps. The TastyTunes mark sits faint in the middle while they show, so a touched
+ * black screen says what it is; it is never drawn at rest (no light at night). Wake only where a
+ * wake can work; where the streamer is out of reach (Eco standby), a line saying so.
+ */
+export function SleepControls({
+  shown,
+  listOpen,
+  onList,
+}: {
+  shown: boolean;
+  listOpen: boolean;
+  onList(open: boolean): void;
+}): React.JSX.Element | null {
+  const control = useControl();
+  const [lockedHere] = useLocked();
+  const group = useRef<HTMLDivElement | null>(null);
+  const groupH = useHeightWhile(group, listOpen);
+  if (lockedHere || control.state !== "allowed" || control.wake == null) return null;
+  const showing = shown ? "opacity-100" : "pointer-events-none opacity-0";
+  if (control.wake === "unreachable")
+    return (
+      <div
+        data-page-sleep="unreachable"
+        className={cx(
+          "absolute inset-0 grid place-items-center px-10 text-center text-[16px] text-dim transition-opacity duration-300",
+          showing,
+        )}
+      >
+        TastyTunes can't reach the streamer. Wake it with its remote.
+      </div>
+    );
+  const presets = control.presets;
+  const resume = control.resume;
+  const bottom = "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)";
+  return (
+    <>
+      <div
+        aria-hidden
+        data-page-sleep-mark
+        className={cx(
+          "pointer-events-none absolute inset-0 grid place-items-center",
+          shown ? "opacity-100" : "opacity-0",
+        )}
+        style={{ transition: shown ? DIM_IN : DIM_OUT }}
+      >
+        <TtMark className="text-[64px] text-ink opacity-40" />
+      </div>
+      {presets && listOpen && (
+        <ListPanel
+          queue={null}
+          presets={presets}
+          bottom={`calc(${bottom} + ${groupH + 12}px)`}
+          onClose={() => onList(false)}
+        />
+      )}
+      <div
+        ref={group}
+        data-page-sleep="ready"
+        className={cx(
+          "absolute inset-x-0 z-[46] flex flex-col items-center gap-2 px-4 transition-opacity duration-300 select-none",
+          showing,
+        )}
+        style={{ bottom }}
+      >
+        {resume && (
+          <button
+            type="button"
+            data-page-resume
+            onClick={() => void steer("resume")}
+            className="flex max-w-[min(36rem,90vw)] items-center gap-2.5 rounded-full bg-panel/85 py-2.5 pr-5 pl-3.5 text-[14px] text-ink shadow-lg ring-1 ring-edge backdrop-blur [-webkit-tap-highlight-color:transparent] transition-transform active:scale-95"
+          >
+            <Play size={15} fill="currentColor" className="shrink-0" />
+            <span className="truncate">
+              Pick up where you left off <span className="text-dim">· {resume.title}</span>
+            </span>
+          </button>
+        )}
+        <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-2">
+          {presets && (
+            <Disc
+              label={listOpen ? "Close the list" : "Presets"}
+              size="side"
+              active={listOpen}
+              onPress={() => onList(!listOpen)}
+              attrs={{ "data-page-presets-button": "" }}
+            >
+              <Radio size={22} />
+            </Disc>
+          )}
+          {control.wake === "ready" && (
+            <Disc verb="wake" label="Wake" size="main">
+              <Power size={30} />
+            </Disc>
+          )}
         </div>
       </div>
     </>

@@ -646,8 +646,9 @@ export const ONE_HOME = [
     selector: strings(String.raw`/[a-z]-gold|--gold-rgb/`),
     files: [`^${R}`],
     allow: [
-      // TastyTunes itself: the wordmarks, the update dot and the version chip
+      // TastyTunes itself: the wordmarks, the "tt" mark, the update dot and the version chip
       "components/Nav\\.tsx$",
+      "chrome/TtMark\\.tsx$",
       "App\\.tsx$",
       "overlays/InfoModal\\.tsx$",
       "screens/SettingsScreen\\.tsx$",

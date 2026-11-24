@@ -509,6 +509,9 @@ export interface AppSettings {
   /** Under displayControl: whether an allowed screen may also step the volume, one step a tap,
    *  under the volume limit. Off by default. */
   displayControlVolume: boolean;
+  /** Under displayControl: whether an allowed screen may play presets, wake the streamer from
+   *  standby and pick up where it left off, the controls that start music. Off by default. */
+  displayControlPresets: boolean;
   /** Where the agent tools' exports go (main/app/exportsFolder): chosen in a dialog when the Exports
    *  group is first switched on, null until then. Set only by that dialog. */
   agentExportFolder: string | null;
@@ -698,6 +701,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   displayServer: { enabled: false, port: 8556 },
   displayControl: false,
   displayControlVolume: false,
+  displayControlPresets: false,
   agentExportFolder: null,
   mcp: {
     enabled: false,

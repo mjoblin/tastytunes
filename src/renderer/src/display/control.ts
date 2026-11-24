@@ -12,7 +12,15 @@ import type { DisplayControl, DisplayControlAnswer, DisplayVerb } from "@shared/
  * asking, declined or allowed, with the volume and the next track when allowed.
  */
 
-const OFF: DisplayControl = { state: "off", volume: null, next: null, queue: null };
+const OFF: DisplayControl = {
+  state: "off",
+  volume: null,
+  next: null,
+  queue: null,
+  presets: null,
+  wake: null,
+  resume: null,
+};
 let control: DisplayControl = OFF;
 const heard = new Set<() => void>();
 

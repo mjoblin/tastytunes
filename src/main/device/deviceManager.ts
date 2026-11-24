@@ -111,6 +111,9 @@ export class DeviceManager {
   private demo = false;
   /** See Snapshot.lastRecalledPresetId — in-app recalls only, content-checked by consumers. */
   private lastRecalledPresetId: number | null = null;
+  /** Presets whose last recall came to nothing, until recalled again: the windows' deadPresets,
+   *  kept here too for another screen's presets (app/display, shared/litPresets). */
+  private deadPresets: number[] = [];
   private mcpStatus: McpStatus = { running: false, url: null, error: null };
   private missedSchedule: MissedSchedule | null = null;
   private mediaIndexStatuses: MediaIndexStatus[] = [];
@@ -239,6 +242,7 @@ export class DeviceManager {
     awake: () => this.cache.systemPower == null || this.cache.systemPower.power === "ON",
     onDead: (id) => {
       listeningRecord.recallCameToNothing(id);
+      if (!this.deadPresets.includes(id)) this.deadPresets = [...this.deadPresets, id];
       this.push({ kind: "presetRecallDead", id });
     },
   });
@@ -603,6 +607,8 @@ export class DeviceManager {
           cmd.alreadyPlaying === true ||
           (this.lastRecalledPresetId === cmd.presetId && this.cache.playState?.state === "play");
         this.setRecalledPreset(cmd.presetId);
+        // recalled again, it is given another chance, as the windows give it (clearDeadPreset)
+        this.deadPresets = this.deadPresets.filter((x) => x !== cmd.presetId);
         const udn = this.cache.systemInfo?.udn ?? null;
         const name = this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name ?? null;
         listeningRecord.openContext({ kind: "preset", id: cmd.presetId, name, streamer: udn });
@@ -1009,6 +1015,21 @@ export class DeviceManager {
 
   /** What the connected streamer has said so far (its power, play state and the rest), read
    *  without a snapshot. */
+  /** What the presets' lamp reads beside the cache (shared/litPresets): the app's last recall,
+   *  the recalls that came to nothing, and a wake on its way. */
+  get recallsNow(): { lastRecalled: number | null; dead: readonly number[]; waking: boolean } {
+    return {
+      lastRecalled: this.lastRecalledPresetId,
+      dead: this.deadPresets,
+      waking: this.wakePromise != null,
+    };
+  }
+
+  /** What TastyTunes holds to pick up where it left off on this streamer, or null. */
+  get heldNow(): HeldState | null {
+    return heldFor(this.cache.systemInfo?.udn ?? null);
+  }
+
   get streamerNow(): Readonly<StreamerCache> {
     return this.cache;
   }

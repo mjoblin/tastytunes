@@ -24,8 +24,9 @@ import {
  * changed), then follows main's pushes as the server starts, stops or fails.
  *
  * CONTROLS ON THE OTHER SCREENS: a switch of its own, off by default (turning on viewing never
- * grants control), the volume under it, and the screens that asked, each allowed or not, with
- * Remove (main/servers/displayScreens).
+ * grants control), under it the volume and the controls that start music (presets, Wake, picking
+ * up where it left off), each with a switch of its own and off by default, and the screens that
+ * asked, each allowed or not, with Remove (main/servers/displayScreens).
  */
 const setDisplayStatus = (displayStatus: DisplayStatus): void =>
   useStore.setState({ displayStatus });
@@ -145,6 +146,12 @@ function ControlRows({ settings, save }: SectionProps): React.JSX.Element {
               No volume limit is set. You can set one in Settings › Behavior.
             </div>
           )}
+          <Toggle
+            label="Presets and wake"
+            hint="Play presets from these screens, and wake the streamer from standby."
+            checked={settings.displayControlPresets}
+            onChange={(displayControlPresets) => void save({ displayControlPresets })}
+          />
         </div>
       )}
       {control && screens.length > 0 && (

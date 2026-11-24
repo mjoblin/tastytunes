@@ -67,6 +67,7 @@ export const HELD_SETTINGS = [
   "displayServer",
   "displayControl",
   "displayControlVolume",
+  "displayControlPresets",
 ] as const satisfies readonly (keyof AppSettings)[];
 
 /** Display's own settings and the look they draw with, over the defaults. The scene is the
@@ -202,10 +203,12 @@ export function displaySnapshot(snap: Snapshot, art: ArtRegistry): Snapshot {
   };
 }
 
-/** A screen's control line as it is sent: the queue's pictures by id, never by address. */
+/** A screen's control line as it is sent: the queue's and the presets' pictures by id, never by
+ *  address. */
 export function displayControlLine(c: DisplayControl, art: ArtRegistry): DisplayControl {
-  if (!c.queue) return c;
-  return { ...c, queue: c.queue.map((r) => ({ ...r, art: r.art ? art(r.art) : null })) };
+  const byId = <T extends { art: string | null }>(rows: T[] | null): T[] | null =>
+    rows && rows.map((r) => ({ ...r, art: r.art ? art(r.art) : null }));
+  return { ...c, queue: byId(c.queue), presets: byId(c.presets) };
 }
 
 /** A push the page may hear, reduced; null for any other kind. */
