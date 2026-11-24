@@ -19,6 +19,7 @@ import { useDisplayFont } from "@/hooks/useDisplayFont";
 import { useMotionPreference } from "@/hooks/useMotionPreference";
 import { DisplayMode } from "@/components/playback/DisplayMode";
 import { followApp } from "./live";
+import { musicGoing, REST_OPACITY, useRest } from "./rest";
 
 /**
  * DISPLAY ON OTHER SCREENS, THE PAGE (0.17.0): the app's own Display mode, full screen, always on,
@@ -27,6 +28,8 @@ import { followApp } from "./live";
  * restart or a wake. Its own controls (the close button, the scene picker) are hidden: a page on
  * another screen shows, it doesn't steer. While the streamer sleeps, or the app hasn't been
  * heard for a few seconds, the page goes dark.
+ *
+ * A SCREEN LEFT ON: with the music stopped for a while, the page dims and drifts (display/rest).
  *
  * SCENES WHERE THEY CAN RUN (stage 2): the owner's scene is drawn where the browser has WebGL2,
  * the Sleeve's face everywhere else (asked once, by the browser itself, never by a GPU's name).
@@ -64,16 +67,30 @@ function Page(): React.JSX.Element {
   const settings = useStore((s) => s.settings);
   const powered = useStore((s) => s.systemPower?.power === "ON");
   const connected = useStore((s) => s.connection.phase === "connected");
+  const going = useStore((s) => musicGoing(s.playState?.state));
+  // a screen left on: dimmed and drifting while the music is stopped (display/rest)
+  const { resting, offset } = useRest(going);
+  const [reduced, setReduced] = useState(false);
   useTheme(settings.theme);
   useDisplayFont(settings.displayFont);
   useMotionPreference(settings.motion);
   useEffect(() => {
     document.documentElement.classList.add("display-page");
   }, []);
+  // the drift glides unless motion is reduced, when it steps (the dimming fades either way)
+  useEffect(() => {
+    setReduced(document.documentElement.classList.contains("reduce-motion"));
+  }, [settings.motion]);
   return (
     <div
       data-display-scenes={SCENES_HERE ? "on" : "off"}
+      data-display-resting={resting || undefined}
       className="h-screen w-screen overflow-hidden"
+      style={{
+        opacity: resting ? REST_OPACITY : 1,
+        transform: `translate(${offset[0]}px, ${offset[1]}px)`,
+        transition: reduced ? "opacity 3s ease" : "opacity 3s ease, transform 40s linear",
+      }}
     >
       {heard && connected && powered ? (
         <DisplayMode />
