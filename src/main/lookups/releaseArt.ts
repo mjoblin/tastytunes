@@ -67,6 +67,12 @@ const TYPE_ORDER = [
 /** At most this many scans from one release (a box set's booklet runs to dozens). */
 export const RELEASE_IMAGES_MAX = 24;
 
+/** The archive lists its pictures under plain http, which costs a redirect more than https (four
+ *  in all, past the picture fetch's three) and sends the first hops in the clear, naming the
+ *  release; the same address over https answers in three. */
+const secure = (url: string): string =>
+  url.replace(/^http:\/\/coverartarchive\.org\//i, "https://coverartarchive.org/");
+
 const tracksOf = (r: MbRelease): number =>
   (r.media ?? []).reduce((n, m) => n + (m["track-count"] ?? 0), 0);
 
@@ -102,7 +108,7 @@ export function imagesOf(listing: { images?: CaaImage[] }): ReleaseImage[] {
     .map((i) => ({
       types: i.types?.length ? i.types : ["Other"],
       comment: i.comment?.trim() || null,
-      url: i.thumbnails?.["1200"] ?? i.thumbnails?.large ?? i.image ?? "",
+      url: secure(i.thumbnails?.["1200"] ?? i.thumbnails?.large ?? i.image ?? ""),
     }))
     .filter((i) => i.url !== "")
     .map((img, index) => ({ img, index }))

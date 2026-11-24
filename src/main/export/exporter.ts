@@ -94,6 +94,9 @@ export interface ExportEnv {
   analysisPossible(serverUdn: string): Promise<{ ok: true } | { ok: false; why: string }>;
   /** Start the album's analysis in the window, or say why it can't be. */
   startAnalysis(serverUdn: string, albumId: string): { started: true } | { why: string };
+  /** Whether the window is analyzing the album now, has no analysis of it going, or is closed
+   *  (main/app/analysisRuns). */
+  analysisRun(serverUdn: string, albumId: string): "running" | "idle" | "closed";
   lyrics(node: MediaNode, fill: boolean): Promise<Looked<LyricsResult>>;
   credits(node: MediaNode, fill: boolean): Promise<Looked<TrackInfo>>;
   albumNotes(artist: string, album: string, fill: boolean): Promise<Looked<AlbumInfo>>;
@@ -105,9 +108,11 @@ export interface ExportEnv {
     tracks: number | null,
     fill: boolean,
   ): Promise<Looked<ReleaseArt>>;
+  /** `late`: fill was asked for, and the call's time for lookups ran out before these. */
   artistPictures(
     artist: string,
     fill: boolean,
+    late?: boolean,
   ): Promise<{ offers: ArtistPictureOffer[]; gap: Missing | null }>;
   listeningOn(): boolean;
   plays(): Promise<ListeningPlayEvent[]>;
@@ -457,10 +462,14 @@ async function writePictures(
     if (gap) missing.push(gap);
     if (release.kind === "found") {
       const r = release.value;
+      let asked = 0;
+      let refused = 0;
       for (const [i, img] of r.images.entries()) {
         let file: string | null = null;
         if (opts.fill && budget.open) {
           const got = await fetch(img.url);
+          asked += 1;
+          if (!got) refused += 1;
           const kind = safeName(img.types[0].toLowerCase()).replace(/\s+/g, "-");
           file = got ? save(`release-${String(i + 1).padStart(2, "0")}-${kind}`, got) : null;
         } else if (opts.fill) lateOnes += 1;
@@ -477,10 +486,17 @@ async function writePictures(
           file,
         });
       }
+      if (refused > 0)
+        missing.push({
+          what: `release scans (${refused} of ${asked} listed by address only)`,
+          why: "The Cover Art Archive didn't hand them over.",
+          remedy: "Export again in a moment with fill: true.",
+        });
     }
   }
   if (artist) {
-    const { offers, gap } = await budget.time(() => env.artistPictures(artist, budget.open));
+    const may = budget.open;
+    const { offers, gap } = await budget.time(() => env.artistPictures(artist, may, budget.ranOut));
     if (gap) missing.push(gap);
     let n = 0;
     const seen = new Set<string>();
@@ -735,15 +751,23 @@ async function notesOf(
   return { albumNotes, artistNotes, albumOut, artistOut };
 }
 
-/** The tracks whose analysis an earlier call started, by album, with their state then: called
- *  again with nothing measured since, the export goes ahead (an AAC file measures its waveform
- *  only; DSD can't be decoded) instead of answering "analyzing" for good. */
-const startedFor = new Map<string, string>();
+/** The analysis an earlier call started, by album and the tracks asked about: the tracks' state when it was asked for (or
+ *  when the run was seen to end), when it was asked for, and whether it has ended. Called again
+ *  while the window is still at it, the export answers "analyzing" again; called once the run has
+ *  ended, it goes ahead, and a track the run couldn't measure is said to be one (an AAC file
+ *  measures its waveform only; DSD can't be decoded) instead of "analyzing" for good. */
+const startedFor = new Map<string, { state: string; at: number; ended: boolean }>();
 const stateOf = (an: AudioAnalysis | null): string =>
   an == null ? "none" : analysisOutdated(an) ? "outdated" : "current";
 
-/** With fill, an album with tracks to measure starts its analysis and answers "call again", once
- *  for each state of its tracks; `tried` gets the tracks it was started for before. */
+const ago = (ms: number): string => {
+  const m = Math.floor(ms / 60_000);
+  return m < 1 ? "less than a minute ago" : `${m} ${m === 1 ? "minute" : "minutes"} ago`;
+};
+
+/** With fill, an album with tracks to measure starts its analysis and answers "call again" until
+ *  the window's run ends, once for each state of its tracks; `tried` gets the tracks a finished
+ *  run couldn't measure. */
 async function analysisFirst(
   env: ExportEnv,
   serverUdn: string,
@@ -754,16 +778,32 @@ async function analysisFirst(
   if (!album) return null;
   const unmeasured = tracks.filter((n) => !isCurrent(env.analysis(n)));
   if (unmeasured.length === 0) return null;
-  const key = `${serverUdn}|${album.id}`;
+  // by the tracks asked about too: a track's export and its album's are separate questions
+  const key = `${serverUdn}|${album.id}|${tracks.map((n) => n.id).join(",")}`;
   const state = tracks.map((n) => `${n.id}:${stateOf(env.analysis(n))}`).join(",");
-  if (startedFor.get(key) === state) {
+  const prior = startedFor.get(key);
+  const run = env.analysisRun(serverUdn, album.id);
+  if (prior && run === "running") {
+    const measured = tracks.length - unmeasured.length;
+    const sofar =
+      tracks.length === 1
+        ? "this track isn't measured yet"
+        : `${measured} of ${tracks.length} tracks measured`;
+    return {
+      kind: "analyzing",
+      message: `Still analyzing "${album.title}": ${sofar}, started ${ago(env.clock() - prior.at)}. Call again in a few minutes with the same arguments; get_track_analysis says when each track is measured.`,
+    };
+  }
+  // the run it started has ended: what it couldn't measure, it can't
+  if (prior && run === "idle" && (!prior.ended || prior.state === state)) {
+    startedFor.set(key, { state, at: prior.at, ended: true });
     for (const n of unmeasured) tried.add(n.id);
     return null;
   }
   const possible = await env.analysisPossible(serverUdn);
   if (!possible.ok) return null;
   if ("why" in env.startAnalysis(serverUdn, album.id)) return null;
-  startedFor.set(key, state);
+  startedFor.set(key, { state, at: env.clock(), ended: false });
   return {
     kind: "analyzing",
     message: `Analyzing "${album.title}" first (${unmeasured.length} ${unmeasured.length === 1 ? "track" : "tracks"} to measure, one at a time, in the TastyTunes window). Call again in a few minutes with the same arguments; get_track_analysis says when each track is measured.`,

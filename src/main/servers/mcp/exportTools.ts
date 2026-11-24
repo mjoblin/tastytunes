@@ -35,6 +35,7 @@ import { cachedReleaseArt, fetchReleaseArt } from "../../lookups/releaseArt";
 import { fetchFanartPhotos } from "../../lookups/fanart";
 import { loggedFetch } from "../../netlog";
 import { exportRoot } from "../../app/exportsFolder";
+import { analysisAsked, analysisRunning } from "../../app/analysisRuns";
 import { COPY_STALL_MS } from "../../export/exportFolder";
 import {
   exportAlbum,
@@ -54,8 +55,11 @@ import { defineTool, err, localTime, ok, type ToolContext, type ToolImpl } from 
 // own lookups, each behind its Connections switch, and the folder the owner chose.
 
 const PICTURE_MAX_BYTES = 16 * 1024 * 1024;
-/** What a copied track's answer may be: audio, as a media server names it. */
-const AUDIO_TYPE = /^(audio\/[\w.+-]+|application\/(x-)?(ogg|flac))$/;
+/** What a copied track's answer may be: audio, as a media server names it, or the plain bytes
+ *  some servers call every file (the address is the one its listing gave for audio: audioRes
+ *  takes only a res whose protocolInfo names audio, and the copy is held to the server's host). */
+export const AUDIO_TYPE =
+  /^(audio\/[\w.+-]+|application\/(x-)?(ogg|flac)|(application|binary)\/octet-stream)$/;
 const NO_ARTIST: Looked<never> = {
   kind: "cannot",
   why: "The track has no artist tag, so it can't be looked up.",
@@ -165,8 +169,15 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
       if (!ctx.windowOpen())
         return { why: "Audio is analyzed in the TastyTunes window, which is closed." };
       ctx.sendCommand({ id: "analyzeAlbum", serverUdn, albumId });
+      analysisAsked(serverUdn, albumId, Date.now());
       return { started: true };
     },
+    analysisRun: (serverUdn, albumId) =>
+      !ctx.windowOpen()
+        ? "closed"
+        : analysisRunning(serverUdn, albumId, Date.now())
+          ? "running"
+          : "idle",
     lyrics: (n, fill) => {
       const q = {
         artist: n.artist ?? "",
@@ -240,7 +251,7 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
             () => fetchReleaseArt(group, tracks),
             () => cachedReleaseArt(group, tracks) !== undefined,
           ),
-    artistPictures: async (artist, fill) => {
+    artistPictures: async (artist, fill, late = false) => {
       const offers: ArtistPictureOffer[] = [];
       const online = getSettings().artistInfo;
       const chosen = choiceOf(artist);
@@ -279,11 +290,18 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
         if (known) offers.push({ source: "wikipedia", url: known, fetch: false });
         return {
           offers,
-          gap: {
-            what: "the artist's pictures from Wikipedia, Wikimedia Commons and fanart.tv",
-            why: "Not looked up: the export was made without fill. Any already known are listed by address.",
-            remedy: "Export again with fill: true.",
-          },
+          gap: late
+            ? {
+                what: "the artist's pictures from Wikipedia, Wikimedia Commons and fanart.tv",
+                why: "Not looked up: this export's time for lookups ran out first. Any already known are listed by address.",
+                remedy:
+                  "Export again with fill: true; what was found is kept, so it carries on from there.",
+              }
+            : {
+                what: "the artist's pictures from Wikipedia, Wikimedia Commons and fanart.tv",
+                why: "Not looked up: the export was made without fill. Any already known are listed by address.",
+                remedy: "Export again with fill: true.",
+              },
         };
       }
       // the large photos first (Commons, fanart.tv), the article's thumbnails after, so the

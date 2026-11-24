@@ -23,6 +23,12 @@ import { analyzeTrack, storedIsCurrent } from "@/components/media/waveformAnalys
 const pending = new Set<string>();
 let queueTail: Promise<unknown> = Promise.resolve();
 let waiting = 0;
+/** The albums queued or measuring, by album key, as main hears of them: an agent's export asks
+ *  main whether its album is still being measured (main/app/analysisRuns). */
+const analyzing = new Map<string, { serverUdn: string; albumId: string }>();
+const tellMain = (): void => {
+  void tt.analyzingAlbums([...analyzing.values()]).catch(() => undefined);
+};
 
 export interface AnalyzeAlbumResult {
   tracks: number;
@@ -59,6 +65,8 @@ export async function analyzeAlbum(
   const key = albumDrKey(album);
   if (pending.has(key)) return "busy";
   pending.add(key);
+  analyzing.set(key, { serverUdn, albumId: album.id });
+  tellMain();
   waiting++;
   const run = queueTail.then(() => {
     waiting--;
@@ -69,6 +77,8 @@ export async function analyzeAlbum(
     return await run;
   } finally {
     pending.delete(key);
+    analyzing.delete(key);
+    tellMain();
   }
 }
 

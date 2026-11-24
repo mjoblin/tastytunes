@@ -8,6 +8,7 @@ import { currentUpdateState } from "./updater";
 import { homeWorkArea, isOnScreen } from "./windowPlacement";
 import { deviceManager } from "./runtime";
 import { reloadOnCrash } from "./crashReload";
+import { windowAnalysisGone } from "./analysisRuns";
 import { windowStuck } from "./bootFailure";
 import { devOverride } from "./devOverride";
 
@@ -128,11 +129,14 @@ export function createWindow(): void {
   // opt out and launch normally.
   mainWindow.on("ready-to-show", () => showMain());
   mainWindow.on("focus", () => deviceManager.healthCheck());
+  // a reload or a close takes the window's analysis queue with it (app/analysisRuns)
+  mainWindow.webContents.on("did-start-loading", windowAnalysisGone);
   // Null the handle when the window closes (macOS keeps the app alive) —
   // late callers (updater announce, second-instance) otherwise poke a
   // destroyed BrowserWindow and throw.
   mainWindow.on("closed", () => {
     mainWindow = null;
+    windowAnalysisGone();
     // The close-to-tray notice lives HERE, not on 'window-all-closed', because
     // the tray panel is itself a BrowserWindow: once it has been opened even
     // once, a hidden panel means 'window-all-closed' never fires again and the

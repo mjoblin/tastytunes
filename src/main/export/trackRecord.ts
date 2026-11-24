@@ -245,8 +245,9 @@ function analysisGap(i: TrackInputs): Missing | null {
     return i.analysisTried
       ? {
           what: "analysis",
-          why: "An analysis was started for it and measured nothing: TastyTunes can't decode the file (DSD, for one), or the server wouldn't hand it over.",
-          remedy: "None from TastyTunes.",
+          why: "An analysis ran for it and measured nothing: TastyTunes can't decode the file (DSD, for one), or the server wouldn't hand it over.",
+          remedy:
+            "Call analyze_album with this track's album to try once more, then export again; if it is still missing, TastyTunes can't read this file.",
         }
       : { what: "analysis", why: "Not analyzed yet.", remedy: analyze };
   if (analysisOutdated(an))

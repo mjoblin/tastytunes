@@ -167,6 +167,7 @@ function fakeEnv(
       calls.started.push(id);
       return { started: true };
     },
+    analysisRun: () => "idle",
     lyrics: (_n, fill) => {
       calls.lyrics.push(fill);
       return Promise.resolve(
@@ -387,15 +388,47 @@ describe("a track's export, when things go wrong", () => {
     expect(r.missing.find((m) => m.what === "analysis")?.why).toMatch(/at its own sample rate/);
   });
 
-  it("answers 'analyzing' once for an unchanged state, then exports and says what was tried", async () => {
-    const { env, calls } = fakeEnv({ analysis: () => null });
+  it("answers 'analyzing' while the window measures, then exports and says what was tried", async () => {
+    let run: "running" | "idle" | "closed" = "idle";
+    const { env, calls } = fakeEnv({ analysis: () => null, analysisRun: () => run });
     const first = await exportTrack(env, root(), target(t3), opts({ fill: true }));
     expect(first.kind).toBe("analyzing");
+    // called again at once, with nothing measured yet: still at it, not "measured nothing"
+    run = "running";
+    const again = await exportTrack(env, root(), target(t3), opts({ fill: true }));
+    expect(again.kind).toBe("analyzing");
+    if (again.kind !== "analyzing") return;
+    expect(again.message).toMatch(
+      /^Still analyzing "Harbour Lights": this track isn't measured yet, started less than a minute ago/,
+    );
+    // the window's run has ended: what it couldn't measure, it can't
+    run = "idle";
     const second = await exportTrack(env, root(), target(t3), opts({ fill: true }));
     expect(second.kind).toBe("exported");
     expect(calls.started).toEqual(["al-1"]);
     if (second.kind !== "exported") return;
-    expect(second.missing.find((m) => m.what === "analysis")?.why).toMatch(/measured nothing/);
+    const gap = second.missing.find((m) => m.what === "analysis");
+    expect(gap?.why).toMatch(/ran for it and measured nothing/);
+    expect(gap?.remedy).toMatch(/^Call analyze_album/);
+  });
+
+  it("says a track isn't analyzed yet when the window closed before its run ended", async () => {
+    let run: "running" | "idle" | "closed" = "idle";
+    const t9 = node({ id: "t-9", title: "Lantern", album: "Tidewater" });
+    const tide = node({ id: "al-9", title: "Tidewater", isContainer: true });
+    const { env } = fakeEnv({
+      analysis: () => null,
+      analysisRun: () => run,
+      startAnalysis: () => (run === "closed" ? { why: "closed" } : { started: true }),
+      pools: () => [{ ...pools[0], albums: [tide], tracks: [t9] }],
+    });
+    expect((await exportTrack(env, root(), target(t9), opts({ fill: true }))).kind).toBe(
+      "analyzing",
+    );
+    run = "closed";
+    const r = await exportTrack(env, root(), target(t9), opts({ fill: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(r.missing.find((m) => m.what === "analysis")?.why).toBe("Not analyzed yet.");
   });
 
   it("keeps the date and the title of a long name", async () => {
@@ -550,6 +583,30 @@ describe("the release's scans (the Cover Art Archive step)", () => {
     });
   });
 
+  it("says how many scans the archive didn't hand over, each still listed by its address", async () => {
+    const { env } = fakeEnv({
+      analysis: () => analyzed(),
+      albumNotes: () => Promise.resolve(notes as never),
+      releaseArt: () => Promise.resolve({ kind: "found", value: scans }),
+      picture: (url) =>
+        Promise.resolve(url.includes("/2-1200") ? null : { bytes: JPEG, type: "image/jpeg" }),
+    });
+    const r = await exportAlbum(env, root(), target(album), opts({ fill: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(r.missing.find((m) => m.what.startsWith("release scans"))).toEqual({
+      what: "release scans (1 of 3 listed by address only)",
+      why: "The Cover Art Archive didn't hand them over.",
+      remedy: "Export again in a moment with fill: true.",
+    });
+    const listed = readJson(r.folder, "pictures/pictures.json")["pictures"] as Array<
+      Record<string, unknown>
+    >;
+    expect(listed.filter((p) => p["what"] === "release")[1]).toMatchObject({
+      address: "https://coverartarchive.org/release/r-1/2-1200.jpg",
+      file: null,
+    });
+  });
+
   it("without fill asks nothing and says how to get them; with no notes, nothing is asked", async () => {
     const { env } = fakeEnv({
       albumNotes: () => Promise.resolve(notes as never),
@@ -616,6 +673,28 @@ describe("an album's export", () => {
       why: string;
     }>;
     expect(late.find((m) => m.what === "lyrics")?.why).toMatch(/time for lookups ran out first/);
+  });
+
+  it("says the artist's pictures came after the budget, not that fill was off", async () => {
+    // the track's lyrics take the whole budget; the artist's pictures come after
+    let t = 0;
+    const pictures: Array<{ fill: boolean; late?: boolean }> = [];
+    const base = fakeEnv().env;
+    const { env } = fakeEnv({
+      analysis: () => analyzed(),
+      clock: () => t,
+      lyrics: (n, fill) => {
+        if (fill) t += 60_000;
+        return base.lyrics(n, fill);
+      },
+      artistPictures: (artist, fill, late) => {
+        pictures.push({ fill, late });
+        return base.artistPictures(artist, fill, late);
+      },
+    });
+    const r = await exportTrack(env, root(), target(t1), opts({ fill: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(pictures).toEqual([{ fill: false, late: true }]);
   });
 
   it("ends with its README and record when a track's copy fails part-way", async () => {

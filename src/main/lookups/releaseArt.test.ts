@@ -56,4 +56,23 @@ describe("a release's listing as the export uses it", () => {
     });
     expect(many).toHaveLength(RELEASE_IMAGES_MAX);
   });
+
+  it("asks the archive over https, which it lists as http (a redirect fewer, none in the clear)", () => {
+    const got = imagesOf({
+      images: [
+        {
+          types: ["Front"],
+          image: "http://coverartarchive.org/release/r-1/1.jpg",
+          thumbnails: { "1200": "http://coverartarchive.org/release/r-1/1-1200.jpg" },
+        },
+        { types: ["Back"], image: "http://coverartarchive.org/release/r-1/2.jpg" },
+        { types: ["Booklet"], image: "https://elsewhere.example/3.jpg" },
+      ],
+    });
+    expect(got.map((g) => g.url)).toEqual([
+      "https://coverartarchive.org/release/r-1/1-1200.jpg",
+      "https://coverartarchive.org/release/r-1/2.jpg",
+      "https://elsewhere.example/3.jpg",
+    ]);
+  });
 });

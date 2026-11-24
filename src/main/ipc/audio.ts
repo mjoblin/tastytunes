@@ -16,6 +16,7 @@ import {
 import { pools } from "../media/mediaIndex";
 import { audioRes, audioResUrl } from "../media/upnpBrowser";
 import { windowsGone } from "../app/crashReload";
+import { windowAnalyzing } from "../app/analysisRuns";
 import { loggedFetch } from "../netlog";
 import { closeAudioStream, openAudioStream, readAudioStream } from "../media/audioStream";
 import { handle } from "../app/guard";
@@ -176,6 +177,8 @@ export function registerAudioIpc(): void {
     // and every window hears it
     broadcastAlbumDrs(recordAlbumDrsFromTracks(pools(), key));
   });
+  // the window's analysis queue, for an agent's export (app/analysisRuns)
+  handle(IPC.analyzingAlbums, (_e, albums: unknown) => windowAnalyzing(albums));
   // albums completed track by track before 2026-10-12 (or while the app was elsewhere)
   handle(IPC.albumDrMap, () => {
     broadcastAlbumDrs(recordAlbumDrsFromTracks(pools()));

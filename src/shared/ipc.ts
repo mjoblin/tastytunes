@@ -517,6 +517,9 @@ export interface TastyTunesApi {
   audioAnalysisGet(key: string): Promise<AudioAnalysis | null>;
   /** EXPERIMENT: persist a finished analysis under its content key. */
   audioAnalysisPut(key: string, analysis: AudioAnalysis): Promise<void>;
+  /** The albums the window has queued or is measuring now, said whenever that changes, so an
+   *  agent's export can tell a slow analysis from a finished one (main/app/analysisRuns). */
+  analyzingAlbums(albums: Array<{ serverUdn: string; albumId: string }>): Promise<void>;
   /** EXPERIMENT: the whole album-DR map (albumDrKey -> AlbumDr). */
   albumDrMap(): Promise<Record<string, AlbumDr>>;
   /** EXPERIMENT: record an album's DR (written only when complete). */
@@ -743,6 +746,7 @@ export const IPC = {
   audioStreamClose: "tt:audioStreamClose",
   audioAnalysisGet: "tt:audioAnalysisGet",
   audioAnalysisPut: "tt:audioAnalysisPut",
+  analyzingAlbums: "tt:analyzingAlbums",
   albumDrMap: "tt:albumDrMap",
   albumDrPut: "tt:albumDrPut",
   audioDrMany: "tt:audioDrMany",
