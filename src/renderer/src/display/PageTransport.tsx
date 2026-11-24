@@ -30,6 +30,10 @@ import { controlsLocked, lockControls } from "./pageSettings";
  * - Locked (this screen's Settings), a touch shows only the corner buttons, and keys do nothing.
  */
 
+/** The dim's fade down as the buttons show, and back up as they go (the comment where it is drawn). */
+export const DIM_IN = "opacity 600ms cubic-bezier(0.4, 0, 0.2, 1)";
+export const DIM_OUT = "opacity 800ms cubic-bezier(0.65, 0, 0.35, 1)";
+
 /** A TV remote's media keys, by the codes their browsers send. */
 const TOGGLE_CODES = new Set([179, 10252]);
 const PLAY_CODES = new Set([415]);
@@ -106,14 +110,20 @@ export function PageTransport({
   return (
     <>
       {/* the picture dims while the buttons show, deepest under them; black in either theme (a
-          light page dimmed toward its paper only washed out) */}
+          light page dimmed toward its paper only washed out). Above Display mode's own layer (its
+          root is fixed at z-40; drawn after it, the dim sits over it and under the buttons). The
+          whole screen moves, so it moves
+          slower than the app's small fades (140 to 300ms), which on a surface this size read as
+          a blink: down over 0.6s from a gentle start; back up over 0.8s, after the buttons have
+          gone, as a light coming back would */}
       <div
         aria-hidden
         data-page-dim
         className={cx(
-          "pointer-events-none absolute inset-0 z-30 bg-gradient-to-t from-black/55 via-black/30 to-black/25 transition-opacity duration-300",
+          "pointer-events-none absolute inset-0 z-40 bg-gradient-to-t from-black/45 via-black/25 to-black/20",
           shown ? "opacity-100" : "opacity-0",
         )}
+        style={{ transition: shown ? DIM_IN : DIM_OUT }}
       />
       <div
         data-page-transport={control.state}
