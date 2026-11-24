@@ -247,7 +247,8 @@ export function SceneCanvas({
       remount ??= setTimeout(() => setLost((n) => n + 1), 500);
     };
     wrap.addEventListener("webglcontextlost", onLost, true);
-    raf = requestAnimationFrame(loop);
+    // size() may have asked already (a stage mounted while held)
+    if (!raf) raf = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", onVisibility);

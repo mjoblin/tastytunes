@@ -39,9 +39,10 @@ import { musicGoing, REST_FADE_MS, REST_OPACITY, useRest } from "./rest";
  * DISPLAY ON OTHER SCREENS, THE PAGE (0.17.0): the app's own Display mode, full screen, always on,
  * for a tablet or another computer. It follows the streamer through the display server's live
  * channel (display/live), which opens with what is playing now and opens again by itself after a
- * restart or a wake. Its own controls (the close button, the scene picker) are hidden: a page on
- * another screen shows, it doesn't steer. While the streamer sleeps, or the app hasn't been
- * heard for a few seconds, the page goes dark.
+ * restart or a wake. The window's corner controls are hidden; at a touch the page shows its own
+ * (display/ScenePanel: a scene, settings, full screen), which change this screen alone and never
+ * steer the streamer. While the streamer sleeps, or the app hasn't been heard for a few seconds,
+ * the page goes dark. A touch wakes a resting page, so a screen can be set up in silence.
  *
  * A SCREEN LEFT ON: with the music stopped for a while, the page dims and drifts, a light page
  * turning dark once dimmed (display/rest).
@@ -112,8 +113,12 @@ function Page(): React.JSX.Element {
   const powered = useStore((s) => s.systemPower?.power === "ON");
   const connected = useStore((s) => s.connection.phase === "connected");
   const going = useStore((s) => musicGoing(s.playState?.state));
-  // a screen left on: dimmed and drifting while the music is stopped (display/rest)
-  const { resting, offset, dark, still } = useRest(going);
+  // the panel in use (a touch in the last few seconds, or open) keeps the page awake, so a
+  // resting screen can be set up
+  const [inUse, setInUse] = useState(false);
+  // a screen left on: dimmed and drifting while the music is stopped and nobody is at it
+  // (display/rest)
+  const { resting, offset, dark, still } = useRest(going || inUse);
   // and its scene holds its last picture rather than drawing every frame behind the dimming, once
   // a light page's turn to dark has been drawn (a held scene keeps the picture it last drew)
   useEffect(() => holdStages(still), [still]);
@@ -161,14 +166,14 @@ function Page(): React.JSX.Element {
       {heard && connected && powered ? (
         <>
           <DisplayMode />
-          {SCENES_HERE && (
-            <ScenePanel
-              own={own}
-              appScene={appScene}
-              onPick={pickScene}
-              onAppSettings={backToApp}
-            />
-          )}
+          <ScenePanel
+            own={own}
+            appScene={appScene}
+            onPick={pickScene}
+            onAppSettings={backToApp}
+            scenes={SCENES_HERE}
+            onAwake={setInUse}
+          />
         </>
       ) : (
         <div data-display-asleep className="h-full w-full bg-black" />

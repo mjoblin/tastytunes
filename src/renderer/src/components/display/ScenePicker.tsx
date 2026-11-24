@@ -350,7 +350,14 @@ function RangeSlider({
 
 /** The All scenes rows (the finish, the corners, the drops, the sync), also the page's on another
  *  screen (display/ScenePanel), where a change stays on that screen. */
-export function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
+export function SyncRow({
+  host,
+  sleeveOnly = false,
+}: {
+  host: PickerHost;
+  /** A page on a screen that can't draw scenes: the Show row alone (the rest shape scenes). */
+  sleeveOnly?: boolean;
+}): React.JSX.Element {
   const value = useStore((s) => s.settings.displaySyncMs ?? 0);
   const drops = useStore((s) => s.settings.displayDrops ?? "normal");
   const finish = useStore((s) => s.settings.displayFinish ?? "cathode");
@@ -377,7 +384,7 @@ export function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
     <div data-display-sync className="flex flex-col gap-y-2 text-[11.5px] text-dim">
       {/* the glass is the fullscreen view's alone: the tile draws no cathode finish, so its
           picker shows the drops and the sync, which shape what the tile draws through the feed */}
-      {host === "display" && (
+      {host === "display" && !sleeveOnly && (
         <SettingLine label="Finish" hint="A simulated cathode tube's glass over every scene.">
           <Segmented
             value={finish}
@@ -451,45 +458,49 @@ export function SyncRow({ host }: { host: PickerHost }): React.JSX.Element {
           </label>
         </SettingLine>
       )}
-      <SettingLine
-        label="Drops"
-        hint='"Loose" counts small lulls as a drop, "Strict" requires a real breakdown.'
-      >
-        <Segmented
-          value={drops}
-          options={[
-            { value: "loose", label: "Loose" },
-            { value: "normal", label: "Normal" },
-            { value: "strict", label: "Strict" },
-          ]}
-          onChange={(v) => void saveSettings({ displayDrops: v })}
-        />
-      </SettingLine>
-      <SettingLine
-        label="Sync"
-        hint='Choose "early" if the flashes and lyrics appear after the sound.'
-      >
-        <RangeSlider
-          value={sync}
-          min={-1000}
-          max={1000}
-          step={10}
-          ariaLabel="Sync"
-          className="w-36"
-          onChange={(v, final) => nudge(v, final)}
-        />
-        <span className="w-24 text-right font-mono tabular-nums text-faint">
-          {sync === 0 ? "in step" : sync > 0 ? `${sync} ms early` : `${-sync} ms late`}
-        </span>
-        <HeaderChip
-          type="button"
-          onClick={() => nudge(0, true)}
-          disabled={sync === 0}
-          className="px-2 py-0.5 text-[11.5px] motion-safe:active:scale-90 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-panel/70 disabled:hover:text-dim disabled:hover:ring-edge"
-        >
-          Reset
-        </HeaderChip>
-      </SettingLine>
+      {!sleeveOnly && (
+        <>
+          <SettingLine
+            label="Drops"
+            hint='"Loose" counts small lulls as a drop, "Strict" requires a real breakdown.'
+          >
+            <Segmented
+              value={drops}
+              options={[
+                { value: "loose", label: "Loose" },
+                { value: "normal", label: "Normal" },
+                { value: "strict", label: "Strict" },
+              ]}
+              onChange={(v) => void saveSettings({ displayDrops: v })}
+            />
+          </SettingLine>
+          <SettingLine
+            label="Sync"
+            hint='Choose "early" if the flashes and lyrics appear after the sound.'
+          >
+            <RangeSlider
+              value={sync}
+              min={-1000}
+              max={1000}
+              step={10}
+              ariaLabel="Sync"
+              className="w-36"
+              onChange={(v, final) => nudge(v, final)}
+            />
+            <span className="w-24 text-right font-mono tabular-nums text-faint">
+              {sync === 0 ? "in step" : sync > 0 ? `${sync} ms early` : `${-sync} ms late`}
+            </span>
+            <HeaderChip
+              type="button"
+              onClick={() => nudge(0, true)}
+              disabled={sync === 0}
+              className="px-2 py-0.5 text-[11.5px] motion-safe:active:scale-90 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-panel/70 disabled:hover:text-dim disabled:hover:ring-edge"
+            >
+              Reset
+            </HeaderChip>
+          </SettingLine>
+        </>
+      )}
     </div>
   );
 }

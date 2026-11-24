@@ -270,7 +270,8 @@ export function DisplayMode(): React.JSX.Element {
           onPick={pickScene}
         />
       )}
-      {settings.waveforms && (
+      {/* the waveform's switch, while there is a progress strip for it to change (Show › Progress) */}
+      {settings.waveforms && (settings.displayProgress ?? true) && (
         <button
           data-display-corner
           onClick={() => void saveSettings({ displayWaveform: !settings.displayWaveform })}

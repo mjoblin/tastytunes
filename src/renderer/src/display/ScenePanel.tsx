@@ -52,6 +52,8 @@ export function ScenePanel({
   appScene,
   onPick,
   onAppSettings,
+  scenes,
+  onAwake,
 }: {
   /** This screen's scene, or null when it shows the app's. */
   own: DisplayScene | null;
@@ -59,6 +61,12 @@ export function ScenePanel({
   onPick(id: DisplayScene | null): void;
   /** Let these settings go: the screen shows the app's again. */
   onAppSettings(keys: readonly OwnKey[]): void;
+  /** Whether this browser draws the scenes: without them, the button opens Settings alone (the
+   *  Show row; the rest shape scenes), and full screen stays. */
+  scenes: boolean;
+  /** Whether the panel is in use (a touch in the last few seconds, or open): the page stays
+   *  awake while it is, so a resting screen can be set up (display/rest). */
+  onAwake(awake: boolean): void;
 }): React.JSX.Element {
   const [shown, setShown] = useState(false);
   const [open, setOpen] = useState(false);
@@ -91,6 +99,7 @@ export function ScenePanel({
       if (timer.current) clearTimeout(timer.current);
     };
   }, []);
+  useEffect(() => onAwake(shown || open), [shown, open, onAwake]);
   const chosen = sceneDef(own ?? appScene);
   const pick = (id: DisplayScene | null): void => {
     onPick(id);
@@ -117,14 +126,39 @@ export function ScenePanel({
       <button
         type="button"
         data-page-scene-button
-        aria-label="Scene"
+        aria-label={scenes ? "Scene" : "Settings"}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className={cx(corner, "right-4", open ? "text-accent" : "text-dim", showing)}
       >
-        <Sparkles size={20} />
+        {scenes ? <Sparkles size={20} /> : <SlidersHorizontal size={20} />}
       </button>
-      {open && (
+      {open && !scenes && (
+        <>
+          <div className="absolute inset-0 z-40" onClick={() => setOpen(false)} />
+          <div
+            data-page-scenes
+            className="absolute top-[4.25rem] right-4 z-50 w-[min(30rem,calc(100%_-_2rem))] rounded-2xl bg-panel/85 p-2 shadow-2xl ring-1 ring-edge backdrop-blur-md"
+          >
+            <div data-page-scene-settings className="space-y-3 px-3 pt-2 pb-1">
+              <div className="[zoom:1.15]">
+                <SyncRow host="display" sleeveOnly />
+              </div>
+              {keptHere && (
+                <HeaderChip
+                  type="button"
+                  data-page-app-settings
+                  onClick={() => onAppSettings(ALL_SCENES_KEYS)}
+                  className="h-9 px-3 text-[13px]"
+                >
+                  Use TastyTunes' settings
+                </HeaderChip>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+      {open && scenes && (
         <>
           {/* a touch outside closes it */}
           <div className="absolute inset-0 z-40" onClick={() => setOpen(false)} />
