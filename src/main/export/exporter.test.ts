@@ -399,7 +399,7 @@ describe("a track's export, when things go wrong", () => {
     expect(again.kind).toBe("analyzing");
     if (again.kind !== "analyzing") return;
     expect(again.message).toMatch(
-      /^Still analyzing "Harbour Lights": this track isn't measured yet, started less than a minute ago/,
+      /^Still analyzing "Harbour Lights": this track isn't measured yet\. Call again/,
     );
     // the window's run has ended: what it couldn't measure, it can't
     run = "idle";

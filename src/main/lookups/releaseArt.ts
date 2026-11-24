@@ -67,9 +67,9 @@ const TYPE_ORDER = [
 /** At most this many scans from one release (a box set's booklet runs to dozens). */
 export const RELEASE_IMAGES_MAX = 24;
 
-/** The archive lists its pictures under plain http, which costs a redirect more than https (four
- *  in all, past the picture fetch's three) and sends the first hops in the clear, naming the
- *  release; the same address over https answers in three. */
+/** The archive lists its pictures under plain http, which takes three redirects, the most the
+ *  picture fetch allows, and sends the first hops in the clear, naming the release; the same
+ *  address over https takes two. */
 const secure = (url: string): string =>
   url.replace(/^http:\/\/coverartarchive\.org\//i, "https://coverartarchive.org/");
 
