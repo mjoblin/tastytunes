@@ -24,7 +24,7 @@ import { DisplayMode } from "@/components/playback/DisplayMode";
 import { holdStages } from "@/components/display/SceneCanvas";
 import { askAgainForStored } from "@/components/media/waveformAnalysis";
 import { followApp } from "./live";
-import { musicGoing, REST_OPACITY, useRest } from "./rest";
+import { musicGoing, REST_FADE_MS, REST_OPACITY, useRest } from "./rest";
 
 /**
  * DISPLAY ON OTHER SCREENS, THE PAGE (0.17.0): the app's own Display mode, full screen, always on,
@@ -34,7 +34,8 @@ import { musicGoing, REST_OPACITY, useRest } from "./rest";
  * another screen shows, it doesn't steer. While the streamer sleeps, or the app hasn't been
  * heard for a few seconds, the page goes dark.
  *
- * A SCREEN LEFT ON: with the music stopped for a while, the page dims and drifts (display/rest).
+ * A SCREEN LEFT ON: with the music stopped for a while, the page dims and drifts, a light page
+ * turning dark once dimmed (display/rest).
  *
  * SCENES WHERE THEY CAN RUN (stage 2): the owner's scene is drawn where the browser has WebGL2
  * on its GPU, the Sleeve's face everywhere else (asked once, by the browser itself, never by a
@@ -85,12 +86,12 @@ function Page(): React.JSX.Element {
   const connected = useStore((s) => s.connection.phase === "connected");
   const going = useStore((s) => musicGoing(s.playState?.state));
   // a screen left on: dimmed and drifting while the music is stopped (display/rest)
-  const { resting, offset } = useRest(going);
+  const { resting, offset, dark } = useRest(going);
   // and its scene holds its last picture rather than drawing every frame behind the dimming
   useEffect(() => holdStages(resting), [resting]);
-  const theme = useTheme(settings.theme);
+  // a light page turns dark once its dimming is done (display/rest)
+  const theme = useTheme(dark ? "dark" : settings.theme);
   useDisplayFont(settings.displayFont);
-  // the drift glides unless motion is reduced, when it steps (the dimming fades either way)
   const reduced = useMotionPreference(settings.motion);
   // the owner's accent, From album art included, as the window wears it (its progress line)
   const artUrl = useStore((s) => deriveNowPlaying(s.playState, s.nowPlaying).artUrl);
@@ -107,7 +108,12 @@ function Page(): React.JSX.Element {
       style={{
         opacity: resting ? REST_OPACITY : 1,
         transform: `translate(${offset[0]}px, ${offset[1]}px)`,
-        transition: reduced ? "opacity 3s ease" : "opacity 3s ease, transform 40s linear",
+        // the drift glides while resting (stepping under reduced motion); woken, the picture is
+        // back in its place at once while the dimming lifts
+        transition:
+          resting && !reduced
+            ? `opacity ${REST_FADE_MS}ms ease, transform 40s linear`
+            : `opacity ${REST_FADE_MS}ms ease`,
       }}
     >
       {heard && connected && powered ? (

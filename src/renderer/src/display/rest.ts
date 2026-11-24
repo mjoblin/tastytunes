@@ -6,6 +6,10 @@ import type { ZonePlayStateState } from "@shared/smoip";
  * holding one still picture for hours, and some burn it in. So when the music has stopped for a
  * while the page rests: it dims, and its picture drifts a few pixels every minute; the music
  * starting again brings it back at once. Standby is darker still (the page goes black).
+ *
+ * A LIGHT PAGE RESTS DARK: dimmed paper reads as a flat grey, so once its fade is done a page in
+ * the light theme turns to the dark one, already dim, and is back in light the moment the music
+ * starts. A resting screen looks the same whichever theme it shows, and gives off less light.
  */
 
 /** How long without music before the page rests. */
@@ -15,6 +19,8 @@ export const DRIFT_EVERY_MS = 60_000;
 export const DRIFT_PX = 18;
 /** How bright a resting page is. */
 export const REST_OPACITY = 0.35;
+/** How long the dimming takes; a light page turns dark once it is done. */
+export const REST_FADE_MS = 3_000;
 
 /** Whether the streamer is making music, or about to (a track change passes through these). */
 export const musicGoing = (state: ZonePlayStateState | null | undefined): boolean =>
@@ -26,10 +32,16 @@ export function driftTo(random: () => number = Math.random): [number, number] {
   return [at(), at()];
 }
 
-/** Whether the page rests, and where its picture has drifted to. */
-export function useRest(going: boolean): { resting: boolean; offset: [number, number] } {
+/** Whether the page rests, where its picture has drifted to, and whether its fade is done (when a
+ *  light page shows the dark theme). */
+export function useRest(going: boolean): {
+  resting: boolean;
+  offset: [number, number];
+  dark: boolean;
+} {
   const [resting, setResting] = useState(false);
   const [offset, setOffset] = useState<[number, number]>([0, 0]);
+  const [dark, setDark] = useState(false);
   useEffect(() => {
     if (going) {
       setResting(false);
@@ -45,5 +57,13 @@ export function useRest(going: boolean): { resting: boolean; offset: [number, nu
     const t = setInterval(() => setOffset(driftTo()), DRIFT_EVERY_MS);
     return () => clearInterval(t);
   }, [resting]);
-  return { resting, offset };
+  useEffect(() => {
+    if (!resting) {
+      setDark(false);
+      return;
+    }
+    const t = setTimeout(() => setDark(true), REST_FADE_MS);
+    return () => clearTimeout(t);
+  }, [resting]);
+  return { resting, offset, dark };
 }
