@@ -39,7 +39,10 @@ export const displayServer = new DisplayServer({
   pageDir: join(__dirname, "../renderer"),
   log: (text) => deviceManager.log("info", "display", text),
   failed: () => {
-    state = { port: null, error: "It stopped. Switch it off and on to start it again." };
+    state = {
+      port: null,
+      error: "Display on other screens stopped. Turn it off and back on to restart it.",
+    };
     void pushStatus();
   },
 });
@@ -60,7 +63,7 @@ export async function displayStatus(): Promise<DisplayStatus> {
   return {
     running: true,
     url,
-    error: url ? null : "This computer has no network address. Connect it to your network.",
+    error: url ? null : "This computer isn't connected to a network.",
   };
 }
 

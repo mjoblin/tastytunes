@@ -39,7 +39,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
       <div data-display-server className="space-y-3">
         <Toggle
           label="Display on other screens"
-          hint="Show Display mode on a tablet or another computer on your network. Each lyric is looked up as it plays, as on this screen."
+          hint="Show display mode in a web browser on a tablet, TV or another computer on your network. Each screen can pick its own scene."
           checked={on}
           onChange={(enabled) =>
             void save({ displayServer: { ...settings.displayServer, enabled } })
@@ -57,7 +57,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
             />
             <div className="flex items-center justify-between gap-4">
               <div className="text-[11.5px] text-faint max-w-sm">
-                Open it once on each screen. Anyone with the address can see what's playing.
+                Open this address once on each screen. Anyone who has it can see what's playing.
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <HeaderChip
@@ -79,11 +79,11 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
               <div className="flex items-center gap-4 pt-1">
                 <QrCode text={status.url} label="QR code for the display's address" />
                 <div className="text-[11.5px] text-faint max-w-[16rem] space-y-2">
-                  <p>Scan it with the tablet's camera.</p>
-                  <p>To keep a tablet's screen on, turn off its auto-lock.</p>
+                  <p>Point the tablet's camera at the code to open the address.</p>
+                  <p>Turn off auto-lock on the tablet to keep its screen on.</p>
                   <p>
-                    If the address changes after a restart, reserve this computer's address in your
-                    router.
+                    If the address stops working after a restart, give this computer a fixed address
+                    in your router.
                   </p>
                 </div>
               </div>
@@ -91,7 +91,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
           </div>
         )}
         {on && (
-          <SettingRow label="Port" hint="Change it if another app uses this one.">
+          <SettingRow label="Port" hint="Change this if another app is using the same port.">
             <NumberField
               value={port}
               min={1024}
