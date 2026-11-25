@@ -122,19 +122,25 @@ export interface DisplayQueueRow {
   playing: boolean;
 }
 
-/** The rows sent around the playing track: a few before it, about fifty after. A queue can run to
- *  thousands, and a screen needs what is coming, not the whole evening at once. */
-export const QUEUE_BEFORE = 3;
-export const QUEUE_AFTER = 50;
+/** A queue this long or shorter goes to a screen whole (an album, a playlist, an evening's
+ *  worth): a window of a few rows before the playing track left a screen near an album's end
+ *  with four rows and nothing to scroll back to. */
+export const QUEUE_ALL = 300;
+/** A longer one (a whole library played, thousands of tracks) goes as a window around the playing
+ *  track: this many before it and after. A screen hears its line again only when it changes. */
+export const QUEUE_BEFORE = 100;
+export const QUEUE_AFTER = 200;
 
-/** The window of the queue a screen is sent, around `playId` (from the start without one). */
+/** The queue a screen is sent: whole up to QUEUE_ALL, else the window around `playId` (from the
+ *  start without one). */
 export function queueWindow(
   items: readonly QueueListItem[],
   playId: number | null,
 ): DisplayQueueRow[] {
   const at = playId == null ? -1 : items.findIndex((i) => i.id === playId);
-  const from = Math.max(0, at - QUEUE_BEFORE);
-  const to = Math.min(items.length, Math.max(at, 0) + QUEUE_AFTER + 1);
+  const whole = items.length <= QUEUE_ALL;
+  const from = whole ? 0 : Math.max(0, at - QUEUE_BEFORE);
+  const to = whole ? items.length : Math.min(items.length, Math.max(at, 0) + QUEUE_AFTER + 1);
   const rows: DisplayQueueRow[] = [];
   for (const item of items.slice(from, to)) {
     if (item.id == null) continue;

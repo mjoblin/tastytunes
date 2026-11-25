@@ -3,6 +3,7 @@ import type { QueueListItem } from "./smoip";
 import {
   isDisplayVerb,
   QUEUE_AFTER,
+  QUEUE_ALL,
   QUEUE_BEFORE,
   queueWindow,
   screenName,
@@ -45,8 +46,8 @@ describe("a screen's name and verbs", () => {
     expect(isDisplayVerb({})).toBe(false);
   });
 
-  it("sends the queue around the playing track: a few before, about fifty after", () => {
-    const items: QueueListItem[] = Array.from({ length: 200 }, (_, i) => ({
+  it("sends a queue whole up to QUEUE_ALL, a longer one as a window around the playing track", () => {
+    const items: QueueListItem[] = Array.from({ length: 1000 }, (_, i) => ({
       id: 1000 + i,
       position: i,
       metadata: {
@@ -62,12 +63,18 @@ describe("a screen's name and verbs", () => {
         genre: null,
       },
     }));
-    const rows = queueWindow(items, 1100);
-    expect(rows[0].id).toBe(1100 - QUEUE_BEFORE);
+    // a long queue: the window around the playing track
+    const rows = queueWindow(items, 1500);
+    expect(rows[0].id).toBe(1500 - QUEUE_BEFORE);
     expect(rows).toHaveLength(QUEUE_BEFORE + 1 + QUEUE_AFTER);
-    expect(rows.filter((r) => r.playing).map((r) => r.id)).toEqual([1100]);
+    expect(rows.filter((r) => r.playing).map((r) => r.id)).toEqual([1500]);
     expect(queueWindow(items, 1001)[0].id).toBe(1000);
     expect(queueWindow(items, null)).toHaveLength(QUEUE_AFTER + 1);
-    expect(queueWindow(items.slice(0, 5), 1004)).toHaveLength(QUEUE_BEFORE + 1);
+    // an album's worth, played near its end: all of it, the earlier tracks there to scroll back to
+    const album = items.slice(0, 12);
+    expect(queueWindow(album, 1011).map((r) => r.id)).toEqual(album.map((i) => i.id));
+    // up to QUEUE_ALL, whole wherever it plays
+    expect(queueWindow(items.slice(0, QUEUE_ALL), 1290)).toHaveLength(QUEUE_ALL);
+    expect(queueWindow(items.slice(0, QUEUE_ALL + 1), 1290)[0].id).toBe(1290 - QUEUE_BEFORE);
   });
 });
