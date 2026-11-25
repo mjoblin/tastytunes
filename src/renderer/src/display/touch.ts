@@ -98,3 +98,39 @@ export function useTouchShown(hold: boolean): boolean {
   }, [show, later]);
   return shown;
 }
+
+/**
+ * A PANEL KEEPS ITS SWIPES (iPadOS Safari in full screen): a swipe down that nothing on the page
+ * takes leaves full screen, and a list at its top, or one too short to scroll, takes nothing, so
+ * a swipe down on the queue or the presets left full screen. As a touch starts in the panel, its
+ * scroller is moved a pixel in from the edge it sits at, so native scrolling takes the swipe (its
+ * bounce kept, decisions/0007's sacred scrolling); a touch that moves where nothing can scroll
+ * (the tabs, a list that fits) is held. The rest of the page keeps the system's gesture.
+ */
+export function useHoldSwipes(ref: React.RefObject<HTMLElement | null>, on = true): void {
+  useEffect(() => {
+    const panel = ref.current;
+    if (!panel || !on) return;
+    const scrollerOf = (t: EventTarget | null): HTMLElement | null => {
+      const sc = t instanceof Element ? t.closest<HTMLElement>(".overflow-y-auto") : null;
+      return sc && panel.contains(sc) && sc.scrollHeight > sc.clientHeight ? sc : null;
+    };
+    const start = (e: TouchEvent): void => {
+      const sc = scrollerOf(e.target);
+      if (!sc) return;
+      const bottom = sc.scrollHeight - sc.clientHeight;
+      if (sc.scrollTop <= 0) sc.scrollTop = 1;
+      else if (sc.scrollTop >= bottom) sc.scrollTop = bottom - 1;
+    };
+    const move = (e: TouchEvent): void => {
+      if (scrollerOf(e.target)) return;
+      if (e.cancelable) e.preventDefault();
+    };
+    panel.addEventListener("touchstart", start, { passive: true });
+    panel.addEventListener("touchmove", move, { passive: false });
+    return () => {
+      panel.removeEventListener("touchstart", start);
+      panel.removeEventListener("touchmove", move);
+    };
+  }, [ref, on]);
+}

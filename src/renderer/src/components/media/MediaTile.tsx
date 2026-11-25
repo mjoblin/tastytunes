@@ -33,12 +33,14 @@ export function MediaTile({
       {...attrs}
       onClick={onPress}
       className={cx(
-        "group relative overflow-hidden rounded-lg text-left [-webkit-tap-highlight-color:transparent] motion-safe:active:scale-[0.97]",
+        // the column's width exactly, whatever the picture's own size: sized to its content, a
+        // tile grew to each cover's pixels (a library's covers differ; the mock's don't)
+        "group relative block w-full min-w-0 overflow-hidden rounded-lg text-left [-webkit-tap-highlight-color:transparent] motion-safe:active:scale-[0.97]",
         CARD_TRANSITION,
         playing ? "tile-playing" : tuning ? "ring-1 ring-gold/40" : "ring-1 ring-edge",
       )}
     >
-      <div className="aspect-square bg-raised">
+      <div className="aspect-square w-full overflow-hidden bg-raised">
         <MediaArt src={art} kind={kind} size="card" />
       </div>
       <div className="px-2.5 py-2">
