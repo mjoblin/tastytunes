@@ -258,8 +258,26 @@ function steer(
   }
   // THE CONTROLS THAT START MUSIC (step three), with their own switch: a preset (a recall on a
   // sleeping streamer wakes it first, as in the window), Wake, picking up where it left off
-  if (verb === "playPreset" || verb === "playPlaylist" || verb === "wake" || verb === "resume") {
+  if (
+    verb === "playPreset" ||
+    verb === "playPlaylist" ||
+    verb === "stopPlaylist" ||
+    verb === "wake" ||
+    verb === "resume"
+  ) {
     if (!s.displayControlPresets) return { refused: "presets" };
+    if (verb === "stopPlaylist") {
+      // a playlist on its way into the queue, stopped: the window's Stop loading (what is already
+      // in the queue stays, as there)
+      const run = deviceManager.playlistActivation;
+      const loading = run && !run.finished ? run : null;
+      log(
+        `stop loading ${loading ? loading.name : "a playlist"} from ${name}: ${loading ? "cancelPlaylistActivation" : "nothing to do"}`,
+      );
+      if (!loading) return { refused: "nothing" };
+      deviceManager.cancelPlaylistActivation();
+      return { done: true };
+    }
     if (verb === "playPlaylist") {
       // one of the app's playlists, the window's own Play: it replaces the queue, a track at a
       // time; never two at once, never into a sleeping streamer, never an empty one

@@ -598,7 +598,9 @@ function QueueRows({
  * The app's playlists, as the menu bar panel draws them: the track count (how far, while one is on
  * its way into the queue) and the running time, the first picture. A tap plays it, the window's
  * Play: it replaces the queue a track at a time, the row saying how far, the others dimmed until
- * it is done (two at once would fight for the queue; main refuses a second).
+ * it is done (two at once would fight for the queue; main refuses a second). Stop loading on the
+ * loading row, as the menu bar panel has it (a line across the top as cards): a wrong tap on a
+ * long playlist has its remedy here, what is already queued staying.
  */
 function PlaylistRows({
   rows,
@@ -626,6 +628,11 @@ function PlaylistRows({
       if (!answer || !("done" in answer)) setAsked(null);
     });
   };
+  const loadingRow = rows.find((r) => r.loading != null) ?? null;
+  const stop = (e?: React.MouseEvent): void => {
+    e?.stopPropagation();
+    void steer("stopPlaylist");
+  };
   const line = (p: DisplayPlaylistRow): string =>
     p.loading
       ? `Loading ${p.loading.done} of ${p.loading.total}…`
@@ -635,6 +642,17 @@ function PlaylistRows({
   if (cards)
     return (
       <div className={cardsBody}>
+        {loadingRow && (
+          <button
+            type="button"
+            data-page-playlist-stop
+            onClick={stop}
+            className="col-span-full flex h-11 items-center justify-center gap-2 rounded-lg text-[14px] text-dim ring-1 ring-edge motion-safe:active:scale-[0.98] [-webkit-tap-highlight-color:transparent]"
+          >
+            <X size={16} />
+            Stop loading “{loadingRow.name}”
+          </button>
+        )}
         {rows.map((p) => (
           <div key={p.id} className="min-w-0">
             <MediaTile
@@ -666,6 +684,19 @@ function PlaylistRows({
             artUrl={p.art}
             tuning={loadingId === p.id}
             dimmed={loadingId != null && loadingId !== p.id}
+            actions={
+              p.loading ? (
+                <button
+                  type="button"
+                  data-page-playlist-stop
+                  aria-label="Stop loading"
+                  onClick={stop}
+                  className="grid h-11 w-11 place-items-center rounded-lg text-dim motion-safe:active:scale-90 [-webkit-tap-highlight-color:transparent]"
+                >
+                  <X size={20} />
+                </button>
+              ) : undefined
+            }
             onClick={loadingId == null ? () => play(p.id) : undefined}
           />
         </div>

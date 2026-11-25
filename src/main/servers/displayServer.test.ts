@@ -465,8 +465,11 @@ describe("Display on other screens' server", () => {
     expect((await steer("playPlaylist", { id: "a".repeat(65) })).status).toBe(400);
     expect((await steer("playQueue", { id })).status).toBe(400);
     expect((await steer("playPlaylist", { id })).status).toBe(200);
+    // stopping one on its way in takes nothing
+    expect((await steer("stopPlaylist", { id })).status).toBe(200);
     expect(steered.map((x) => [x.verb, x.playlist, x.id])).toEqual([
       ["playPlaylist", id, undefined],
+      ["stopPlaylist", undefined, undefined],
     ]);
   });
 
