@@ -1,11 +1,13 @@
+import { useLayoutEffect, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 
 /**
  * THE PAGE'S TABS (0.17.0, Display on other screens): one home for the two tab strips on the page,
- * the corner panel's Scene and Settings (display/ScenePanel) and the list's Queue and Presets
- * (display/PageTransport). Words at their own width, the chosen one in ink over a short accent
- * line, the other dim: a tab picks what the panel shows, and the gold-filled segmented look stays
- * the app's for a toggle that sets a value (controls/Segmented). A finger's height, 44px.
+ * the corner panel's Scene and Settings (display/ScenePanel) and the list's Queue, Presets and
+ * Playlists (display/PageTransport). Words at their own width, the chosen one in ink on a soft
+ * capsule that glides to the tab tapped (straight there under reduced motion), the others dim: a
+ * tab picks what the panel shows, and the gold-filled segmented look stays the app's for a toggle
+ * that sets a value (controls/Segmented). A finger's height, 44px.
  */
 export function PageTabs<T extends string>({
   tabs,
@@ -22,8 +24,38 @@ export function PageTabs<T extends string>({
   value: T;
   onChange(id: T): void;
 }): React.JSX.Element {
+  const strip = useRef<HTMLDivElement | null>(null);
+  /** The capsule's place under the chosen tab; null until measured, so it never slides in from
+   *  the strip's start as the panel opens. */
+  const [at, setAt] = useState<{ left: number; width: number } | null>(null);
+  const [glides, setGlides] = useState(false);
+  useLayoutEffect(() => {
+    const el = strip.current;
+    if (!el) return;
+    const measure = (): void => {
+      const tab = el.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+      if (tab) setAt({ left: tab.offsetLeft, width: tab.offsetWidth });
+    };
+    measure();
+    // the words' own widths settle as the font arrives
+    const seen = new ResizeObserver(measure);
+    seen.observe(el);
+    return () => seen.disconnect();
+  }, [value, tabs.length]);
   return (
-    <div role="tablist" className="flex min-w-0 items-center gap-1">
+    <div ref={strip} role="tablist" className="relative flex min-w-0 items-center gap-1">
+      {at && (
+        <span
+          aria-hidden
+          data-page-tab-capsule
+          className={cx(
+            "pointer-events-none absolute inset-y-1 left-0 rounded-full bg-veil2 shadow-sm ring-1 ring-edge",
+            glides &&
+              "transition-[transform,width] duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] motion-reduce:transition-none",
+          )}
+          style={{ width: at.width, transform: `translateX(${at.left}px)` }}
+        />
+      )}
       {tabs.map((t) => {
         const on = t.id === value;
         return (
@@ -33,21 +65,17 @@ export function PageTabs<T extends string>({
             role="tab"
             {...t.attrs}
             aria-selected={on}
-            onClick={() => onChange(t.id)}
+            onClick={() => {
+              setGlides(true);
+              onChange(t.id);
+            }}
             className={cx(
-              "relative flex h-11 shrink-0 items-center gap-2 px-3 text-[15px] font-medium transition-colors motion-safe:active:scale-[0.97] [-webkit-tap-highlight-color:transparent]",
+              "relative flex h-11 shrink-0 items-center gap-2 px-4 text-[15px] font-medium transition-colors duration-200 motion-safe:active:scale-[0.97] [-webkit-tap-highlight-color:transparent]",
               on ? "text-ink" : "text-dim",
             )}
           >
             {t.icon}
             {t.label}
-            <span
-              aria-hidden
-              className={cx(
-                "absolute inset-x-3 bottom-1 h-0.5 rounded-full bg-accent transition-[opacity,transform] duration-200 motion-reduce:transition-none",
-                on ? "scale-x-100 opacity-100" : "scale-x-50 opacity-0",
-              )}
-            />
           </button>
         );
       })}
