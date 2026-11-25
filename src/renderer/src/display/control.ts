@@ -19,6 +19,7 @@ const OFF: DisplayControl = {
   next: null,
   queue: null,
   presets: null,
+  playlists: null,
   wake: null,
   resume: null,
 };
@@ -46,8 +47,9 @@ const touch = (): boolean => typeof navigator !== "undefined" && navigator.maxTo
 /** One verb to the app (`id`: the queue row playQueue plays, the preset playPreset plays). The
  *  answer says whether it was done, or why not (the screen asked the app, the app said not now,
  *  the source can't do it); null when the app couldn't be reached. */
-/** The verbs a button or a key sends: all but a seek, which carries its point (seekTo). */
-export type ButtonVerb = Exclude<DisplayVerb, "seek">;
+/** The verbs a button or a key sends: all but a seek, which carries its point (seekTo), and a
+ *  playlist, which carries its own id (playPlaylist). */
+export type ButtonVerb = Exclude<DisplayVerb, "seek" | "playPlaylist">;
 
 export const steer = (verb: ButtonVerb, id?: number): Promise<DisplayControlAnswer | null> =>
   post({ verb, ...(id != null ? { id } : {}) });
@@ -57,9 +59,13 @@ export const steer = (verb: ButtonVerb, id?: number): Promise<DisplayControlAnsw
 export const seekTo = (secs: number): Promise<DisplayControlAnswer | null> =>
   post({ verb: "seek", secs });
 
+/** One of the app's playlists, by its id: the window's Play, which replaces the queue. */
+export const playPlaylist = (id: string): Promise<DisplayControlAnswer | null> =>
+  post({ verb: "playPlaylist", id });
+
 async function post(what: {
   verb: DisplayVerb;
-  id?: number;
+  id?: number | string;
   secs?: number;
 }): Promise<DisplayControlAnswer | null> {
   try {

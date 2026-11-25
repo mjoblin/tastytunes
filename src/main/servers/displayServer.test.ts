@@ -51,6 +51,7 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
     verb: DisplayVerb;
     id?: number;
     secs?: number;
+    playlist?: string;
   }> = [];
   const control: { now: DisplayControl } = {
     now: {
@@ -59,6 +60,7 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
       next: null,
       queue: null,
       presets: null,
+      playlists: null,
       wake: null,
       resume: null,
     },
@@ -105,13 +107,14 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
     pageDir: page,
     log: (text) => logged.push(text),
     controlFor: () => control.now,
-    steer: (screen, name, verb, id, secs) => {
+    steer: (screen, name, verb, { id, secs, playlist }) => {
       steered.push({
         screen,
         name,
         verb,
         ...(id !== undefined ? { id } : {}),
         ...(secs !== undefined ? { secs } : {}),
+        ...(playlist !== undefined ? { playlist } : {}),
       });
       return { done: true };
     },
@@ -353,12 +356,23 @@ describe("Display on other screens' server", () => {
       presets: [
         { id: 3, name: "Radio", art: "http://192.168.1.5/p3.jpg", lit: false, dead: false },
       ],
+      playlists: [
+        {
+          id: "0b8e2c4a-1f2d-4c3b-9a8e-7d6c5b4a3f21",
+          name: "Sunday",
+          art: "http://192.168.1.5/pl.jpg",
+          tracks: 12,
+          secs: 2880,
+          loading: null,
+        },
+      ],
       wake: null,
       resume: null,
     };
     const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
     expect(opened.first).not.toContain("192.168.1.5");
     expect(opened.first).not.toContain("p3.jpg");
+    expect(opened.first).not.toContain("pl.jpg");
     const id = /"art":"\/art\/([0-9a-f]{24})"/.exec(opened.first)?.[1];
     expect(id).toBeDefined();
     expect((await get(`/art/${id}`, { cookie })).status).toBe(200);
@@ -375,6 +389,20 @@ describe("Display on other screens' server", () => {
       ["playPreset", 2],
       ["wake", undefined],
       ["resume", undefined],
+    ]);
+  });
+
+  it("plays a playlist by its own id only, letters, digits and dashes; no other verb takes one", async () => {
+    const { steer, steered } = await rig();
+    const id = "0b8e2c4a-1f2d-4c3b-9a8e-7d6c5b4a3f21";
+    expect((await steer("playPlaylist")).status).toBe(400);
+    expect((await steer("playPlaylist", { id: 7 })).status).toBe(400);
+    expect((await steer("playPlaylist", { id: "../x" })).status).toBe(400);
+    expect((await steer("playPlaylist", { id: "a".repeat(65) })).status).toBe(400);
+    expect((await steer("playQueue", { id })).status).toBe(400);
+    expect((await steer("playPlaylist", { id })).status).toBe(200);
+    expect(steered.map((x) => [x.verb, x.playlist, x.id])).toEqual([
+      ["playPlaylist", id, undefined],
     ]);
   });
 
@@ -402,6 +430,7 @@ describe("Display on other screens' server", () => {
       next: null,
       queue: null,
       presets: null,
+      playlists: null,
       wake: null,
       resume: null,
     };
@@ -413,6 +442,7 @@ describe("Display on other screens' server", () => {
       next: null,
       queue: null,
       presets: null,
+      playlists: null,
       wake: null,
       resume: null,
     };

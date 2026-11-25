@@ -4,10 +4,12 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { extname, join, normalize, sep } from "node:path";
 import {
   isDisplayVerb,
+  isPlaylistId,
   screenName,
   type DisplayControl,
   type DisplayControlAnswer,
   type DisplayVerb,
+  type DisplayVerbArgs,
 } from "@shared/displayControl";
 import type { PushMessage, Snapshot } from "@shared/ipc";
 import {
@@ -81,14 +83,12 @@ export interface DisplayDeps {
   failed?(message: string): void;
   /** Where a screen stands and what it may see of the controls, by its id. */
   controlFor(screen: string | null): DisplayControl;
-  /** A screen's verb, past the route's checks: what the app did with it (`id`, the queue row or
-   *  the preset; `secs`, where a seek goes). */
+  /** A screen's verb, past the route's checks: what the app did with it. */
   steer(
     screen: string,
     name: string,
     verb: DisplayVerb,
-    id?: number,
-    secs?: number,
+    args: DisplayVerbArgs,
   ): DisplayControlAnswer;
 }
 
@@ -149,7 +149,8 @@ const NO_ADDRESS = `<!doctype html><meta charset="utf-8"><meta name="viewport" c
 
 /** The pushes that can change what a screen may do: the switches (settings), the source and its
  *  controls, the volume, the queue, the connection, and for presets and the sleeping screen the
- *  presets, the power, what is held, a recall's answer and a wake. */
+ *  presets, the playlists and a playlist's loading, the power, what is held, a recall's answer and
+ *  a wake. */
 const CONTROL_KINDS: ReadonlySet<PushMessage["kind"]> = new Set([
   "settings",
   "connection",
@@ -158,6 +159,8 @@ const CONTROL_KINDS: ReadonlySet<PushMessage["kind"]> = new Set([
   "zoneState",
   "queue",
   "presets",
+  "playlists",
+  "playlistActivation",
   "systemPower",
   "held",
   "recalledPreset",
@@ -533,15 +536,16 @@ export class DisplayServer {
         ? body.secs
         : undefined;
     if (verb === "seek" && secs === undefined) return this.refuse(res, 400);
+    // a playlist is played by its own id, the app's (letters, digits and dashes)
+    const playlist = verb === "playPlaylist" && isPlaylistId(body.id) ? body.id : undefined;
+    if (verb === "playPlaylist" && playlist === undefined) return this.refuse(res, 400);
     if (!this.withinRate(screen, verb)) return this.json(res, { refused: "busy" }, 429);
     const name = screenName(req.headers["user-agent"] ?? "", body.touch === true);
-    const answer = this.deps.steer(
-      screen,
-      name,
-      verb,
-      takesId ? id : undefined,
-      verb === "seek" ? secs : undefined,
-    );
+    const answer = this.deps.steer(screen, name, verb, {
+      id: takesId ? id : undefined,
+      secs: verb === "seek" ? secs : undefined,
+      playlist,
+    });
     this.json(res, answer, "done" in answer ? 200 : answer.refused === "nothing" ? 409 : 403);
     // the screen hears where it stands now (an ask raised, say)
     this.pushControl();

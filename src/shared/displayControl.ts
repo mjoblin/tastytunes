@@ -8,8 +8,9 @@ import type { QueueListItem } from "./smoip";
  * - A FIXED LIST OF VERBS, the system's media commands (shared/transport MediaCommand) with a
  *   seek to a point in the playing track (step four, its seconds), a volume step up or down,
  *   playing a track already in the queue (the queue view, step two: view and select), and with
- *   their own switch the controls that start music (step three): a preset, Wake, picking up where
- *   it left off. Nothing else is reachable: no level, no queue or preset edits, no settings.
+ *   their own switch the controls that start music (step three): a preset, one of the app's
+ *   playlists, Wake, picking up where it left off. Nothing else is reachable: no level, no queue,
+ *   preset or playlist edits, no settings.
  * - Each screen is told where it stands (DisplayControl), over its own line of the live channel,
  *   so it draws only what it may do.
  */
@@ -27,6 +28,7 @@ export const DISPLAY_VERBS = [
   "volumeDown",
   "playQueue",
   "playPreset",
+  "playPlaylist",
   "wake",
   "resume",
 ] as const;
@@ -34,6 +36,18 @@ export type DisplayVerb = (typeof DISPLAY_VERBS)[number];
 
 export const isDisplayVerb = (v: unknown): v is DisplayVerb =>
   typeof v === "string" && (DISPLAY_VERBS as readonly string[]).includes(v);
+
+/** What a verb carries, past the route's checks: `id`, the queue row or the preset (a whole
+ *  number); `secs`, where a seek goes; `playlist`, the playlist's own id. */
+export interface DisplayVerbArgs {
+  id?: number;
+  secs?: number;
+  playlist?: string;
+}
+
+/** A playlist's id as a screen may send it: the app's own (a UUID), letters, digits and dashes. */
+export const isPlaylistId = (v: unknown): v is string =>
+  typeof v === "string" && /^[0-9A-Za-z-]{1,64}$/.test(v);
 
 /**
  * Where a screen stands:
@@ -56,14 +70,17 @@ export interface DisplayControl {
   /** The queue around the playing track (queueWindow), for a screen allowed to control while the
    *  queue is what plays; null otherwise. Pictures by the display server's id, never by address. */
   queue: DisplayQueueRow[] | null;
-  /** The presets, for a screen allowed to control with Presets and wake on; null otherwise. */
+  /** The presets, for a screen allowed to control with Presets, playlists and wake on; null otherwise. */
   presets: DisplayPresetRow[] | null;
-  /** With Presets and wake on, while the streamer isn't playing for the page: "ready", the app is
+  /** The app's playlists, under the same switch, while the streamer is on (loading one doesn't
+   *  wake it); null otherwise. */
+  playlists: DisplayPlaylistRow[] | null;
+  /** With Presets, playlists and wake on, while the streamer isn't playing for the page: "ready", the app is
    *  connected to a streamer in standby, so Wake works; "unreachable", the app isn't connected (in
    *  Cambridge's default Eco standby the streamer leaves the network), so the screen says so and
    *  draws no button that does nothing; null otherwise. */
   wake: "ready" | "unreachable" | null;
-  /** What TastyTunes holds to pick up where it left off (with Presets and wake on), or null. */
+  /** What TastyTunes holds to pick up where it left off (with Presets, playlists and wake on), or null. */
   resume: { title: string; detail: string | null } | null;
 }
 
@@ -77,6 +94,20 @@ export interface DisplayPresetRow {
   lit: boolean;
   /** Its last recall came to nothing (main/device/recallWatch). */
   dead: boolean;
+}
+
+/** One of the app's playlists as a screen sees it: view and select, nothing edited. */
+export interface DisplayPlaylistRow {
+  /** Its id: the only thing a screen sends back (playPlaylist). */
+  id: string;
+  name: string;
+  /** Its first picture (the menu bar panel's row), by the display server's id on the wire. */
+  art: string | null;
+  tracks: number;
+  /** Its running time, where its tracks know theirs; null otherwise. */
+  secs: number | null;
+  /** On its way into the queue (the app loads a playlist a track at a time), how far. */
+  loading: { done: number; total: number } | null;
 }
 
 /** One track of the queue as a screen sees it. */

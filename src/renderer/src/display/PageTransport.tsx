@@ -3,6 +3,7 @@ import {
   LayoutGrid,
   List,
   ListMusic,
+  ListOrdered,
   Minus,
   Pause,
   Play,
@@ -14,9 +15,9 @@ import {
   Square,
   X,
 } from "lucide-react";
-import type { DisplayPresetRow, DisplayQueueRow } from "@shared/displayControl";
+import type { DisplayPlaylistRow, DisplayPresetRow, DisplayQueueRow } from "@shared/displayControl";
 import { transportAbilities, type TransportAbilities } from "@shared/transport";
-import { cx } from "@/lib/format";
+import { cx, fmtDuration } from "@/lib/format";
 import { onScreenKey } from "@/lib/keyboardOwner";
 import { useStore } from "@/store";
 import { Switch } from "@/components/controls/Switch";
@@ -27,7 +28,7 @@ import { scrollToTop } from "@/lib/scroll";
 import { MediaTile } from "@/components/media/MediaTile";
 import { SettingLine } from "@/components/display/ScenePicker";
 import { PageSeekBar } from "@/components/media/Waveform";
-import { seekTo, steer, useControl, type ButtonVerb } from "./control";
+import { playPlaylist, seekTo, steer, useControl, type ButtonVerb } from "./control";
 import { musicGoing } from "./rest";
 import { PageTabs } from "./PageTabs";
 import {
@@ -35,6 +36,7 @@ import {
   keepListView,
   listView,
   lockControls,
+  type ListTab,
   type ListView,
 } from "./pageSettings";
 
@@ -186,7 +188,8 @@ export function PageTransport({
   const showing = shown ? "opacity-100" : "pointer-events-none opacity-0";
   const queue = control.queue;
   const presets = control.presets;
-  const list = queue != null || presets != null;
+  const playlists = control.playlists;
+  const list = queue != null || presets != null || playlists != null;
   // over a scene a little higher (styles.css, --page-transport-lift)
   const bottom = "calc(env(safe-area-inset-bottom, 0px) + var(--page-transport-lift, 0.75rem))";
   return (
@@ -211,6 +214,7 @@ export function PageTransport({
         <ListPanel
           queue={queue}
           presets={presets}
+          playlists={playlists}
           bottom={`calc(${bottom} + ${stripH + 12}px)`}
           onClose={() => onQueue(false)}
         />
@@ -277,13 +281,27 @@ export function PageTransport({
               {/* the list stands apart from the transport by the same gap as the volume does */}
               {list && (
                 <Disc
-                  label={queueOpen ? "Close the list" : queue ? "Queue" : "Presets"}
+                  label={
+                    queueOpen
+                      ? "Close the list"
+                      : queue
+                        ? "Queue"
+                        : presets
+                          ? "Presets"
+                          : "Playlists"
+                  }
                   size="side"
                   active={queueOpen}
                   onPress={() => onQueue(!queueOpen)}
                   attrs={{ "data-page-queue-button": "" }}
                 >
-                  {queue ? <ListMusic size={22} /> : <Radio size={22} />}
+                  {queue ? (
+                    <ListMusic size={22} />
+                  ) : presets ? (
+                    <Radio size={22} />
+                  ) : (
+                    <ListOrdered size={22} />
+                  )}
                 </Disc>
               )}
               {anyButton && (
@@ -401,33 +419,44 @@ function useHeightWhile(ref: React.RefObject<HTMLDivElement | null>, on: boolean
   return h;
 }
 
-type ListTab = "queue" | "presets";
+/** The list's tabs in their order, with what each is called and drawn as. */
+const LIST_TABS: ReadonlyArray<{ id: ListTab; label: string; icon: React.ReactNode }> = [
+  { id: "queue", label: "Queue", icon: <ListMusic size={16} /> },
+  { id: "presets", label: "Presets", icon: <Radio size={16} /> },
+  { id: "playlists", label: "Playlists", icon: <ListOrdered size={16} /> },
+];
 
 /**
- * THE LIST, VIEWED (steps two and three): the queue's window the display server sent and the
- * presets, as tabs when there are both (Presets alone where there is no queue), the playing one
- * marked and in view when it opens, each row the app's own (components/media/MediaRow, the menu
- * bar panel's rows: one home) at its full, finger-sized height. A tap plays that row; nothing
- * edits. Above the buttons, so play and pause stay in reach; a touch outside closes it.
+ * THE LIST, VIEWED (steps two and three, and the playlists after): the queue's window the display
+ * server sent, the presets and the app's playlists, as tabs where there is more than one (Presets
+ * and Playlists alone where there is no queue), the playing one marked and in view when it opens,
+ * each row the app's own (components/media/MediaRow, the menu bar panel's rows: one home) at its
+ * full, finger-sized height. A tap plays that row; nothing edits. Above the buttons, so play and
+ * pause stay in reach; a touch outside closes it.
  */
 function ListPanel({
   queue,
   presets,
+  playlists,
   bottom,
   onClose,
 }: {
   queue: DisplayQueueRow[] | null;
   presets: DisplayPresetRow[] | null;
+  playlists: DisplayPlaylistRow[] | null;
   /** The top of the buttons: the panel keeps above them. */
   bottom: string;
   onClose(): void;
 }): React.JSX.Element {
-  const [tab, setTab] = useState<ListTab>(queue ? "queue" : "presets");
-  const showing: ListTab = tab === "queue" && queue ? "queue" : presets ? "presets" : "queue";
+  const here = LIST_TABS.filter((t) => ({ queue, presets, playlists })[t.id] != null);
+  const [tab, setTab] = useState<ListTab>(here[0]?.id ?? "queue");
+  // the chosen tab while it has something to show, else the first that does
+  const showing: ListTab = here.some((t) => t.id === tab) ? tab : (here[0]?.id ?? "queue");
   // rows or cards, each tab its own, kept in this browser (the menu bar panel's choice)
   const [views, setViews] = useState<Record<ListTab, ListView>>(() => ({
     queue: listView("queue"),
     presets: listView("presets"),
+    playlists: listView("playlists"),
   }));
   const view = views[showing];
   const flip = (): void => {
@@ -448,30 +477,17 @@ function ListPanel({
       >
         {/* 8px from the panel's edge all round */}
         <div className="flex shrink-0 items-center gap-2 p-2 pb-0">
-          {queue && presets ? (
-            <div className="min-w-0 flex-1">
+          {here.length > 1 ? (
+            <div className="min-w-0 flex-1 overflow-x-auto">
               <PageTabs<ListTab>
-                tabs={[
-                  {
-                    id: "queue",
-                    label: "Queue",
-                    icon: <ListMusic size={16} />,
-                    attrs: { "data-page-list-tab": "queue" },
-                  },
-                  {
-                    id: "presets",
-                    label: "Presets",
-                    icon: <Radio size={16} />,
-                    attrs: { "data-page-list-tab": "presets" },
-                  },
-                ]}
+                tabs={here.map((t) => ({ ...t, attrs: { "data-page-list-tab": t.id } }))}
                 value={showing}
                 onChange={setTab}
               />
             </div>
           ) : (
             <span className="flex-1 pl-3 text-[15px] font-medium text-ink">
-              {queue ? "Queue" : "Presets"}
+              {LIST_TABS.find((t) => t.id === showing)?.label}
             </span>
           )}
           <button
@@ -489,6 +505,8 @@ function ListPanel({
         </div>
         {showing === "queue" && queue ? (
           <QueueRows key={`queue-${view}`} rows={queue} cards={view === "cards"} />
+        ) : showing === "playlists" && playlists ? (
+          <PlaylistRows key={`playlists-${view}`} rows={playlists} cards={view === "cards"} />
         ) : (
           <PresetRows key={`presets-${view}`} rows={presets ?? []} cards={view === "cards"} />
         )}
@@ -569,6 +587,86 @@ function QueueRows({
             playing={r.playing}
             duration={r.duration}
             onClick={() => void steer("playQueue", r.id)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * The app's playlists, as the menu bar panel draws them: the track count (how far, while one is on
+ * its way into the queue) and the running time, the first picture. A tap plays it, the window's
+ * Play: it replaces the queue a track at a time, the row saying how far, the others dimmed until
+ * it is done (two at once would fight for the queue; main refuses a second).
+ */
+function PlaylistRows({
+  rows,
+  cards,
+}: {
+  rows: DisplayPlaylistRow[];
+  cards: boolean;
+}): React.JSX.Element {
+  // the tap's own answer, sooner than the line's first word of loading
+  const [asked, setAsked] = useState<string | null>(null);
+  const running = rows.find((r) => r.loading != null)?.id ?? null;
+  useEffect(() => {
+    if (asked == null) return;
+    if (running != null) {
+      setAsked(null);
+      return;
+    }
+    const t = setTimeout(() => setAsked(null), TUNING_MS);
+    return () => clearTimeout(t);
+  }, [asked, running]);
+  const loadingId = running ?? asked;
+  const play = (id: string): void => {
+    setAsked(id);
+    void playPlaylist(id).then((answer) => {
+      if (!answer || !("done" in answer)) setAsked(null);
+    });
+  };
+  const line = (p: DisplayPlaylistRow): string =>
+    p.loading
+      ? `Loading ${p.loading.done} of ${p.loading.total}…`
+      : loadingId === p.id
+        ? "Loading…"
+        : `${p.tracks} ${p.tracks === 1 ? "track" : "tracks"}`;
+  if (cards)
+    return (
+      <div className={cardsBody}>
+        {rows.map((p) => (
+          <div key={p.id} className="min-w-0">
+            <MediaTile
+              attrs={{ "data-page-playlist-row": p.id }}
+              art={p.art}
+              kind="album"
+              title={p.name}
+              sub={line(p)}
+              playing={false}
+              tuning={loadingId === p.id}
+              dimmed={loadingId != null && loadingId !== p.id}
+              onPress={() => loadingId == null && play(p.id)}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  return (
+    <div className={rowsBody}>
+      {rows.map((p) => (
+        <div key={p.id}>
+          <MediaRow
+            touch
+            attrs={{ "data-page-playlist-row": p.id }}
+            title={p.name}
+            subtitle={line(p)}
+            meta={p.secs != null ? fmtDuration(p.secs) : undefined}
+            kind="album"
+            artUrl={p.art}
+            tuning={loadingId === p.id}
+            dimmed={loadingId != null && loadingId !== p.id}
+            onClick={loadingId == null ? () => play(p.id) : undefined}
           />
         </div>
       ))}
@@ -704,6 +802,7 @@ export function SleepControls({
         <ListPanel
           queue={null}
           presets={presets}
+          playlists={null}
           bottom={`calc(${bottom} + ${groupH + 12}px)`}
           onClose={() => onList(false)}
         />

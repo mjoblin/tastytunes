@@ -30,11 +30,36 @@ export type OwnKey = keyof typeof OWN;
 
 /** What a screen keeps that the app has no setting for: its controls locked (display/
  *  PageTransport), so a touch shows only the corner buttons and the keys do nothing; and how its
- *  list shows the queue and the presets, rows or cards (the menu bar panel's choice). */
+ *  list shows the queue, the presets and the playlists, rows or cards (the menu bar panel's
+ *  choice). */
 const isView = (v: unknown): boolean => v === "rows" || v === "cards";
-const HERE = { lockControls: isBool, queueView: isView, presetsView: isView } as const;
+const HERE = {
+  lockControls: isBool,
+  queueView: isView,
+  presetsView: isView,
+  playlistsView: isView,
+} as const;
 export type ListView = "rows" | "cards";
-type Here = { lockControls?: boolean; queueView?: ListView; presetsView?: ListView };
+type Here = {
+  lockControls?: boolean;
+  queueView?: ListView;
+  presetsView?: ListView;
+  playlistsView?: ListView;
+};
+/** The list's tabs (display/PageTransport). */
+export type ListTab = "queue" | "presets" | "playlists";
+const VIEW_KEY = {
+  queue: "queueView",
+  presets: "presetsView",
+  playlists: "playlistsView",
+} as const satisfies Record<ListTab, keyof Here>;
+/** Each tab's view until this screen chooses: the presets as cards (the window's Presets screen),
+ *  the queue and the playlists as rows (the menu bar panel's). */
+const VIEW_FIRST: Record<ListTab, ListView> = {
+  queue: "rows",
+  presets: "cards",
+  playlists: "rows",
+};
 /** Every setting a screen may keep. */
 export const OWN_KEYS = Object.keys(OWN) as OwnKey[];
 type Own = Partial<Pick<AppSettings, OwnKey>>;
@@ -107,15 +132,15 @@ export function lockControls(on: boolean): void {
   keepHere({ lockControls: on });
 }
 
-/** How this screen's list shows a tab: the presets as cards unless chosen otherwise (as the
- *  window's Presets screen), the queue as rows. */
-export function listView(tab: "queue" | "presets"): ListView {
-  const h = here();
-  return (tab === "queue" ? h.queueView : h.presetsView) ?? (tab === "queue" ? "rows" : "cards");
+/** How this screen's list shows a tab (VIEW_FIRST until it chooses). */
+export function listView(tab: ListTab): ListView {
+  return here()[VIEW_KEY[tab]] ?? VIEW_FIRST[tab];
 }
 
-export function keepListView(tab: "queue" | "presets", view: ListView): void {
-  keepHere(tab === "queue" ? { queueView: view } : { presetsView: view });
+export function keepListView(tab: ListTab, view: ListView): void {
+  const patch: Partial<Here> = {};
+  patch[VIEW_KEY[tab]] = view;
+  keepHere(patch);
 }
 
 /** Keep, for this screen, the settings of `patch` a screen may keep (the rest are dropped). */

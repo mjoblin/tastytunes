@@ -211,7 +211,12 @@ export function displaySnapshot(snap: Snapshot, art: ArtRegistry): Snapshot {
 export function displayControlLine(c: DisplayControl, art: ArtRegistry): DisplayControl {
   const byId = <T extends { art: string | null }>(rows: T[] | null): T[] | null =>
     rows && rows.map((r) => ({ ...r, art: r.art ? art(r.art) : null }));
-  return { ...c, queue: byId(c.queue), presets: byId(c.presets) };
+  return {
+    ...c,
+    queue: byId(c.queue),
+    presets: byId(c.presets),
+    playlists: byId(c.playlists),
+  };
 }
 
 /** A push the page may hear, reduced; null for any other kind. */

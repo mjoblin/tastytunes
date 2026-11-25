@@ -6,13 +6,15 @@ import {
   type DisplayControlAnswer,
   type DisplayScreen,
   type DisplayVerb,
+  type DisplayVerbArgs,
 } from "@shared/displayControl";
 import type { DisplayStatus } from "@shared/ipc";
-import type { AppSettings } from "@shared/model";
+import { playlistTotalSecs, type AppSettings } from "@shared/model";
 import { litPresetIds } from "@shared/litPresets";
 import { activeSourceId, isCbusMode, isPreAmpMode } from "@shared/smoip";
 import { commandForMedia, transportAbilities } from "@shared/transport";
 import { jsonFileStore } from "../data/jsonStore";
+import { getPlaylists } from "../data/playlists";
 import { artHostTrust, fetchPicture } from "../lookups/artFetch";
 import { fetchLyrics } from "../lookups/lyrics";
 import { audioAnalysisGet } from "../lookups/audioAnalysis";
@@ -141,6 +143,35 @@ function presetsHere(): DisplayControl["presets"] {
 /** A wake can work: the app is connected to a streamer in standby. In Cambridge's default Eco
  *  standby the streamer leaves the network and the app isn't connected, so a screen says it
  *  can't reach it instead of drawing a button that does nothing. */
+/** The streamer is connected and on: a playlist loads into its queue then (loading one doesn't
+ *  wake it, unlike a preset's recall). */
+function streamerOn(): boolean {
+  return (
+    deviceManager.connectionNow.phase === "connected" &&
+    deviceManager.streamerNow.systemPower?.power === "ON"
+  );
+}
+
+/** The app's playlists, as the menu bar panel lists them: the first picture, the track count, the
+ *  running time, and how far one on its way into the queue has got. */
+function playlistsHere(): DisplayControl["playlists"] {
+  const lists = getPlaylists();
+  if (lists.length === 0 || !streamerOn()) return null;
+  const run = deviceManager.playlistActivation;
+  const loading = run && !run.finished ? run : null;
+  return lists.map((p) => {
+    const secs = playlistTotalSecs(p);
+    return {
+      id: p.id,
+      name: p.name,
+      art: p.items.find((i) => i.artUrl)?.artUrl ?? null,
+      tracks: p.items.length,
+      secs: secs > 0 ? secs : null,
+      loading: loading?.playlistId === p.id ? { done: loading.done, total: loading.total } : null,
+    };
+  });
+}
+
 function wakeCanWork(): boolean {
   const power = deviceManager.streamerNow.systemPower?.power;
   return deviceManager.connectionNow.phase === "connected" && power != null && power !== "ON";
@@ -169,6 +200,7 @@ function controlFor(screen: string | null): DisplayControl {
       next: null,
       queue: null,
       presets: null,
+      playlists: null,
       wake: null,
       resume: null,
     };
@@ -179,6 +211,7 @@ function controlFor(screen: string | null): DisplayControl {
     next: nextInQueue(),
     queue: queueHere(),
     presets: starts ? presetsHere() : null,
+    playlists: starts ? playlistsHere() : null,
     wake: !starts
       ? null
       : wakeCanWork()
@@ -197,8 +230,7 @@ function steer(
   screen: string,
   name: string,
   verb: DisplayVerb,
-  id?: number,
-  secs?: number,
+  { id, secs, playlist }: DisplayVerbArgs,
 ): DisplayControlAnswer {
   const s = getSettings();
   const state = screenBook.stateOf(screen, s.displayControl);
@@ -225,8 +257,29 @@ function steer(
   }
   // THE CONTROLS THAT START MUSIC (step three), with their own switch: a preset (a recall on a
   // sleeping streamer wakes it first, as in the window), Wake, picking up where it left off
-  if (verb === "playPreset" || verb === "wake" || verb === "resume") {
+  if (verb === "playPreset" || verb === "playPlaylist" || verb === "wake" || verb === "resume") {
     if (!s.displayControlPresets) return { refused: "presets" };
+    if (verb === "playPlaylist") {
+      // one of the app's playlists, the window's own Play: it replaces the queue, a track at a
+      // time; never two at once, never into a sleeping streamer, never an empty one
+      const p = getPlaylists().find((x) => x.id === playlist);
+      const run = deviceManager.playlistActivation;
+      const why = !p
+        ? "nothing to do"
+        : p.items.length === 0
+          ? "nothing to do (empty)"
+          : run && !run.finished
+            ? `nothing to do (still loading ${run.name})`
+            : !streamerOn()
+              ? "nothing to do (the streamer isn't on)"
+              : null;
+      log(`playlist ${p ? p.name : playlist} from ${name}: ${why ?? "playlistActivate"}`);
+      if (why || !p) return { refused: "nothing" };
+      void deviceManager
+        .playlistActivate(p.id)
+        .catch((e: unknown) => log(`playlist ${p.name} from ${name} stopped: ${String(e)}`));
+      return { done: true };
+    }
     if (verb === "playPreset") {
       const items = deviceManager.streamerNow.presets?.presets ?? [];
       const there = id != null && items.some((p) => p.id === id);

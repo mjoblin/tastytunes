@@ -137,7 +137,8 @@ function Page(): React.JSX.Element {
   const transportShown = transport && shown && !panelOpen;
   // the list closes when there is nothing to show (another source with no presets, the controls
   // off or locked)
-  const listHere = transport && (control.queue != null || control.presets != null);
+  const listHere =
+    transport && (control.queue != null || control.presets != null || control.playlists != null);
   useEffect(() => {
     if (!listHere) setQueueOpen(false);
   }, [listHere]);
