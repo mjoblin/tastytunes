@@ -130,6 +130,15 @@ export const QUEUE_ALL = 300;
  *  track: this many before it and after. A screen hears its line again only when it changes. */
 export const QUEUE_BEFORE = 100;
 export const QUEUE_AFTER = 200;
+/** The streamer's preset slots (1 to 99): every preset goes to a screen. */
+export const PRESETS_MAX = 99;
+/** The playlists a screen is sent, at most (the app's own, in their order). */
+export const PLAYLISTS_SENT = 200;
+/** The most pictures one control line can name: the queue's rows, every preset, the playlists. The
+ *  display server keeps its picture ids by this (servers/displayServer MAX_ART_IDS): a cap of its
+ *  own (200) once fell under a whole queue's 300 rows and dropped covers a screen still showed. */
+export const LINE_PICTURES_MAX =
+  Math.max(QUEUE_ALL, QUEUE_BEFORE + 1 + QUEUE_AFTER) + PRESETS_MAX + PLAYLISTS_SENT;
 
 /** The queue a screen is sent: whole up to QUEUE_ALL, else the window around `playId` (from the
  *  start without one). */

@@ -5,6 +5,7 @@ import { extname, join, normalize, sep } from "node:path";
 import {
   isDisplayVerb,
   isPlaylistId,
+  LINE_PICTURES_MAX,
   screenName,
   type DisplayControl,
   type DisplayControlAnswer,
@@ -106,7 +107,10 @@ const MAX_CONTROL_BODY = 512;
  *  runaway repeat stops here as well as on the page. */
 export const CONTROL_RATE = { count: 8, ms: 4_000 } as const;
 export const VOLUME_RATE = { count: 4, ms: 1_000 } as const;
-const MAX_ART_IDS = 200;
+/** The picture ids kept: room for two whole control lines (a screen still fetching the pictures
+ *  of the one before as the next arrives) and the playing cover, which its push names before the
+ *  line does. Worked out from what a line can name, so the two can't drift apart. */
+export const MAX_ART_IDS = 2 * LINE_PICTURES_MAX + 1;
 /** The analysis keys handed out with the playing file, kept for its next few asks. */
 const MAX_TRACK_KEYS = 20;
 /** A ping this often; the page counts the app lost after a few missed (display/live). */

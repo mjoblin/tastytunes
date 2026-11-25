@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { app } from "electron";
 import {
+  PLAYLISTS_SENT,
   queueWindow,
   type DisplayControl,
   type DisplayControlAnswer,
@@ -159,7 +160,7 @@ function playlistsHere(): DisplayControl["playlists"] {
   if (lists.length === 0 || !streamerOn()) return null;
   const run = deviceManager.playlistActivation;
   const loading = run && !run.finished ? run : null;
-  return lists.map((p) => {
+  return lists.slice(0, PLAYLISTS_SENT).map((p) => {
     const secs = playlistTotalSecs(p);
     return {
       id: p.id,

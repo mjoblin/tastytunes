@@ -5,7 +5,15 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Snapshot } from "@shared/ipc";
 import { DEFAULT_SETTINGS } from "@shared/model";
-import type { DisplayControl, DisplayVerb } from "@shared/displayControl";
+import {
+  LINE_PICTURES_MAX,
+  PLAYLISTS_SENT,
+  PRESETS_MAX,
+  QUEUE_AFTER,
+  QUEUE_BEFORE,
+  type DisplayControl,
+  type DisplayVerb,
+} from "@shared/displayControl";
 import { asksForPlaying, CONTROL_RATE, DisplayServer, PING_MS, VOLUME_RATE } from "./displayServer";
 
 const TOKEN = "tok-123";
@@ -334,6 +342,62 @@ describe("Display on other screens' server", () => {
       ["playQueue", 7],
       ["next", undefined],
     ]);
+  });
+
+  it("keeps every picture a whole line names answerable, the playing cover's too", async () => {
+    const { live, control, get } = await rig();
+    const pic = (kind: string, i: number): string => `http://192.168.1.5/${kind}/${i}.jpg`;
+    const rows = QUEUE_BEFORE + 1 + QUEUE_AFTER;
+    control.now = {
+      state: "allowed",
+      volume: null,
+      next: null,
+      queue: Array.from({ length: rows }, (_, i) => ({
+        id: i + 1,
+        title: `T${i}`,
+        artist: null,
+        album: null,
+        duration: 200,
+        art: pic("q", i),
+        playing: i === QUEUE_BEFORE,
+      })),
+      presets: Array.from({ length: PRESETS_MAX }, (_, i) => ({
+        id: i + 1,
+        name: `P${i}`,
+        art: pic("p", i),
+        lit: false,
+        dead: false,
+      })),
+      playlists: Array.from({ length: PLAYLISTS_SENT }, (_, i) => ({
+        id: `pl-${i}`,
+        name: `L${i}`,
+        art: pic("l", i),
+        tracks: 3,
+        secs: null,
+        loading: null,
+      })),
+      wake: null,
+      resume: null,
+    };
+    const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
+    // a line this long arrives in pieces: wait for the control event's end
+    await vi.waitFor(() =>
+      expect(opened.more().slice(opened.more().indexOf("event: control"))).toMatch(/\}\n\n/),
+    );
+    const ids = [
+      ...new Set([...opened.more().matchAll(/\/art\/([0-9a-f]{24})/g)].map((m) => m[1])),
+    ];
+    // the playing cover (the snapshot's) and every row, preset and playlist
+    expect(ids.length).toBe(1 + rows + PRESETS_MAX + PLAYLISTS_SENT);
+    expect(rows + PRESETS_MAX + PLAYLISTS_SENT).toBeLessThanOrEqual(LINE_PICTURES_MAX);
+    const statuses: number[] = [];
+    for (let at = 0; at < ids.length; at += 50)
+      statuses.push(
+        ...(await Promise.all(
+          ids.slice(at, at + 50).map(async (id) => (await get(`/art/${id}`, { cookie })).status),
+        )),
+      );
+    expect(statuses.filter((st) => st !== 200)).toEqual([]);
   });
 
   it("sends a screen its queue with pictures by an id it handed out, never the address", async () => {
