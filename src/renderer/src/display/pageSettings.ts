@@ -29,9 +29,12 @@ const OWN = {
 export type OwnKey = keyof typeof OWN;
 
 /** What a screen keeps that the app has no setting for: its controls locked (display/
- *  PageTransport), so a touch shows only the corner buttons and the keys do nothing. */
-const HERE = { lockControls: isBool } as const;
-type Here = { lockControls?: boolean };
+ *  PageTransport), so a touch shows only the corner buttons and the keys do nothing; and how its
+ *  list shows the queue and the presets, rows or cards (the menu bar panel's choice). */
+const isView = (v: unknown): boolean => v === "rows" || v === "cards";
+const HERE = { lockControls: isBool, queueView: isView, presetsView: isView } as const;
+export type ListView = "rows" | "cards";
+type Here = { lockControls?: boolean; queueView?: ListView; presetsView?: ListView };
 /** Every setting a screen may keep. */
 export const OWN_KEYS = Object.keys(OWN) as OwnKey[];
 type Own = Partial<Pick<AppSettings, OwnKey>>;
@@ -62,8 +65,22 @@ function kept(): Own & Here {
 
 /** What this screen keeps of the app's settings: only known settings, each a value it may have. */
 export function ownSettings(): Own {
-  const { lockControls: _here, ...own } = kept();
-  return own;
+  const all: Record<string, unknown> = { ...kept() };
+  for (const k of Object.keys(HERE)) delete all[k];
+  return all;
+}
+
+/** What this screen keeps of its own. */
+function here(): Here {
+  const all = kept();
+  const out: Record<string, unknown> = {};
+  for (const k of Object.keys(HERE)) if (k in all) out[k] = (all as Record<string, unknown>)[k];
+  return out;
+}
+
+/** Keep these of this screen's own, beside the rest it keeps. */
+function keepHere(patch: Here): void {
+  write({ ...ownSettings(), ...here(), ...patch });
 }
 
 function write(own: Own & Here): void {
@@ -77,7 +94,7 @@ function write(own: Own & Here): void {
 
 /** The app's settings this screen keeps, beside what it keeps of its own. */
 function store(own: Own): void {
-  write({ ...own, lockControls: kept().lockControls });
+  write({ ...own, ...here() });
 }
 
 /** Whether this screen's controls are locked. */
@@ -87,7 +104,18 @@ export function controlsLocked(): boolean {
 
 /** Lock this screen's controls, or let them be used again. */
 export function lockControls(on: boolean): void {
-  write({ ...ownSettings(), lockControls: on });
+  keepHere({ lockControls: on });
+}
+
+/** How this screen's list shows a tab: the presets as cards unless chosen otherwise (as the
+ *  window's Presets screen), the queue as rows. */
+export function listView(tab: "queue" | "presets"): ListView {
+  const h = here();
+  return (tab === "queue" ? h.queueView : h.presetsView) ?? (tab === "queue" ? "rows" : "cards");
+}
+
+export function keepListView(tab: "queue" | "presets", view: ListView): void {
+  keepHere(tab === "queue" ? { queueView: view } : { presetsView: view });
 }
 
 /** Keep, for this screen, the settings of `patch` a screen may keep (the rest are dropped). */

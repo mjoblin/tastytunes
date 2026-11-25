@@ -10,7 +10,17 @@ export const SHOWN_MS = 4_000;
  * is down or `hold` is true (a panel or a list open); on a computer the pointer moving shows them
  * too, never a still one. THE FIRST TOUCH ONLY SHOWS: a touch on a page whose buttons are hidden is swallowed before
  * its click reaches anything, so a tap where the play button will appear never presses it.
+ * A TOUCH AWAY FROM THEM PUTS THEM AWAY: with the buttons up and nothing open, a deliberate tap on
+ * the picture, away from every control, lets them go at once (the dim lifting at its own pace)
+ * rather than holding them up another four seconds. With a panel or a list open, a tap outside
+ * only closes that.
  */
+
+/** A control, or anything a touch on means to use (a panel's or a list's own area). */
+const CONTROL =
+  'button, a, input, select, textarea, label, [role="button"], [role="switch"], [role="tab"], [role="slider"], [data-page-scenes], [data-page-queue]';
+const onControl = (t: EventTarget | null): boolean =>
+  t instanceof Element && t.closest(CONTROL) != null;
 export function useTouchShown(hold: boolean): boolean {
   const [shown, setShown] = useState(false);
   const shownRef = useRef(false);
@@ -37,17 +47,25 @@ export function useTouchShown(hold: boolean): boolean {
   useEffect(() => {
     // whether this touch's click is the one that showed the buttons
     let swallow = false;
+    // whether this touch, away from every control, puts the buttons away when it lifts
+    let away = false;
     const pressed = (e: PointerEvent): void => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
       swallow = !shownRef.current;
+      away = shownRef.current && !holdRef.current && !onControl(e.target);
       down.current = true;
-      show(true);
+      if (!away) show(true);
       if (timer.current) clearTimeout(timer.current);
       timer.current = null;
     };
     const lifted = (): void => {
       if (!down.current) return;
       down.current = false;
+      if (away) {
+        away = false;
+        show(false);
+        return;
+      }
       later();
     };
     const moved = (e: PointerEvent): void => {

@@ -659,7 +659,7 @@ export const ONE_HOME = [
       "queue/DiscQueue\\.tsx$",
       "library/LibraryCards\\.tsx$",
       "lenses/ArtistsLens\\.tsx$",
-      "media/(MediaRow|StationRow|Eqbars)\\.tsx$",
+      "media/(MediaRow|MediaTile|StationRow|Eqbars)\\.tsx$",
       "presets/PresetTiles\\.tsx$",
       "playback/TrayPanelTabs\\.tsx$",
       "device/(SourcesPanel|DeviceSwitcher)\\.tsx$",

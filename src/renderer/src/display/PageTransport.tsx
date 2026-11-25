@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  LayoutGrid,
+  List,
   ListMusic,
   Minus,
   Pause,
@@ -22,9 +24,16 @@ import { MediaRow } from "@/components/media/MediaRow";
 import { TtMark } from "@/components/chrome/TtMark";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { scrollToVisible } from "@/lib/scroll";
+import { MediaTile } from "@/components/media/MediaTile";
 import { SettingLine } from "@/components/display/ScenePicker";
 import { steer, useControl } from "./control";
-import { controlsLocked, lockControls } from "./pageSettings";
+import {
+  controlsLocked,
+  keepListView,
+  listView,
+  lockControls,
+  type ListView,
+} from "./pageSettings";
 
 /**
  * CONTROLS ON THE OTHER SCREENS, THE PAGE'S HALF (0.17.0): previous, play or pause, and next, low
@@ -357,6 +366,19 @@ function ListPanel({
 }): React.JSX.Element {
   const [tab, setTab] = useState<ListTab>(queue ? "queue" : "presets");
   const showing: ListTab = tab === "queue" && queue ? "queue" : presets ? "presets" : "queue";
+  // rows or cards, each tab its own, kept in this browser (the menu bar panel's choice)
+  const [views, setViews] = useState<Record<ListTab, ListView>>(() => ({
+    queue: listView("queue"),
+    presets: listView("presets"),
+  }));
+  const view = views[showing];
+  const flip = (): void => {
+    const next: ListView = view === "cards" ? "rows" : "cards";
+    keepListView(showing, next);
+    setViews((v) => ({ ...v, [showing]: next }));
+  };
+  const square =
+    "grid h-11 w-11 shrink-0 place-items-center rounded-lg text-dim motion-safe:active:scale-90 [-webkit-tap-highlight-color:transparent]";
   const tabClass = (on: boolean): string =>
     cx(
       "flex h-11 flex-1 items-center justify-center gap-2 rounded-md text-[14px] transition-colors motion-safe:active:scale-[0.97]",
@@ -371,9 +393,13 @@ function ListPanel({
         className="absolute top-[4.25rem] left-1/2 z-50 flex w-[min(36rem,calc(100%_-_2rem))] -translate-x-1/2 flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
         style={{ bottom }}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 py-1 pr-1 pl-2">
+        {/* 8px from the panel's edge all round, the tabs' corners following the panel's */}
+        <div className="flex shrink-0 items-center gap-2 p-2 pb-0">
           {queue && presets ? (
-            <div role="tablist" className="flex flex-1 rounded-lg bg-veil p-0.5 ring-1 ring-edge">
+            <div
+              role="tablist"
+              className="flex min-w-0 flex-1 rounded-lg bg-veil p-0.5 ring-1 ring-edge"
+            >
               <button
                 type="button"
                 role="tab"
@@ -398,36 +424,68 @@ function ListPanel({
               </button>
             </div>
           ) : (
-            <span className="pl-2 text-[14px] text-ink">{queue ? "Queue" : "Presets"}</span>
+            <span className="flex-1 pl-2 text-[14px] text-ink">{queue ? "Queue" : "Presets"}</span>
           )}
           <button
             type="button"
-            aria-label="Close the list"
-            onClick={onClose}
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-dim motion-safe:active:scale-90 [-webkit-tap-highlight-color:transparent]"
+            data-page-list-view={view}
+            aria-label={view === "cards" ? "View as rows" : "View as cards"}
+            onClick={flip}
+            className={square}
           >
+            {view === "cards" ? <List size={20} /> : <LayoutGrid size={20} />}
+          </button>
+          <button type="button" aria-label="Close the list" onClick={onClose} className={square}>
             <X size={20} />
           </button>
         </div>
         {showing === "queue" && queue ? (
-          <QueueRows key="queue" rows={queue} />
+          <QueueRows key={`queue-${view}`} rows={queue} cards={view === "cards"} />
         ) : (
-          <PresetRows key="presets" rows={presets ?? []} />
+          <PresetRows key={`presets-${view}`} rows={presets ?? []} cards={view === "cards"} />
         )}
       </div>
     </>
   );
 }
 
-const listBody = "min-h-0 space-y-1 overflow-y-auto overscroll-contain px-2 pb-2";
+/** The list's body: 8px all round, so the playing row's ring has room at the top as at the
+ *  bottom (flush, the first row's ring was cut off). */
+const listBody = "min-h-0 overflow-y-auto overscroll-contain p-2";
+const rowsBody = cx(listBody, "space-y-1");
+const cardsBody = cx(listBody, "grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2.5");
 
 /** The queue's rows: the playing track marked and in view as they open. */
-function QueueRows({ rows }: { rows: DisplayQueueRow[] }): React.JSX.Element {
+function QueueRows({
+  rows,
+  cards,
+}: {
+  rows: DisplayQueueRow[];
+  cards: boolean;
+}): React.JSX.Element {
   const playingRow = useRef<HTMLDivElement | null>(null);
   // the playing track in view as it opens (container-scoped, never the page)
   useEffect(() => scrollToVisible(playingRow.current, 8), []);
+  if (cards)
+    return (
+      <div className={cardsBody}>
+        {rows.map((r) => (
+          <div key={r.id} ref={r.playing ? playingRow : undefined}>
+            <MediaTile
+              attrs={{ "data-page-queue-row": String(r.id) }}
+              art={r.art}
+              kind="track"
+              title={r.title}
+              sub={r.artist}
+              playing={r.playing}
+              onPress={() => void steer("playQueue", r.id)}
+            />
+          </div>
+        ))}
+      </div>
+    );
   return (
-    <div className={listBody}>
+    <div className={rowsBody}>
       {rows.map((r) => (
         <div key={r.id} ref={r.playing ? playingRow : undefined}>
           <MediaRow
@@ -451,7 +509,13 @@ const TUNING_MS = 8_000;
 
 /** The presets' rows, as the menu bar panel draws them (their slot numbers, the playing one lit):
  *  a tap recalls at once, the row tuning until it lights, or says it came to nothing. */
-function PresetRows({ rows }: { rows: DisplayPresetRow[] }): React.JSX.Element {
+function PresetRows({
+  rows,
+  cards,
+}: {
+  rows: DisplayPresetRow[];
+  cards: boolean;
+}): React.JSX.Element {
   const playingRow = useRef<HTMLDivElement | null>(null);
   useEffect(() => scrollToVisible(playingRow.current, 8), []);
   const [tuning, setTuning] = useState<number | null>(null);
@@ -465,8 +529,31 @@ function PresetRows({ rows }: { rows: DisplayPresetRow[] }): React.JSX.Element {
     const t = setTimeout(() => setTuning(null), TUNING_MS);
     return () => clearTimeout(t);
   }, [tuning, answered]);
+  const play = (id: number): void => {
+    setTuning(id);
+    void steer("playPreset", id);
+  };
+  if (cards)
+    return (
+      <div className={cardsBody}>
+        {rows.map((p) => (
+          <div key={p.id} ref={p.lit ? playingRow : undefined}>
+            <MediaTile
+              attrs={{ "data-page-preset-row": String(p.id) }}
+              art={p.art}
+              kind="preset"
+              title={p.name}
+              sub={p.dead && tuning !== p.id ? "Nothing played" : null}
+              playing={p.lit}
+              tuning={tuning === p.id && !p.lit}
+              onPress={() => play(p.id)}
+            />
+          </div>
+        ))}
+      </div>
+    );
   return (
-    <div className={listBody}>
+    <div className={rowsBody}>
       {rows.map((p) => {
         const isTuning = tuning === p.id;
         return (
@@ -480,10 +567,7 @@ function PresetRows({ rows }: { rows: DisplayPresetRow[] }): React.JSX.Element {
               artUrl={p.art}
               playing={p.lit}
               tuning={isTuning && !p.lit}
-              onClick={() => {
-                setTuning(p.id);
-                void steer("playPreset", p.id);
-              }}
+              onClick={() => play(p.id)}
             />
           </div>
         );
