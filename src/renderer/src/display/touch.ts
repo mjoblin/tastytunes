@@ -8,7 +8,7 @@ export const SHOWN_MS = 4_000;
  * buttons show (the corner buttons, display/ScenePanel; the transport, display/PageTransport). A touch
  * anywhere shows them for SHOWN_MS, the time starting again at every touch and held while a finger
  * is down or `hold` is true (a panel or a list open); on a computer the pointer moving shows them
- * too. THE FIRST TOUCH ONLY SHOWS: a touch on a page whose buttons are hidden is swallowed before
+ * too, never a still one. THE FIRST TOUCH ONLY SHOWS: a touch on a page whose buttons are hidden is swallowed before
  * its click reaches anything, so a tap where the play button will appear never presses it.
  */
 export function useTouchShown(hold: boolean): boolean {
@@ -52,6 +52,9 @@ export function useTouchShown(hold: boolean): boolean {
     };
     const moved = (e: PointerEvent): void => {
       if (e.pointerType !== "mouse" || down.current) return;
+      // a pointer that hasn't moved: the browser's own move when the page changes under a still
+      // cursor (a track change, the screen going dark), which would show the buttons unasked
+      if (e.movementX === 0 && e.movementY === 0) return;
       show(true);
       later();
     };
