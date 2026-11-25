@@ -206,6 +206,16 @@ export function PageTransport({
           </div>
         ) : (
           <>
+            {control.state === "ask" && (
+              // a screen not yet allowed has the buttons (its first tap asks), but the queue and
+              // the presets go only to an allowed one: it says so, where the next track will be
+              <div
+                data-page-transport-allow
+                className="max-w-[min(36rem,90vw)] truncate rounded-full bg-panel/75 px-3 py-0.5 text-[13px] text-dim backdrop-blur"
+              >
+                Allow this screen in TastyTunes to see the queue and presets.
+              </div>
+            )}
             {control.next && (
               // the next track's line opens the queue too: it grew out of it
               <button
