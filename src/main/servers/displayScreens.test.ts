@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { DisplayScreen } from "@shared/displayControl";
-import { isStoredScreen, MAX_SCREENS_KEPT, NOT_NOW_MS, ScreenBook } from "./displayScreens";
+import {
+  ASK_GAP_MS,
+  isStoredScreen,
+  MAX_ASKS_WAITING,
+  MAX_SCREENS_KEPT,
+  NOT_NOW_MS,
+  ScreenBook,
+} from "./displayScreens";
 
 const A = "a".repeat(32);
 const B = "b".repeat(32);
@@ -46,12 +53,54 @@ describe("the screens that may control", () => {
   });
 
   it("asks about one screen at a time, oldest first", () => {
-    const { b } = book();
+    const { b, later } = book();
     b.ask(A, "iPad · Safari", true);
+    later(ASK_GAP_MS);
     b.ask(B, "TV", true);
     expect(b.list().asking?.id).toBe(A);
     b.answer(A, false);
     expect(b.list().asking?.id).toBe(B);
+  });
+
+  it("lets made-up screens raise no more than MAX_ASKS_WAITING asks, recording nothing past it", () => {
+    const { b, later, changes } = book();
+    const made = Array.from({ length: 20 }, (_, i) => i.toString(16).padStart(32, "0"));
+    const answers = made.map((id) => {
+      later(ASK_GAP_MS);
+      return b.ask(id, "Screen", true);
+    });
+    expect(answers.filter((a) => a === "asking")).toHaveLength(MAX_ASKS_WAITING);
+    expect(answers.slice(MAX_ASKS_WAITING).every((a) => a === "busy")).toBe(true);
+    expect(changes()).toBe(MAX_ASKS_WAITING);
+    // a refused one is still free to ask once the app has answered the others
+    for (const id of made.slice(0, MAX_ASKS_WAITING)) b.answer(id, false);
+    later(ASK_GAP_MS);
+    expect(b.ask(made[MAX_ASKS_WAITING], "Screen", true)).toBe("asking");
+  });
+
+  it("raises a new ask at most once in ASK_GAP_MS across all screens", () => {
+    const { b, later } = book();
+    expect(b.ask(A, "iPad · Safari", true)).toBe("asking");
+    later(ASK_GAP_MS - 1);
+    expect(b.ask(B, "TV", true)).toBe("busy");
+    expect(b.stateOf(B, true)).toBe("ask");
+    later(1);
+    expect(b.ask(B, "TV", true)).toBe("asking");
+  });
+
+  it("drops a turned-down screen's hold once it has passed", () => {
+    const { b, later } = book();
+    b.ask(A, "TV", true);
+    b.answer(A, false);
+    later(ASK_GAP_MS);
+    b.ask(B, "Phone", true);
+    b.answer(B, false);
+    expect(b.heldOff).toBe(2);
+    later(NOT_NOW_MS);
+    expect(b.stateOf(A, true)).toBe("ask");
+    expect(b.heldOff).toBe(1);
+    b.ask(A, "TV", true);
+    expect(b.heldOff).toBe(0);
   });
 
   it("after Not now, doesn't ask again for a while, and Settings can still allow it", () => {
@@ -68,9 +117,10 @@ describe("the screens that may control", () => {
   });
 
   it("forgets a removed screen, whose next tap asks again; a new address ends every approval", () => {
-    const { b, stored } = book();
+    const { b, stored, later } = book();
     b.ask(A, "iPad", true);
     b.answer(A, true);
+    later(ASK_GAP_MS);
     b.ask(B, "TV", true);
     b.answer(B, true);
     b.remove(A);
@@ -82,10 +132,11 @@ describe("the screens that may control", () => {
   });
 
   it("drops its asks when the switch goes off, and keeps the answers", () => {
-    const { b } = book();
+    const { b, later } = book();
     b.ask(A, "iPad", true);
     b.answer(A, true);
-    b.ask(B, "TV", true);
+    later(ASK_GAP_MS);
+    expect(b.ask(B, "TV", true)).toBe("asking");
     b.dropAsks();
     expect(b.list().asking).toBeNull();
     expect(b.stateOf(A, true)).toBe("allowed");
@@ -97,7 +148,7 @@ describe("the screens that may control", () => {
       const id = i.toString(16).padStart(32, "0");
       b.ask(id, `screen ${i}`, true);
       b.answer(id, i % 2 === 0);
-      later(1);
+      later(ASK_GAP_MS);
     }
     expect(stored()).toHaveLength(MAX_SCREENS_KEPT);
     expect(stored().filter((s) => s.allowed)).toHaveLength(Math.ceil((MAX_SCREENS_KEPT + 3) / 2));

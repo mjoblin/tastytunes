@@ -7,8 +7,11 @@ import type { DisplayControlState, DisplayScreen, DisplayScreens } from "@shared
  * here in main and never in the settings a screen is shown. Settings lists the screens that were
  * answered, each with Remove, and can allow one that was turned down.
  *
- * - After "Not now", that screen doesn't ask again for NOT_NOW_MS, so a guest's screen can't fill
- *   the app with prompts.
+ * - After "Not now", that screen doesn't ask again for NOT_NOW_MS; at most MAX_ASKS_WAITING screens
+ *   wait to be asked about, and a new one asks at most once in ASK_GAP_MS across all screens. A
+ *   screen's id is whatever its cookie says (a private window, cleared cookies or a script holding
+ *   the address is a new screen each time), so these bound the book itself: a guest's screens
+ *   can't fill the app with prompts. A tap past them asks nothing and records nothing.
  * - A new address ends every approval (clear).
  * - What approval protects against: a copied address and a stray browser. Not someone who can
  *   watch the network's traffic (the page is plain http, so its cookies can be read there), and
@@ -19,6 +22,10 @@ import type { DisplayControlState, DisplayScreen, DisplayScreens } from "@shared
 
 /** How long a screen turned down waits before it may ask again. */
 export const NOT_NOW_MS = 10 * 60_000;
+/** At most this many screens wait to be asked about at once. */
+export const MAX_ASKS_WAITING = 3;
+/** A new ask at most this often, across all screens. */
+export const ASK_GAP_MS = 5_000;
 /** Screens kept; past it, the oldest turned down go first, then the oldest. */
 export const MAX_SCREENS_KEPT = 32;
 /** A screen's id: the 16 random bytes its cookie carries, in hex. */
@@ -51,8 +58,10 @@ export function isStoredScreen(x: unknown): x is DisplayScreen {
 export class ScreenBook {
   /** The screens being asked about, oldest first. */
   private readonly asks = new Map<string, DisplayScreen>();
-  /** Turned down: not asked about again until then. */
+  /** Turned down: not asked about again until then (dropped once that has passed). */
   private readonly notNow = new Map<string, number>();
+  /** When the last new ask was raised. */
+  private lastAsk = -Infinity;
 
   constructor(private readonly deps: ScreenBookDeps) {}
 
@@ -75,18 +84,30 @@ export class ScreenBook {
     if (this.stored().some((s) => s.id === id && s.allowed)) return "allowed";
     if (this.asks.has(id)) return "asking";
     const until = this.notNow.get(id);
-    if (until != null && until > this.deps.now()) return "declined";
+    if (until == null) return "ask";
+    if (until > this.deps.now()) return "declined";
+    this.notNow.delete(id);
     return "ask";
   }
 
-  /** A screen's tap that isn't allowed yet: the app is asked, once. */
-  ask(id: string, name: string, on: boolean): DisplayControlState {
+  /** A screen's tap that isn't allowed yet: the app is asked, once; "busy" (nothing asked, nothing
+   *  recorded) while MAX_ASKS_WAITING wait or another was asked within ASK_GAP_MS. */
+  ask(id: string, name: string, on: boolean): DisplayControlState | "busy" {
     const state = this.stateOf(id, on);
     if (state !== "ask") return state;
+    const now = this.deps.now();
+    for (const [other, until] of this.notNow) if (until <= now) this.notNow.delete(other);
+    if (this.asks.size >= MAX_ASKS_WAITING || now - this.lastAsk < ASK_GAP_MS) return "busy";
+    this.lastAsk = now;
     const known = this.stored().find((s) => s.id === id);
-    this.asks.set(id, { id, name, firstSeen: known?.firstSeen ?? this.deps.now(), allowed: false });
+    this.asks.set(id, { id, name, firstSeen: known?.firstSeen ?? now, allowed: false });
     this.deps.changed();
     return "asking";
+  }
+
+  /** Screens turned down and still waiting out NOT_NOW_MS (for the tests). */
+  get heldOff(): number {
+    return this.notNow.size;
   }
 
   /** The app's answer, from its prompt or from Settings' list. */

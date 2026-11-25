@@ -236,8 +236,10 @@ function steer(
   const s = getSettings();
   const state = screenBook.stateOf(screen, s.displayControl);
   if (state === "ask") {
-    log(`${name} asks to control playback`);
-    return { refused: screenBook.ask(screen, name, s.displayControl) };
+    // logged only when it asked: a stream of made-up screens past the cap would fill the log
+    const asked = screenBook.ask(screen, name, s.displayControl);
+    if (asked === "asking") log(`${name} asks to control playback`);
+    return { refused: asked };
   }
   if (state !== "allowed") return { refused: state };
   if (verb === "volumeUp" || verb === "volumeDown") {
