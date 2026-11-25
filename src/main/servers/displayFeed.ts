@@ -41,6 +41,9 @@ export const SHOWN_SETTINGS = [
   "lyrics",
   // the audio analysis switch: off, the scenes draw nothing measured, as in the window
   "waveforms",
+  // and the evidence the waveforms work on this installation, which Display's strip and the
+  // page's seek bar wait for, as the window's do: without it the page drew the plain line only
+  "waveformSeen",
   "displayFont",
   "displayHintSeen",
   "displayWaveform",

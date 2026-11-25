@@ -345,6 +345,136 @@ export function DisplayWaveform({
   );
 }
 
+/**
+ * THE PAGE'S SEEK BAR (0.17.0, Display on other screens, step four): Display mode's strip, raised
+ * clear of the bottom edge and grown to a finger's height while the page's buttons show
+ * (display/PageTransport). At the edge a brushing hand would jump the track, and on an iPad a
+ * sideways drag there switches apps; so the strip stays a picture at rest and only this bar seeks.
+ * - The strip's own picture, the waveform where Display draws one, the plain line where it
+ *   doesn't, with the played time at its start and the length at its end.
+ * - A touch or a drag shows the time under the finger, the played part following it; ONE SEEK
+ *   goes out when the finger lifts (`onSeek`), never a stream of them during a drag. A finger
+ *   that slides off and is taken by the browser (a cancel) sends nothing.
+ * - Only while `live` (the buttons up): a touch that lands while they are away does nothing.
+ */
+export function PageSeekBar({
+  live,
+  onSeek,
+}: {
+  live: boolean;
+  /** Seek to this many seconds from the track's start; resolves whether it was done. */
+  onSeek(secs: number): Promise<boolean>;
+}): React.JSX.Element | null {
+  const enabled = useStore(
+    (s) => s.settings.waveforms && s.settings.displayWaveform && s.settings.waveformSeen,
+  );
+  const duration = useStore((s) => s.playState?.metadata?.duration ?? null);
+  const ref = usePlayingFileRef();
+  const analysis = usePeaks(
+    enabled ? (ref?.serverUdn ?? null) : null,
+    ref?.objectId ?? null,
+    ref?.contentKey ?? null,
+  );
+  const played = useProgress();
+  /** Where the finger is, as a share of the track, while one is down. */
+  const [at, setAt] = useState<number | null>(null);
+  const finger = useRef<number | null>(null);
+  const track = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const ready = analysis != null && analysis !== "loading";
+  const shown = at ?? played ?? 0;
+
+  useEffect(() => {
+    if (canvasRef.current && ready)
+      draw(canvasRef.current, analysis, shown, { strip: true, style: "envelope" });
+  }, [analysis, ready, shown]);
+
+  if (duration == null || duration <= 0) return null;
+  const shareAt = (x: number): number | null => {
+    const r = track.current?.getBoundingClientRect();
+    if (!r || r.width <= 0) return null;
+    return Math.max(0, Math.min(1, (x - r.left) / r.width));
+  };
+  const letGo = (): void => {
+    finger.current = null;
+    setAt(null);
+  };
+  return (
+    <div
+      data-page-seek
+      data-page-seek-live={live || undefined}
+      className={cx(
+        "flex h-12 w-[min(34rem,100%)] items-center gap-3 rounded-full bg-panel/75 px-4 shadow-lg ring-1 ring-edge backdrop-blur",
+        // it rises to meet the finger as the buttons come, and settles as they go
+        "transition-transform duration-300 ease-out motion-reduce:transition-none",
+        live ? "translate-y-0" : "translate-y-3 motion-reduce:translate-y-0",
+      )}
+    >
+      <span className="w-12 shrink-0 text-right font-mono text-[13px] tabular-nums text-ink">
+        {fmtTime(shown * duration)}
+      </span>
+      <div
+        ref={track}
+        role="slider"
+        aria-label="Seek"
+        aria-valuemin={0}
+        aria-valuemax={Math.round(duration)}
+        aria-valuenow={Math.round(shown * duration)}
+        aria-valuetext={fmtTime(shown * duration)}
+        className="relative h-full min-w-0 flex-1 cursor-pointer touch-none"
+        onPointerDown={(e) => {
+          if (!live || finger.current != null) return;
+          if (e.pointerType === "mouse" && e.button !== 0) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          finger.current = e.pointerId;
+          setAt(shareAt(e.clientX));
+        }}
+        onPointerMove={(e) => {
+          if (finger.current === e.pointerId) setAt(shareAt(e.clientX));
+        }}
+        onPointerUp={(e) => {
+          if (finger.current !== e.pointerId) return;
+          const pct = shareAt(e.clientX) ?? at;
+          letGo();
+          if (pct == null || !live) return;
+          holdSeek(pct);
+          void onSeek(pct * duration).then((done) => {
+            if (!done) seekHold = null;
+          });
+        }}
+        onPointerCancel={letGo}
+      >
+        {ready ? (
+          <canvas ref={canvasRef} className="absolute inset-x-0 inset-y-2 block h-8 w-full" />
+        ) : (
+          <div className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-veil2">
+            <div className="h-full rounded-full bg-accent" style={{ width: `${shown * 100}%` }} />
+          </div>
+        )}
+        {at != null && (
+          // the finger: a hairline where it is, and the time a lift would go to, above it
+          <>
+            <div
+              className="pointer-events-none absolute inset-y-1 w-px bg-ink/60"
+              style={{ left: `${at * 100}%` }}
+            />
+            <div
+              data-page-seek-tip
+              className="pointer-events-none absolute bottom-full mb-3 -translate-x-1/2 whitespace-nowrap rounded-md bg-panel/95 px-2 py-1 font-mono text-[15px] tabular-nums text-ink shadow-lg ring-1 ring-edge"
+              style={{ left: `${at * 100}%` }}
+            >
+              {fmtTime(at * duration)}
+            </div>
+          </>
+        )}
+      </div>
+      <span className="w-12 shrink-0 font-mono text-[13px] tabular-nums text-dim">
+        {fmtTime(duration)}
+      </span>
+    </div>
+  );
+}
+
 /** Under the album art on Now Playing: the waveform as pure form — playhead,
  *  no controls, absent (zero height) when the track has no peaks. */
 export function NowPlayingWaveform(): React.JSX.Element | null {

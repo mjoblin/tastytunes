@@ -16,9 +16,10 @@ export const SHOWN_MS = 4_000;
  * only closes that.
  */
 
-/** A control, or anything a touch on means to use (a panel's or a list's own area). */
+/** A control, or anything a touch on means to use (a panel's, a list's or the seek bar's own
+ *  area). */
 const CONTROL =
-  'button, a, input, select, textarea, label, [role="button"], [role="switch"], [role="tab"], [role="slider"], [data-page-scenes], [data-page-queue]';
+  'button, a, input, select, textarea, label, [role="button"], [role="switch"], [role="tab"], [role="slider"], [data-page-scenes], [data-page-queue], [data-page-seek]';
 const onControl = (t: EventTarget | null): boolean =>
   t instanceof Element && t.closest(CONTROL) != null;
 export function useTouchShown(hold: boolean): boolean {

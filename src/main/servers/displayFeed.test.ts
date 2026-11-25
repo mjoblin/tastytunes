@@ -111,4 +111,9 @@ describe("what a screen on the network may see", () => {
     expect(display.filter((k) => !decided.has(k))).toEqual([]);
     for (const k of SHOWN_SETTINGS) expect(k in DEFAULT_SETTINGS).toBe(true);
   });
+
+  it("tells a page the waveforms work here, so its strip and seek bar draw them as the window's do", () => {
+    expect(displaySettings({ ...DEFAULT_SETTINGS, waveformSeen: true }).waveformSeen).toBe(true);
+    expect(displaySettings({ ...DEFAULT_SETTINGS, waveformSeen: false }).waveformSeen).toBe(false);
+  });
 });

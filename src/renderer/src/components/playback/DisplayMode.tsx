@@ -36,6 +36,9 @@ import { onScreenKey } from "@/lib/keyboardOwner";
 const FROSTED = "rounded-full bg-panel/85 ring-1 ring-edge backdrop-blur";
 const SCENE_CHIP = cx(FROSTED, "px-3 py-0.5");
 
+/** Display mode drawn by the page on another screen (display/page), not in the app's window. */
+const onPage = (): boolean => document.documentElement.classList.contains("display-page");
+
 /**
  * Full-screen "display mode" (Roon display mode / Volumio now-playing kiosk):
  * chrome-free art + metadata for a desk or wall screen. Toggled with F; the
@@ -134,7 +137,7 @@ export function DisplayMode(): React.JSX.Element {
   // fullscreen (Esc), close display mode too. Not on a page on another screen (display/page),
   // where full screen is the viewer's to choose with a tap (display/ScenePanel).
   useEffect(() => {
-    if (document.documentElement.classList.contains("display-page")) return;
+    if (onPage()) return;
     void document.documentElement.requestFullscreen?.().catch(() => {});
     const onChange = (): void => {
       if (!document.fullscreenElement) setDisplayMode(false);
@@ -373,8 +376,12 @@ export function DisplayMode(): React.JSX.Element {
         <DisplayWaveform
           progress={Math.min(1, position / duration)}
           duration={duration}
-          onSeek={(pct) =>
-            void tt.command({ type: "seek", positionSecs: Math.round(pct * duration) })
+          // a page on another screen seeks with its own raised bar while its buttons show
+          // (display/PageTransport), never from the edge
+          onSeek={
+            onPage()
+              ? undefined
+              : (pct) => void tt.command({ type: "seek", positionSecs: Math.round(pct * duration) })
           }
           fallback={
             <div className="absolute inset-x-0 bottom-0 h-[3px] bg-veil2">

@@ -34,9 +34,9 @@ import { connectedHost, deviceManager } from "./runtime";
  * CONTROLS ON THE OTHER SCREENS: with its own switch on (displayControl, apart from viewing), a
  * screen the app has allowed (servers/displayScreens, kept in display-screens.json) may steer what
  * is playing. A verb goes the way the media keys go: commandForMedia against what the source can
- * do at that moment, then deviceManager.fire; a volume step with its own switch on, through the
- * same command path and so under the one volume limit (decisions/0017). Each in the log, with the
- * screen's name.
+ * do at that moment (a seek inside the track playing now), then deviceManager.fire; a volume step
+ * with its own switch on, through the same command path and so under the one volume limit
+ * (decisions/0017). Each in the log, with the screen's name.
  */
 
 const MAX_PICTURE_BYTES = 8 * 1024 * 1024;
@@ -193,7 +193,13 @@ function controlFor(screen: string | null): DisplayControl {
 const log = (text: string): void => deviceManager.log("info", "display", text);
 
 /** A screen's verb, past the route's checks. */
-function steer(screen: string, name: string, verb: DisplayVerb, id?: number): DisplayControlAnswer {
+function steer(
+  screen: string,
+  name: string,
+  verb: DisplayVerb,
+  id?: number,
+  secs?: number,
+): DisplayControlAnswer {
   const s = getSettings();
   const state = screenBook.stateOf(screen, s.displayControl);
   if (state === "ask") {
@@ -243,9 +249,14 @@ function steer(screen: string, name: string, verb: DisplayVerb, id?: number): Di
     return { done: true };
   }
   const v = deviceManager.streamerNow;
-  const can = transportAbilities(v.nowPlaying?.controls, v.playState?.metadata?.duration ?? null);
-  const cmd = commandForMedia(verb, v.playState?.state ?? null, can);
-  log(`${verb} from ${name}: ${cmd ? cmd.type : "nothing to do"}`);
+  const duration = v.playState?.metadata?.duration ?? null;
+  const can = transportAbilities(v.nowPlaying?.controls, duration);
+  // a seek (step four) lands inside the track playing now, whatever the page last heard of it;
+  // commandForMedia refuses it where the source can't seek
+  const to = secs != null && duration != null ? Math.min(secs, duration) : secs;
+  const cmd = commandForMedia(verb, v.playState?.state ?? null, can, to);
+  const asked = verb === "seek" && to != null ? `seek to ${Math.round(to)}s` : verb;
+  log(`${asked} from ${name}: ${cmd ? cmd.type : "nothing to do"}`);
   if (!cmd) return { refused: "nothing" };
   deviceManager.fire(cmd);
   return { done: true };

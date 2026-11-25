@@ -14,7 +14,7 @@ import {
   Square,
   X,
 } from "lucide-react";
-import type { DisplayPresetRow, DisplayQueueRow, DisplayVerb } from "@shared/displayControl";
+import type { DisplayPresetRow, DisplayQueueRow } from "@shared/displayControl";
 import { transportAbilities } from "@shared/transport";
 import { cx } from "@/lib/format";
 import { onScreenKey } from "@/lib/keyboardOwner";
@@ -26,7 +26,8 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 import { scrollToTop } from "@/lib/scroll";
 import { MediaTile } from "@/components/media/MediaTile";
 import { SettingLine } from "@/components/display/ScenePicker";
-import { steer, useControl } from "./control";
+import { PageSeekBar } from "@/components/media/Waveform";
+import { seekTo, steer, useControl, type ButtonVerb } from "./control";
 import {
   controlsLocked,
   keepListView,
@@ -65,6 +66,10 @@ import {
  *   low where the buttons always are, Wake, the presets, and "Pick up where you left off" when
  *   there is something to return to, with the TastyTunes mark faint in the middle (SleepControls).
  *   Wake only where a wake can work; in Eco standby, a line saying the streamer is out of reach.
+ * - SEEK (step four), on an allowed screen where the source can seek: below the buttons, Display's
+ *   strip raised from the bottom edge to a finger's height (components/media/Waveform's
+ *   PageSeekBar), one seek for each lift of a finger. At rest the strip at the edge stays a
+ *   picture.
  */
 
 /** The dim's fade down as the buttons show, and back up as they go (the comment where it is drawn). */
@@ -76,7 +81,7 @@ const TOGGLE_CODES = new Set([179, 10252]);
 const PLAY_CODES = new Set([415]);
 const PAUSE_CODES = new Set([19]);
 
-function keyVerb(e: KeyboardEvent): DisplayVerb | null {
+function keyVerb(e: KeyboardEvent): ButtonVerb | null {
   if (e.metaKey || e.ctrlKey || e.altKey) return null;
   if (e.key === " " || e.key === "MediaPlayPause" || TOGGLE_CODES.has(e.keyCode)) return "toggle";
   if (e.key === "MediaPlay" || PLAY_CODES.has(e.keyCode)) return "play";
@@ -115,14 +120,11 @@ function useAbilities(): ReturnType<typeof transportAbilities> {
 
 export function PageTransport({
   shown,
-  scene,
   queueOpen,
   onQueue,
 }: {
   /** The page's buttons show (display/touch). */
   shown: boolean;
-  /** A scene is drawn under them (not the Sleeve): they sit inside the cathode glass's edge. */
-  scene: boolean;
   /** The queue view is open (display/page holds the buttons up while it is). */
   queueOpen: boolean;
   onQueue(open: boolean): void;
@@ -155,9 +157,8 @@ export function PageTransport({
   const queue = control.queue;
   const presets = control.presets;
   const list = queue != null || presets != null;
-  const bottom = scene
-    ? "calc(env(safe-area-inset-bottom, 0px) + 2.5rem)"
-    : "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)";
+  // over a scene a little higher (styles.css, --page-transport-lift)
+  const bottom = "calc(env(safe-area-inset-bottom, 0px) + var(--page-transport-lift, 0.75rem))";
   return (
     <>
       {/* the picture dims while the buttons show, deepest under them; black in either theme (a
@@ -193,8 +194,8 @@ export function PageTransport({
         )}
         // just above the bottom edge (and an iPad's home bar), inside the band the Sleeve keeps for
         // the lyric's two lines: higher, on a short screen under a browser's bars, the discs and
-        // the next track met the format chips. Over a scene a little higher, inside the cathode
-        // glass's curved bottom edge
+        // the next track met the format chips. Over a scene that draws a little higher, inside the
+        // cathode glass's curved bottom edge
         style={{ bottom }}
       >
         {asking ? (
@@ -289,6 +290,16 @@ export function PageTransport({
                 </div>
               )}
             </div>
+            {control.state === "allowed" && can.canSeek && (
+              // SEEK (step four): the strip at the bottom edge, raised to meet the finger
+              <PageSeekBar
+                live={shown}
+                onSeek={async (secs) => {
+                  const answer = await seekTo(secs);
+                  return answer != null && "done" in answer;
+                }}
+              />
+            )}
           </>
         )}
       </div>
@@ -308,7 +319,7 @@ function Disc({
   children,
 }: {
   /** What it asks of the app; or `onPress`, for a button that acts on the page (the queue). */
-  verb?: DisplayVerb;
+  verb?: ButtonVerb;
   onPress?(): void;
   /** Its list is open (the queue's button). */
   active?: boolean;

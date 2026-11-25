@@ -197,12 +197,7 @@ function Page(): React.JSX.Element {
       {heard && connected && powered ? (
         <>
           <DisplayMode />
-          <PageTransport
-            shown={transportShown}
-            scene={SCENES_HERE && settings.displayScene !== "sleeve"}
-            queueOpen={queueOpen}
-            onQueue={setQueueOpen}
-          />
+          <PageTransport shown={transportShown} queueOpen={queueOpen} onQueue={setQueueOpen} />
           <ScenePanel
             own={own}
             appScene={appScene}

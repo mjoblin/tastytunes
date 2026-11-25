@@ -81,9 +81,15 @@ export interface DisplayDeps {
   failed?(message: string): void;
   /** Where a screen stands and what it may see of the controls, by its id. */
   controlFor(screen: string | null): DisplayControl;
-  /** A screen's verb, past the route's checks: what the app did with it (`id`, playQueue's
-   *  queue id). */
-  steer(screen: string, name: string, verb: DisplayVerb, id?: number): DisplayControlAnswer;
+  /** A screen's verb, past the route's checks: what the app did with it (`id`, the queue row or
+   *  the preset; `secs`, where a seek goes). */
+  steer(
+    screen: string,
+    name: string,
+    verb: DisplayVerb,
+    id?: number,
+    secs?: number,
+  ): DisplayControlAnswer;
 }
 
 const COOKIE = "tt_display";
@@ -512,6 +518,7 @@ export class DisplayServer {
     const body = (await bodyOf(req, MAX_CONTROL_BODY)) as {
       verb?: unknown;
       id?: unknown;
+      secs?: unknown;
       touch?: unknown;
     } | null;
     if (!body || !isDisplayVerb(body.verb)) return this.refuse(res, 400);
@@ -520,9 +527,21 @@ export class DisplayServer {
     const id = typeof body.id === "number" && Number.isSafeInteger(body.id) ? body.id : undefined;
     const takesId = verb === "playQueue" || verb === "playPreset";
     if (takesId && id === undefined) return this.refuse(res, 400);
+    // a seek goes to a point in the track, in seconds from its start, and no other verb takes one
+    const secs =
+      typeof body.secs === "number" && Number.isFinite(body.secs) && body.secs >= 0
+        ? body.secs
+        : undefined;
+    if (verb === "seek" && secs === undefined) return this.refuse(res, 400);
     if (!this.withinRate(screen, verb)) return this.json(res, { refused: "busy" }, 429);
     const name = screenName(req.headers["user-agent"] ?? "", body.touch === true);
-    const answer = this.deps.steer(screen, name, verb, takesId ? id : undefined);
+    const answer = this.deps.steer(
+      screen,
+      name,
+      verb,
+      takesId ? id : undefined,
+      verb === "seek" ? secs : undefined,
+    );
     this.json(res, answer, "done" in answer ? 200 : answer.refused === "nothing" ? 409 : 403);
     // the screen hears where it stands now (an ask raised, say)
     this.pushControl();

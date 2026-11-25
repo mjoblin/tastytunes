@@ -1314,6 +1314,15 @@ img {
 .display-page [data-display-corner] {
   display: none;
 }
+/* the page's playback buttons sit just above the bottom edge (and an iPad's home bar); over a
+   scene a little higher, inside the cathode glass's curved bottom edge, and only while one draws (a
+   scene with nothing to draw stands in with the Sleeve's face, whose text the higher buttons met) */
+.display-page {
+  --page-transport-lift: 0.75rem;
+}
+.display-page:has([data-display-stage]) {
+  --page-transport-lift: 2.5rem;
+}
 /* while the page's playback buttons show (display/PageTransport), they sit over the picture and
    never move it: the Sleeve's lyric line, in the same band, steps back until they go, the scene's
    name lifts clear of them, and on a narrow screen (a phone) the corners' chips step back too */
@@ -1325,6 +1334,21 @@ img {
 }
 .display-page [data-controls-shown] [data-display-scene-toast] {
   bottom: 13rem;
+}
+/* the seek bar (step four, display/PageTransport) is the strip at the bottom edge raised: while it
+   is up, the strip steps back from the edge as the bar rises, the format chips step back from the
+   buttons it lifts into their band (on a tablet in landscape the play button met them), and the
+   scene's name keeps above it */
+.display-page [data-display-waveform],
+.display-page [data-display-badges] {
+  transition: opacity 300ms ease;
+}
+.display-page:has([data-page-seek-live]) [data-display-waveform],
+.display-page:has([data-page-seek-live]) [data-display-badges] {
+  opacity: 0;
+}
+.display-page:has([data-page-seek-live]) [data-display-scene-toast] {
+  bottom: 16.5rem;
 }
 @media (max-width: 640px) {
   .display-page [data-display-caption],

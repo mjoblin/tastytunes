@@ -5,11 +5,11 @@ import type { QueueListItem } from "./smoip";
  * streamer, and what it is told it may do. Shared by the display server (main/servers/
  * displayServer, the one write route) and the page (display/PageTransport).
  *
- * - A FIXED LIST OF VERBS, the system's media commands (shared/transport MediaCommand), a volume
- *   step up or down, playing a track already in the queue (the queue view, step two: view and
- *   select), and with their own switch the controls that start music (step three): a preset,
- *   Wake, picking up where it left off. Nothing else is reachable: no seek, no level, no queue
- *   or preset edits, no settings.
+ * - A FIXED LIST OF VERBS, the system's media commands (shared/transport MediaCommand) with a
+ *   seek to a point in the playing track (step four, its seconds), a volume step up or down,
+ *   playing a track already in the queue (the queue view, step two: view and select), and with
+ *   their own switch the controls that start music (step three): a preset, Wake, picking up where
+ *   it left off. Nothing else is reachable: no level, no queue or preset edits, no settings.
  * - Each screen is told where it stands (DisplayControl), over its own line of the live channel,
  *   so it draws only what it may do.
  */
@@ -22,6 +22,7 @@ export const DISPLAY_VERBS = [
   "next",
   "previous",
   "stop",
+  "seek",
   "volumeUp",
   "volumeDown",
   "playQueue",

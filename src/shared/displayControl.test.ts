@@ -40,7 +40,8 @@ describe("a screen's name and verbs", () => {
   it("knows the fixed list of verbs only", () => {
     expect(isDisplayVerb("toggle")).toBe(true);
     expect(isDisplayVerb("volumeUp")).toBe(true);
-    expect(isDisplayVerb("seek")).toBe(false);
+    expect(isDisplayVerb("seek")).toBe(true);
+    expect(isDisplayVerb("setVolumePercent")).toBe(false);
     expect(isDisplayVerb({})).toBe(false);
   });
 

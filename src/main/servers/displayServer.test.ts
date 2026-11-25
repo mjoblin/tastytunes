@@ -45,7 +45,13 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
   const fetched: string[] = [];
   const asked: string[] = [];
   const logged: string[] = [];
-  const steered: Array<{ screen: string; name: string; verb: DisplayVerb; id?: number }> = [];
+  const steered: Array<{
+    screen: string;
+    name: string;
+    verb: DisplayVerb;
+    id?: number;
+    secs?: number;
+  }> = [];
   const control: { now: DisplayControl } = {
     now: {
       state: "allowed",
@@ -99,8 +105,14 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
     pageDir: page,
     log: (text) => logged.push(text),
     controlFor: () => control.now,
-    steer: (screen, name, verb, id) => {
-      steered.push({ screen, name, verb, ...(id !== undefined ? { id } : {}) });
+    steer: (screen, name, verb, id, secs) => {
+      steered.push({
+        screen,
+        name,
+        verb,
+        ...(id !== undefined ? { id } : {}),
+        ...(secs !== undefined ? { secs } : {}),
+      });
       return { done: true };
     },
   });
@@ -152,6 +164,7 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
       headers?: Record<string, string>;
       origin?: string | null;
       id?: unknown;
+      secs?: unknown;
     } = {},
   ) =>
     get("/api/control", {
@@ -165,7 +178,12 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
           "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
         ...opts.headers,
       },
-      body: JSON.stringify({ verb, touch: true, ...("id" in opts ? { id: opts.id } : {}) }),
+      body: JSON.stringify({
+        verb,
+        touch: true,
+        ...("id" in opts ? { id: opts.id } : {}),
+        ...("secs" in opts ? { secs: opts.secs } : {}),
+      }),
     });
   /** /api/live's first bytes, then whether the stream ended. */
   const live = (cookieHeader: string) =>
@@ -281,11 +299,25 @@ describe("Display on other screens' server", () => {
     expect(steered).toEqual([{ screen: SCREEN, name: "iPad · Safari", verb: "next" }]);
   });
 
-  it("knows a fixed list of verbs and nothing else, seek among them", async () => {
+  it("knows a fixed list of verbs and nothing else", async () => {
     const { steer, steered } = await rig();
-    for (const v of ["seek", "setVolumePercent", "recallPreset", 7, null])
+    for (const v of ["setVolumePercent", "recallPreset", "playQueueId", 7, null])
       expect((await steer(v)).status).toBe(400);
     expect(steered).toEqual([]);
+  });
+
+  it("seeks to a point in seconds from the start only, and passes no seconds with any other verb", async () => {
+    const { steer, steered } = await rig();
+    expect((await steer("seek")).status).toBe(400);
+    expect((await steer("seek", { secs: "90" })).status).toBe(400);
+    expect((await steer("seek", { secs: -1 })).status).toBe(400);
+    expect((await steer("seek", { secs: null })).status).toBe(400);
+    expect((await steer("seek", { secs: 90.4 })).status).toBe(200);
+    expect((await steer("next", { secs: 90 })).status).toBe(200);
+    expect(steered.map((x) => [x.verb, x.secs])).toEqual([
+      ["seek", 90.4],
+      ["next", undefined],
+    ]);
   });
 
   it("plays a queue row by a whole-number id only, and passes no id with any other verb", async () => {
