@@ -73,10 +73,12 @@ function AbsentLine({
  * (seen live, 2026-08-30). The hold releases when the device lands near
  * the target, or after its window — the optimistic-hold family's shape.
  */
-let seekHold: { pct: number; until: number } | null = null;
+let seekHold: { pct: number; until: number; of: number | null } | null = null;
 const SEEK_HOLD_MS = 2500;
-function holdSeek(pct: number): void {
-  seekHold = { pct, until: Date.now() + SEEK_HOLD_MS };
+/** Hold the shown progress at `pct` of a track `of` seconds long; a new track lets it go (a seek
+ *  into a track's last second goes to the next one: main/device/commandFrames). */
+function holdSeek(pct: number, of: number | null): void {
+  seekHold = { pct, until: Date.now() + SEEK_HOLD_MS, of };
 }
 
 /** Interpolated play progress 0..1, ticking gently; null without a duration. */
@@ -93,7 +95,8 @@ function useProgress(): number | null {
   const secs = playhead.secs + (playing ? (now - playhead.at) / 1000 : 0);
   const device = Math.max(0, Math.min(1, secs / duration));
   if (seekHold) {
-    if (now > seekHold.until || Math.abs(device - seekHold.pct) < 0.02) seekHold = null;
+    if (now > seekHold.until || Math.abs(device - seekHold.pct) < 0.02 || duration !== seekHold.of)
+      seekHold = null;
     else return seekHold.pct;
   }
   return device;
@@ -228,7 +231,7 @@ export function Waveform({
               if (duration == null || duration <= 0) return;
               const r = e.currentTarget.getBoundingClientRect();
               const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-              holdSeek(pct);
+              holdSeek(pct, duration);
               void tt.command({ type: "seek", positionSecs: Math.round(pct * duration) });
             }}
           />
@@ -313,7 +316,7 @@ export function DisplayWaveform({
                   const rect = canvasRef.current?.getBoundingClientRect();
                   if (!rect || rect.width <= 0) return;
                   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                  holdSeek(pct);
+                  holdSeek(pct, duration ?? null);
                   onSeek(pct);
                 }
               : undefined
@@ -447,7 +450,7 @@ export function PageSeekBar({
           const pct = shareAt(e.clientX) ?? at;
           letGo();
           if (pct == null || !live) return;
-          holdSeek(pct);
+          holdSeek(pct, duration);
           void onSeek(pct * duration).then((done) => {
             if (!done) seekHold = null;
           });

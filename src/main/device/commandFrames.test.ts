@@ -183,3 +183,56 @@ describe("what is not a plain socket write", () => {
     expect(commandFrames({ type: "resumeHeld" }, idle)).toBeNull();
   });
 });
+
+describe("a seek to a track's end (live 2026-11-25: the firmware drops one to the full length)", () => {
+  const library = {
+    controls: ["pause", "play_pause", "track_next", "track_previous", "seek"],
+  } as unknown as ZoneNowPlaying;
+  const at = (index: number, of: number, extra: Partial<ZonePlayState> = {}): CommandState => ({
+    ...idle,
+    nowPlaying: library,
+    playState: {
+      state: "play",
+      queue_index: index,
+      queue_length: of,
+      mode_repeat: "off",
+      metadata: { duration: 142 },
+      ...extra,
+    } as unknown as ZonePlayState,
+  });
+  const seek = (secs: number, s: CommandState) =>
+    commandFrames({ type: "seek", positionSecs: secs }, s);
+
+  it("lands a seek short of the last second where it was asked", () => {
+    expect(seek(130, at(2, 12))).toEqual([
+      { path: "/zone/play_control", params: { position: 130 } },
+    ]);
+    expect(seek(140.4, at(2, 12))).toEqual([
+      { path: "/zone/play_control", params: { position: 140 } },
+    ]);
+  });
+
+  it("goes to the next track for a seek into the last second, the full length included", () => {
+    for (const secs of [141, 141.6, 142, 999])
+      expect(seek(secs, at(2, 12))).toEqual([
+        { path: "/zone/play_control", params: { skip_track: 1 } },
+      ]);
+  });
+
+  it("with no track after it, lands two seconds short so the track ends on its own", () => {
+    expect(seek(142, at(11, 12))).toEqual([
+      { path: "/zone/play_control", params: { position: 140 } },
+    ]);
+    const noNext = {
+      ...at(2, 12),
+      nowPlaying: { controls: ["play_pause", "seek"] } as unknown as ZoneNowPlaying,
+    };
+    expect(seek(142, noNext)).toEqual([{ path: "/zone/play_control", params: { position: 140 } }]);
+  });
+
+  it("goes on past the queue's last track when the whole queue repeats", () => {
+    expect(seek(142, at(11, 12, { mode_repeat: "all" }))).toEqual([
+      { path: "/zone/play_control", params: { skip_track: 1 } },
+    ]);
+  });
+});

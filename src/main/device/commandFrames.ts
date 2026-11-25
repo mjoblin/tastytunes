@@ -50,6 +50,20 @@ function clampSpec(value: number, range?: { minimum?: number; maximum?: number }
 
 const frame = (path: string, params: Record<string, unknown>): SocketFrame[] => [{ path, params }];
 
+/** How far short of a track's end a seek there lands when no track follows it. */
+export const SEEK_END_MARGIN_SECS = 2;
+
+/** A track follows the playing one: the source offers next, and the queue has one after it (or
+ *  repeats the whole), or doesn't say where it is. */
+function hasNextTrack(s: CommandState): boolean {
+  if (!(s.nowPlaying?.controls ?? []).includes("track_next")) return false;
+  const ps = s.playState;
+  if (ps?.mode_repeat === "all") return true;
+  const at = ps?.queue_index;
+  const of = ps?.queue_length;
+  return at == null || of == null || at + 1 < of;
+}
+
 /**
  * THE COMMAND TRANSLATION (split out of DeviceManager.command in the 0.11.0 sweep): what a
  * command sends over the socket, given what the device last said. Pure, so the firmware
@@ -88,8 +102,23 @@ export function commandFrames(cmd: StreamerCommand, s: CommandState): SocketFram
       return frame("/zone/play_control", { skip_track: 1 });
     case "previousTrack":
       return frame("/zone/play_control", { skip_track: -1 });
-    case "seek":
-      return frame("/zone/play_control", { position: Math.max(0, Math.round(cmd.positionSecs)) });
+    case "seek": {
+      const at = Math.max(0, Math.round(cmd.positionSecs));
+      // A SEEK TO A TRACK'S END (read live 2026-11-25, docs/streamer.md): one to
+      // the track's full length is dropped without a word (three seeks to 142 of 142 s left it
+      // playing on; 130 landed). A seek into the last second means done with this one, a finger
+      // dragged off the bar's end: the next track, where there is one; with none it lands
+      // SEEK_END_MARGIN_SECS short and the track ends on its own. One home: the window's bars, a
+      // screen's and an agent's seek all pass here.
+      const length = s.playState?.metadata?.duration ?? null;
+      if (length != null && length > 0 && at >= Math.floor(length) - 1) {
+        if (hasNextTrack(s)) return frame("/zone/play_control", { skip_track: 1 });
+        return frame("/zone/play_control", {
+          position: Math.max(0, Math.floor(length) - SEEK_END_MARGIN_SECS),
+        });
+      }
+      return frame("/zone/play_control", { position: at });
+    }
     case "playQueueId":
       return frame("/zone/play_control", { queue_id: cmd.queueId });
     case "setRepeat":
