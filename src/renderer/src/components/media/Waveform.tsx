@@ -372,7 +372,13 @@ export function PageSeekBar({
   const enabled = useStore(
     (s) => s.settings.waveforms && s.settings.displayWaveform && s.settings.waveformSeen,
   );
-  const duration = useStore((s) => s.playState?.metadata?.duration ?? null);
+  // the track's length, held through a moment without one (a skip's buffering): the bar is drawn
+  // only where the source can seek, which needs a length, so a stale one is never long shown
+  const heard = useStore((s) => s.playState?.metadata?.duration ?? null);
+  const [duration, setDuration] = useState(heard);
+  useEffect(() => {
+    if (heard != null && heard > 0) setDuration(heard);
+  }, [heard]);
   const ref = usePlayingFileRef();
   const analysis = usePeaks(
     enabled ? (ref?.serverUdn ?? null) : null,

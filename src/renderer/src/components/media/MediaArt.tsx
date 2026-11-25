@@ -55,11 +55,11 @@ export const MEDIA_ART_FALLBACK: Record<
  * with it: a 16px row glyph marooned in a 112px tile is unreadable, which is
  * exactly how it shipped.
  */
-export type MediaArtSize = "row" | "dense" | "card";
+export type MediaArtSize = "row" | "dense" | "touch" | "card";
 
 /** Fallback glyph size per art size — the row sizes are thumb-scale, the card
  *  one is sized to be legible in a tile a third of the panel's width. */
-const GLYPH: Record<MediaArtSize, number> = { row: 16, dense: 14, card: 28 };
+const GLYPH: Record<MediaArtSize, number> = { row: 16, dense: 14, touch: 20, card: 28 };
 
 /**
  * A big glyph needs a THINNER stroke, not the same one scaled up. Lucide's
@@ -69,7 +69,22 @@ const GLYPH: Record<MediaArtSize, number> = { row: 16, dense: 14, card: 28 };
  * constant so the two can't diverge again.
  */
 export const CARD_GLYPH_STROKE = 1.2;
-const GLYPH_STROKE: Record<MediaArtSize, number> = { row: 2, dense: 2, card: CARD_GLYPH_STROKE };
+/** Each size's box and the size its picture is fetched at (the drawn size: Asset serves the
+ *  1400px original for a 40px thumb otherwise, shared/artUrl; cards fill tiles up to ~240px). A
+ *  map, so a new size can't be drawn without saying both. */
+const BOX: Record<MediaArtSize, { box: string; px: number }> = {
+  row: { box: "h-10 w-10", px: 40 },
+  dense: { box: "h-8 w-8", px: 32 },
+  touch: { box: "h-[52px] w-[52px]", px: 52 },
+  card: { box: "h-full w-full", px: 240 },
+};
+
+const GLYPH_STROKE: Record<MediaArtSize, number> = {
+  row: 2,
+  dense: 2,
+  touch: 2,
+  card: CARD_GLYPH_STROKE,
+};
 
 export function MediaArt({
   src,
@@ -99,7 +114,7 @@ export function MediaArt({
   className?: string;
 }): React.JSX.Element {
   const Fallback = icon ?? MEDIA_ART_FALLBACK[kind];
-  const px = size === "card" ? 240 : size === "dense" ? 32 : 40;
+  const { box, px } = BOX[size];
   /** The saved picture this row gave up on (a new src tries again). */
   const [gaveUp, setGaveUp] = useState<string | null>(null);
   const fallback = (
@@ -111,7 +126,7 @@ export function MediaArt({
       data-art-size={size}
       className={cx(
         "relative shrink-0 rounded overflow-hidden ring-1 ring-edge bg-raised flex items-center justify-center",
-        size === "card" ? "h-full w-full" : size === "dense" ? "h-8 w-8" : "h-10 w-10",
+        box,
         className,
       )}
     >
@@ -125,8 +140,7 @@ export function MediaArt({
         />
       ) : (
         <ArtImage
-          // fetch at the drawn size — Asset serves the 1400px original for a
-          // 40px thumb otherwise (shared/artUrl); cards fill up to ~240px tiles
+          // fetch at the drawn size (BOX)
           src={artSrc(src, px)}
           fallbackArt={fallbackArt}
           lazy

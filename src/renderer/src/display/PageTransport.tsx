@@ -15,7 +15,7 @@ import {
   X,
 } from "lucide-react";
 import type { DisplayPresetRow, DisplayQueueRow } from "@shared/displayControl";
-import { transportAbilities } from "@shared/transport";
+import { transportAbilities, type TransportAbilities } from "@shared/transport";
 import { cx } from "@/lib/format";
 import { onScreenKey } from "@/lib/keyboardOwner";
 import { useStore } from "@/store";
@@ -28,6 +28,8 @@ import { MediaTile } from "@/components/media/MediaTile";
 import { SettingLine } from "@/components/display/ScenePicker";
 import { PageSeekBar } from "@/components/media/Waveform";
 import { seekTo, steer, useControl, type ButtonVerb } from "./control";
+import { musicGoing } from "./rest";
+import { PageTabs } from "./PageTabs";
 import {
   controlsLocked,
   keepListView,
@@ -111,11 +113,38 @@ export function useLocked(): [boolean, (on: boolean) => void] {
   ];
 }
 
-/** What the buttons are for this source, from its controls list. */
-function useAbilities(): ReturnType<typeof transportAbilities> {
+/** How long a button the source stops offering stays drawn: a skip passes through the streamer's
+ *  buffering for 300 to 600 ms with pause and seek dropped from its controls (docs/streamer.md),
+ *  and the page drew the play button and the seek bar out and back in for it. */
+const ABILITY_SETTLE_MS = 1_200;
+const ABILITIES = [
+  "canToggle",
+  "canPrev",
+  "canNext",
+  "canSeek",
+  "canShuffle",
+  "canRepeat",
+  "canStop",
+] as const satisfies readonly (keyof TransportAbilities)[];
+
+/** What the buttons are for this source, from its controls list, steady through a change: a button
+ *  the source starts offering shows at once, one it stops offering goes only once that has lasted
+ *  ABILITY_SETTLE_MS (a lost one past it is gone; main refuses a verb the source can't do). */
+function useAbilities(): TransportAbilities {
   const controls = useStore((s) => s.nowPlaying?.controls);
   const duration = useStore((s) => s.playState?.metadata?.duration ?? null);
-  return transportAbilities(controls, duration);
+  const now = transportAbilities(controls, duration);
+  const nowKey = ABILITIES.map((k) => (now[k] ? "1" : "0")).join("");
+  const [heldKey, setHeldKey] = useState(nowKey);
+  useEffect(() => {
+    // gains at once, losses later
+    setHeldKey((h) => [...nowKey].map((c, i) => (c === "1" || h[i] === "1" ? "1" : "0")).join(""));
+    const t = setTimeout(() => setHeldKey(nowKey), ABILITY_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [nowKey]);
+  return Object.fromEntries(
+    ABILITIES.map((k, i) => [k, heldKey[i] === "1"]),
+  ) as unknown as TransportAbilities;
 }
 
 export function PageTransport({
@@ -132,7 +161,8 @@ export function PageTransport({
   const control = useControl();
   const [lockedHere] = useLocked();
   const can = useAbilities();
-  const playing = useStore((s) => s.playState?.state === "play");
+  // pause stays pause through a skip's buffering (the music is still going: display/rest)
+  const playing = useStore((s) => musicGoing(s.playState?.state));
   const usable = !lockedHere && (control.state === "ask" || control.state === "allowed");
   // the buttons' height, which the list keeps above: two rows on a phone, the volume wrapping
   const strip = useRef<HTMLDivElement | null>(null);
@@ -212,7 +242,7 @@ export function PageTransport({
               // the presets go only to an allowed one: it says so, where the next track will be
               <div
                 data-page-transport-allow
-                className="max-w-[min(36rem,90vw)] truncate rounded-full bg-panel/75 px-3 py-0.5 text-[13px] text-dim backdrop-blur"
+                className="mb-1.5 max-w-[min(36rem,90vw)] truncate rounded-full bg-panel/75 px-3 py-0.5 text-[13px] text-dim backdrop-blur"
               >
                 Allow this screen in TastyTunes to see the queue and presets.
               </div>
@@ -224,7 +254,7 @@ export function PageTransport({
                 data-page-transport-next
                 disabled={!queue}
                 onClick={() => onQueue(!queueOpen)}
-                className="max-w-[min(36rem,90vw)] truncate rounded-full bg-panel/75 px-3 py-0.5 text-[13px] text-dim backdrop-blur [-webkit-tap-highlight-color:transparent] enabled:active:scale-95 transition-transform"
+                className="mb-1.5 max-w-[min(36rem,90vw)] truncate rounded-full bg-panel/75 px-3 py-0.5 text-[13px] text-dim backdrop-blur [-webkit-tap-highlight-color:transparent] enabled:active:scale-95 transition-transform"
               >
                 <span className="text-faint">Next</span> {control.next.title}
                 {control.next.artist && ` · ${control.next.artist}`}
@@ -354,13 +384,17 @@ function Disc({
   );
 }
 
-/** An element's height, measured while `on` (the buttons, which a list keeps above). */
+/** An element's tallest height while `on` (the buttons, which a list keeps above): measured afresh
+ *  as the list opens, then only ever higher, so the list holds still while a track it played
+ *  changes over and the strip's lines come and go (a list that followed every change grew and
+ *  shrank under the finger). */
 function useHeightWhile(ref: React.RefObject<HTMLDivElement | null>, on: boolean): number {
   const [h, setH] = useState(112);
   useEffect(() => {
     const el = ref.current;
     if (!el || !on) return;
-    const seen = new ResizeObserver(() => setH(el.offsetHeight));
+    setH(el.offsetHeight);
+    const seen = new ResizeObserver(() => setH((was) => Math.max(was, el.offsetHeight)));
     seen.observe(el);
     return () => seen.disconnect();
   }, [ref, on]);
@@ -403,11 +437,6 @@ function ListPanel({
   };
   const square =
     "grid h-11 w-11 shrink-0 place-items-center rounded-lg text-dim motion-safe:active:scale-90 [-webkit-tap-highlight-color:transparent]";
-  const tabClass = (on: boolean): string =>
-    cx(
-      "flex h-11 flex-1 items-center justify-center gap-2 rounded-md text-[14px] transition-colors motion-safe:active:scale-[0.97]",
-      on ? "bg-accentdim text-accent" : "text-dim",
-    );
   return (
     <>
       <div className="absolute inset-0 z-[45]" onClick={onClose} />
@@ -417,38 +446,33 @@ function ListPanel({
         className="absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] left-1/2 z-50 flex w-[min(36rem,calc(100%_-_2rem))] -translate-x-1/2 flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
         style={{ bottom }}
       >
-        {/* 8px from the panel's edge all round, the tabs' corners following the panel's */}
+        {/* 8px from the panel's edge all round */}
         <div className="flex shrink-0 items-center gap-2 p-2 pb-0">
           {queue && presets ? (
-            <div
-              role="tablist"
-              className="flex min-w-0 flex-1 rounded-lg bg-veil p-0.5 ring-1 ring-edge"
-            >
-              <button
-                type="button"
-                role="tab"
-                data-page-list-tab="queue"
-                aria-selected={showing === "queue"}
-                onClick={() => setTab("queue")}
-                className={tabClass(showing === "queue")}
-              >
-                <ListMusic size={15} />
-                Queue
-              </button>
-              <button
-                type="button"
-                role="tab"
-                data-page-list-tab="presets"
-                aria-selected={showing === "presets"}
-                onClick={() => setTab("presets")}
-                className={tabClass(showing === "presets")}
-              >
-                <Radio size={15} />
-                Presets
-              </button>
+            <div className="min-w-0 flex-1">
+              <PageTabs<ListTab>
+                tabs={[
+                  {
+                    id: "queue",
+                    label: "Queue",
+                    icon: <ListMusic size={16} />,
+                    attrs: { "data-page-list-tab": "queue" },
+                  },
+                  {
+                    id: "presets",
+                    label: "Presets",
+                    icon: <Radio size={16} />,
+                    attrs: { "data-page-list-tab": "presets" },
+                  },
+                ]}
+                value={showing}
+                onChange={setTab}
+              />
             </div>
           ) : (
-            <span className="flex-1 pl-2 text-[14px] text-ink">{queue ? "Queue" : "Presets"}</span>
+            <span className="flex-1 pl-3 text-[15px] font-medium text-ink">
+              {queue ? "Queue" : "Presets"}
+            </span>
           )}
           <button
             type="button"
@@ -536,6 +560,7 @@ function QueueRows({
       {rows.map((r) => (
         <div key={r.id} ref={r.playing ? playingRow : undefined}>
           <MediaRow
+            touch
             attrs={{ "data-page-queue-row": String(r.id) }}
             title={r.title}
             subtitle={[r.artist, r.album].filter(Boolean).join(FACT_SEP) || undefined}
@@ -606,6 +631,7 @@ function PresetRows({
         return (
           <div key={p.id} ref={p.lit ? playingRow : undefined}>
             <MediaRow
+              touch
               attrs={{ "data-page-preset-row": String(p.id) }}
               slot={p.id}
               title={p.name}

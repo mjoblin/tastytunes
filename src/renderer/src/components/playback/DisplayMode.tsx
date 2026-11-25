@@ -112,12 +112,14 @@ export function DisplayMode(): React.JSX.Element {
   useEffect(() => listenForTab(), [settings.displayScene]);
   // Display mode's 46vmin tile is the biggest art in the app: the file's own
   // picture when the server's is small (lib/bestArt)
-  const art = useBestArt(
+  const best = useBestArt(
     meta.artUrl,
     !meta.isRadio && meta.title
       ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
       : null,
   );
+  const changing = playState?.state === "connecting" || playState?.state === "buffering";
+  const art = useHeldArt(best, changing);
 
   // Title/artist/badges render from a SETTLED snapshot and fade as one group:
   // on track change the group fades out, and only once the metadata settles
@@ -187,11 +189,15 @@ export function DisplayMode(): React.JSX.Element {
         </div>
       )}
       {(!stage || standIn) && art && artLoadable && (
+        // the wash crossfades with the art: a background swapped in place went blank while the new
+        // picture loaded (longer on another screen, whose pictures come through the app)
         <div
           aria-hidden
-          className="absolute inset-0 bg-center bg-cover scale-125 blur-[110px] opacity-25 saturate-150"
-          style={{ backgroundImage: `url(${art})` }}
-        />
+          data-display-wash
+          className="absolute inset-0 scale-125 blur-[110px] opacity-25 saturate-150"
+        >
+          <CrossfadeArt fill src={art} className="h-full w-full object-cover" fallback={null} />
+        </div>
       )}
 
       {/* the corners are each a switch in All scenes (2026-09-15): a shelf display wants the
@@ -395,6 +401,30 @@ export function DisplayMode(): React.JSX.Element {
       )}
     </div>
   );
+}
+
+/** How long a picture that drops out mid-change is held (the backstop: a change that never
+ *  settles lets it go). */
+const ART_HOLD_MS = 6_000;
+
+/**
+ * THE ART THROUGH A CHANGE: while the streamer is between things (connecting to a preset's station,
+ * buffering a new album), its picture can drop out before the next one arrives, and Display went
+ * from the old cover to the empty disc and on to the new one. A picture that drops out while it is
+ * changing is the last one held, so the cover and the wash go old to new in one crossfade; once
+ * the streamer settles with no picture (a station without one), the disc shows as before.
+ */
+function useHeldArt(art: string | null, changing: boolean): string | null {
+  const [held, setHeld] = useState(art);
+  useEffect(() => {
+    if (art || !changing) {
+      setHeld(art);
+      return;
+    }
+    const t = setTimeout(() => setHeld(null), ART_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [art, changing]);
+  return art ?? (changing ? held : null);
 }
 
 /**

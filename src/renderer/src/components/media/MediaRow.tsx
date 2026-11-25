@@ -41,6 +41,7 @@ export function MediaRow({
   onContextMenu,
   attrs,
   dense,
+  touch,
   parked,
   slot,
   held,
@@ -97,6 +98,13 @@ export function MediaRow({
    */
   dense?: boolean;
   /**
+   * The row on a touch screen held at arm's length (the display page on another screen,
+   * display/PageTransport): the same row with the art at the `touch` size (52px) and the padding
+   * pulled in to match, the art as far from the row's left edge as from its top and bottom. A
+   * tablet's points are smaller than a computer's, so the window's 40px art read small there.
+   */
+  touch?: boolean;
+  /**
    * The current row of a queue whose source ISN'T the audible one — a radio
    * preset or AirPlay is playing, and this is merely where the queue will
    * resume. Set apart quietly rather than dressed as playing: the device
@@ -128,6 +136,7 @@ export function MediaRow({
 }): React.JSX.Element {
   // a keyed list is one Tab stop: its rows are reached with the arrows
   const inList = useInListKeys();
+  const artSize = dense ? "dense" : touch ? "touch" : "row";
   return (
     <div
       {...attrs}
@@ -155,7 +164,11 @@ export function MediaRow({
         // pl-1 == py-1: the art sits the same distance from the row's left
         // edge as from its top and bottom. pr-2 keeps the trailing duration off
         // the edge, which is a different job.
-        dense ? "gap-2.5 pl-1 pr-2 py-1 rounded-md" : "gap-3 px-3 py-2.5 rounded-xl",
+        dense
+          ? "gap-2.5 pl-1 pr-2 py-1 rounded-md"
+          : touch
+            ? "gap-3 pl-1.5 pr-3 py-1.5 rounded-xl"
+            : "gap-3 px-3 py-2.5 rounded-xl",
         onClick && !dimmed && "cursor-pointer",
         playing
           ? "row-playing bg-gold/10"
@@ -170,15 +183,9 @@ export function MediaRow({
       )}
     >
       {artistName ? (
-        <ArtistArt name={artistName} src={artUrl} size={dense ? "dense" : "row"} />
+        <ArtistArt name={artistName} src={artUrl} size={artSize} />
       ) : (
-        <MediaArt
-          src={artUrl}
-          artKey={artKey}
-          kind={kind}
-          icon={icon}
-          size={dense ? "dense" : "row"}
-        />
+        <MediaArt src={artUrl} artKey={artKey} kind={kind} icon={icon} size={artSize} />
       )}
       {slot != null && (
         <span

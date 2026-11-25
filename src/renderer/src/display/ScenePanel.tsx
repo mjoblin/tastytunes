@@ -6,6 +6,7 @@ import { SCENES_ORDERED, sceneDef } from "@/components/display/scenes";
 import { SyncRow } from "@/components/display/ScenePicker";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { ALL_SCENES_KEYS, ownSettings, type OwnKey } from "./pageSettings";
+import { PageTabs } from "./PageTabs";
 
 /** Full screen as this browser offers it to a page (Safari on an iPad, the desktop browsers), or
  *  null where it doesn't (a phone, a browser app that keeps the page in its frame). */
@@ -110,11 +111,6 @@ export function ScenePanel({
     // below the status bar where the page draws under it (on the Home Screen, its bar translucent)
     "absolute top-[calc(env(safe-area-inset-top,0px)+1rem)] z-50 flex h-11 w-11 items-center justify-center rounded-full bg-panel/85 ring-1 ring-edge backdrop-blur transition-opacity duration-300 motion-safe:active:scale-90";
   const showing = shown || open ? "opacity-100" : "pointer-events-none opacity-0";
-  const tabClass = (on: boolean): string =>
-    cx(
-      "flex h-11 flex-1 items-center justify-center gap-2 rounded-md text-[14px] transition-colors motion-safe:active:scale-[0.97]",
-      on ? "bg-accentdim text-accent" : "text-dim",
-    );
   return (
     <>
       {FS && (
@@ -148,30 +144,24 @@ export function ScenePanel({
           >
             {scenes && (
               <div className="shrink-0 p-2 pb-0">
-                <div role="tablist" className="flex rounded-lg bg-veil p-0.5 ring-1 ring-edge">
-                  <button
-                    type="button"
-                    role="tab"
-                    data-page-scene-tab
-                    aria-selected={tab === "scene"}
-                    onClick={() => setTab("scene")}
-                    className={tabClass(tab === "scene")}
-                  >
-                    <Sparkles size={14} />
-                    Scene
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    data-page-settings
-                    aria-selected={tab === "settings"}
-                    onClick={() => setTab("settings")}
-                    className={tabClass(tab === "settings")}
-                  >
-                    <SlidersHorizontal size={14} />
-                    Settings
-                  </button>
-                </div>
+                <PageTabs<Tab>
+                  tabs={[
+                    {
+                      id: "scene",
+                      label: "Scene",
+                      icon: <Sparkles size={15} />,
+                      attrs: { "data-page-scene-tab": "" },
+                    },
+                    {
+                      id: "settings",
+                      label: "Settings",
+                      icon: <SlidersHorizontal size={15} />,
+                      attrs: { "data-page-settings": "" },
+                    },
+                  ]}
+                  value={tab}
+                  onChange={setTab}
+                />
               </div>
             )}
             <div className="min-h-0 overflow-y-auto overscroll-contain p-2">

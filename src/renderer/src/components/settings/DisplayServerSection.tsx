@@ -161,9 +161,11 @@ function ControlRows({ settings, save }: SectionProps): React.JSX.Element {
       {control && screens.length > 0 && (
         <div data-display-screens className="space-y-1">
           <div className="text-[12px] text-dim">Screens</div>
-          {screens.map((s) => (
-            <ScreenRow key={s.id} screen={s} />
-          ))}
+          <div className="flex flex-col gap-2">
+            {screens.map((s) => (
+              <ScreenRow key={s.id} screen={s} />
+            ))}
+          </div>
         </div>
       )}
     </div>

@@ -17,10 +17,14 @@ export function CrossfadeArt({
   src,
   className,
   fallback,
+  fill = false,
 }: {
   src: string | null | undefined;
   className: string;
   fallback: React.ReactNode;
+  /** Fill the positioned box it sits in (Display's blurred wash behind the art), rather than
+   *  taking the picture's own size. */
+  fill?: boolean;
 }): React.JSX.Element {
   const [cur, setCur] = useState<{ src: string | null | undefined; k: number }>({ src, k: 0 });
   const [prev, setPrev] = useState<{ src: string | null | undefined; k: number } | null>(null);
@@ -36,7 +40,7 @@ export function CrossfadeArt({
     setCur(next);
   }, [src, pending]);
   return (
-    <div className="relative">
+    <div className={fill ? "absolute inset-0" : "relative"}>
       {prev && (
         <div key={`p${prev.k}`} className="absolute inset-0">
           <ArtImage src={prev.src} className={className} fallback={fallback} />
@@ -44,7 +48,7 @@ export function CrossfadeArt({
       )}
       <div
         key={`c${cur.k}`}
-        className="art-fade-in"
+        className={fill ? "art-fade-in absolute inset-0" : "art-fade-in"}
         onAnimationEnd={(e) => {
           if (e.target === e.currentTarget) setPrev(null);
         }}
