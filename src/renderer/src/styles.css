@@ -1335,10 +1335,10 @@ img {
 .display-page [data-controls-shown] [data-display-scene-toast] {
   bottom: 13rem;
 }
-/* the seek bar (step four, display/PageTransport) is the strip at the bottom edge raised: while it
-   is up, the strip steps back from the edge as the bar rises, the format chips step back from the
-   buttons it lifts into their band (on a tablet in landscape the play button met them), and the
-   scene's name keeps above it */
+/* the seek bar (step four, display/PageTransport) is the strip at the bottom edge raised above the
+   buttons: while it is up, the strip steps back from the edge as the bar rises, the format chips
+   step back from the bar, which reaches into their band (on a tablet in landscape it met them),
+   and the scene's name keeps above it */
 .display-page [data-display-waveform],
 .display-page [data-display-badges] {
   transition: opacity 300ms ease;

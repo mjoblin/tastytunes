@@ -347,15 +347,19 @@ export function DisplayWaveform({
 
 /**
  * THE PAGE'S SEEK BAR (0.17.0, Display on other screens, step four): Display mode's strip, raised
- * clear of the bottom edge and grown to a finger's height while the page's buttons show
- * (display/PageTransport). At the edge a brushing hand would jump the track, and on an iPad a
- * sideways drag there switches apps; so the strip stays a picture at rest and only this bar seeks.
+ * above the page's buttons and grown to a finger's height while they show (display/PageTransport).
+ * At the edge a brushing hand would jump the track, and on an iPad a sideways drag anywhere low on
+ * the screen is the system's: it switches apps, and the page never hears the finger lift. So the
+ * strip stays a picture at rest and only this bar seeks, the furthest of the controls from the
+ * edge.
  * - The strip's own picture, the waveform where Display draws one, the plain line where it
  *   doesn't, with the played time at its start and the length at its end.
  * - A touch or a drag shows the time under the finger, the played part following it; ONE SEEK
  *   goes out when the finger lifts (`onSeek`), never a stream of them during a drag. A finger
  *   that slides off and is taken by the browser (a cancel) sends nothing.
  * - Only while `live` (the buttons up): a touch that lands while they are away does nothing.
+ * - A lift that never came (a touch the system took) holds nothing up: the next touch is taken
+ *   afresh, and a capture lost without a lift lets go, sending nothing.
  */
 export function PageSeekBar({
   live,
@@ -423,7 +427,7 @@ export function PageSeekBar({
         aria-valuetext={fmtTime(shown * duration)}
         className="relative h-full min-w-0 flex-1 cursor-pointer touch-none"
         onPointerDown={(e) => {
-          if (!live || finger.current != null) return;
+          if (!live) return;
           if (e.pointerType === "mouse" && e.button !== 0) return;
           e.currentTarget.setPointerCapture(e.pointerId);
           finger.current = e.pointerId;
@@ -443,6 +447,9 @@ export function PageSeekBar({
           });
         }}
         onPointerCancel={letGo}
+        onLostPointerCapture={(e) => {
+          if (finger.current === e.pointerId) letGo();
+        }}
       >
         {ready ? (
           <canvas ref={canvasRef} className="absolute inset-x-0 inset-y-2 block h-8 w-full" />

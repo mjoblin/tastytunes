@@ -66,7 +66,7 @@ import {
  *   low where the buttons always are, Wake, the presets, and "Pick up where you left off" when
  *   there is something to return to, with the TastyTunes mark faint in the middle (SleepControls).
  *   Wake only where a wake can work; in Eco standby, a line saying the streamer is out of reach.
- * - SEEK (step four), on an allowed screen where the source can seek: below the buttons, Display's
+ * - SEEK (step four), on an allowed screen where the source can seek: above the buttons, Display's
  *   strip raised from the bottom edge to a finger's height (components/media/Waveform's
  *   PageSeekBar), one seek for each lift of a finger. At rest the strip at the edge stays a
  *   picture.
@@ -230,6 +230,19 @@ export function PageTransport({
                 {control.next.artist && ` · ${control.next.artist}`}
               </button>
             )}
+            {control.state === "allowed" && can.canSeek && (
+              // SEEK (step four): the strip at the bottom edge, raised above the buttons to meet
+              // the finger. Above them, not below: low on an iPad a sideways drag is the system's
+              // (it switches apps, and the page never hears the finger lift), while the buttons
+              // only take taps, which reach the page there
+              <PageSeekBar
+                live={shown}
+                onSeek={async (secs) => {
+                  const answer = await seekTo(secs);
+                  return answer != null && "done" in answer;
+                }}
+              />
+            )}
             <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-2">
               {/* the list stands apart from the transport by the same gap as the volume does */}
               {list && (
@@ -290,16 +303,6 @@ export function PageTransport({
                 </div>
               )}
             </div>
-            {control.state === "allowed" && can.canSeek && (
-              // SEEK (step four): the strip at the bottom edge, raised to meet the finger
-              <PageSeekBar
-                live={shown}
-                onSeek={async (secs) => {
-                  const answer = await seekTo(secs);
-                  return answer != null && "done" in answer;
-                }}
-              />
-            )}
           </>
         )}
       </div>
