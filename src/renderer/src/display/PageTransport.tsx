@@ -23,7 +23,7 @@ import { Switch } from "@/components/controls/Switch";
 import { MediaRow } from "@/components/media/MediaRow";
 import { TtMark } from "@/components/chrome/TtMark";
 import { FACT_SEP } from "@/lib/mediaFacts";
-import { scrollToVisible } from "@/lib/scroll";
+import { scrollToTop } from "@/lib/scroll";
 import { MediaTile } from "@/components/media/MediaTile";
 import { SettingLine } from "@/components/display/ScenePicker";
 import { steer, useControl } from "./control";
@@ -453,7 +453,30 @@ function ListPanel({
  *  bottom (flush, the first row's ring was cut off). */
 const listBody = "min-h-0 overflow-y-auto overscroll-contain p-2";
 const rowsBody = cx(listBody, "space-y-1");
-const cardsBody = cx(listBody, "grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2.5");
+// four across in the panel, two on a phone, so more than one row shows on a short screen
+const cardsBody = cx(listBody, "grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-2.5");
+
+/**
+ * The list opens on the playing one, at its top (8px of ring room), container-scoped, never the
+ * page; and again while the list settles to its size in its first moments (the panel's height
+ * follows the buttons', measured as it opens), so the landing holds.
+ */
+function useLandOn(ref: React.RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const land = (): void => scrollToTop(el, 8);
+    land();
+    const box = el.closest(".overflow-y-auto");
+    const seen = box ? new ResizeObserver(land) : null;
+    if (box) seen?.observe(box);
+    const settled = setTimeout(() => seen?.disconnect(), 800);
+    return () => {
+      clearTimeout(settled);
+      seen?.disconnect();
+    };
+  }, [ref]);
+}
 
 /** The queue's rows: the playing track marked and in view as they open. */
 function QueueRows({
@@ -464,8 +487,8 @@ function QueueRows({
   cards: boolean;
 }): React.JSX.Element {
   const playingRow = useRef<HTMLDivElement | null>(null);
-  // the playing track in view as it opens (container-scoped, never the page)
-  useEffect(() => scrollToVisible(playingRow.current, 8), []);
+  // the playing track at the top as it opens, what comes next below it
+  useLandOn(playingRow);
   if (cards)
     return (
       <div className={cardsBody}>
@@ -517,7 +540,7 @@ function PresetRows({
   cards: boolean;
 }): React.JSX.Element {
   const playingRow = useRef<HTMLDivElement | null>(null);
-  useEffect(() => scrollToVisible(playingRow.current, 8), []);
+  useLandOn(playingRow);
   const [tuning, setTuning] = useState<number | null>(null);
   const answered = rows.find((p) => p.id === tuning && (p.lit || p.dead)) != null;
   useEffect(() => {

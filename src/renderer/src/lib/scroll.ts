@@ -114,3 +114,15 @@ export function scrollToVisible(el: HTMLElement | null, pad = 0): void {
   else if (eRect.bottom > cRect.bottom - pad)
     container.scrollTop += eRect.bottom - cRect.bottom + pad;
 }
+
+/** Bring the element to the top of its nearest scroll container, `pad` below the edge (its ring
+ *  room), as far as the container can scroll: a list that opens on what plays, with what comes
+ *  next below it (another screen's queue and presets, display/PageTransport). */
+export function scrollToTop(el: HTMLElement | null, pad = 0): void {
+  if (!el) return;
+  const container = el.closest(".overflow-y-auto");
+  if (!container) return;
+  const cRect = container.getBoundingClientRect();
+  const eRect = el.getBoundingClientRect();
+  container.scrollTop += eRect.top - cRect.top - pad;
+}
