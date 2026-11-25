@@ -260,8 +260,8 @@ export function PageTransport({
                 onClick={() => onQueue(!queueOpen)}
                 className="mb-1.5 max-w-[min(36rem,90vw)] truncate rounded-full bg-panel/75 px-3 py-0.5 text-[13px] text-dim backdrop-blur [-webkit-tap-highlight-color:transparent] enabled:active:scale-95 transition-transform"
               >
-                {/* the word set apart from the track it names, 20px on */}
-                <span className="mr-5 text-faint">Next</span>
+                {/* the word set apart from the track it names, 10px on */}
+                <span className="mr-2.5 text-faint">Next</span>
                 {control.next.title}
                 {control.next.artist && ` · ${control.next.artist}`}
               </button>
