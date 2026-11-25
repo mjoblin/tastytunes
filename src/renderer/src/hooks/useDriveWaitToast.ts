@@ -4,10 +4,10 @@ import { useStore } from "@/store";
 const TEXT = "Waiting for the USB drive. This can take a minute after standby.";
 
 /**
- * A WAIT ON THE USB DRIVE SAYS SO (0.10.0, user ask 2026-10-06). After a standby or a
+ * A WAIT ON THE USB DRIVE SAYS SO (0.10.0). After a standby or a
  * replug the streamer's USB ids have moved, and the first thing that needs one (a
  * playlist, a favorite, Open in Library, Info, an agent's play) waits while the index is
- * moved onto the new ids and checked, or walked: about 20 s on the user's stick straight
+ * moved onto the new ids and checked, or walked: about 20 s on a USB stick straight
  * after a wake, minutes on a big drive. A spinning Play button said "working" and nothing
  * said why, and from the palette or Search nothing showed at all. The index status marks
  * the server `waiting` once something has waited a second (a quick heal never flashes);

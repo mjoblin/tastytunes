@@ -6,14 +6,13 @@ import { type LensArtist } from "./useLensIndex";
 import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
 import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
 import { keyedEvent } from "@/lib/menuAt";
+import { cx } from "@/lib/format";
 
-// The Artists lens as cards (0.13.0 round 12; a user's suggestion, 2026-10-25: "a degree of uniformity
-// across the Album, Artist and Tracks sections ... only the Albums section gives a choice of
-// displaying by rows or by cards"; his picks the same day on the decision page "Artists as
-// Cards"). The cards are the Albums lens's own (ContainerCard: an artist container takes main's
-// picture, the portrait crop, the ⋯ and no Play) in the Albums lens's grid (useCardGrid), with
-// the line the artist's row says under the name. A click opens the artist's page
-// (decisions/0012). The Library's one Rows or Cards choice decides the view, as it does for
+// The Artists lens as cards (0.13.0 round 12: only the Albums lens offered rows or cards, and
+// the three lenses read better alike). The cards are the Albums lens's own (ContainerCard: an
+// artist container takes main's picture, the portrait crop, the ⋯ and no Play) in the Albums
+// lens's grid (useCardGrid), with the line the artist's row says under the name. A click opens
+// the artist's page. The Library's one Rows or Cards choice decides the view, as it does for
 // Albums and an artist's page.
 
 /**
@@ -50,23 +49,33 @@ export function AzRail({
   letters,
   onJump,
   className,
+  quiet = false,
 }: {
   letters: readonly string[];
   onJump(letter: string): void;
   className?: string;
+  /** The letters show only while the caller's group/az is hovered or a letter has the keyboard
+   *  (the Artists columns, 0.16.0: an always-on rail floated between the columns). */
+  quiet?: boolean;
 }): React.JSX.Element {
   return (
     <div
       data-az-rail
-      className={
-        className ?? "shrink-0 flex flex-col items-center justify-center gap-px pl-0.5 select-none"
-      }
+      className={cx(
+        className ?? "shrink-0 flex flex-col items-center justify-center gap-px pl-0.5 select-none",
+        quiet && "group",
+      )}
     >
       {letters.map((l) => (
         <button
           key={l}
           onClick={() => onJump(l)}
-          className="px-1 text-[9.5px] leading-[13px] font-mono text-faint hover:text-gold transition-colors"
+          className={cx(
+            "px-1 text-[10px] leading-[13px] font-medium text-faint hover:text-accent",
+            quiet
+              ? "opacity-0 group-hover/az:opacity-100 group-kbd:opacity-100 transition-[color,opacity] duration-200"
+              : "transition-colors",
+          )}
         >
           {l}
         </button>
@@ -147,7 +156,7 @@ export function ArtistCards({
     });
     return () => cancelAnimationFrame(raf);
   }, [revealAt, placed]);
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the cards' four arrows; Enter is a card's click
+  // FROM THE KEYBOARD (0.14.0): the cards' four arrows; Enter is a card's click
   // (the artist's page), "." its More menu
   const keys = useListKeys({
     count: artists.length,

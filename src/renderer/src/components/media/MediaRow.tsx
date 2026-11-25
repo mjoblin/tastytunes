@@ -14,12 +14,12 @@ import { useInListKeys, type ListItemAttrs } from "@/hooks/useListKeys";
  * listings) keep the FLAT grid skin with hairlines; the two skins share their
  * primitives (MediaArt, DurationCell, RowAction, RowHeart), not a wrapper.
  *
- * Grew out of SearchRow when the audit found Favorites, Recents and Radio each
+ * Grew out of SearchRow when Favorites, Recents and Radio were each found
  * hand-rolling the same ringed row at drifting sizes. One shell means one type
  * scale (13.5/12; the `dense` panel variant runs 13.5/11.5-faint — see the
  * prop), one art size per variant, one playing/tuning treatment — and a
  * `duration` slot that reserves its width, so a row without a known length
- * can't let the heart drift out of line (the screenshot that started this).
+ * can't let the heart drift out of line.
  */
 export function MediaRow({
   title,
@@ -87,7 +87,7 @@ export function MediaRow({
    * The row-anatomy law fixes the ART (32px here — the `dense` variant) and
    * the TITLE at 13.5px; neither moves. The SUBTITLE is the one line that
    * differs by law: 11.5px `faint` here vs the window rows' 12px `dim`
-   * (amended at the user's call, 2026-08-04 — in a 380px glanceable panel
+   * (in a 380px glanceable panel
    * the second line is wayfinding, not content, and the AA-retuned `faint`
    * lets it be quieter without dropping under the contrast floor). Those
    * tokens are what make a row recognisably the same object across
@@ -110,7 +110,7 @@ export function MediaRow({
    * between the art and the name — the flat skin's position cell, adopted
    * here for rows whose identity IS a slot (the tray panel's preset rows,
    * whose second line said "Preset N" on every row: boilerplate wearing a
-   * subtitle's clothes; user call 2026-08-04). The cell is present in every
+   * subtitle's clothes). The cell is present in every
    * state and the number is always two glyphs, so names share one left edge.
    * Playing/tuning markers move INTO the cell, replacing the number — the
    * flat skin's rule — instead of stacking beside it in the title row.
@@ -120,13 +120,13 @@ export function MediaRow({
    * This row's menu is open: the pointer has left for the menu (its
    * click-catcher covers the window), but the row is still what is being
    * acted on, so it keeps its hover fill and its actions stay shown — the
-   * cards' menuOpen, for rows (user, 2026-09-11: the fill and the other
-   * icons vanishing on the ⋯ click was "a little unexpected"). RowAction
+   * cards' menuOpen, for rows (the fill and the other
+   * icons vanishing on the ⋯ click was unexpected). RowAction
    * reads it as `group-data-[held]`, so no action needs pinning by hand.
    */
   held?: boolean;
 }): React.JSX.Element {
-  // a keyed list is one Tab stop (K1): its rows are reached with the arrows
+  // a keyed list is one Tab stop: its rows are reached with the arrows
   const inList = useInListKeys();
   return (
     <div

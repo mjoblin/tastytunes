@@ -7,7 +7,7 @@ import type {
   ZonePlayState,
   ZoneState,
 } from "@shared/smoip";
-import { EQ_GAIN_MAX, EQ_GAIN_MIN } from "@shared/smoip";
+import { EQ_GAIN_MAX, EQ_GAIN_MIN, VOLUME_STEP_SCALE } from "@shared/smoip";
 
 /** One frame for the socket: a path and its params. */
 export type SocketFrame = { path: string; params: Record<string, unknown> };
@@ -34,6 +34,9 @@ const bandString = (bands: [number, number][]): string =>
     .map(([i, g]) => `${i},,,${Math.max(EQ_GAIN_MIN, Math.min(EQ_GAIN_MAX, g)).toFixed(1)},`)
     .join("|");
 
+/** The limit on a model read in steps alone: the same share of its step scale, whole. */
+const stepLimit = (limit: number): number => Math.floor((limit / 100) * VOLUME_STEP_SCALE);
+
 /** The volume a write may ask for: under the limit, 0 to 100, whole. */
 export function clampVolume(percent: number, limit: number | null): number {
   const capped = limit != null ? Math.min(percent, limit) : percent;
@@ -46,6 +49,42 @@ function clampSpec(value: number, range?: { minimum?: number; maximum?: number }
 }
 
 const frame = (path: string, params: Record<string, unknown>): SocketFrame[] => [{ path, params }];
+
+/** How far short of a track's end a seek there lands when no track follows it. */
+export const SEEK_END_MARGIN_SECS = 2;
+
+/**
+ * WHERE A SEEK LANDS, the one home for a track's end (the device layer's seek frame and the agents'
+ * seek tool read it; nothing else clamps a seek). A seek to the track's full length is dropped by
+ * the firmware without a word (read live 2026-11-25, docs/streamer.md: three seeks to 142 of 142 s
+ * left it playing on; 130 landed). So a seek into the last second, done with this one (a finger
+ * dragged off a bar's end, a skip ahead past it), goes to the next track where one follows; with
+ * none, or the track repeating, it lands SEEK_END_MARGIN_SECS short and the track ends on its own.
+ * Anything else lands where asked, a whole second from the start.
+ */
+export function seekLanding(
+  positionSecs: number,
+  s: Pick<CommandState, "playState" | "nowPlaying">,
+): { next: true } | { at: number } {
+  const at = Math.max(0, Math.round(positionSecs));
+  const length = s.playState?.metadata?.duration ?? null;
+  if (length == null || length <= 0 || at < Math.floor(length) - 1) return { at };
+  if (hasNextTrack(s)) return { next: true };
+  return { at: Math.max(0, Math.floor(length) - SEEK_END_MARGIN_SECS) };
+}
+
+/** A track follows the playing one: the source offers next, the track isn't repeating, and the
+ *  queue has one after it (or repeats the whole), or doesn't say where it is. */
+function hasNextTrack(s: Pick<CommandState, "playState" | "nowPlaying">): boolean {
+  if (!(s.nowPlaying?.controls ?? []).includes("track_next")) return false;
+  const ps = s.playState;
+  // repeat one: the track's own end plays it again, and so does a seek to it
+  if (ps?.mode_repeat === "one") return false;
+  if (ps?.mode_repeat === "all") return true;
+  const at = ps?.queue_index;
+  const of = ps?.queue_length;
+  return at == null || of == null || at + 1 < of;
+}
 
 /**
  * THE COMMAND TRANSLATION (split out of DeviceManager.command in the 0.11.0 sweep): what a
@@ -85,8 +124,13 @@ export function commandFrames(cmd: StreamerCommand, s: CommandState): SocketFram
       return frame("/zone/play_control", { skip_track: 1 });
     case "previousTrack":
       return frame("/zone/play_control", { skip_track: -1 });
-    case "seek":
-      return frame("/zone/play_control", { position: Math.max(0, Math.round(cmd.positionSecs)) });
+    case "seek": {
+      // where it lands is seekLanding's to say: into a track's last second, the next track
+      const land = seekLanding(cmd.positionSecs, s);
+      return "next" in land
+        ? frame("/zone/play_control", { skip_track: 1 })
+        : frame("/zone/play_control", { position: land.at });
+    }
     case "playQueueId":
       return frame("/zone/play_control", { queue_id: cmd.queueId });
     case "setRepeat":
@@ -111,16 +155,37 @@ export function commandFrames(cmd: StreamerCommand, s: CommandState): SocketFram
       return frame("/zone/state", { mute: cmd.mute });
     case "setSource":
       return frame("/zone/state", { source: cmd.sourceId });
-    case "setVolumeStep":
-      return frame("/zone/state", { volume_step: cmd.step });
+    case "setVolumeStep": {
+      const limit = s.volumeLimitPercent;
+      const step = Math.max(0, Math.round(cmd.step));
+      return frame("/zone/state", {
+        volume_step: limit != null ? Math.min(step, stepLimit(limit)) : step,
+      });
+    }
     case "setVolumePercent":
       return frame("/zone/state", {
         volume_percent: clampVolume(cmd.percent, s.volumeLimitPercent),
       });
     case "volumeStepChange": {
+      // THE LIMIT IS A CEILING: a raise that would reach it is sent as the level it stops at, never
+      // as a step change that crosses it (a step is one percent on the models seen; the firmware
+      // applies a step change whole). Below the limit a raise stays a step change, the firmware's
+      // own step. Without a known level (Control Bus, a model not yet heard from) there is nothing
+      // to hold it to, so the step goes as sent.
       const limit = s.volumeLimitPercent;
-      const current = s.zoneState?.volume_percent;
-      if (cmd.delta > 0 && limit != null && current != null && current >= limit) return [];
+      const percent = s.zoneState?.volume_percent;
+      const step = s.zoneState?.volume_step;
+      if (cmd.delta > 0 && limit != null) {
+        if (percent != null) {
+          if (percent >= limit) return [];
+          if (percent + cmd.delta >= limit)
+            return frame("/zone/state", { volume_percent: clampVolume(limit, limit) });
+        } else if (step != null) {
+          const top = stepLimit(limit);
+          if (step >= top) return [];
+          if (step + cmd.delta >= top) return frame("/zone/state", { volume_step: top });
+        }
+      }
       return frame("/zone/state", { volume_step_change: cmd.delta });
     }
     // ---- /zone/audio tone controls. One frame per logical control: writes

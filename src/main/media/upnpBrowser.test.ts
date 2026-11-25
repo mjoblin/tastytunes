@@ -8,9 +8,11 @@ import {
   probeObject,
   queueAdd,
   refreshServers,
+  resAudioFacts,
   search,
   serversListed,
 } from "./upnpBrowser";
+import { flacRes } from "../servers/demo/upnpShapes";
 
 describe("search: the live search on a server that answers 150 at a time", () => {
   let server: FakeStreamer;
@@ -103,5 +105,17 @@ describe("queueAdd: the large-queue guard (S77's static pin, a unit since 0.13.0
     } finally {
       await server.stop();
     }
+  });
+});
+
+describe("resAudioFacts: what a track's resource says of its audio", () => {
+  it("reads the length, the sample rate and the channels the server gives", () => {
+    const attrs = /<res\b([^>]*)>/.exec(flacRes(372, "http://nas/a.flac"))?.[1] ?? "";
+    expect(resAudioFacts(attrs)).toEqual({ secs: 372, rate: 44100, channels: 2 });
+    expect(resAudioFacts('protocolInfo="http-get:*:audio/mpeg:*"')).toEqual({
+      secs: null,
+      rate: null,
+      channels: null,
+    });
   });
 });

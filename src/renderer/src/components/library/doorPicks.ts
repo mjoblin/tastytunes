@@ -11,8 +11,8 @@ import { hashStr } from "@/components/display/scenes/lib";
 import { nameKey } from "@shared/keys";
 
 /**
- * WHAT THE LIBRARY'S DOORS SHOW (0.12.0-rc.3, his ask: "our custom entrypoints look too much like
- * the streamer's entrypoints… make ours look more exciting"). Each door is a picture of its own
+ * WHAT THE LIBRARY'S DOORS SHOW (0.12.0-rc.3: the app's own entry points looked too much like
+ * the streamer's, and too plain beside them). Each door is a picture of its own
  * lens drawn from the reader's library: the Albums door a crate of the most-played covers, the
  * Artists door the most-played artists, the Tracks door the waveforms of the most-played tracks
  * that have been analyzed. Ties, and a library with no listening record, fall back to an order
@@ -120,7 +120,7 @@ export function pickDoorArt(
 
 /** The Artists door's faces, front first: the artists with a photo ahead of those shown by a
  *  cover, each kind in the order of their plays, so the door shows people where the Albums door
- *  shows covers (his most-played artist's cover was the front of both doors). */
+ *  shows covers (the most-played artist's cover was the front of both doors). */
 export function faceOrder<T extends { pic: string | null }>(
   faces: ReadonlyArray<T>,
   coverArt: ReadonlySet<string>,

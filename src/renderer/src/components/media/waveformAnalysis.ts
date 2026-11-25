@@ -1,5 +1,5 @@
 // A TRACK'S ANALYSIS: its store, its measuring and the hooks every surface reads it through. Moved
-// out of Waveform.tsx as it was (0.15.0, the hygiene pass: the file had grown from 873 lines to
+// out of Waveform.tsx as it was (0.15.0: the file had grown from 873 lines to
 // 1,265); Waveform.tsx keeps the faces that draw it, waveformDraw.ts the drawing itself.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { tt } from "@/api";
@@ -7,6 +7,7 @@ import { useStore } from "@/store";
 import { nowPlayingInfoTarget } from "@/lib/mediaInfo";
 import { useReadyIndexSig } from "@/hooks/useIndexPools";
 import { sniffSampleRate } from "@/lib/audioHeader";
+import { fmtDuration } from "@/lib/format";
 import { stripFromStored, stripToStored } from "@/lib/featureStrip";
 import { onsetsFromStored, onsetsToStored } from "@/lib/onsets";
 import { FEATURES_VERSION, featuresFromStored, featuresToStored } from "@/lib/features";
@@ -20,11 +21,12 @@ import {
   tempoBpm,
   type AnalysisFeatures,
   type AudioAnalysis,
+  unhurried,
 } from "@shared/model";
 import { Lru } from "@/lib/lru";
 
 /**
- * EXPERIMENT (0.7 exploration, the audio-file-data GO): waveforms from the
+ * EXPERIMENT (0.7 exploration): waveforms from the
  * file's own bytes. Main fetches the audio from the LOCAL media server; this
  * module decodes with WebAudio and keeps TWO envelopes per track — peak and
  * RMS — so the drawing shows dynamics, not just shape: a crushed master
@@ -47,8 +49,7 @@ import { Lru } from "@/lib/lru";
  * keeps 1200 buckets (~10KB/track) and every renderer downsamples to its
  * own density — bars hold a ~1.5px pitch wherever they draw, and the
  * fullscreen strip renders a continuous filled envelope instead of
- * stretching a fixed bucket count into 10px slabs (user, 2026-08-30, on
- * noticing exactly that).
+ * stretching a fixed bucket count into 10px slabs.
  */
 
 const CAPTURE_BUCKETS = 1200;
@@ -59,7 +60,7 @@ const CAPTURE_BUCKETS = 1200;
  *  it (analyzeTrack), as playing it does. */
 export type Analysis = Measured & {
   outdated?: boolean;
-  /** Still being measured (0.14.0, his A1: the waveform fills in as the file arrives): the
+  /** Still being measured (0.14.0: the waveform fills in as the file arrives): the
    *  envelopes' first `ready` of `of` buckets hold their values; every other figure is empty
    *  until it is done. Never stored. */
   partial?: { ready: number; of: number };
@@ -69,20 +70,21 @@ export type Analysis = Measured & {
 const cache = new Lru<string, Promise<Analysis | null>>(48);
 // A read that came back empty is NOT kept as the answer for the session: the
 // disk is asked by content on every call (an Analyze audio sweep may have
-// written this track's analysis under its content key since — the user's
-// "no DR, no scene until a restart", 2026-09-16, a track that had resolved
-// to the unreadable USB copy), and the network is held off for a minute.
+// written this track's analysis under its content key since; a track that had
+// resolved to the unreadable USB copy showed no DR and no scene until a
+// restart), and the network is held off for a minute.
 const failedAt = new Lru<string, number>(500);
 const FAILED_MEMO_MS = 60_000;
 // files main refused for their size (main/ipc/audio), so the absent line can say so
 const tooLarge = new Lru<string, { bytes: number; maxBytes: number }>(500);
-// files whose server stopped sending (0.14.0, his A3: a stall is a silence, caught on its own),
+const tooLong = new Lru<string, { secs: number; maxSecs: number }>(500);
+// files whose server stopped sending (0.14.0: a stall is a silence, caught on its own),
 // so the absent line can say so and offer to try again
 export const stalled = new Lru<string, true>(500);
 
 // A FILE BEING MEASURED (0.14.0, analysis with no size limit): the waveform's buckets so far, by
-// location, for every surface that draws it while the file arrives (his A1), and the way to stop
-// a playing track's measuring when it is skipped (his A3), unless something holds it: Info open on
+// location, for every surface that draws it while the file arrives, and the way to stop
+// a playing track's measuring when it is skipped, unless something holds it: Info open on
 // the track, an Analyze audio sweep, a forced measurement.
 type Live = { ready: number; peak: Float32Array; rms: Float32Array };
 const live = new Map<string, Live>();
@@ -133,7 +135,7 @@ export function retryAnalysis(serverUdn: string, objectId: string): void {
   for (const l of liveListeners) l();
 }
 
-/** What a file measured in pieces has so far, by location, while `key` is given (his A1). */
+/** What a file measured in pieces has so far, by location, while `key` is given. */
 function useLivePartial(key: string | null): Analysis | null {
   const sofar = useSyncExternalStore(subscribeLive, () => (key ? (live.get(key) ?? null) : null));
   return useMemo(() => (sofar ? partialOf(sofar) : null), [sofar]);
@@ -159,6 +161,17 @@ function partialOf(l: Live): Analysis {
   };
 }
 
+/** Whether any file is being measured now (the album being played waits its turn behind the
+ *  playing track's own measuring, Info's and a sweep's: lib/albumOnPlay). */
+export function measuringNow(): boolean {
+  return controllers.size > 0;
+}
+
+// AN UNHURRIED READ (0.16.0): a measuring nobody is waiting on (the album being played,
+// lib/albumOnPlay) reads the file no faster than UNHURRIED_BYTES_PER_SECOND beside the streamer's
+// own read of the same server (shared/model unhurried), in pieces here and, for a lossy file, the
+// whole file in main
+
 /** A file measured in pieces (FLAC, WAV, AIFF): its analysis; "whole" when only the whole-file
  *  decode reads it; null when it couldn't be measured (`stalled` says when the server stopped). */
 async function measureInPieces(
@@ -166,16 +179,20 @@ async function measureInPieces(
   objectId: string,
   key: string,
   signal: AbortSignal,
+  pace: boolean,
 ): Promise<Analysis | "whole" | null> {
   const opened = await tt.audioStreamOpen(serverUdn, objectId).catch(() => null);
   if (!opened) return null;
+  const due = pace ? unhurried() : null;
+  let wait = 0;
+  const read = async (): ReturnType<typeof tt.audioStreamRead> => {
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    const piece = await tt.audioStreamRead(opened.id);
+    if (due && piece instanceof Uint8Array) wait = due(piece.byteLength);
+    return piece;
+  };
   try {
-    const out = await measureStreamOffThread(
-      () => tt.audioStreamRead(opened.id),
-      CAPTURE_BUCKETS,
-      (p) => setLive(key, p),
-      signal,
-    );
+    const out = await measureStreamOffThread(read, CAPTURE_BUCKETS, (p) => setLive(key, p), signal);
     if ("measured" in out) return out.measured;
     if ("whole" in out) return "whole";
     if (out.failed === "stalled") stalled.set(key, true);
@@ -192,9 +209,12 @@ export function absentLine(serverUdn: string | null, objectId: string | null): s
   const key = serverUdn && objectId ? `${serverUdn}|${objectId}` : null;
   if (key && stalled.get(key)) return "No waveform for this file. The server stopped sending it.";
   const big = key ? tooLarge.get(key) : undefined;
+  const long = key ? tooLong.get(key) : undefined;
   return big
     ? `No waveform for this file. At ${fmtBytes(big.bytes)} it's larger than TastyTunes can analyze (${fmtBytes(big.maxBytes)}).`
-    : "No waveform for this file. It couldn't be read or decoded.";
+    : long
+      ? `No waveform for this file. At ${fmtDuration(long.secs)} it's longer than TastyTunes can analyze in its format (${fmtDuration(long.maxSecs)}).`
+      : "No waveform for this file. It couldn't be read or decoded.";
 }
 
 // Disk shape round trip: envelopes quantized to thousandths (the JSON
@@ -256,7 +276,7 @@ function fromStored(st: AudioAnalysis): Analysis {
 /** A stored analysis the current version would write the same: every measurement there, the
  *  features its version. An entry from before loudness (0.7.0's cache shape) is incomplete and
  *  is measured again ONCE, on the next play or Analyze audio, rather than carrying the gap
- *  forever (user, 2026-09-05: re-analysis showed only DR); likewise the later measurements. */
+ *  forever (re-analysis showed only DR); likewise the later measurements. */
 const isCurrent = (st: AudioAnalysis): boolean =>
   !predatesLoudness(st) && !predatesStrip(st) && !predatesOnsets(st) && !predatesFeatures(st);
 
@@ -272,12 +292,17 @@ export async function storedIsCurrent(contentKey: string): Promise<boolean> {
  *  key stays LOCATION (udn|objectId), scoped to the session. `force` measures
  *  the file again even when a current analysis is stored (Analyze audio with
  *  nothing else to do, 0.12.0: a file replaced under the same title, artist,
- *  album and length keeps its old analysis otherwise). */
+ *  album and length keeps its old analysis otherwise). `pace` reads the file at the unhurried
+ *  pace (shared/model unhurried), for a measuring nobody is waiting on. */
 export function analyzeTrack(
   serverUdn: string,
   objectId: string,
   contentKey: string | null = null,
-  { force = false, keep = false }: { force?: boolean; keep?: boolean } = {},
+  {
+    force = false,
+    keep = false,
+    pace = false,
+  }: { force?: boolean; keep?: boolean; pace?: boolean } = {},
 ): Promise<Analysis | null> {
   const key = `${serverUdn}|${objectId}`;
   const hit = force ? undefined : cache.get(key);
@@ -298,7 +323,7 @@ export function analyzeTrack(
     const release = keep || force ? holdAnalysis(serverUdn, objectId) : null;
     let pieces: Analysis | "whole" | null;
     try {
-      pieces = await measureInPieces(serverUdn, objectId, key, ac.signal);
+      pieces = await measureInPieces(serverUdn, objectId, key, ac.signal, pace);
     } finally {
       release?.();
       if (controllers.get(key) === ac) controllers.delete(key);
@@ -308,10 +333,13 @@ export function analyzeTrack(
       if (pieces && contentKey) void tt.audioAnalysisPut(contentKey, toStored(pieces));
       return pieces;
     }
-    const got = await tt.expTrackAudio(serverUdn, objectId);
+    // a lossy file is read whole, at the same unhurried pace when nobody is waiting (0.16.0 read
+    // it at full speed beside the streamer's own read)
+    const got = await tt.expTrackAudio(serverUdn, objectId, { pace });
     if (!got) return null;
     if (!ArrayBuffer.isView(got)) {
-      tooLarge.set(key, got.tooLarge);
+      if ("tooLarge" in got) tooLarge.set(key, got.tooLarge);
+      else tooLong.set(key, got.tooLong);
       return null;
     }
     // the bytes as they came: no copy (a 24/192 file is hundreds of MB, and its samples as
@@ -379,7 +407,7 @@ export function usePeaks(
   contentKey: string | null = null,
 ): Analysis | null | "loading" {
   const [state, setState] = useState<Analysis | null | "loading">("loading");
-  // while the file is measured in pieces, what is measured so far (0.14.0, his A1)
+  // while the file is measured in pieces, what is measured so far (0.14.0)
   const key = serverUdn && objectId ? `${serverUdn}|${objectId}` : null;
   const partial = useLivePartial(state === "loading" ? key : null);
   const attempt = useSyncExternalStore(subscribeLive, () => (key ? (retries.get(key) ?? 0) : 0));
@@ -420,7 +448,7 @@ export function usePlayingFileRef(): {
   psRef.current = playState;
   const npRef = useRef(nowPlaying);
   npRef.current = nowPlaying;
-  // AFTER A REBUILD (his rc.3 launch, 2026-10-23: the seek bar's waveform waited for the next
+  // AFTER A REBUILD (the seek bar's waveform used to wait for the next
   // track): an index that is building answers no lookup, so a track that started then asks
   // again once the ready indexes change; a file already found for this track is kept
   const readySig = useReadyIndexSig();
@@ -522,7 +550,7 @@ export function useKnownAnalysis(
   const [state, setState] = useState<KnownAnalysis>(
     () => knownNow(serverUdn, objectId) ?? "loading",
   );
-  // while Analyze measures the file in pieces, what is measured so far (0.14.0, his A1)
+  // while Analyze measures the file in pieces, what is measured so far (0.14.0)
   const partial = useLivePartial(
     enabled && serverUdn && state === "loading" ? `${serverUdn}|${objectId}` : null,
   );
@@ -543,7 +571,7 @@ export function useKnownAnalysis(
     setState("loading");
     void analyzeTrack(serverUdn, objectId, contentKey, { keep: true }).then((a) => setState(a));
   };
-  // Info open on a track keeps its measuring going through a skip (0.14.0, his A3)
+  // Info open on a track keeps its measuring going through a skip (0.14.0)
   useEffect(
     () => (enabled && serverUdn ? holdAnalysis(serverUdn, objectId) : undefined),
     [enabled, serverUdn, objectId],
@@ -596,7 +624,7 @@ export function usePlayingMeasured(): { tempo: number | null; key: string | null
 }
 
 /**
- * A SKIP STOPS THE SKIPPED TRACK'S MEASURING (0.14.0, his A3, settled on the proposal): when the
+ * A SKIP STOPS THE SKIPPED TRACK'S MEASURING (0.14.0): when the
  * playing file changes, the last one's measuring stops, with its download, unless it played to
  * its end (within END_SLACK_S of it: then the little left of the download finishes under the next
  * track), or something holds it (Info open on it, an Analyze audio sweep). Mounted once, in App.

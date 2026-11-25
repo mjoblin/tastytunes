@@ -23,7 +23,6 @@ import type { ScreenLayout } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { usePlayhead } from "@/hooks/usePlayhead";
-import { useArtAccent } from "@/hooks/useArtAccent";
 import { useMotionPreference } from "@/hooks/useMotionPreference";
 import { useTheme } from "@/hooks/useTheme";
 import { useDisplayFont } from "@/hooks/useDisplayFont";
@@ -108,7 +107,7 @@ export function TrayPanel(): React.JSX.Element {
   // where taking focus took your shortcuts away: space, the arrows and the
   // volume keys all went dead while it was open.
   useShortcuts({ transportOnly: true });
-  const theme = useTheme(settings.theme);
+  useTheme(settings.theme);
   useDisplayFont(settings.displayFont);
   useMotionPreference(settings.motion);
 
@@ -185,12 +184,11 @@ export function TrayPanel(): React.JSX.Element {
 
   const meta = deriveNowPlaying(playState, nowPlaying);
   // the three lines keep the app's order everywhere: title, then artist (the
-  // song, on radio), then album. The user tried the song on top for radio and
-  // preferred the station there (2026-09-10): the station is what the panel is
+  // song, on radio), then album. The song on top was tried for radio, and the
+  // station read better there: the station is what the panel is
   // tuned to, and a song that did not need two lines left a gap. The song line
   // is the one that wraps.
   const lines = { title: meta.title, second: meta.subtitle, third: meta.album };
-  useArtAccent(settings.accentFollowsArt && active ? meta.artUrl : null, theme);
   const { art } = useDecodedArt(meta.artUrl);
 
   const muted = zoneState?.mute === true;
@@ -247,7 +245,8 @@ export function TrayPanel(): React.JSX.Element {
   const formatText = active ? meta.badges.slice(0, 3).join(" · ") : "";
 
   return (
-    <div className="h-screen w-screen p-1">
+    // the panel belongs to the music, as the playback bar does: everything in it is gold
+    <div className="h-screen w-screen p-1 music-gold">
       <div
         data-tray-holding={holding || undefined}
         className={cx(
@@ -259,17 +258,14 @@ export function TrayPanel(): React.JSX.Element {
           "relative h-full w-full rounded-2xl bg-panel flex flex-col shadow-[0_18px_50px_rgb(0_0_0_/_0.55)] ring-1 transition-[box-shadow,--tw-ring-color]",
           // THE CUE. While a run this panel started is in flight, blur no
           // longer dismisses — and a surface that refuses to close without
-          // saying why reads as stuck, not protective. A gold edge is the
-          // quietest thing that says "held on purpose"; the tab's own row
+          // saying why reads as stuck, not protective. A gold edge (the accent, in
+          // this gold panel) is the quietest thing that says "held on purpose"; the tab's own row
           // carries the count and the cancel.
-          holding ? "ring-gold/60" : "ring-edge2",
+          holding ? "ring-accent/60" : "ring-edge2",
         )}
       >
         <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-          <AmbientArt
-            src={active && settings.ambientArt !== "off" ? (art ?? null) : null}
-            vignette={settings.vignette}
-          />
+          <AmbientArt src={active && settings.ambientArt !== "off" ? (art ?? null) : null} />
         </div>
 
         {/* STANDBY REPLACES THE HEADER, it doesn't grey it out. A dimmed
@@ -285,9 +281,8 @@ export function TrayPanel(): React.JSX.Element {
             move when the state changes. The faces used to carry their own
             min-height mirroring the header, but the live header grew with its
             content (a wrapped radio song), so switching streamers lifted the
-            tabs row a few pixels while the connect attempt showed (user,
-            2026-09-10). One number here, not a height per face; S8 and S75
-            measure it. */}
+            tabs row a few pixels while the connect attempt showed. One
+            number here, not a height per face. */}
         <div data-tray-top className="relative shrink-0 h-[138px] flex flex-col">
           {offline ? (
             <TrayOffline phase={connection.phase} host={deviceName} />
@@ -319,12 +314,12 @@ export function TrayPanel(): React.JSX.Element {
                     {/* min-heights keep the lines occupying space through the brief
                   metadata gap on a track change, so nothing shifts. Every line
                   shows its start, scrolls once when it changes, and carries its
-                  full text as a tip when it overflows (0.8.0, a user whose
-                  station's artist and song "very often" did not fit); on radio
+                  full text as a tip when it overflows (0.8.0: a station's artist
+                  and song often did not fit); on radio
                   the song line may wrap to two, an ellipsis and the tip past that. */}
                     {/* The title sizes to its TEXT (no flex-1) and shrinks only when
                   it overflows, so the heart follows the title rather than the
-                  column's far edge (user, 2026-09-10: flex-1 had parked it there). */}
+                  column's far edge (flex-1 had parked it there). */}
                     <div className="flex items-center gap-1.5 min-h-[17px]">
                       <ScrollOnce
                         text={active ? (lines.title ?? " ") : "Nothing playing"}
@@ -343,7 +338,7 @@ export function TrayPanel(): React.JSX.Element {
                           onClick={heart.toggle}
                           className={cx(
                             "tip-bottom shrink-0 p-0.5 rounded transition-colors",
-                            heart.active ? "text-gold" : "text-faint hover:text-ink",
+                            heart.active ? "text-accent" : "text-faint hover:text-ink",
                           )}
                         >
                           <Heart size={12} fill={heart.active ? "currentColor" : "none"} />
@@ -491,8 +486,8 @@ export function TrayPanel(): React.JSX.Element {
                   <SignalLamp tipClass="tip-bottom tip-end" />
                 </div>
                 <div className="flex-1" />
-                {/* THE PLAYBACK BAR'S POWER CONTROL, at panel scale — filled gold
-              with the same glow and hover-grow, rather than a bare icon that
+                {/* THE PLAYBACK BAR'S POWER CONTROL, at panel scale — the same soft
+              gold disc, glow and hover-grow, rather than a bare icon that
               happened to be gold. It is the one control here that commits the
               streamer to a state change, and in the main window it reads that
               way; a second surface that renders it as ordinary chrome
@@ -513,13 +508,13 @@ export function TrayPanel(): React.JSX.Element {
                   className={cx(
                     "tip-top tip-end shrink-0 p-1.5 rounded-full flex items-center justify-center transition-all",
                     powered
-                      ? "bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]"
+                      ? "bg-golddim text-gold shadow-[0_0_12px_rgb(var(--gold-rgb)_/_0.15)] motion-safe:hover:scale-110 hover:bg-gold/25"
                       : connected
-                        ? "bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110"
+                        ? "bg-veil2 text-faint hover:text-gold motion-safe:hover:scale-110"
                         : "bg-veil2 text-faint/40",
                   )}
                 >
-                  <Power size={14} strokeWidth={2.2} />
+                  <Power size={14} strokeWidth={2.2} className="-translate-y-[0.5px]" />
                 </button>
               </div>
             </>
@@ -586,7 +581,7 @@ export function TrayPanel(): React.JSX.Element {
                 13px they collapse into something that looks like a ✕. */}
             {density === "detailed" ? <Rows4 size={13} /> : <Rows2 size={13} />}
           </ViewChip>
-          {/* THE STREAMER (0.8.0, a two-streamer household's ask): the bar's
+          {/* THE STREAMER (0.8.0, for a two-streamer household): the bar's
               switcher at panel scale, the same glyph and the same list, shown
               only when there is more than one streamer to choose from. Here in
               the tabs row with the other square controls: switching is a
@@ -616,9 +611,8 @@ export function TrayPanel(): React.JSX.Element {
             // scrollbar-gutter STABLE: the 4px tray scrollbar is the panel's
             // right gutter by design, but without the reservation only tabs
             // tall enough to scroll paid it — a short tab's rows sat 4px
-            // wider and the right-aligned column jumped as you switched tabs
-            // (user, 2026-08-04). Same idiom as the main window's list
-            // screens; S8 asserts one row right-edge across tabs.
+            // wider and the right-aligned column jumped as you switched tabs.
+            // Same idiom as the main window's list screens.
             "relative flex-1 min-h-0 overflow-y-auto [scrollbar-gutter:stable] pl-3 pr-2 pt-1.5 pb-2",
             // Rhythm belongs to the FLOATING skin: detailed rows are ringed
             // cards and need air between them. Compressed rows are the flat
@@ -746,13 +740,13 @@ function TrayOffline({ phase, host }: { phase: string; host: string | null }): R
     <div
       data-tray-offline={busy ? "connecting" : "disconnected"}
       // Fills the panel's one fixed top box (data-tray-top), so it cannot
-      // disagree with the header it replaces. S8 and S75 measure it.
+      // disagree with the header it replaces.
       className="relative flex-1 min-h-0 flex items-center gap-3.5 px-4"
     >
       <div
         className={cx(
           "h-14 w-14 shrink-0 rounded-full ring-2 flex items-center justify-center",
-          busy ? "ring-amber/40 text-amber motion-safe:animate-pulse" : "ring-edge2 text-faint",
+          busy ? "ring-accent/40 text-accent motion-safe:animate-pulse" : "ring-edge2 text-faint",
         )}
       >
         {busy ? <Loader2 size={22} className="spin" /> : <Unplug size={22} />}
@@ -770,7 +764,7 @@ function TrayOffline({ phase, host }: { phase: string; host: string | null }): R
           {!busy && (
             <button
               onClick={() => void tt.showMain("device")}
-              className="inline-flex items-center gap-1.5 text-[11.5px] px-2.5 py-1 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
+              className="inline-flex items-center gap-1.5 text-[11.5px] px-2.5 py-1 rounded-lg ring-1 ring-accent/40 bg-accentdim text-accent hover:brightness-110 hover:ring-accent/60 motion-safe:active:scale-95 transition-all"
             >
               Connect a streamer
               <ArrowRight size={12} />
@@ -800,7 +794,7 @@ function TrayStandby({
       // moves when it wakes or sleeps. A panel that resizes its own body on a
       // state change makes the list under it jump, which is the thing you
       // notice and can't unnotice. Content is centred in the space rather than
-      // padded to fill it, which keeps the lines tight. S8 measures it.
+      // padded to fill it, which keeps the lines tight.
       className="relative flex-1 min-h-0 flex items-center gap-3.5 px-4"
     >
       <button
@@ -808,19 +802,20 @@ function TrayStandby({
         data-tip="Wake the streamer"
         aria-label="Wake the streamer"
         className={cx(
-          "tip-bottom h-14 w-14 shrink-0 rounded-full ring-2 ring-amber/50 text-amber",
+          "tip-bottom h-14 w-14 shrink-0 rounded-full ring-2 ring-accent/50 text-accent",
           "flex items-center justify-center transition-all",
-          "hover:bg-amberdim hover:shadow-[0_0_28px_rgb(var(--amber-rgb)_/_0.3)]",
-          busy && "motion-safe:animate-pulse bg-amberdim",
+          "hover:bg-accentdim hover:shadow-[0_0_28px_rgb(var(--accent-rgb)_/_0.3)]",
+          busy && "motion-safe:animate-pulse bg-accentdim",
         )}
       >
-        <Power size={24} strokeWidth={1.8} />
+        {/* the glyph's circle sits about a pixel below its box's middle; lifted to sit centered in the ring */}
+        <Power size={24} strokeWidth={1.8} className="-translate-y-px" />
       </button>
       <div className="min-w-0 flex-1">
         {/* Every line holds its height whether or not it has content, so the
             lamp beside them never moves as the wake progresses. */}
         <div className="font-display no-optical tracking-tight text-[14px] text-dim flex items-center gap-1.5 min-h-[17px]">
-          <Moon size={14} strokeWidth={1.8} className="text-amber/70 shrink-0" />
+          <Moon size={14} strokeWidth={1.8} className="text-accent/70 shrink-0" />
           <span className="truncate">{systemInfo?.name ?? "Streamer"} is asleep</span>
         </div>
         <div className="text-[11.5px] text-faint truncate min-h-[15px]">

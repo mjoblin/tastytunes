@@ -16,9 +16,9 @@ export interface ArtistInfo {
 }
 
 /**
- * AN ARTIST'S CHOSEN PICTURE (0.13.0 round 7; a user's ask, like Plexamp: Wikipedia's lead image is
- * often a poor stage photo). Within decisions/0013 (a photo changes only when asked: choosing is
- * asking, and nothing replaces a choice but another, or a reset) and 0001 (no API keys): another
+ * AN ARTIST'S CHOSEN PICTURE (0.13.0 round 7, like Plexamp: Wikipedia's lead image is often a
+ * poor stage photo). Within the rules that a photo changes only when asked (choosing is asking,
+ * and nothing replaces a choice but another, or a reset) and that no API key ships: another
  * image from the artist's Wikipedia article, one of their album covers in the library, or a
  * picture file (copied into the app's data, so moving the original loses nothing). It outranks
  * every other picture: the page's, the Artists view's rows, the Library's Artists card.

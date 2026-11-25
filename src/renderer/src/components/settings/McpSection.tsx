@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
-import { DEFAULT_SETTINGS, type AppSettings, type McpBind, type McpSettings } from "@shared/model";
+import { DEFAULT_SETTINGS, type McpBind, type McpSettings } from "@shared/model";
 import { MCP_CLUSTERS, mcpClusterEnabled, type McpClusterInfo } from "@shared/mcpCatalog";
 import { AGENTS_GUIDE_URL } from "@shared/ipc";
 import { tt } from "@/api";
@@ -14,21 +14,18 @@ import {
   Toggle,
   NumberField,
   useCopied,
+  type SectionProps,
+  SettingsCard,
 } from "@/components/settings/SettingsKit";
 import { Segmented } from "@/components/controls/Segmented";
 
 // The MCP section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
 
-export function McpSection({
-  settings,
-  save,
-}: {
-  settings: AppSettings;
-  save(patch: Partial<AppSettings>): Promise<void>;
-}): React.JSX.Element {
+export function McpSection({ settings, save }: SectionProps): React.JSX.Element {
   const mcp = settings.mcp;
   const lan = mcp.bind === "lan";
+  const localUrl = `http://127.0.0.1:${mcp.port}/mcp`;
   const status = useStore((s) => s.mcpStatus);
   const { copied, copy } = useCopied();
   const tokenConfirm = useConfirmPopover();
@@ -84,10 +81,10 @@ export function McpSection({
 
   return (
     <section className="space-y-3">
-      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+      <SettingsCard>
         <Toggle
           label="MCP server"
-          hint="Let AI agents and other MCP clients see and control the streamer over the Model Context Protocol."
+          hint="Let AI agents and other MCP clients see and control your streamers over the Model Context Protocol."
           checked={mcp.enabled}
           onChange={(enabled) => saveMcp({ enabled })}
         />
@@ -162,14 +159,29 @@ export function McpSection({
                     {tokenConfirm.popover}
                   </div>
                 )}
+                {/* on the local network, Claude Code on THIS computer takes the loopback address:
+                    no token, and it keeps working when the computer's network address changes
+                    (0.16.0: a setup copied from the network line stopped reaching the server) */}
+                {lan && (
+                  <CopyRow
+                    label="This computer"
+                    text={claudeCommand(localUrl, null)}
+                    copied={copied === "claude-local"}
+                    onCopy={() => copy("claude-local", claudeCommand(localUrl, null))}
+                    hint="For Claude Code on this computer. No token is needed."
+                  />
+                )}
                 <CopyRow
-                  label="Claude Code"
+                  label={lan ? "Other computer" : "Claude Code"}
                   text={claudeCommand(status.url, lan ? masked : null)}
                   copied={copied === "claude"}
                   onCopy={() =>
                     lan
                       ? copyWithToken("claude", (token) => claudeCommand(status.url!, token))
                       : copy("claude", claudeCommand(status.url!, null))
+                  }
+                  hint={
+                    lan ? "For Claude Code on another computer. Includes the token." : undefined
                   }
                 />
                 <CopyRow
@@ -298,7 +310,7 @@ export function McpSection({
             })}
           </div>
         </div>
-      </div>
+      </SettingsCard>
     </section>
   );
 }

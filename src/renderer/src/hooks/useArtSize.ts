@@ -9,12 +9,12 @@ const TEXT_MIN_PX = 320;
 const GAP_PX = 32;
 
 /** The automatic size: three tiers by window width, at Tailwind's lg and xl breakpoints
- *  (compact windows get genuinely small art, the user's pass). */
+ *  (compact windows get genuinely small art). */
 export const artTier = (windowWidth: number): number =>
   windowWidth >= 1280 ? 400 : windowWidth >= 1024 ? 340 : 260;
 
 /**
- * The Now Playing art's size (the user, 2026-09-12: a handle at the corner, the size
+ * The Now Playing art's size (a handle at the corner, the size
  * remembered). The drag is in pixels, through the drawers' hook, live while dragging and
  * saved on release; what is saved is the size's SHARE of the room the art has, so it
  * survives a window of another size, and null when the drag ends on the detent, the

@@ -2,10 +2,14 @@ import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import { app } from "electron";
 import { jsonFileStore } from "./jsonStore";
+import { checkPlaylists, playlistsCarriedNone, withCarriedPlaylists } from "./savedChecks";
 import {
   MAX_PLAYLISTS,
   MAX_PLAYLIST_ITEMS,
+  PLAYLISTS_FULL,
+  PLAYLIST_FULL_TOKEN,
   playlistItemKey,
+  playlistTooLong,
   type Playlist,
   type PlaylistItem,
 } from "@shared/model";
@@ -22,23 +26,42 @@ function sortNewest(list: Playlist[]): Playlist[] {
   return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
 }
 
+// a later version's playlists and items this one doesn't read, kept out of the app and written back
+let carried = playlistsCarriedNone();
+
 const store = jsonFileStore<Playlist[]>({
   pathOf: () => join(app.getPath("userData"), "playlists.json"),
   scope: "playlists",
-  load: (parsed) => (Array.isArray(parsed) ? sortNewest(parsed as Playlist[]) : []),
+  said: "your playlists",
+  load: (parsed, setAside) => {
+    carried = playlistsCarriedNone();
+    return sortNewest(checkPlaylists(parsed, setAside, carried));
+  },
+  encode: (list) => withCarriedPlaylists(list, carried),
+  kept: () => carried.lists.notes,
 });
 
 export function getPlaylists(): Playlist[] {
   return store.get();
 }
 
+/** Every write, whole: nothing loaded or written is ever trimmed (the bounds refuse instead). */
 function save(list: Playlist[]): Playlist[] {
-  return store.set(sortNewest(list).slice(0, MAX_PLAYLISTS));
+  return store.set(sortNewest(list));
 }
 
-/** Trim to the item ceiling — applied on every write path, not just create. */
+/** A write past a bound, refused with the sentence the window and an agent show (the model's
+ *  PLAYLIST_FULL_TOKEN). */
+export class PlaylistFullError extends Error {
+  constructor(readonly sentence: string) {
+    super(`${PLAYLIST_FULL_TOKEN}:${sentence}`);
+  }
+}
+
+/** The item ceiling, held on every write path that can grow a playlist, not just create. */
 function boundItems(items: PlaylistItem[]): PlaylistItem[] {
-  return items.slice(0, MAX_PLAYLIST_ITEMS);
+  if (items.length > MAX_PLAYLIST_ITEMS) throw new PlaylistFullError(playlistTooLong(items.length));
+  return items;
 }
 
 /**
@@ -67,6 +90,7 @@ export function createPlaylist(
   name: string,
   items: PlaylistItem[],
 ): { list: Playlist[]; created: Playlist } {
+  if (getPlaylists().length >= MAX_PLAYLISTS) throw new PlaylistFullError(PLAYLISTS_FULL);
   const now = Date.now();
   const playlist: Playlist = {
     id: randomUUID(),

@@ -76,7 +76,7 @@ export function useNavDrag({
           // Cancelled by Esc with the button still held: the abort's release
           // is the NEXT pointerup, whenever it comes — swallow its click,
           // and only its click (a plain timeout missed late releases and the
-          // click deselected; user, 2026-08-30).
+          // click deselected).
           const onAbortRelease = (): void => {
             window.addEventListener("click", swallowClick, { capture: true, once: true });
             setTimeout(() => window.removeEventListener("click", swallowClick, true), 150);

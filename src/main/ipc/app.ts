@@ -1,9 +1,13 @@
 import { IPC } from "@shared/ipc";
 import { shell } from "electron";
 import { hasLocalNetworkPrivacy } from "../app/localNetwork";
+import { revealLog } from "../app/appLog";
+import { loginItemState, setOpenAtLogin } from "../app/loginItem";
+import { openAccessibilitySettings, refreshMediaKeys } from "../app/mediaKeys";
 import { deviceManager, mcpBridge } from "../app/runtime";
 import { checkUpdatesOnDemand, downloadUpdate, installUpdate } from "../app/updater";
 import {
+  getMainWindow,
   sendMenuCommand,
   setUndoMenuLabel,
   showMainWindow,
@@ -17,6 +21,18 @@ export function registerAppIpc(): void {
     if (/^https?:/i.test(url)) return shell.openExternal(url);
     return Promise.resolve();
   });
+  // Open at login: the system's login item, read fresh for each showing of the row
+  handle(IPC.getLoginItem, () => Promise.resolve(loginItemState()));
+  // the media keys: bound again when they can be now, then where they stand (app/mediaKeys)
+  handle(IPC.getMediaKeys, () => Promise.resolve(refreshMediaKeys()));
+  handle(IPC.openAccessibilitySettings, () => openAccessibilitySettings());
+  handle(IPC.revealLogFile, () => {
+    // a line first, so the file is there to show even before anything else was logged
+    deviceManager.log("info", "app", "the log file was shown");
+    revealLog();
+    return Promise.resolve();
+  });
+  handle(IPC.setLoginItem, (_e, on: boolean) => Promise.resolve(setOpenAtLogin(on === true)));
   handle(IPC.localNetworkPrivacy, () =>
     Promise.resolve(hasLocalNetworkPrivacy(process.platform, process.getSystemVersion())),
   );
@@ -41,5 +57,9 @@ export function registerAppIpc(): void {
   handle(IPC.showMain, (_e, screen?: string) =>
     screen ? sendMenuCommand({ id: "screen", screen }) : showMainWindow(),
   );
-  handle(IPC.undoLabelSet, (_e, label: string | null) => setUndoMenuLabel(label));
+  // the main window's top entry is the one Cmd+Z runs, so it alone names the Edit menu's Undo
+  // (0.16.0: the tray panel's heart renamed it to an entry Cmd+Z then didn't run)
+  handle(IPC.undoLabelSet, (e, label: string | null) => {
+    if (e.sender === getMainWindow()?.webContents) setUndoMenuLabel(label);
+  });
 }

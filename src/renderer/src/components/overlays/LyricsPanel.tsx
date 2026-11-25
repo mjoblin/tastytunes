@@ -8,6 +8,7 @@ import { useLyrics } from "@/hooks/useLyrics";
 import { usePanelWidth } from "@/hooks/usePanelWidth";
 import { PanelResizeHandle } from "@/components/controls/PanelResizeHandle";
 import { HeaderChip } from "@/components/chrome/Chrome";
+import { SIDE_PANEL } from "@/components/chrome/Overlay";
 
 export function LyricsPanel({ className }: { className?: string }): React.JSX.Element {
   const setLyricsOpen = useStore((s) => s.setLyricsOpen);
@@ -25,13 +26,7 @@ export function LyricsPanel({ className }: { className?: string }): React.JSX.El
   }, [currentIndex, hovered]);
 
   return (
-    <aside
-      style={{ width }}
-      className={cx(
-        "no-drag absolute inset-y-0 right-0 z-10 max-w-[60%] flex flex-col bg-panel/60 backdrop-blur-md border-l border-edge",
-        className,
-      )}
-    >
+    <aside style={{ width }} className={cx(SIDE_PANEL, className)}>
       <PanelResizeHandle dragging={dragging} snapped={snapped} handleProps={handleProps} />
       <div className="flex items-center justify-between px-6 pt-5 pb-3">
         <div className="microlabel text-ink/80 flex items-center gap-2">

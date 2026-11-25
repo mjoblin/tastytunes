@@ -1,7 +1,7 @@
 /**
  * A FLAC FILE IN FRAMES, AS ITS BYTES ARRIVE (0.14.0, analysis with no size limit). WebCodecs'
  * AudioDecoder decodes FLAC a frame at a time (every rate to 384 kHz, 16 and 24 bit, stereo and
- * 5.1, with today's values: ops decoder-probe), but it wants the frames handed to it one by one,
+ * 5.1, with today's values), but it wants the frames handed to it one by one,
  * and a FLAC file marks them only by a sync code that may also occur inside one. So: the stream
  * marker and the metadata blocks first (STREAMINFO is the decoder's description and says the
  * track's length), then each frame from its header to the next header whose frame number follows
@@ -99,7 +99,7 @@ export class FlacFrames {
   private buf = new Uint8Array(1 << 20);
   /** Where the unread bytes begin and end in `buf`. A read offset (0.15.0): the buffer is
    *  compacted only once the offset passes half of it, where every frame used to copy the rest
-   *  down (63 times a file's bytes, the 0.14 re-score measured). */
+   *  down (63 times a file's bytes, as measured). */
   private base = 0;
   private len = 0;
   private info: FlacInfo | null = null;
@@ -245,7 +245,7 @@ export class FlacFrames {
         this.scan = this.minFrame;
         continue;
       }
-      // A FRAME LONGER THAN ONE CAN BE (0.15.0, the 0.14 re-score): the header that should follow
+      // A FRAME LONGER THAN ONE CAN BE (0.15.0): the header that should follow
       // was lost (a missing frame, a flipped bit). The next header that passes its CRC with a
       // later number is taken, and the damaged stretch before it is dropped: the decoder, which
       // refuses a bad frame and the whole decode with it, never sees it, and the bytes held stay

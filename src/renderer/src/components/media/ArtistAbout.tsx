@@ -20,9 +20,9 @@ const refreshed = new Set<(name: string) => void>();
 
 /**
  * Ask main again past its cache (the artist page's Refresh details, as Now Playing's panel has
- * it; his ask, 2026-10-12: "is there some way to attempt to load artist art again (maybe a
- * wikipedia page has been added since last check)"). An ask that comes back with nothing keeps
- * the answer already held: a refresh never takes away what the page was showing.
+ * it: the artist's picture or a Wikipedia page may have appeared since the last check). An ask
+ * that comes back with nothing keeps the answer already held: a refresh never takes away what
+ * the page was showing.
  */
 export function refreshArtistAbout(name: string): Promise<ArtistInfo | null> {
   const held = aboutCache.get(name) ?? Promise.resolve(null);
@@ -63,7 +63,7 @@ export function useArtistAbout(
       // THE RENDERER REMEMBERS ANSWERS, MAIN REMEMBERS MISSES: main returns null
       // for a search that never happened (a 503, a timeout) and refuses to
       // cache it, so keeping that null here turned one bad second into
-      // "Nothing found" for the session (user, 2026-09-12: Dominic Fike).
+      // "Nothing found" for the session.
       if (info == null) aboutCache.delete(name);
       if (live) setGot({ name, info });
     });
@@ -111,7 +111,7 @@ export function ArtistAbout({
     return () => ro.disconnect();
   }, [summary, whole]);
   if (status === "off") return null;
-  // a toggle (his ask, 2026-10-13: "if i choose read more i can't revert back"): both labels
+  // a toggle (read more had no way back): both labels
   // hold one grid cell, the other kept invisible, so it is one width whichever it says
   const labels = (
     <>
@@ -209,13 +209,12 @@ export function ArtistAbout({
 }
 
 /**
- * THE ARTIST PAGE'S LINKS OUT, on the name's line (his idea, 2026-10-13: "what if we moved the
- * buttons to be right-aligned from the artist name. they wouldn't move up/down then, and would
- * leave more room for the text ... icon buttons for musicbrainz and wikipedia"): round icon
- * buttons, the album header's heart and ⋯ shape, Wikipedia and MusicBrainz as monograms (the
- * app's own letters, not the sites' logos) close together, Refresh details a step apart. The
- * refresh is a standing slot (disabled while the first lookup is out), so nothing pops in
- * beside the name; the links join it when the lookup finds them.
+ * THE ARTIST PAGE'S LINKS OUT, on the name's line (right-aligned from the name, they never move
+ * up or down and leave the text more room): round icon buttons, the album header's heart and ⋯
+ * shape, Wikipedia and MusicBrainz as monograms (the app's own letters, not the sites' logos)
+ * close together, Refresh details a step apart. The refresh is a standing slot (disabled while
+ * the first lookup is out), so nothing pops in beside the name; the links join it when the
+ * lookup finds them.
  */
 export function ArtistLinks({ name }: { name: string }): React.JSX.Element | null {
   const { status, info } = useArtistAbout(name, true);

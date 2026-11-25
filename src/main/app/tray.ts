@@ -16,11 +16,14 @@ import type { StreamerCommand } from "@shared/ipc";
 import { getSettings, updateSettings } from "../data/persist";
 import { anchorToTray, workAreaFor, type Rect } from "./windowPlacement";
 import { reloadOnCrash } from "./crashReload";
+import { currentUpdateState } from "./updater";
 import { deviceManager } from "./runtime";
 import trayTemplateIcon from "../../../resources/trayTemplate.png?asset";
 import trayTemplateIcon2x from "../../../resources/trayTemplate@2x.png?asset";
 import trayTileIcon from "../../../resources/tray.png?asset";
 import { FACT_SEP } from "@shared/model";
+import type { UpdateState } from "@shared/model";
+import { devOverride } from "./devOverride";
 
 /**
  * The system-tray / menu-bar companion. Phase 1: an icon and a native context
@@ -89,7 +92,7 @@ export function trayWantsRefresh(kind: PushMessage["kind"]): boolean {
 
 // --------------------------------------------------------------- menu contents
 
-type TrayAction = "open" | "settings" | "about" | "quit";
+type TrayAction = "open" | "settings" | "updates" | "about" | "quit";
 
 /**
  * A plain description of the menu, built before any Electron object exists.
@@ -151,8 +154,17 @@ function sourcesNode(snap: Snapshot): TrayNode {
  * into a menu is not a thing), and the visual, frequent surfaces — queue,
  * presets, playlists, recents — are the panel's job in a later phase.
  */
-export function buildTrayMenu(snap: Snapshot): TrayNode[] {
+export function buildTrayMenu(snap: Snapshot, update: UpdateState | null = null): TrayNode[] {
   const connected = snap.connection.phase === "connected";
+  // AN UPDATE, WHERE THE MENU BAR'S PEOPLE LOOK (0.16.0): someone who runs TastyTunes from here may
+  // never see the window's Update button, so the menu says it first while one is on offer, and
+  // the item opens Settings › Updates, where the download and the restart are asked for
+  const offered =
+    update != null &&
+    update.version != null &&
+    (update.phase === "available" ||
+      update.phase === "downloading" ||
+      update.phase === "downloaded");
   // Only NETWORK standby is reachable, and that's exactly the case where
   // power !== 'ON' while still connected — so the label can always name the
   // action rather than making someone guess what a toggle would do.
@@ -161,6 +173,12 @@ export function buildTrayMenu(snap: Snapshot): TrayNode[] {
   return [
     { id: "tray-status", label: statusLabel(snap), enabled: false },
     { type: "separator" },
+    ...(offered
+      ? ([
+          { id: "tray-update", label: `Update to ${update.version}…`, action: "updates" },
+          { type: "separator" },
+        ] satisfies TrayNode[])
+      : []),
     { id: "tray-open", label: "Open TastyTunes", action: "open" },
     { type: "separator" },
     sourcesNode(snap),
@@ -201,6 +219,9 @@ function runAction(action: TrayAction, d: TrayDeps): void {
       return;
     case "settings":
       d.sendToMain({ id: "screen", screen: "settings" });
+      return;
+    case "updates":
+      d.sendToMain({ id: "updates" });
       return;
     case "about":
       d.sendToMain({ id: "about" });
@@ -499,7 +520,7 @@ function ensurePanel(): BrowserWindow {
     // ordered in while the app's own main window is full screen is not
     // overlaid — macOS promotes it to a full-screen tile of its own: the panel
     // came up 1728×1084 in a brand-new Space when the icon was clicked from
-    // display mode (user report, 2026-08-15; measured: isFullScreen true, a
+    // display mode (measured 2026-08-15: isFullScreen true, a
     // new Space id). With Primary cleared it is a plain auxiliary overlay,
     // 380×560, on the Space it was summoned from.
     fullscreenable: false,
@@ -510,7 +531,7 @@ function ensurePanel(): BrowserWindow {
     // window calls activateIgnoringOtherApps BEFORE ordering the window in,
     // and app activation is what makes macOS jump to "a Space with open
     // windows for the application" — i.e. every tray click yanked the user to
-    // whichever desktop the main window lived on (reported 2026-08-15). A
+    // whichever desktop the main window lived on. A
     // panel gives macOS nothing to switch for, and dismissing it leaves the
     // app you were in frontmost, Spotlight-style. The type also carries
     // all-Spaces + over-fullscreen in its collection behaviour, which is what
@@ -520,6 +541,8 @@ function ensurePanel(): BrowserWindow {
     // No traffic lights, no shadow gap — the panel draws its own card.
     backgroundColor: "#00000000",
     webPreferences: {
+      // no text box in the app needs it, and off the Mac it fetches its dictionaries from Google
+      spellcheck: false,
       preload: join(__dirname, "../preload/index.cjs"),
       sandbox: true,
       // THE PANEL MUST NOT BE THROTTLED WHILE HIDDEN. Chromium suspends
@@ -575,8 +598,9 @@ function ensurePanel(): BrowserWindow {
   });
   reloadOnCrash(panel, "menu bar panel", (text) => deviceManager.log("warn", "app", text));
 
-  if (process.env["ELECTRON_RENDERER_URL"]) {
-    void panel.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}?tray=1`);
+  const devPage = devOverride("ELECTRON_RENDERER_URL");
+  if (devPage) {
+    void panel.loadURL(`${devPage}?tray=1`);
   } else {
     void panel.loadFile(join(__dirname, "../renderer/index.html"), { query: { tray: "1" } });
   }
@@ -611,10 +635,9 @@ function showPanel(): void {
   //
   // A transparent window that is composited before its renderer has painted
   // is FULLY SEE-THROUGH, so on Windows the panel appeared for an instant,
-  // vanished, and then faded in under the OS's own show animation — reported
-  // from real use 2026-08-04. macOS doesn't show it (its show is synchronous
-  // with the first frame), so this stays scoped rather than changing a
-  // behaviour that is already right.
+  // vanished, and then faded in under the OS's own show animation. macOS
+  // doesn't show it (its show is synchronous with the first frame), so this
+  // stays scoped rather than changing a behaviour that is already right.
   //
   // Opacity, not a deferred show(): the window has to be shown to paint, and
   // deferring the show is what the 900ms retry below already has to work
@@ -674,7 +697,7 @@ export function hasTray(): boolean {
 /** Rebuild the context menu if what it would say has changed. */
 export function refreshTrayMenu(): void {
   if (!tray || !deps) return;
-  const nodes = buildTrayMenu(deps.snapshot());
+  const nodes = buildTrayMenu(deps.snapshot(), currentUpdateState());
   const signature = JSON.stringify(nodes);
   if (signature === rendered) return;
   rendered = signature;
@@ -796,10 +819,10 @@ function installTestHooks(): void {
   if (process.env["TASTYTUNES_TRAY_TEST"] !== "1" || globalThis.__ttTray) return;
   globalThis.__ttTray = {
     present: () => tray != null,
-    menu: () => (tray && deps ? buildTrayMenu(deps.snapshot()) : null),
+    menu: () => (tray && deps ? buildTrayMenu(deps.snapshot(), currentUpdateState()) : null),
     click(id: string): boolean {
       if (!tray || !deps) return false;
-      const node = findNode(buildTrayMenu(deps.snapshot()), id);
+      const node = findNode(buildTrayMenu(deps.snapshot(), currentUpdateState()), id);
       if (!node || node.enabled === false) return false;
       if (node.command) deps.command(node.command);
       else if (node.action) runAction(node.action, deps);

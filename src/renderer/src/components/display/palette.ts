@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { tt } from "@/api";
 import type { Rgb, ScenePalette } from "./scenes/types";
 import { Lru } from "@/lib/lru";
+import { coverPixels } from "@/lib/coverPixels";
+import { hslToRgb, rgbToHsl, roundRgb } from "@/lib/color";
 
 /**
  * The scenes' colors: the theme's tokens read off :root (so a scene is at
@@ -50,45 +52,14 @@ export function readTokens(): Tokens {
   };
 }
 
-function rgbToHsl(r: number, g: number, b: number): [number, number, number] {
-  r /= 255;
-  g /= 255;
-  b /= 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  if (max === min) return [0, 0, l];
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h: number;
-  if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6;
-  else if (max === g) h = ((b - r) / d + 2) / 6;
-  else h = ((r - g) / d + 4) / 6;
-  return [h, s, l];
-}
-function hslToRgb(h: number, s: number, l: number): Rgb {
-  if (s === 0) return [l * 255, l * 255, l * 255];
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  const hue = (t: number): number => {
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-  return [hue(h + 1 / 3) * 255, hue(h) * 255, hue(h - 1 / 3) * 255].map(Math.round) as Rgb;
-}
-
 /** The gold's neighbours: the accents when the art is plain or unknown. */
 export function goldAccents(gold: Rgb, light: boolean): Rgb[] {
   const [h, s] = rgbToHsl(gold[0], gold[1], gold[2]);
   const l = light ? 0.42 : 0.6;
   return [
-    hslToRgb((h + 0.92) % 1, Math.max(0.45, s * 0.8), l),
-    hslToRgb((h + 0.55) % 1, Math.max(0.4, s * 0.7), l * 0.9),
-    hslToRgb(h, s, l),
+    roundRgb(hslToRgb((h + 0.92) % 1, Math.max(0.45, s * 0.8), l)),
+    roundRgb(hslToRgb((h + 0.55) % 1, Math.max(0.4, s * 0.7), l * 0.9)),
+    roundRgb(hslToRgb(h, s, l)),
   ];
 }
 
@@ -100,17 +71,8 @@ interface ArtColors {
 
 /** Three vivid hues from the picture, clamped into the theme's readable range, and its cast. */
 async function artAccents(dataUrl: string, light: boolean): Promise<ArtColors | null> {
-  const img = new Image();
-  img.src = dataUrl;
-  await img.decode();
-  const size = 40;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  if (!ctx) return null;
-  ctx.drawImage(img, 0, 0, size, size);
-  const { data } = ctx.getImageData(0, 0, size, size);
+  const data = await coverPixels(dataUrl, 40);
+  if (!data) return null;
   const buckets = 12;
   const acc = Array.from({ length: buckets }, () => ({ w: 0, r: 0, g: 0, b: 0 }));
   const all = { w: 0, r: 0, g: 0, b: 0 };
@@ -141,10 +103,12 @@ async function artAccents(dataUrl: string, light: boolean): Promise<ArtColors | 
   const [lMin, lMax] = light ? [0.32, 0.48] : [0.5, 0.7];
   const out = ranked.map((a) => {
     const [h, s, l] = rgbToHsl(a.r / a.w, a.g / a.w, a.b / a.w);
-    return hslToRgb(h, Math.min(Math.max(s, 0.45), 0.85), Math.min(Math.max(l, lMin), lMax));
+    return roundRgb(
+      hslToRgb(h, Math.min(Math.max(s, 0.45), 0.85), Math.min(Math.max(l, lMin), lMax)),
+    );
   });
   const [hueAll, satAll] = rgbToHsl(all.r / all.w, all.g / all.w, all.b / all.w);
-  const tint = hslToRgb(hueAll, Math.min(Math.max(satAll, 0.4), 0.7), light ? 0.8 : 0.22);
+  const tint = roundRgb(hslToRgb(hueAll, Math.min(Math.max(satAll, 0.4), 0.7), light ? 0.8 : 0.22));
   return { accent: out, tint };
 }
 

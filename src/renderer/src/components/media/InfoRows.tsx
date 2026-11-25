@@ -21,8 +21,8 @@ export type Row = [label: string, value: React.ReactNode];
 
 /** The sections of one Info surface share one label column, as wide as the longest label shown
  *  (at most 9rem), its labels set against their values, so every label sits next to its value
- *  and every section's values still line up (0.12.0, his ask: a fixed 112px column left a short
- *  label like Year looking abandoned; right-aligned his pick, the Mac's Get Info look). Every
+ *  and every section's values still line up (0.12.0: a fixed 112px column left a short
+ *  label like Year looking abandoned; right-aligned, the Mac's Get Info look). Every
  *  Section sits inside one. */
 export function InfoSections({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -62,7 +62,7 @@ export const mono = (v: string | null | undefined): React.ReactNode =>
 
 /**
  * A mono value with a copy affordance — the URL or id someone pastes into a
- * bug report, an agent prompt, a browser (user ask, 2026-08-16). The app
+ * bug report, an agent prompt, a browser. The app
  * doesn't allow free text selection, on purpose; this is the deliberate
  * exception, one value at a time. Feedback is in place (the icon becomes a
  * check for a beat) — a toast would double-feedback something under the
@@ -169,7 +169,7 @@ export function trackFormatRows(
     ["File size", f.sizeBytes ? fmtBytes(f.sizeBytes) : null],
     // DR is a fact about the MASTER, so it files with the file facts. Rows
     // are PROSE: tinted text with the band word attached — the detail layer
-    // says what the token only points at (user call, 2026-09-01).
+    // says what the token only points at.
     [
       "Dynamic range",
       dr != null && dr > 0 ? (

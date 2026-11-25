@@ -1,21 +1,29 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { isRecord } from "@shared/guards";
+import { isRecord, kindOf } from "@shared/guards";
+import { MCP_RENAMED_TOOLS } from "@shared/mcpCatalog";
 import { join } from "node:path";
 import { app } from "electron";
 import {
+  ACCENT_IDS,
   DEFAULT_SETTINGS,
   DISPLAY_FONT_IDS,
   DISPLAY_SCENE_IDS,
   type AppSettings,
 } from "@shared/model";
 import { atomicWriteFileSync } from "./jsonStore";
+import { checkSettingsKinds } from "./savedChecks";
+import { keepAsFound, readSaved, saveFailed } from "./savedFiles";
 import { getSecret, setSecret } from "./secrets";
 
 let cached: AppSettings | null = null;
+/** settings.json couldn't be read this session: nothing writes over it (data/savedFiles). */
+let unreadable = false;
 
 /** The MCP server's bearer token (the secrets store's mcpToken): minted here and nowhere else. */
 const mintToken = (): string => randomBytes(24).toString("base64url");
+
+/** Settings that once were and are no longer: dropped from a file read, so a write leaves them out. */
+const RETIRED = ["accentFollowsArt", "ambientCoverage", "vignette", "searchHidden"] as const;
 
 /** The tokens settings.json held before the secrets store (0.13.0): read only to move them. */
 type Legacy = AppSettings & { lbToken?: unknown; mcp: AppSettings["mcp"] & { token?: unknown } };
@@ -36,22 +44,46 @@ function settingsPath(): string {
 export function getSettings(): AppSettings {
   if (cached) return cached;
   let loaded: AppSettings;
+  // THE FILE CHECKED ON LOAD (0.16.0, data/savedFiles and data/savedChecks): a file that isn't JSON
+  // is moved aside, one that can't be read is never written over this session, and a value of the
+  // wrong kind is set aside so its default stands, the file as it was copied aside first
+  const path = settingsPath();
+  const read = readSaved(path);
+  unreadable = read.state === "unreadable";
+  const setAside: string[] = [];
+  const raw = read.state === "read" ? read.parsed : undefined;
+  if (raw !== undefined && !isRecord(raw)) setAside.push(`it held ${kindOf(raw)}, not settings`);
+  // our own file: an object is ours to read as settings (missing or retired keys are backfilled
+  // below), anything else is ignored
+  const file = checkSettingsKinds(isRecord(raw) ? raw : {}, setAside);
+  keepAsFound(path, setAside);
   try {
-    const raw: unknown = JSON.parse(readFileSync(settingsPath(), "utf-8"));
-    // our own file: an object is ours to read as settings (the cast says so;
-    // missing or retired keys are backfilled below), anything else is ignored
-    const file: Record<string, unknown> = isRecord(raw) ? raw : {};
     loaded = { ...DEFAULT_SETTINGS, ...(file as Partial<AppSettings>) };
     // The merge above is shallow — backfill nested objects from older files.
     loaded.mcp = { ...DEFAULT_SETTINGS.mcp, ...loaded.mcp };
+    // an agent tool renamed keeps the user's choice to switch it off
+    loaded.mcp.disabledTools = loaded.mcp.disabledTools.map((n) => MCP_RENAMED_TOOLS[n] ?? n);
     // The Tracks view had no Rows or Cards of its own before 0.13.0-rc.4 (it followed the
     // Library's one choice): an older file keeps what it showed
     if (!("lensTracksLayout" in file)) loaded.lensTracksLayout = loaded.libraryLayout;
+    // nor the Artists view and an artist's page before 0.16.0: an older file keeps what it showed
+    if (!("lensArtistsLayout" in file)) loaded.lensArtistsLayout = loaded.libraryLayout;
+    if (!("artistPageLayout" in file)) loaded.artistPageLayout = loaded.libraryLayout;
     // Heal a display font that was retired (e.g. an older file naming a face no
     // longer in the curated set) back to the default so the picker stays in sync.
     if (!DISPLAY_FONT_IDS.includes(loaded.displayFont)) {
       loaded.displayFont = DEFAULT_SETTINGS.displayFont;
     }
+    // Accent follows album art became one of the accent's choices (0.16.0): a file that had it on
+    // keeps the album's color, one that had it off gets the default
+    if (!("accent" in file)) {
+      loaded.accent = file.accentFollowsArt === true ? "art" : DEFAULT_SETTINGS.accent;
+    }
+    // retired settings leave the file at the next write (0.16.0: the album-art switch, now an
+    // accent choice; the ambient art's coverage and vignette, now always the whole window with it;
+    // the Search screen's hidden categories, now one scope at a time, Everything first)
+    for (const key of RETIRED) delete (loaded as unknown as Record<string, unknown>)[key];
+    if (!ACCENT_IDS.includes(loaded.accent)) loaded.accent = DEFAULT_SETTINGS.accent;
     if (!DISPLAY_SCENE_IDS.includes(loaded.displayScene)) {
       loaded.displayScene = DEFAULT_SETTINGS.displayScene;
     }
@@ -99,12 +131,19 @@ export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const merged = { ...getSettings(), ...patch };
   const next = secretsMoved ? withoutSecrets(merged) : merged;
   cached = next;
+  if (unreadable) return next;
   try {
     // atomic (temp + rename) — a crash mid-write must not truncate settings.
     // Pretty-printed: this is the one file the user might open or diff.
     atomicWriteFileSync(settingsPath(), JSON.stringify(next, null, 2));
   } catch (err) {
     console.error("failed to persist settings", err);
+    // said once a session (data/savedFiles saveFailed)
+    if (!settingsFailSaid) {
+      settingsFailSaid = true;
+      saveFailed("your settings", err);
+    }
   }
   return next;
 }
+let settingsFailSaid = false;

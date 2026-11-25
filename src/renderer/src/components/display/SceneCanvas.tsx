@@ -55,6 +55,8 @@ export function SceneCanvas({
   const wrapRef = useRef<HTMLDivElement | null>(null);
   const instRef = useRef<ReturnType<typeof makeScene> | null>(null);
   const [failed, setFailed] = useState(false);
+  // bumped when a graphics context is lost: the scene mounts again on fresh canvases
+  const [lost, setLost] = useState(0);
   const persisted = useStore((s) => s.settings.displaySceneSettings[scene]);
   const settings = useMemo(() => resolveSettings(def, persisted), [def, persisted]);
   useEffect(() => {
@@ -152,7 +154,7 @@ export function SceneCanvas({
         return;
       }
       raf = requestAnimationFrame(loop);
-      // REDUCED MOTION SOFTENS A SCENE, IT DOES NOT STOP ONE (user, 2026-10-06): a scene runs
+      // REDUCED MOTION SOFTENS A SCENE, IT DOES NOT STOP ONE: a scene runs
       // only because someone picked it by name (both surfaces default to the album art), so
       // it runs at its full rate and each scene softens itself through the frame's reduced
       // flag (slower, no sprays, no entrances); what nobody picked stays still: the picker's
@@ -215,10 +217,21 @@ export function SceneCanvas({
       if (!raf) raf = requestAnimationFrame(loop);
     };
     document.addEventListener("visibilitychange", onVisibility);
+    // A LOST GRAPHICS CONTEXT (a GPU process restart, a driver reset, a remote session) left
+    // Display mode black until it was reopened: the scene, and the finish with it, mount again on
+    // fresh canvases a beat later. Heard in the capture phase, so the finish's own canvas counts.
+    let remount: ReturnType<typeof setTimeout> | null = null;
+    const onLost = (e: Event): void => {
+      e.preventDefault();
+      remount ??= setTimeout(() => setLost((n) => n + 1), 500);
+    };
+    wrap.addEventListener("webglcontextlost", onLost, true);
     raf = requestAnimationFrame(loop);
     return () => {
       cancelAnimationFrame(raf);
       document.removeEventListener("visibilitychange", onVisibility);
+      wrap.removeEventListener("webglcontextlost", onLost, true);
+      if (remount) clearTimeout(remount);
       ro.disconnect();
       instRef.current = null;
       // leave the DOM first and lose the contexts a beat LATER: losing a
@@ -250,7 +263,7 @@ export function SceneCanvas({
     };
     // settings ride the effect above; the loop reads inst.settings each frame
   });
-  useEffect(() => mountScene(), [scene, feed, mini, gl]);
+  useEffect(() => mountScene(), [scene, feed, mini, gl, lost]);
 
   return (
     <div ref={wrapRef} className={cx("relative block h-full w-full", className)} data-scene={scene}>

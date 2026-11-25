@@ -4,14 +4,16 @@ import "./app/boot";
 import { app, globalShortcut, powerMonitor } from "electron";
 import { IPC } from "@shared/ipc";
 import { serveArtProtocol } from "./app/artProtocol";
-import { denyPermissionsByDefault } from "./app/permissions";
+import { denyPermissionsByDefault, keepNoCookies, logWindowPictures } from "./app/permissions";
+import { lateStep, startupFailed } from "./app/bootFailure";
 import { broadcastSettings, wireListeningPushes } from "./app/broadcast";
-import { syncMediaKeys } from "./app/mediaKeys";
+import { syncMediaKeys, watchMediaKeys } from "./app/mediaKeys";
 import { installAppMenu } from "./app/menu";
 import { deviceManager, mcpBridge } from "./app/runtime";
 import { catchUpOnResume, noteSuspend, startScheduler } from "./app/scheduler";
 import { hasTray, refreshTrayMenu, syncTray, trayWantsRefresh } from "./app/tray";
 import { startUpdater } from "./app/updater";
+import { announceUpdate, shouldAnnounce } from "./app/updateNotice";
 import { serveUrlActions } from "./app/urlActions";
 import { takeUrlFromArgv } from "./app/urlInbox";
 import {
@@ -19,18 +21,21 @@ import {
   focusMain,
   getMainWindow,
   markQuitting,
+  markWindowStep,
   menuDeps,
   quitting,
   sendMenuCommand,
   showMainWindow,
   trayDeps,
 } from "./app/windows";
-import { getSettings, moveSecrets } from "./data/persist";
+import { getSettings, moveSecrets, updateSettings } from "./data/persist";
+import { LOGIN_ARG, openedAtLogin, startsInTray } from "./app/loginItem";
 import { listeningRecord } from "./data/listeningRecord";
 import { registerIpc } from "./ipc";
 import { artistPrefetchAfterIndex, startArtistPrefetch } from "./lookups/artistPrefetch";
 import { flushArtThumbs } from "./lookups/artThumbs";
 import { flushLookupCaches } from "./lookups/diskCache";
+import { remoteStreamers } from "./device/remoteStreamer";
 import * as mediaIndex from "./media/mediaIndex";
 import { deviceLaneReset, refreshServers } from "./media/upnpBrowser";
 import { stopDemoStreamer } from "./servers/demoStreamer";
@@ -45,6 +50,10 @@ wireListeningPushes();
 // MCP tools can mutate settings (schedules) — the renderer must hear about it
 mcpBridge.onSettingsMutated = (settings) => broadcastSettings(settings);
 mcpBridge.sendCommand = (command) => sendMenuCommand(command);
+mcpBridge.windowOpen = () => {
+  const w = getMainWindow();
+  return w != null && !w.isDestroyed();
+};
 
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
@@ -54,10 +63,12 @@ if (!gotLock) {
     // A tastytunes:// URL on Windows and Linux arrives as a second launch: its verb decides
     // whether a window shows (app/urlActions), so a key press does not pull the app forward.
     if (takeUrlFromArgv(argv)) return;
+    // the login item launching an app already running asks for nothing to be shown
+    if (argv.includes(LOGIN_ARG)) return;
     // A second launch means "show me the app" — recreate the window if the
-    // first instance is running window-less (macOS after close).
+    // first instance is running window-less (macOS after close), once start-up has made one.
     const mainWindow = getMainWindow();
-    if (!mainWindow) return createWindow();
+    if (!mainWindow) return showMainWindow();
     if (mainWindow.isMinimized()) mainWindow.restore();
     focusMain();
   });
@@ -65,15 +76,45 @@ if (!gotLock) {
   app
     .whenReady()
     .then(async () => {
+      // THE UPDATE CHECK FIRST, in its own try (app/bootFailure): a build that fails further on
+      // can still be offered the next one
+      try {
+        startUpdater((state) => {
+          getMainWindow()?.webContents.send(IPC.push, { kind: "updateState", state });
+          // the menu bar or tray menu offers it too
+          if (hasTray()) refreshTrayMenu();
+          // and someone running from the menu bar or tray, the window out of view, hears it once
+          const main = getMainWindow();
+          const inView = !!main && !main.isDestroyed() && main.isVisible() && !main.isMinimized();
+          if (state.version && shouldAnnounce(state, getSettings(), inView)) {
+            const version = state.version;
+            if (announceUpdate(version, () => sendMenuCommand({ id: "updates" }))) {
+              updateSettings({ updateNotified: version });
+            }
+          }
+        });
+      } catch (e) {
+        console.error("the update check couldn't start:", e);
+      }
       // the tokens into the secrets store before any window opens, so none ever receives one
       await moveSecrets();
       denyPermissionsByDefault();
+      keepNoCookies();
+      logWindowPictures();
       serveArtProtocol();
       registerIpc();
       installAppMenu(menuDeps);
-      createWindow();
+      // OPEN AT LOGIN (app/loginItem): with the menu bar icon on, a launch at login starts in
+      // the tray, no window, as closing the window leaves it; the window opens on demand from the
+      // tray or the Dock. An icon that could not appear opens the window after all. From here a Dock
+      // click or a second launch opens the window too (app/windows).
+      markWindowStep();
+      const inTray = startsInTray(openedAtLogin(), getSettings().tray);
+      if (!inTray) createWindow();
       syncMediaKeys();
+      watchMediaKeys();
       syncTray(getSettings().tray, trayDeps);
+      if (inTray && !hasTray()) createWindow();
       // THE HEAL AHEAD (0.10.0): the USB index heals on its own a few seconds after the
       // streamer wakes, or after connecting to one already awake (see
       // mediaIndex.healAhead); a standby or a lost connection cancels what was scheduled.
@@ -98,7 +139,7 @@ if (!gotLock) {
           else if (was !== "ON" && aheadHost) mediaIndex.scheduleHealAhead(aheadHost);
         }
         if (trayWantsRefresh(msg.kind)) refreshTrayMenu();
-        // INDEX AT CONNECT (2026-09-02, user call): the media indexes used to
+        // INDEX AT CONNECT: the media indexes used to
         // build only when the Library screen first listed servers, so on a
         // fresh install the Queue's album links and Open in Library could "not
         // find" an album the app had simply never looked for. The same
@@ -116,39 +157,49 @@ if (!gotLock) {
             .catch(() => {});
         }
       };
-      mcpBridge.sync(getSettings());
-      void deviceManager.startup();
+      // EACH LATE STEP IN ITS OWN TRY (app/bootFailure lateStep): with the window or the menu bar
+      // icon up, a step that throws costs itself, never the steps after it
+      lateStep("the agents' server", () => mcpBridge.sync(getSettings()));
+      lateStep("connecting", () => deviceManager.startup());
       // tastytunes:// URLs, those that arrived before ready first (app/urlInbox)
-      serveUrlActions();
-      startScheduler(deviceManager);
-      startArtistPrefetch();
-      mediaIndex.init((statuses) => {
-        deviceManager.setMediaIndex(statuses);
-        artistPrefetchAfterIndex();
-      });
-      startUpdater((state) => {
-        getMainWindow()?.webContents.send(IPC.push, { kind: "updateState", state });
-      });
+      lateStep("links", () => serveUrlActions());
+      lateStep("schedules", () => startScheduler(deviceManager));
+      lateStep("artist pictures", () => startArtistPrefetch());
+      lateStep("the library index", () =>
+        mediaIndex.init((statuses) => {
+          deviceManager.setMediaIndex(statuses);
+          artistPrefetchAfterIndex();
+        }),
+      );
 
       // Node timers stall during system sleep. The sleep timer fires what came
       // due; the SCHEDULER offers it instead (an alarm minutes late is a
       // question, not an instruction) — see scheduler.ts for the three rules.
-      powerMonitor.on("suspend", () => noteSuspend());
-      powerMonitor.on("resume", () => {
-        deviceManager.healthCheck();
-        deviceManager.checkSleepTimer();
-        catchUpOnResume(deviceManager);
+      lateStep("the sleep handlers", () => {
+        powerMonitor.on("suspend", () => {
+          noteSuspend();
+          // a station's session waits for the wake to say whether it played through (data/listeningRecord)
+          listeningRecord.noteSleep();
+        });
+        powerMonitor.on("resume", () => {
+          deviceManager.healthCheck();
+          deviceManager.checkSleepTimer();
+          // an agent's connections to other streamers, and their sleep timers, as the window's
+          remoteStreamers.resumed();
+          catchUpOnResume(deviceManager);
+        });
       });
-
-      // Dock-icon click. Asking for the MAIN window rather than "are there zero
-      // windows" matters now that a hidden tray panel can be the only window
-      // there is — counting windows would make the dock icon do nothing.
-      app.on("activate", () => showMainWindow());
     })
-    .catch((e: unknown) => {
-      // a failure anywhere in startup used to vanish (floating promise)
-      console.error("startup failed:", e);
-    });
+    // a failure anywhere in start-up says so, and points at the latest version; with the window or
+    // the tray up, the app stays (app/bootFailure)
+    .catch((e: unknown) => startupFailed(e, getMainWindow() != null || hasTray()));
+
+  // Dock-icon click, outside the start-up chain so a failure in it leaves the icon working; before
+  // start-up reaches its window step it does nothing (app/windows).
+  // Asking for the MAIN window rather than "are there zero windows" matters now that a hidden
+  // tray panel can be the only window there is: counting windows would make the dock icon do
+  // nothing.
+  app.on("activate", () => showMainWindow());
 
   app.on("before-quit", () => {
     markQuitting();
@@ -174,7 +225,7 @@ if (!gotLock) {
     flushArtThumbs();
     // Quitting mid-track: the open play's accumulated time reaches the
     // record (synchronous append; see listeningRecord).
-    listeningRecord.flush();
+    listeningRecord.flush({ quitting: true });
   });
   // A TERMINATION SIGNAL IS A QUIT (2026-09-15): a dev restart or a kill ends the process
   // without will-quit, and whatever the caches had not yet written was lost — an AirPlay

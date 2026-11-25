@@ -3,7 +3,7 @@ import { useStore } from "@/store";
 // THE CHROME'S GROUND (0.15.0, the hygiene pass: the navigation panel and the playback bar each
 // spelled the rule, and had drifted to different tones in dark). Clear under the full-window wash;
 // in dark on the window's own ground; in light only, a panel tint that sets the frame back from
-// the page (user call, 2026-10-31), the bar's a little stronger behind its blur. A new piece of
+// the page, the bar's a little stronger behind its blur. A new piece of
 // chrome takes a line here; the lint rule chrome-ground refuses the tint anywhere else, and S167
 // measures the result.
 const GROUND = {

@@ -1,11 +1,11 @@
 import { AlarmClock, Plus, Trash2, X } from "lucide-react";
-import { type AppSettings, type Schedule } from "@shared/model";
+import { type Schedule } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { cx } from "@/lib/format";
 import { Switch } from "@/components/controls/Switch";
 import { HeaderChip, PrimaryButton } from "@/components/chrome/Chrome";
-import { NumberField } from "@/components/settings/SettingsKit";
+import { NumberField, type SectionProps } from "@/components/settings/SettingsKit";
 import { Segmented } from "@/components/controls/Segmented";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
@@ -34,10 +34,10 @@ function MissedRow({ dueAt }: { dueAt: number }): React.JSX.Element {
   return (
     <div
       data-missed-schedule
-      className="flex items-center gap-3 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2"
+      className="flex items-center gap-3 rounded-lg ring-1 ring-accent/40 bg-accentdim px-3 py-2"
     >
-      <AlarmClock size={14} strokeWidth={1.9} className="shrink-0 text-gold" />
-      <span className="flex-1 min-w-0 text-[12.5px] text-gold">
+      <AlarmClock size={14} strokeWidth={1.9} className="shrink-0 text-accent" />
+      <span className="flex-1 min-w-0 text-[12.5px] text-accent">
         Missed {time} while your computer was asleep.
       </span>
       <PrimaryButton
@@ -50,7 +50,7 @@ function MissedRow({ dueAt }: { dueAt: number }): React.JSX.Element {
         onClick={() => void tt.scheduleDismissMissed()}
         data-tip="Dismiss"
         aria-label="Dismiss the missed schedule"
-        className="tip-top tip-end shrink-0 flex items-center justify-center h-7 w-7 rounded-md text-gold/70 hover:text-gold hover:bg-gold/10 motion-safe:active:scale-90 transition-all"
+        className="tip-top tip-end shrink-0 flex items-center justify-center h-7 w-7 rounded-md text-accent/70 hover:text-accent hover:bg-accent/10 motion-safe:active:scale-90 transition-all"
       >
         <X size={14} strokeWidth={2} />
       </button>
@@ -70,12 +70,14 @@ function describeSchedule(s: Schedule): string {
         : s.days.join(",") === "0,6"
           ? "on weekends"
           : `on ${s.days.map((d) => DAY_NAMES[d]).join(", ")}`;
-  if (s.action === "standby") return `Puts the streamer in standby at ${s.time} ${days}.`;
+  // a schedule an agent set for another streamer names it (0.16.0)
+  const who = s.streamer?.name ?? "the streamer";
+  if (s.action === "standby") return `Puts ${who} in standby at ${s.time} ${days}.`;
   const extras = [
     s.presetId != null ? `recalls preset ${s.presetId}` : null,
     s.volumePercent != null ? `sets volume to ${s.volumePercent}%` : null,
   ].filter(Boolean);
-  return `Wakes the streamer${extras.length ? `, ${extras.join(", ")},` : ""} at ${s.time} ${days}.`;
+  return `Wakes ${who}${extras.length ? `, ${extras.join(", ")},` : ""} at ${s.time} ${days}.`;
 }
 
 /**
@@ -83,13 +85,7 @@ function describeSchedule(s: Schedule): string {
  * day-of-week chips, wake/standby, and (for wake) optional preset + volume.
  * Executed by the main process; honest caveat up top about app-must-be-running.
  */
-export function SchedulesSection({
-  settings,
-  save,
-}: {
-  settings: AppSettings;
-  save(patch: Partial<AppSettings>): Promise<void>;
-}): React.JSX.Element {
+export function SchedulesSection({ settings, save }: SectionProps): React.JSX.Element {
   const presets = useStore((s) => s.presets?.presets ?? null);
   const showToast = useStore((s) => s.showToast);
   const missed = useStore((s) => s.missedSchedule);
@@ -159,8 +155,8 @@ export function SchedulesSection({
             {/* UNCONTROLLED while editing (defaultValue, not value): Chrome's
                 time input emits "" mid-edit — after the first minute digit —
                 and a controlled value would snap the field back between the
-                two keystrokes (user, 2026-08-24: "it only changes the second
-                of the two digits"). Complete values commit on change. */}
+                two keystrokes, so only the second of the two digits would
+                change. Complete values commit on change. */}
             <input
               type="time"
               key={s.id}
@@ -204,7 +200,7 @@ export function SchedulesSection({
                 className={cx(
                   "w-7 h-7 rounded-full text-[11px] font-mono transition-colors",
                   s.days.includes(day)
-                    ? "bg-amberdim text-amber ring-1 ring-amber/40"
+                    ? "bg-accentdim text-accent ring-1 ring-accent/40"
                     : "text-faint hover:text-dim ring-1 ring-edge",
                 )}
               >

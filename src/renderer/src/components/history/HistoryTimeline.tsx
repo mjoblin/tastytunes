@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useEffectEvent } from "react";
 import { ChevronRight, Clock, MoreHorizontal, Play } from "lucide-react";
 import {
+  eventsOfYears,
   groupSessions,
   type ListeningEvent,
   type ListeningPlayEvent,
@@ -249,11 +250,10 @@ export function HistoryTimeline({
     return () => clearInterval(t);
   }, []);
 
-  const all = useMemo(() => {
-    const out: ListeningEvent[] = [];
-    for (const y of loadedYears) out.push(...(loaded[y] ?? []));
-    return narrowToStreamer(out, streamer);
-  }, [loaded, loadedYears, streamer]);
+  const all = useMemo(
+    () => narrowToStreamer(eventsOfYears(loaded, loadedYears), streamer),
+    [loaded, loadedYears, streamer],
+  );
   const textShown = useMemo(() => (filter ? filterEvents(all, filter) : all), [all, filter]);
   // the facets' options, count-carrying, from the text-narrowed pool
   const sourceOptions = useMemo(() => {
@@ -351,8 +351,8 @@ export function HistoryTimeline({
   const kinds = useMemo(() => items.map((i) => i.kind), [items]);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  // the spot is remembered across visits like every other screen's (user,
-  // 2026-09-05: ⌘← from an artist landed back at the top); one callback ref
+  // the spot is remembered across visits like every other screen's (⌘← from
+  // an artist used to land back at the top); one callback ref
   // feeds both the memory and the windowing hook's element
   const rememberScroll = useScrollMemory("history:timeline");
   const attachScroller = useCallback(
@@ -488,7 +488,7 @@ export function HistoryTimeline({
     return () => clearTimeout(t);
   }, [flash]);
 
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the timeline one Tab stop; up and down through its
+  // FROM THE KEYBOARD (0.14.0): the timeline one Tab stop; up and down through its
   // sessions and plays (the month and day lines are headings, passed over); Enter opens or
   // closes a session as its click does, "." a play's More menu
   const lines = useMemo(
@@ -656,7 +656,7 @@ export function HistoryTimeline({
       <div className="flex-1 min-h-0 flex gap-3">
         {/* overflow-hidden: the pushed-away header is clipped at the list's top
             edge, as a scroll container clips its own sticky header — without it
-            the header rose over the toolbar (user, 2026-09-05) */}
+            the header rose over the toolbar */}
         <div className="relative flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* the sticky day header (see the effect above): the same face as a
               day header in the list, on the bare ground; the scroller's fade-top
@@ -776,7 +776,7 @@ export function HistoryTimeline({
                       data-win-kind="play"
                       data-win-index={index}
                       data-history-flash={flashed ? "true" : undefined}
-                      className={cx("pb-1", flashed && "rounded-xl ring-2 ring-gold/60")}
+                      className={cx("pb-1", flashed && "rounded-xl ring-2 ring-accent/60")}
                     >
                       <EventRow
                         item={lineItem(index)}
@@ -830,7 +830,7 @@ export function HistoryTimeline({
                       className={cx(
                         "block w-full rounded px-1 py-0.5 text-left text-[11px] transition-colors",
                         current
-                          ? "text-amber bg-amberdim"
+                          ? "text-accent bg-accentdim"
                           : "text-faint hover:text-ink hover:bg-veil",
                       )}
                     >

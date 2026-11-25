@@ -6,7 +6,7 @@
 // are never cached, so the next request retries cleanly. Such a failure is said
 // as "unreachable", never as "no lyrics": the window asks again, where a null
 // read as a miss left "No lyrics found" on a track until the line was toggled
-// off and on (his look, 2026-10-30). `force` bypasses the cache read for a
+// off and on. `force` bypasses the cache read for a
 // user-driven refresh; its fresh answer overwrites the entry.
 import { rmSync } from "node:fs";
 import { join } from "node:path";

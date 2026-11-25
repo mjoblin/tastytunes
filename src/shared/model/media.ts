@@ -32,13 +32,17 @@ export const usbServer = (s: Pick<MediaServerInfo, "isStreamer" | "searchable">)
 export interface MediaIndexStatus {
   udn: string;
   serverName: string;
+  /** The server wasn't in the streamer's last list of servers: its index can be removed. */
+  gone?: boolean;
   /** 'failed': the last build produced nothing (the server refused Search AND Browse — offline, or mid-scan); `failure` says why. */
   state: "none" | "building" | "ready" | "failed";
+  /** Why the last build failed: with 'failed', why there is no index; with 'ready', why the last
+   *  rebuild didn't finish, the index being the one from before (cleared by the next success). */
   failure?: string;
   /** While building: the app started this build on its own to keep an index it already
    *  had honest (the server's counter moved, the TTL passed, the schema changed, a stale id
    *  was revalidated before an answer was trusted). The doors show it as any build; the
-   *  indexing toast never announces it (user, 2026-09-15: the streamer's USB ids rotate
+   *  indexing toast never announces it (the streamer's USB ids rotate
    *  across every standby, and each revalidation toasted "streamer indexed · 0 tracks"). */
   quiet?: boolean;
   /** The server's counter moved since this index was built and the app will not walk
@@ -47,12 +51,12 @@ export interface MediaIndexStatus {
   /** Something someone asked for (a playlist, a favorite, Open in Library, Info, an
    *  agent's play) has waited over a second while this index is moved and checked, or
    *  walked, after the server's ids moved: the streamer's USB server after a standby or a
-   *  replug (the user's Evo, 2026-10-06: about 20 s while a cold drive's folders are
+   *  replug (an Evo, 2026-10-06: about 20 s while a cold drive's folders are
    *  listed). The working toast says so. */
   waiting?: boolean;
   /** The server answers UPnP Search itself, so the Library's search box reaches it with
    *  no index; a Browse-only server (the streamer's USB stick) has no search until its
-   *  index is built. The Search screen's unindexed line says which (user, 2026-09-17). */
+   *  index is built. The Search screen's unindexed line says which. */
   searchable?: boolean;
   strategy: "search" | "browse" | null;
   tracks: number;
@@ -108,7 +112,7 @@ export interface MediaNode {
    * PROVISIONAL, a parse's guess for the pool rule discs-from-file-names (main/media/reconcile)
    * and never kept: the disc a track's file name gives ("2-11 Close Your Eyes.flac", the second
    * number its track number), read only when the server sent no disc (MinimServer sends none,
-   * 0.12.0-rc.3, a user's box sets). The rule promotes it to discNumber only when every track
+   * 0.12.0-rc.3). The rule promotes it to discNumber only when every track
    * of the album agrees, and drops it either way.
    */
   fileDisc?: number;
@@ -204,8 +208,8 @@ export function isHiRes(f: {
   );
 }
 
-/** The separator between facts on one line: EN spaces around the dot, so the items breathe (user,
- *  2026-09-01; app-wide for facts and status lines 2026-10-07) — plain double spaces would
+/** The separator between facts on one line: EN spaces around the dot, so the items breathe
+ *  (app-wide for facts and status lines since 2026-10-07); plain double spaces would
  *  collapse in HTML. Shared so the main process's menu reads the same. Not for formatLabel below:
  *  albumFormatChips splits its " · " back into chips. */
 export const FACT_SEP = "\u2002·\u2002";
@@ -241,33 +245,37 @@ export function albumFormat(tracks: ReadonlyArray<Pick<MediaNode, "format">>): {
   const known = labels.filter(Boolean).length;
   // THE PREDOMINANT FORMAT HEADLINES when at least half the tracks share it,
   // and every other track says what IT is; with no predominant format the
-  // headline is "mixed formats" and every track says. The user's ruling
-  // (2026-08-16, after a stricter odd-one-out cut hid information they
-  // wanted): the point of the row notes is to SEE the exceptions, however
-  // many there are.
+  // headline is "mixed formats" and every track says. A stricter odd-one-out
+  // cut once hid information worth having: the point of the row notes is to
+  // SEE the exceptions, however many there are.
   if (counts.size > 1 && n * 2 < known)
     return { label: "mixed formats", notes: labels.map((l) => l ?? null) };
   return { label: top, notes: labels.map((l) => (l && l !== top ? l : null)) };
 }
 
 /**
- * How a track row names its performers INSIDE AN ALBUM under its artist:
- * the album artist, then the guests as "feat." — "Daft Punk feat. Julian
- * Casablancas". Anywhere else (search, queue, a compilation) the raw packed
- * string is the honest thing to show, so this returns it unchanged unless
- * the album artist is among the performers and there are others.
+ * How every row names a track's performers, one rule wherever it shows (the album page, the
+ * lenses, search, the queue, playlists, favorites): its album's artist first, then the guests as
+ * "feat." ("Daft Punk feat. Julian Casablancas"); a track whose performers don't include its
+ * album's artist (a compilation's duet) names them as a credit reads, "A & B" or "A, B & C",
+ * never the server's packed "A; B". One performer, or none told apart, shows its artist as it
+ * stands. Callers pass the album's artist where they know it, else the track's own albumArtist.
  */
 export function performerLine(
   n: Pick<MediaNode, "artist" | "artists" | "albumArtist">,
   albumArtist: string | null | undefined,
 ): string | null {
   const names = trackArtists(n);
-  if (!albumArtist || names.length < 2) return n.artist;
-  const key = nameKey(albumArtist);
-  const lead = names.find((x) => nameKey(x) === key);
-  if (!lead) return n.artist;
-  const guests = names.filter((x) => x !== lead);
-  return guests.length > 0 ? `${lead} feat. ${guests.join(", ")}` : n.artist;
+  if (names.length < 2) return n.artist;
+  const key = albumArtist ? nameKey(albumArtist) : null;
+  const lead = key == null ? undefined : names.find((x) => nameKey(x) === key);
+  if (lead) {
+    const guests = names.filter((x) => x !== lead);
+    if (guests.length > 0) return `${lead} feat. ${guests.join(", ")}`;
+  }
+  return names.length === 2
+    ? `${names[0]} & ${names[1]}`
+    : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
 }
 
 const VARIOUS = /^(various(\s+artists?)?|va|v\.a\.|verschiedene(\s+interpreten)?|divers)$/i;
@@ -364,7 +372,7 @@ export interface ArtistGroup {
   name: string;
   /** The server's own picture for the artist when it is a real one: not one of the indexed
    *  albums' or tracks' covers (an Asset library, 2026-10-11: 370 of 371 artists carried one of
-   *  their own album covers; 0.12.0-rc.3, a user's MinimServer: some track's embedded cover). */
+   *  their own album covers; 0.12.0-rc.3, a MinimServer library: some track's embedded cover). */
   own: string | null;
   /** The first of their albums with a picture, else the first of their tracks with one. */
   cover: string | null;
@@ -480,7 +488,7 @@ export function discTrackCount(
 /** The same count from an album's own listing (a browsed album, which has no index pools).
  *  Null, so no "of", when the album has no disc numbers and its track numbers repeat: the
  *  numbers count within discs the server never named, and the whole album's count would say
- *  "track 11 of 143" of a box set's eleventh track (0.12.0-rc.3, a user's MinimServer). */
+ *  "track 11 of 143" of a box set's eleventh track (0.12.0-rc.3, MinimServer). */
 export function discCountIn(
   track: Pick<MediaNode, "discNumber">,
   albumTracks: ReadonlyArray<Pick<MediaNode, "discNumber" | "trackNumber">>,
@@ -527,19 +535,24 @@ export function orderTracks<T extends Pick<MediaNode, "trackNumber" | "discNumbe
   }
   if (!repeats) return [...tracks].sort(compareTrackOrder);
   // Repeats: the listing order stands ONLY when it reads as discs — ascending
-  // runs, each restarting lower than the last position (Browse of a minidlna
-  // or MinimServer album). A search-built index lists by title (Gerbera,
-  // Minim) and that order says nothing about discs; sort by position then,
-  // interleaved but ordered (survey 2026-08-17: OKNOTOK came out alphabetical).
+  // runs, each new disc starting again from the album's lowest position (Browse
+  // of a minidlna or MinimServer album: 1, 2, 3, 1, 2, 3). A search-built index
+  // lists by title (Gerbera, Minim, Asset) and that order says nothing about
+  // discs; sort by position then, interleaved but ordered (survey 2026-08-17:
+  // OKNOTOK came out alphabetical). A drop that lands anywhere else is a title
+  // order, however few the drops (0.16.0): two albums of one title, every track
+  // on disc 1, listed by title dropped 16 times in 34 tracks, under half, and
+  // the alphabetical order stood with its numbers all over the place.
   const positions = tracks.map(trackPosition);
+  const lowest = Math.min(...positions.filter((p): p is number => p != null));
   let ascendingRuns = true;
   let restarts = 0;
   for (let i = 1; i < positions.length; i++) {
     const a = positions[i - 1];
     const b = positions[i];
     if (a == null || b == null) continue;
-    if (b < a) restarts++;
-    else if (b === a) {
+    if (b < a && b === lowest) restarts++;
+    else if (b <= a) {
       ascendingRuns = false;
       break;
     }
@@ -583,6 +596,19 @@ export function fmtBytes(n: number): string {
   if (n >= 1024 ** 3) return `${(n / 1024 ** 3).toFixed(n >= 10 * 1024 ** 3 ? 0 : 1)} GB`;
   if (n >= 1024 ** 2) return `${Math.round(n / 1024 ** 2)} MB`;
   return `${Math.max(1, Math.round(n / 1024))} KB`;
+}
+
+/**
+ * The names a credit packs, in order: "A feat. B", "A ft. B", "A & B", "A and B", "A with B",
+ * "A, B; C", as a streaming service or a tag writes a credit (0.16.0, lifted from the record's
+ * in-library test, its one home since). The whole credit is not among them: a duo's name ("Simon
+ * & Garfunkel") splits too, so a caller tries the whole credit first.
+ */
+export function creditNames(credit: string): string[] {
+  return credit
+    .split(/\s*(?:,|;|&|\band\b|\bfeat\.?|\bft\.?|\bwith\b)\s*/i)
+    .map((s) => s.trim())
+    .filter(Boolean);
 }
 
 /**
@@ -844,8 +870,8 @@ export interface StreamInfo {
  * content. "act": for its id (Open in Library), which must answer on the server now. Only
  * an act confirms a Browse-built index against the device, and confirming can rebuild it:
  * the streamer's USB ids are all new after a standby, and a rebuild the user never asked
- * for was the "building…" a CXN V2 owner saw on the first track after the streamer woke
- * (user report, 2026-09-25). Required at every call, so a new caller has to choose.
+ * for was the "building…" shown on the first track after the streamer woke (a CXN V2).
+ * Required at every call, so a new caller has to choose.
  */
 export type LookupPurpose = "show" | "act";
 
@@ -902,7 +928,11 @@ export type ProfileNote =
   | { kind: "discs-from-file-names"; count: number }
   | { kind: "search-failed-browsed-instead" }
   | { kind: "search-paged-smaller" }
-  | { kind: "browse-capped"; count: number };
+  | { kind: "browse-capped"; count: number }
+  /** A first crawl the server stopped answering partway through (a later one keeps the index). */
+  | { kind: "crawl-interrupted" }
+  /** The server lists more than the index holds (MAX_TRACKS, MAX_CONTAINERS): its own total. */
+  | { kind: "index-capped"; what: "albums" | "artists" | "tracks"; kept: number; total: number };
 
 /**
  * The words for a ProfileNote — user-facing (Info › Source, MCP), plain, no
@@ -944,6 +974,10 @@ export function describeProfileNote(note: ProfileNote): string {
       return "the server's search failed on large pages, so it was read in smaller pages instead";
     case "browse-capped":
       return `browsing stopped after ${note.count} folders, so a very large library may be only partly indexed`;
+    case "crawl-interrupted":
+      return "the server stopped answering partway through, so this index may be incomplete (Rebuild reads it again)";
+    case "index-capped":
+      return `the server lists ${note.total.toLocaleString("en-US")} ${note.what} and the index holds the first ${note.kept.toLocaleString("en-US")}, so the rest aren't in the Library, search or an agent's answers`;
   }
 }
 
@@ -963,7 +997,7 @@ export type MediaQueueAction = "REPLACE" | "APPEND" | "PLAY_NEXT" | "PLAY_NOW" |
 /**
  * A container verb over this many tracks asks first, from every surface (the
  * guard lives in main's queueAdd). Filed after Play from here on a search
- * scope queued 2,528 tracks on the user's Evo (2026-09-04): a box set
+ * scope queued 2,528 tracks on an Evo (2026-09-04): a box set
  * queues without a prompt, a library-sized container never does.
  */
 export const LARGE_QUEUE_TRACKS = 200;
@@ -1020,6 +1054,14 @@ const VOLUME_ROMAN: Record<string, number> = {
   xix: 19,
   xx: 20,
 };
+
+/** The year a set's volumes share, or null when they differ or none has one: what a set's own
+ *  row and card say (a box whose volumes span years says none rather than one of them). */
+export function sharedYear(volumes: ReadonlyArray<Pick<MediaNode, "year">>): string | null {
+  const years = new Set(volumes.map((v) => v.year?.trim() || null));
+  const [only] = years;
+  return years.size === 1 ? only : null;
+}
 
 export function albumVolume(title: string): { base: string; volume: number } | null {
   // The value can be digits, a spelled-out word (one–twenty) or a Roman

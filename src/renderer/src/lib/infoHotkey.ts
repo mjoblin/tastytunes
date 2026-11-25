@@ -2,7 +2,7 @@ import { useStore } from "@/store";
 import { openInfoForNowPlaying } from "@/lib/mediaInfo";
 
 /**
- * ⌘I OPENS INFO FOR WHAT IS IN FRONT OF YOU (0.12.0, his word; Ctrl+I off the Mac; the Mac's
+ * ⌘I OPENS INFO FOR WHAT IS IN FRONT OF YOU (0.12.0; Ctrl+I off the Mac; the Mac's
  * Get Info key). Info open, it closes. The Library showing an album, that album's Info; an
  * artist's page or folder, the artist's. Anywhere else (Now Playing, Display mode, the Queue,
  * the Library's lists, Presets…) the playing track's, with what the streamer says of the stream,

@@ -3,7 +3,7 @@ import { KEYBOARD_NAV_ATTR } from "@/lib/inputModality";
 import { scrollToVisible } from "@/lib/scroll";
 
 /**
- * A LIST FROM THE KEYBOARD (0.14.0, his K1 to K9 on the design page "TastyTunes 0.14.0 Design").
+ * A LIST FROM THE KEYBOARD (0.14.0).
  *
  * K1 one Tab stop per list: the list itself is the stop, its rows and their buttons leave the
  * Tab order (ListKeysContext tells a row's controls they are inside one). K2 a list that has
@@ -226,7 +226,8 @@ export function useListKeys(o: ListKeysOptions): ListKeys {
     if (e.key === "Enter") {
       if (!opts.current.onEnter || count === 0) return;
       take();
-      opts.current.onEnter(at, itemEl(at));
+      // a held Enter plays (or opens) once
+      if (!e.repeat) opts.current.onEnter(at, itemEl(at));
       return;
     }
     if (isMenuKey(e)) {
@@ -238,7 +239,8 @@ export function useListKeys(o: ListKeysOptions): ListKeys {
     if (e.key === "Delete" || e.key === "Backspace") {
       if (!opts.current.onDelete || count === 0) return;
       take();
-      opts.current.onDelete(at);
+      // a held Delete removes one row: its repeat would clear the list faster than undo can follow
+      if (!e.repeat) opts.current.onDelete(at);
       return;
     }
     if (opts.current.step) {

@@ -127,6 +127,12 @@ export interface ZonePlayState {
   metadata: ZonePlayStateMetadata | null;
 }
 
+/** The playing track, for telling one moment from the next: its queue entry, and its title for a
+ *  source with no queue (two neighbors of the same length are still two tracks). */
+export const playingTrackKey = (
+  ps: Pick<ZonePlayState, "queue_id" | "metadata"> | null | undefined,
+): string => `${ps?.queue_id ?? ""}|${ps?.metadata?.title ?? ""}`;
+
 /** The streamer's repeat has three states (live-probed 2026-09-18, Evo 150, ARC 2.03): off,
  *  all (the queue) and one (the current track). FIRMWARE: "one" cannot be set by name, a
  *  mode_repeat of "one" answers 200 and lands on "all", over HTTP and the socket alike; only
@@ -280,6 +286,10 @@ export interface AudioCaps {
 export const EQ_GAIN_MIN = -6;
 export const EQ_GAIN_MAX = 3;
 
+/** The absolute step scale a model that reports volume_step without volume_percent is read on
+ *  (0 to 30): the sliders map it, and the volume limit is held on it there. */
+export const VOLUME_STEP_SCALE = 30;
+
 export function audioCaps(spec: ZoneAudioSpec | null | undefined): AudioCaps | null {
   if (spec == null) return null;
   const range = (r: AudioSpecRange | undefined, fallbackMin: number, fallbackMax: number) => ({
@@ -310,7 +320,7 @@ export const isCbusMode = (z: Pick<ZoneState, "cbus"> | null | undefined): boole
  * Pre-amp mode: the streamer holds an absolute volume it can set. Requires
  * pre_amp_mode AND pre_amp_state === "on" — matching punytunes
  * (`isPreAmpModeEnabled`); a mode-enabled-but-not-"on" pre-amp can't take an
- * absolute level. (Live-confirmed safe on the user's Evo 150: pre_amp_mode
+ * absolute level. (Live-confirmed safe on an Evo 150: pre_amp_mode
  * true, pre_amp_state "on".)
  */
 export const isPreAmpMode = (

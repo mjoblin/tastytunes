@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } f
 import { dirname, extname, join } from "node:path";
 import { app, dialog, nativeImage, type BrowserWindow, type NativeImage } from "electron";
 import { PICKED_ART } from "@shared/artUrl";
-import { isRecord } from "@shared/guards";
+import { isRecord, kindOf } from "@shared/guards";
 import type { ArtistChoice, MediaIndexPools } from "@shared/model";
 import { jsonFileStore } from "./jsonStore";
 import { nameKey } from "@shared/keys";
@@ -12,10 +12,10 @@ import { nameKey } from "@shared/keys";
 // why). One small JSON beside settings.json, an artist's name (lowercased) to their choice, and
 // a folder of the picture files people chose, each copied in under a name made from its bytes, so
 // moving or deleting the original loses nothing. A choice is never replaced but by another, or
-// cleared (decisions/0013). Every other picture yields to it: main's answer for the rows and cards
+// cleared. Every other picture yields to it: main's answer for the rows and cards
 // (ipc/lookups artistPictures) and every window's map of them (artistChoices) both read resolveChoice.
 //
-// EVERY CHOSEN PICTURE KEPT (0.14.0, his word 2026-10-30: "yes, build it, covers too"): a picture
+// EVERY CHOSEN PICTURE KEPT (0.14.0): a picture
 // chosen from Wikipedia, Commons, fanart.tv or an album's cover is copied into the same folder
 // (lookups/choiceCopies), its file named on the choice as `copy`, and drawn from there, so a
 // source that drops or renames it, or an album that leaves the library, changes nothing; it had
@@ -69,14 +69,37 @@ function own(c: ArtistChoice): ArtistChoice {
   return { kind: c.kind, url: c.url, album: c.album, serverUdn: c.serverUdn };
 }
 
+// a later version's choices this one doesn't read (1.0 is the oldest reader such a file will
+// meet), by key: kept out of the app and written back, and while there is one the sweep waits
+let carried: Record<string, unknown> = {};
+let carriedNotes: string[] = [];
+
 const store = jsonFileStore<Record<string, Stored>>({
   pathOf: () => join(app.getPath("userData"), "artist-choices.json"),
   scope: "artist-choices",
-  load: (parsed) => {
+  said: "your artist picture choices",
+  encode: (next) => {
+    const back = Object.fromEntries(Object.entries(carried).filter(([k]) => !(k in next)));
+    return { ...back, ...next };
+  },
+  kept: () => carriedNotes,
+  load: (parsed, setAside) => {
+    carried = {};
+    carriedNotes = [];
     const out: Record<string, Stored> = {};
-    if (!isRecord(parsed)) return out;
+    if (parsed === undefined) return out;
+    if (!isRecord(parsed)) {
+      setAside.push(`the file was ${kindOf(parsed)}, not a set of choices, so none were read`);
+      return out;
+    }
     for (const [k, v] of Object.entries(parsed)) {
-      if (!isArtistChoice(v)) continue;
+      if (!isArtistChoice(v)) {
+        if (isRecord(v)) {
+          carried[nameKey(k)] = v;
+          carriedNotes.push(`the choice for "${k}" isn't one this version reads, kept as it was`);
+        } else setAside.push(`the choice for "${k}" isn't one this version reads, left out`);
+        continue;
+      }
       const { at, copy } = v as { at?: unknown; copy?: unknown };
       const choice: Stored = {
         ...own(v),
@@ -131,7 +154,13 @@ export function copyKept(c: StoredChoice): boolean {
   return c.kind === "file" || (c.copy != null && pickedPath(c.copy) != null);
 }
 
+/** The picked files no choice names go, older than an hour: only once the choices file was read
+ *  whole this session (jsonFileStore.readWhole). A choices file missing, moved aside, unreadable
+ *  or with a choice left out names too few, and every other picture would go with the next
+ *  choice, a picture picked from disk among them. */
 function sweepPicked(choices: Record<string, Stored>): void {
+  // a carried choice (a later version's) may name its files where this version doesn't look
+  if (!store.readWhole() || Object.keys(carried).length > 0) return;
   const used = new Set(
     Object.values(choices).flatMap((c) => (c.kind === "file" ? [c.file] : c.copy ? [c.copy] : [])),
   );

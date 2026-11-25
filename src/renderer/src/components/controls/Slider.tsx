@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { cx } from "@/lib/format";
+import { raisePace } from "@/lib/volumePace";
 
 interface SliderProps {
   /** 0..1 */
@@ -32,16 +33,23 @@ interface SliderProps {
   tall?: boolean;
   /** One arrow key's step, 0..1 (Page Up and Page Down take five). */
   step?: number;
+  /** A VOLUME'S GUARD: a press more than this far above the thumb nudges it up by this much and
+   *  starts no drag, and End doesn't send it to the top. A stray click or tap lands anywhere, and a
+   *  jump there could be far too loud before anyone reacts; a drag from the thumb still goes as far
+   *  as it's taken, heard as it moves and stopped by letting go. The click leaves the slider
+   *  focused, so its keys are guarded too: a key raises by raiseBy at most (Page Up included), and
+   *  a held one is paced as the volume shortcut is (lib/volumePace). Down is never guarded. */
+  raiseBy?: number;
 }
 
 /**
- * A SLIDER OVER A SAVED SETTING (0.13.0-rc.4, his eye on View options: "when i drag a slider and
- * release, the slider pops back to previous value before returning to just-set value"). A save
- * round-trips through main before the store has the new value, and the sliders showed the saved
- * value again the moment the drag ended; the value they were let go at now holds until the saved
- * one arrives (or a moment passes, should main settle on another). `onLive`, where a view can
- * follow the drag, hears each value as it moves, and the saved value the drag began from when
- * the drag is abandoned; onCommit hears that start too, for an undo.
+ * A SLIDER OVER A SAVED SETTING (0.13.0-rc.4, View options: on release a slider popped back to
+ * its previous value before returning to the value just set). A save round-trips through main
+ * before the store has the new value, and the sliders showed the saved value again the moment the
+ * drag ended; the value they were let go at now holds until the saved one arrives (or a moment
+ * passes, should main settle on another). `onLive`, where a view can follow the drag, hears each
+ * value as it moves, and the saved value the drag began from when the drag is abandoned; onCommit
+ * hears that start too, for an undo.
  */
 export function useSliderDraft(
   value: number,
@@ -84,7 +92,7 @@ export function useSliderDraft(
   };
 }
 
-/** A pointer-driven slider styled as a thin faceplate track with an amber fill. */
+/** A pointer-driven slider styled as a thin faceplate track with an accent fill. */
 export function Slider({
   value,
   onCommit,
@@ -97,8 +105,10 @@ export function Slider({
   track,
   tall,
   step = 0.02,
+  raiseBy,
 }: SliderProps): React.JSX.Element {
   const trackRef = useRef<HTMLDivElement>(null);
+  const [pace] = useState(raisePace);
   const [dragValue, setDragValue] = useState<number | null>(null);
   // Screen coordinates for the scrub bubble, recomputed per pointer move. Kept
   // as state (not derived at render from the ratio) because the bubble is
@@ -119,7 +129,7 @@ export function Slider({
     const x = Math.min(Math.max(rect.left + ratio * rect.width, 34), window.innerWidth - 34);
     // Anchor from the track's CENTER, not its top: the plain and waveform
     // tracks differ in height, and a top-anchored bubble floated higher above
-    // the tall one, reading as detached (user, 2026-08-30). Center minus 18
+    // the tall one, reading as detached. Center minus 18
     // reproduces the plain track's exact gap on both.
     setBubble({ left: x, top: rect.top + rect.height / 2 - 18 });
   }, []);
@@ -206,12 +216,16 @@ export function Slider({
           PageDown: -step * 5,
         };
         let next: number | null = null;
-        if (e.key in by) next = shown + by[e.key];
+        // a guarded slider raises by raiseBy at most, Page Up's five steps included
+        if (e.key in by)
+          next = shown + (raiseBy != null ? Math.min(by[e.key], raiseBy) : by[e.key]);
         else if (e.key === "Home") next = 0;
-        else if (e.key === "End") next = 1;
+        else if (e.key === "End" && raiseBy == null) next = 1;
         if (next == null || disabled) return;
         e.preventDefault();
         e.stopPropagation();
+        // and a held raise is paced as the volume shortcut's is; a lowering never
+        if (raiseBy != null && !pace(e.repeat, next > shown)) return;
         onCommit(Math.max(0, Math.min(1, next)));
       }}
       className={cx(
@@ -220,9 +234,14 @@ export function Slider({
         disabled ? "opacity-35 pointer-events-none" : "cursor-pointer",
       )}
       onPointerDown={(e) => {
+        const v = ratioFromEvent(e);
+        if (raiseBy != null && v > shown + raiseBy) {
+          // well above the thumb: a nudge up, no drag (see raiseBy)
+          onCommit(Math.min(1, shown + raiseBy));
+          return;
+        }
         e.currentTarget.setPointerCapture(e.pointerId);
         dragRef.current = true;
-        const v = ratioFromEvent(e);
         setDragValue(v);
         placeBubble(v);
         onScrub?.(v);
@@ -289,14 +308,14 @@ export function Slider({
           track(shown)
         ) : (
           <div
-            className="absolute inset-y-0 left-0 rounded-full bg-gold"
+            className="absolute inset-y-0 left-0 rounded-full bg-accent"
             style={{ width: `${shown * 100}%` }}
           />
         )}
         <div
           className={cx(
-            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-gold",
-            "shadow-[0_0_8px_rgb(var(--gold-rgb)_/_0.7)] transition-opacity",
+            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-accent",
+            "shadow-[0_0_8px_rgb(var(--accent-rgb)_/_0.7)] transition-opacity",
             dragValue !== null || thumb === "always"
               ? "opacity-100"
               : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",

@@ -12,10 +12,10 @@ import { nameKey } from "@shared/keys";
  * HEARD ELSEWHERE (0.8.0, the History screen's Elsewhere tab): the artists the
  * record met away from the library — through AirPlay, a cast, the streamer's
  * own services, or on internet radio — and how each relates to what the
- * library holds. ONE list, of artists (user, 2026-09-11, on his own record:
- * the tracks and radio songs were "largely unknown to me; artists I
- * recognize", and what he wants of a row is "does it relate to something I
- * own; get more information on it"). Pure; the view sorts and filters.
+ * library holds. ONE list, of artists: the tracks and radio songs met elsewhere
+ * are mostly unknown where their artists are recognized, and a row's job is to
+ * say whether it relates to something the library holds and to offer more about
+ * it. Pure; the view sorts and filters.
  *
  * A track heard through a source and a song a station announced are the same
  * item here, music met away from the library, keyed by content, so one song
@@ -23,6 +23,14 @@ import { nameKey } from "@shared/keys";
  * station's announcement is a sighting, not a measured play; "heard" counts
  * both, which is honest enough at this altitude.
  */
+/** The most heard first, then the most recently heard: the Elsewhere view's "heard" order, and
+ *  history_elsewhere's (0.16.0: the tool had answered in the order the artists were first heard, so
+ *  its first twenty were the record's first day). */
+export const mostHeardFirst = (
+  a: { heard: number; lastAt: number },
+  b: { heard: number; lastAt: number },
+): number => b.heard - a.heard || b.lastAt - a.lastAt;
+
 export interface HeardTrack {
   key: string;
   title: string;
@@ -53,8 +61,7 @@ export interface HeardArtist {
    *  album artist, or a performer credit on a track. The server's bare artist
    *  index used to count too, and it lists names its tags mention that no
    *  album or track in the index credits — "in your library" with a Go to
-   *  artist that landed on an empty lens (user, 2026-09-12: Ellie Goulding,
-   *  John Legend). */
+   *  artist that landed on an empty lens. */
   inLibrary: boolean;
   /** Of the tracks heard, how many the library holds. */
   ownedTracks: number;
@@ -188,7 +195,7 @@ export function heardElsewhere(
     else byArtist.set(k, [t]);
   }
   const artists: HeardArtist[] = [...byArtist.entries()].map(([key, list]) => {
-    list.sort((a, b) => b.heard - a.heard || b.lastAt - a.lastAt);
+    list.sort(mostHeardFirst);
     const where = new Tally();
     for (const t of list) for (const [place, n] of t.places.entries()) where.add(place, n);
     const albums = albumsBy.get(key) ?? 0;

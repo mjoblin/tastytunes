@@ -1,6 +1,6 @@
 /**
- * THE ARRIVAL WASH — the one "here is the row you asked for" signal (ruled
- * 2026-09-02, user call): a gold fill at 30% that holds for the first 0.8s
+ * THE ARRIVAL WASH — the one "here is the row you asked for" signal: an accent
+ * fill at 30% that holds for the first 0.8s
  * and fades over the next 1.8s. Born as the Queue's undo-restore wash; now
  * also the landing after Open in Library / a name link / a Favorites jump,
  * the scroll-to-current click feedback, and the nav rail's drop
@@ -8,9 +8,15 @@
  * (target-flash), a second grammar for the same meaning. WAAPI, not a
  * class, so a re-render mid-wash can't snap it; skipped under reduced
  * motion (the OS preference or the app's own setting).
+ *
+ * NEVER OVER THE PLAYING RING (0.16.0): a row or tile that is playing already wears the ring that
+ * says "here" (row-playing, tile-playing), so the wash goes only where nothing else marks the row:
+ * an album opened from Now Playing landed on its playing track and washed it under its ring.
  */
+const PLAYING = ".row-playing, .tile-playing";
 export function flashTarget(el: HTMLElement | null): void {
   if (!el) return;
+  if (el.matches(PLAYING) || el.querySelector(PLAYING)) return;
   if (
     window.matchMedia("(prefers-reduced-motion: reduce)").matches ||
     document.documentElement.classList.contains("reduce-motion")
@@ -18,9 +24,9 @@ export function flashTarget(el: HTMLElement | null): void {
     return;
   el.animate(
     [
-      { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0 },
-      { backgroundColor: "rgb(var(--gold-rgb) / 0.3)", offset: 0.3 },
-      { backgroundColor: "rgb(var(--gold-rgb) / 0)", offset: 1 },
+      { backgroundColor: "rgb(var(--accent-rgb) / 0.3)", offset: 0 },
+      { backgroundColor: "rgb(var(--accent-rgb) / 0.3)", offset: 0.3 },
+      { backgroundColor: "rgb(var(--accent-rgb) / 0)", offset: 1 },
     ],
     { duration: 2600, easing: "ease-out" },
   );
@@ -102,7 +108,7 @@ export function scrollToVisible(el: HTMLElement | null, pad = 0): void {
   // `pad` is breathing room past the element's border box. Rings and glows
   // are box-shadows OUTSIDE that box, so a flush alignment scrolls the row
   // in and clips its gold ring at the scrollport edge — shipped visibly on
-  // the tray panel's followed queue (user, 2026-08-04). Callers whose rows
+  // the tray panel's followed queue. Callers whose rows
   // wear rings pass the pad; the default keeps everyone else exact.
   if (eRect.top < cRect.top + pad) container.scrollTop += eRect.top - cRect.top - pad;
   else if (eRect.bottom > cRect.bottom - pad)

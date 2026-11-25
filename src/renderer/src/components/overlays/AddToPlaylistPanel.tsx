@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { ListOrdered, Plus } from "lucide-react";
-import type { PlaylistItem } from "@shared/model";
+import { type PlaylistItem, playlistFullSentence } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { cx, fmtTime, matchesFilter } from "@/lib/format";
+import { pushAddToPlaylistUndo, pushCreatePlaylistUndo } from "@/lib/playlists";
 import { PopoverCard } from "@/components/chrome/Overlay";
 
 /**
@@ -62,23 +63,12 @@ export function AddToPlaylistPanel({
         onClose();
         return;
       }
-      // The exact inverse at push time: the item list as it was before the
-      // append (a snapshot restore — edits made while the entry waits are
-      // the same best-effort trade every restore here makes).
-      const prior = useStore.getState().playlists.find((p) => p.id === id)?.items ?? null;
       await tt.playlistAppend(id, items);
-      if (prior != null) {
-        const n = items.length;
-        useStore
-          .getState()
-          .pushUndo(
-            `Add ${n} ${n === 1 ? "Track" : "Tracks"} to Playlist “${name}”`,
-            () => void tt.playlistSetItems(id, prior),
-          );
-      }
+      // its undo takes out what this add appended, keeping any edit made since (lib/playlists)
+      pushAddToPlaylistUndo(id, name, items);
       done(items.length, name);
-    } catch {
-      showToast({ kind: "error", text: "Couldn't add to the playlist" });
+    } catch (e) {
+      showToast({ kind: "error", text: playlistFullSentence(e) ?? "Couldn't add to the playlist" });
       onClose();
     } finally {
       setBusy(false);
@@ -98,15 +88,13 @@ export function AddToPlaylistPanel({
       // Toast the STORED name — a collision uniquifies it ("Jazz (2)"), and
       // the toast naming a playlist that isn't the one just made reads as a bug.
       const created = await tt.playlistCreate(name, items);
-      // Creation's inverse is exactly delete. The closure is a raw delete —
-      // undo closures never push entries of their own (that would be redo
-      // by the back door, and redo is out of scope by design).
-      useStore
-        .getState()
-        .pushUndo(`Create Playlist “${created.name}”`, () => void tt.playlistDelete(created.id));
+      // Creation's inverse is a delete, while the playlist is as it was made (lib/playlists).
+      // Undo closures never push entries of their own (that would be redo by the back door,
+      // and redo is out of scope by design).
+      pushCreatePlaylistUndo(created);
       done(items.length, created.name);
-    } catch {
-      showToast({ kind: "error", text: "Couldn't create the playlist" });
+    } catch (e) {
+      showToast({ kind: "error", text: playlistFullSentence(e) ?? "Couldn't create the playlist" });
       onClose();
     } finally {
       setBusy(false);
@@ -182,7 +170,7 @@ export function AddToPlaylistPanel({
               disabled={busy}
               onClick={() => void createWith()}
               className={cx(
-                "mt-1 w-full rounded-lg h-7 text-[12px] bg-amberdim text-amber",
+                "mt-1 w-full rounded-lg h-7 text-[12px] bg-accentdim text-accent",
                 "hover:brightness-110 disabled:opacity-50 transition-all",
               )}
             >

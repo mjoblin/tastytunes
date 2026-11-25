@@ -1,5 +1,5 @@
-// THE SCALE FIXTURE (0.13.0 round 2; the 0.11 re-score: "nothing proves the app above 5,000
-// tracks"). A library of any size in the media index's own shape, made the same way every time:
+// THE SCALE FIXTURE (0.13.0 round 2: nothing proved the app above 5,000 tracks). A library of
+// any size in the media index's own shape, made the same way every time:
 // ten tracks to an album, four albums to an artist, years across six decades, the genres round
 // ten, two formats, and one album in a hundred held twice (the same title and artist, another
 // picture, 24/96), so the copy rules run at size too. The mock streamer's MOCK_LIB_SCALE serves

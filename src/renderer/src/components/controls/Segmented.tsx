@@ -15,7 +15,7 @@ export interface SegmentedOption<T> {
 }
 
 /**
- * A pill segmented toggle: the active option is filled gold, the rest are
+ * A pill segmented toggle: the active option is filled with the accent, the rest are
  * translucent (bg-panel/70) so the backdrop shows through — matching the
  * queue/preset follow buttons. Generic over the option value type.
  */
@@ -47,13 +47,14 @@ export function Segmented<T extends string | number | boolean>({
           aria-disabled={opt.disabled || undefined}
           data-tip={opt.tip}
           className={cx(
-            "flex items-center gap-1.5 px-3 rounded-md text-[12px]",
+            // one line always: a two-word label ("All songs") broke in two in a narrow header
+            "flex items-center gap-1.5 px-3 rounded-md text-[12px] whitespace-nowrap",
             !modal && "transition-colors",
             opt.tip && "tip-top",
             opt.disabled
               ? "text-faint opacity-50 cursor-default"
               : value === opt.value
-                ? "bg-golddim text-gold"
+                ? "bg-accentdim text-accent"
                 : "text-dim hover:text-ink",
           )}
         >
@@ -61,13 +62,13 @@ export function Segmented<T extends string | number | boolean>({
           {opt.label}
           {opt.count !== undefined && (
             // a pill with room for two digits, the count centred in it: a count arriving, or
-            // reaching ten, never widens the tab (his look, 2026-10-30); hidden while it is asked
+            // reaching ten, never widens the tab; hidden while it is asked
             <span
               data-segment-count
               className={cx(
                 "grid h-4 min-w-[1.375rem] place-items-center rounded-full px-1 text-[10.5px] leading-none tabular-nums",
                 opt.count == null && "invisible",
-                value === opt.value ? "bg-gold/15 text-gold" : "bg-veil text-faint",
+                value === opt.value ? "bg-accent/15 text-accent" : "bg-veil text-faint",
               )}
             >
               {opt.count ?? ""}

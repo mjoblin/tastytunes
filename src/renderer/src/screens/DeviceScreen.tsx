@@ -15,14 +15,14 @@ import { audioCaps } from "@shared/smoip";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
-import { cx } from "@/lib/format";
+import { LED_TIPS, cx } from "@/lib/format";
 import { forgetDevice, lastSeenLabel } from "@/lib/devices";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { Segmented } from "@/components/controls/Segmented";
 import { SourcesPanel } from "@/components/device/SourcesPanel";
 import { ToneEq } from "@/components/device/ToneEq";
 import { DeviceControls } from "@/components/device/DeviceControls";
-import { HeaderChip, ScreenTitle } from "@/components/chrome/Chrome";
+import { HeaderChip, ScreenTitle, pageEdges } from "@/components/chrome/Chrome";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 export function DeviceScreen(): React.JSX.Element {
@@ -142,7 +142,7 @@ export function DeviceScreen(): React.JSX.Element {
       </header>
 
       {/* pinned header; only the content scrolls (house pattern) */}
-      <div ref={useScrollMemory("device")} className="flex-1 overflow-y-auto px-8 pb-10 pt-1">
+      <div ref={useScrollMemory("device")} className={`flex-1 overflow-y-auto px-8 ${pageEdges()}`}>
         <div className="max-w-2xl space-y-8">
           {/* ------------------------------------------------------------ connection */}
           <section className="space-y-3">
@@ -154,6 +154,9 @@ export function DeviceScreen(): React.JSX.Element {
                     "led",
                     connection.phase === "connected" ? "led-on" : busyHost ? "led-busy" : "led-off",
                   )}
+                  data-tip={
+                    LED_TIPS[connection.phase === "connected" ? "on" : busyHost ? "busy" : "off"]
+                  }
                 />
                 <span className="text-[13.5px] flex-1">{statusText}</span>
                 {connection.phase !== "idle" && (
@@ -192,7 +195,7 @@ export function DeviceScreen(): React.JSX.Element {
                       disabled={discovering}
                       // Fixed width: the label alternates with the background
                       // sweep and the row must not breathe with it.
-                      className="flex min-w-[128px] items-center justify-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
+                      className="flex min-w-[128px] items-center justify-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-accent hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all disabled:opacity-50"
                     >
                       {discovering ? (
                         <Loader2 size={13} className="spin" />
@@ -228,7 +231,7 @@ export function DeviceScreen(): React.JSX.Element {
                       ) : (
                         <button
                           onClick={() => void tt.connect(device.host)}
-                          className="text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-amber/40 bg-amberdim text-amber hover:brightness-110 hover:ring-amber/60 motion-safe:active:scale-95 transition-all"
+                          className="text-[12px] px-3 py-1.5 rounded-lg ring-1 ring-accent/40 bg-accentdim text-accent hover:brightness-110 hover:ring-accent/60 motion-safe:active:scale-95 transition-all"
                         >
                           Connect
                         </button>
@@ -289,7 +292,7 @@ export function DeviceScreen(): React.JSX.Element {
                 simply don't carry — guest/IoT VLANs, a streamer on ethernet
                 while the Mac is on a mesh AP, VPNs, and virtual machines (a
                 VM on NAT reaches the streamer fine and never hears a
-                multicast reply — user, 2026-08-04). For those people this
+                multicast reply). For those people this
                 field is not a fallback, it IS the way in, and it used to sit
                 unlabelled under a hairline looking like a developer setting.
 
@@ -303,12 +306,12 @@ export function DeviceScreen(): React.JSX.Element {
                   className={cx(
                     "mt-3 rounded-xl transition-all",
                     needsManual
-                      ? "ring-1 ring-amber/35 bg-amberdim/25 p-3"
+                      ? "ring-1 ring-accent/35 bg-accentdim/25 p-3"
                       : "border-t border-edge pt-3",
                   )}
                 >
                   <div className="flex items-center gap-2 mb-2">
-                    <Router size={14} className={needsManual ? "text-amber" : "text-faint"} />
+                    <Router size={14} className={needsManual ? "text-accent" : "text-faint"} />
                     <span className={cx("text-[12.5px]", needsManual ? "text-ink" : "text-dim")}>
                       Connect by address
                     </span>
@@ -336,7 +339,7 @@ export function DeviceScreen(): React.JSX.Element {
                       className={cx(
                         "flex-1 bg-bg rounded-lg ring-1 outline-none px-3 text-[13px] placeholder:text-faint transition-all",
                         needsManual
-                          ? "ring-amber/40 focus:ring-amber/70 py-2"
+                          ? "ring-accent/40 focus:ring-accent/70 py-2"
                           : "ring-edge focus:ring-edge2 py-1.5",
                       )}
                     />
@@ -344,7 +347,7 @@ export function DeviceScreen(): React.JSX.Element {
                       disabled={!manualHost.trim()}
                       onClick={() => void tt.connect(manualHost.trim())}
                       className={cx(
-                        "rounded-lg bg-amber text-bg font-medium disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all",
+                        "rounded-lg bg-accent text-bg font-medium disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all",
                         needsManual ? "text-[13px] px-4 py-2" : "text-[12.5px] px-3 py-1.5",
                       )}
                     >
@@ -360,7 +363,7 @@ export function DeviceScreen(): React.JSX.Element {
                   onClick={() => void tt.demoStart()}
                   className="mt-9 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
                 >
-                  <Sparkles size={14} className="text-gold/70" />
+                  <Sparkles size={14} className="text-accent/70" />
                   Try the built-in demo, no streamer needed →
                 </button>
               )}
@@ -370,14 +373,14 @@ export function DeviceScreen(): React.JSX.Element {
           {/* ------------------------------------------------- system / sources / eq */}
           {/* The tab labelled "System" holds identity + the §10 device controls.
             It was "Streamer", which said nothing on a screen that is entirely
-            the streamer (user call 2026-07-25). The STORED id stays 'streamer'
+            the streamer. The STORED id stays 'streamer'
             — renaming it would cost a settings migration for no visible gain.
             "Info & Settings" was considered and rejected: "Settings" collides
             with the app's own Settings screen. */}
           {systemInfo && connectedHost && (
             <section className="space-y-3">
               {/* Tabs left, web admin right — the button belongs to the DEVICE,
-                not to one tab (user call 2026-07-25; it used to sit at the
+                not to one tab (it used to sit at the
                 bottom of the Streamer card, out of sight and reading as a
                 streamer-info thing). Right-aligned lands it flush with the
                 edge of the tab body below it. */}
@@ -401,7 +404,7 @@ export function DeviceScreen(): React.JSX.Element {
                     // the row has no room for a caption, and the app tips
                     // everything else that needs a "why".
                     data-tip="Renaming and firmware updates live in the streamer's web interface"
-                    className="tip-bottom tip-end shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
+                    className="tip-bottom tip-end shrink-0 flex items-center gap-1.5 text-[12.5px] px-3 h-8 rounded-lg ring-1 ring-edge bg-panel/70 text-accent hover:brightness-110 hover:ring-edge2 motion-safe:active:scale-95 transition-all"
                   >
                     Open web admin <ExternalLink size={12} />
                   </button>
@@ -430,20 +433,20 @@ export function DeviceScreen(): React.JSX.Element {
                   control — the streamer reports its own self-check and updating
                   is done in the Cambridge Audio app or the web admin. */}
                 {firmwareUpdate?.updating ? (
-                  <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
-                    <Loader2 size={14} className="spin text-gold shrink-0 mt-px" />
+                  <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-accent/40 bg-accentdim px-3 py-2.5">
+                    <Loader2 size={14} className="spin text-accent shrink-0 mt-px" />
                     <div className="min-w-0">
-                      <div className="text-[12.5px] text-gold">Updating firmware…</div>
+                      <div className="text-[12.5px] text-accent">Updating firmware…</div>
                       <div className="text-[11px] text-faint mt-0.5">
                         The streamer is installing an update. Leave it powered on until it finishes.
                       </div>
                     </div>
                   </div>
                 ) : firmwareUpdate?.updateAvailable ? (
-                  <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-gold/40 bg-golddim px-3 py-2.5">
-                    <ArrowUpCircle size={14} className="text-gold shrink-0 mt-px" />
+                  <div className="flex items-start gap-2.5 rounded-lg ring-1 ring-accent/40 bg-accentdim px-3 py-2.5">
+                    <ArrowUpCircle size={14} className="text-accent shrink-0 mt-px" />
                     <div className="min-w-0">
-                      <div className="text-[12.5px] text-gold">Firmware update available</div>
+                      <div className="text-[12.5px] text-accent">Firmware update available</div>
                       <div className="text-[11px] text-faint mt-0.5">
                         Install it in the Cambridge Audio app or the streamer&rsquo;s web admin.
                         TastyTunes never updates firmware itself.
@@ -451,7 +454,7 @@ export function DeviceScreen(): React.JSX.Element {
                     </div>
                   </div>
                 ) : firmwareUpdate ? (
-                  // Calm positive confirmation (not gold — this is the normal state),
+                  // Calm positive confirmation (not the accent — this is the normal state),
                   // so the user gets the same "you're up to date" reassurance the
                   // streamer's own web page gives.
                   <div className="flex items-center gap-2 text-[12px] text-dim">

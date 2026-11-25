@@ -1,0 +1,57 @@
+name: Linux smoke
+
+# The AppImage on GitHub's Ubuntu 24.04 runner, as the README tells an owner to run it: without
+# libfuse2 it stops and says it needs FUSE, and with libfuse2t64 installed and --no-sandbox (24.04
+# restricts the sandbox Electron uses) it boots, connects to the built-in demo and round-trips
+# transport, driven through Playwright as the Windows smoke drives the installed build. No streamer
+# and no LAN on the runner, hence the demo.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Package the AppImage
+        run: npx electron-builder --linux AppImage --x64 --publish never
+
+      - name: Without libfuse2 it says it needs FUSE
+        shell: bash
+        run: |
+          sudo apt-get remove -y -q libfuse2t64 libfuse2 >/dev/null 2>&1 || true
+          set +e
+          timeout 30 ./dist/TastyTunes-x86_64.AppImage --no-sandbox > fuse.txt 2>&1
+          rc=$?
+          set -e
+          cat fuse.txt
+          if [ "$rc" = 0 ] || [ "$rc" = 124 ] || ! grep -qi 'fuse' fuse.txt; then
+            echo "::error::without libfuse2 the AppImage should stop and name FUSE (exit $rc)"
+            exit 1
+          fi
+
+      - name: With libfuse2t64 and --no-sandbox it boots and plays the demo
+        shell: bash
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q libfuse2t64 xvfb
+          npm i --no-save playwright-core
+          TT_EXE="$PWD/dist/TastyTunes-x86_64.AppImage" TT_ARGS=--no-sandbox xvfb-run -a node .github/windows-smoke.mjs

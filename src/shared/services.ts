@@ -1,5 +1,5 @@
-// THE SERVICES THE APP TALKS TO (0.15.0, the 0.14 re-score's one HIGH: the site's and the README's
-// "complete list" of what leaves the machine had drifted from the code, missing fanart.tv,
+// THE SERVICES THE APP TALKS TO (0.15.0: the site's and the README's "complete list" of what
+// leaves the machine had drifted from the code, missing fanart.tv,
 // Wikimedia Commons and the background artist lookups). One home: every request the main process
 // logs names one of these (loggedFetch takes a ServiceId), so a new service cannot be called
 // without a line here, and services.test.ts holds the README's "What leaves your machine" to the
@@ -43,7 +43,7 @@ export const SERVICES = {
   wikipedia: { where: "internet", hosts: ["wikipedia.org"], sent: "an article's title" },
   commons: {
     where: "internet",
-    hosts: ["commons.wikimedia.org"],
+    hosts: ["commons.wikimedia.org", "upload.wikimedia.org"],
     sent: "an artist's name, when you look for a picture of them",
   },
   fanart: {
@@ -53,7 +53,7 @@ export const SERVICES = {
   },
   caa: {
     where: "internet",
-    hosts: ["coverartarchive.org"],
+    hosts: ["coverartarchive.org", "archive.org"],
     sent: "an album's MusicBrainz identifier",
   },
   "radio-browser": {

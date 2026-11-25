@@ -1,5 +1,5 @@
 /**
- * THE USB SERVER'S PICTURES MOVE WITH ITS IDS (2026-10-11, the user's Evo: after a wake the
+ * THE USB SERVER'S PICTURES MOVE WITH ITS IDS (2026-10-11, on an Evo: after a wake the
  * Albums lens and the album page showed no art for the drive's albums). The streamer serves a
  * drive's pictures at URLs it re-mints on every wake ("album-art-e548?id=70:3" came back as
  * "album-art-2e42?id=12:3" for the same cover, the old URL a 404), and the heal moved the

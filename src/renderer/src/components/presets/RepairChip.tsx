@@ -184,7 +184,7 @@ export function RepairChip({
                           onClick={() => setPick(i)}
                           className={cx(
                             "block w-full text-left rounded px-2 py-1 transition-colors",
-                            i === pick ? "bg-amberdim text-ink" : "text-dim hover:text-ink",
+                            i === pick ? "bg-accentdim text-ink" : "text-dim hover:text-ink",
                           )}
                         >
                           <span className="block text-[12px] truncate">{a.title}</span>
@@ -210,7 +210,7 @@ export function RepairChip({
                     </span>
                   )}
                   <ConfirmActions
-                    tone="gold"
+                    tone="accent"
                     busy={saving}
                     verb={saving ? "Repairing…" : `Save to slot ${preset.id}`}
                     onCancel={() => setOpen(false)}

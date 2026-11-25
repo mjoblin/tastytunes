@@ -7,7 +7,7 @@ import { drumTrack, noise } from "../__fixtures__/synthAudio";
 // ANALYSIS WITH NO SIZE LIMIT (0.14.0): the measures read a tape that holds a little of the track
 // at a time. On the round's first cut, before the strip's loudness fix, every field matched the
 // old whole-track code's to the bit, at 44.1 to 192 kHz, mono to six channels, in pieces from 999
-// frames to the whole track (journal/0.14.0.md); these hold the pieces to the whole from now on.
+// frames to the whole track; these hold the pieces to the whole from now on.
 
 const track = (rate: number, secs: number, channels: number): Float32Array[] => {
   const l = drumTrack(118, secs, rate, { hats: true }).samples;

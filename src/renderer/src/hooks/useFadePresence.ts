@@ -20,7 +20,7 @@ import { cx } from "@/lib/format";
  * `enter: false` opens at once and fades only on close: a surface whose mount
  * is heavy (the scene picker's thirteen live thumbnails, each a GL context)
  * did all of that work behind an opacity of zero, so its fade-in read as a
- * delay before it appeared rather than as a fade (the user, 2026-09-13).
+ * delay before it appeared rather than as a fade.
  */
 export function useFadePresence(
   open: boolean,

@@ -50,7 +50,7 @@ import {
   X,
 } from "lucide-react";
 import { queueContentHash, type QueueListItem } from "@shared/smoip";
-import { presetVolumeKey, audioAnalysisKey } from "@shared/model";
+import { audioAnalysisKey, playlistFullSentence, presetVolumeKey } from "@shared/model";
 import { ViewOptions } from "@/components/library/lenses/ViewOptions";
 import { type ContentRef, type QueueRestoreResult } from "@shared/model";
 import { tt } from "@/api";
@@ -88,6 +88,7 @@ import {
   GAP_BETWEEN,
   GAP_WITHIN,
   cardChip,
+  pageEdges,
 } from "@/components/chrome/Chrome";
 import { artSrc } from "@/lib/artSrc";
 import { useQueueDrag } from "@/components/queue/useQueueDrag";
@@ -169,12 +170,12 @@ let discView: "disc" | "media" = "disc";
  * The Queue screen: the streamer's Media Library queue, or, while the CD is the source, the
  * disc's tracks (0.10.0), with the parked queue a click away in either direction.
  *
- * ONE SWITCH IN ONE PLACE (user, 2026-09-26: two buttons in two places were "jarring" to click
+ * ONE SWITCH IN ONE PLACE (two buttons in two places were jarring to click
  * between): both views put the same segmented control in the header as its second row,
  * left-aligned with the title, the Device screen's tabs' place. The headers are one height, so
  * neither the switch nor the list below moves between the views, and the Media Library
  * header's toolbar, already full at the default window width, gives up nothing. The header
- * owns the rhythm (user, 2026-09-26: the switch sat too far under the title as a row after
+ * owns the rhythm (the switch sat too far under the title as a row after
  * the header, its padding stacked on the title's): a small gap between the rows, the header's
  * own bottom padding under the switch. With no CD the header is its one row, as it always was.
  * An empty Media Library queue leaves nothing to switch to: its option is dimmed and the disc
@@ -303,7 +304,13 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
       minute: "2-digit",
     })}`;
     // Toast the STORED name (two saves in the same minute uniquify to "… (2)").
-    const created = await tt.playlistCreate(name, items);
+    let created: Awaited<ReturnType<typeof tt.playlistCreate>>;
+    try {
+      created = await tt.playlistCreate(name, items);
+    } catch (e) {
+      showToast({ kind: "error", text: playlistFullSentence(e) ?? "Couldn't save the queue" });
+      return;
+    }
     showToast({
       kind: "success",
       text: `Saved ${items.length} tracks as “${created.name}”`,
@@ -424,8 +431,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
   });
   const leanRange: [number, number] = [leanWin.first, leanWin.last];
 
-  // FROM THE KEYBOARD (0.14.0, his K1 to K9): the Queue one Tab stop; up and down through the
-  // rows (all four in the cards; album by album in the Albums view, his settled call); Enter
+  // FROM THE KEYBOARD (0.14.0): the Queue one Tab stop; up and down through the
+  // rows (all four in the cards; album by album in the Albums view); Enter
   // jumps to a track as its click does, "." its More menu, Delete removes it (or the selection)
   // with Undo, and Option with up or down moves it, dropped on Option's release as ONE change
   const groups = useMemo(() => (albums ? albumRuns(items) : []), [albums, items]);
@@ -531,7 +538,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
   });
   useEffect(() => followCurrent(), [playId, followQueue, cards, presetGap, filter]);
 
-  // THE LANDING ANIMATES (user, 2026-08-27 — an instant re-order after the
+  // THE LANDING ANIMATES (an instant re-order after the
   // line model read as a teleport): a FLIP pass flies every displaced row
   // from its old rect to its new one. WAAPI (el.animate), not style
   // mutation, so the streamer's re-announce mid-flight can't snap a row out
@@ -557,7 +564,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
         // neighbors FLIP out of the way. No wash here: this branch also
         // fires for a restore's transient tail append, which is exactly
         // where the wash must NOT go (it lit the off-screen tail, not the
-        // landing) — washArrivals owns the gold.
+        // landing) — washArrivals owns the wash.
         el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" });
         return;
       }
@@ -658,7 +665,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
             within one — the app-wide toolbar tiers, one home in Chrome
             (GAP_BETWEEN / GAP_WITHIN). The filter stands alone: typing is its
             own kind of act, so the between tier separates it from the verbs. */}
-          <div className={`flex items-center ${GAP_BETWEEN}`}>
+          <div className={`flex min-w-0 items-center ${GAP_BETWEEN}`}>
             <FilterInput
               value={filter}
               onChange={(t) => setScreenFilter("queue", t)}
@@ -704,8 +711,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
               {clearConfirm.popover}
             </div>
             <div className={`flex items-center ${GAP_WITHIN}`}>
-              {/* Rows, Cards or Albums, and the card grid's size, gap and Fill rows (0.14.0, his
-                  D5 pick on "View Options": the menu wherever a Rows or Cards button was) */}
+              {/* Rows, Cards or Albums, and the card grid's size, gap and Fill rows (0.14.0,
+                  in "View Options": the menu wherever a Rows or Cards button was) */}
               <ViewOptions kind="queue" />
               <HeaderChip
                 data-tip="Scroll to the current track"
@@ -850,8 +857,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
         </SelectionBar>
       )}
 
-      {/* rows: pt-1 keeps the current ring unclipped; cards: pt-2 gives the
-          hover grow + glow ring headroom on the top row */}
+      {/* pageEdges' top padding keeps the current row's ring unclipped and gives a card's
+          hover grow and glow ring headroom on the top row */}
       <div
         {...keys.container}
         ref={(el) => {
@@ -867,10 +874,10 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
           "flex-1 overflow-y-auto [overflow-anchor:none]",
           // the albums view separates by its header surface, not by rules —
           // dividers would double the boundary the veil bar already draws
-          cards ? "px-8 pt-2" : albums ? "px-6 pt-1" : "px-6 pt-1 divide-y divide-edge/50",
-          // the floating bar overlaps the last rows at full scroll — selection
+          cards ? "px-8" : albums ? "px-5" : "px-5 divide-y divide-edge/50",
+          // the floating bar overlaps the last rows at full scroll: selection
           // mode adds scroll-room below the content so every row can clear it
-          selected.size > 0 ? "pb-28" : cards ? "pb-8" : "pb-6",
+          pageEdges(selected.size > 0),
         )}
       >
         {items.length === 0 && (
@@ -958,7 +965,7 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
               batch and single drags hand off to a cursor-anchored ghost —
               the overlay's grab offset would park the chip ON TOP of the
               target row, and the glow must stay visible (the two-state
-              model, ruled with the user 2026-08-30). */}
+              model). */}
             <DragOverlay dropAnimation={null} modifiers={[chipToCursor]}>
               {(() => {
                 if (!dragBatch || navHover != null) return null;
@@ -1002,8 +1009,8 @@ function MediaQueue({ viewSwitch }: { viewSwitch: React.ReactNode }): React.JSX.
 }
 
 /**
- * The album-grouped queue view (2026-08-24, a repeated forum ask: "cover
- * once, tracks beneath, remove the album by its cover"). Groups are
+ * The album-grouped queue view (2026-08-24): the cover once, its tracks
+ * beneath, the album removed by its cover. Groups are
  * CONTIGUOUS runs of one album — queue order stays authoritative, so the
  * same album queued twice shows twice. Albumless entries render as plain
  * ungrouped rows. A reading-and-pruning view: drag reorder stays with the
@@ -1045,17 +1052,16 @@ function removeAlbumRun(g: AlbumRun): void {
   for (const i of g.items) if (i.id != null) void tt.command({ type: "queueDelete", id: i.id });
   // One closure, two entry points — sequential, ascending positions, each
   // restore arming the FLIP (the batch-remove pattern exactly).
-  const undoId = useStore
-    .getState()
-    .pushUndo(
-      g.album != null ? `Remove “${g.album}”` : `Remove ${g.items.length} Tracks`,
-      async () => {
-        for (const s of saved) {
-          snapQueueRows();
-          await restoreToQueue(s.content, s.position);
-        }
-      },
-    );
+  const undoId = useStore.getState().pushUndo(
+    g.album != null ? `Remove “${g.album}”` : `Remove ${g.items.length} Tracks`,
+    async () => {
+      for (const s of saved) {
+        snapQueueRows();
+        await restoreToQueue(s.content, s.position);
+      }
+    },
+    { queue: true },
+  );
   useStore.getState().showToast({
     kind: "success",
     text: `Removed ${g.items.length} ${g.items.length === 1 ? "track" : "tracks"} from “${g.album}”`,
@@ -1119,7 +1125,7 @@ function QueueAlbumGroups({
             <div
               {...groupItem(gi)}
               className={cx(
-                "group mb-1.5 grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+                "group mb-1.5 grid grid-cols-[44px_1fr_auto] items-center gap-3 rounded-lg px-3 py-1.5",
                 // the header rests one veil step above the tracks (they are
                 // transparent until hover), and hover moves it one step further
                 // — the same ladder the wells and hover fills already use
@@ -1264,10 +1270,17 @@ function removeFromQueue(item: QueueListItem): void {
   // No title, no content identity, nothing to find it by later — so no offer.
   // (Same rule as the row's heart: see queueItemFavorite.)
   if (!title) return;
-  const undoId = useStore.getState().pushUndo(`Remove “${title}”`, () => {
-    snapQueueRows();
-    void restoreToQueue({ title, artist: md?.artist ?? null, album: md?.album ?? null }, position);
-  });
+  const undoId = useStore.getState().pushUndo(
+    `Remove “${title}”`,
+    () => {
+      snapQueueRows();
+      void restoreToQueue(
+        { title, artist: md?.artist ?? null, album: md?.album ?? null },
+        position,
+      );
+    },
+    { queue: true },
+  );
   useStore.getState().showToast({
     kind: "success",
     text: `Removed “${title}”`,
@@ -1329,7 +1342,7 @@ async function restoreQueueOrder(prev: number[]): Promise<void> {
  * dnd-kit places an overlay at the dragged node's rect plus the delta, so
  * grabbing a row's far side parked the 320px chip far from the pointer —
  * and the rail ghost uses the same +14/+10, so crossing onto the rail never
- * makes the chip jump (user, 2026-08-30).
+ * makes the chip jump.
  */
 const chipToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform }) => {
   if (draggingNodeRect == null || !(activatorEvent instanceof MouseEvent)) return transform;
@@ -1350,7 +1363,7 @@ const chipToCursor: Modifier = ({ activatorEvent, draggingNodeRect, transform })
 /** Rows an undo just put back: the queue id each landed under → the slot it
  *  was restored to. A restore is an append at the tail plus a move into
  *  place — TWO announces — and washing on "row just appeared" lit the tail
- *  off-screen instead of the landing (user, 2026-08-28: three tracks came
+ *  off-screen instead of the landing (three tracks came
  *  back, one brief wash). The wash instead fires when the queue shows the id
  *  AT its restored position, from whichever side wins the announce-vs-IPC
  *  race; entries expire quietly (a filtered view may never render the row). */
@@ -1420,7 +1433,7 @@ interface QueueItemProps {
    *  grid has gaps, so its rings never overlap). */
   selStart?: boolean;
   selEnd?: boolean;
-  /** The gold insertion line — where the block will land on release. */
+  /** The accent insertion line — where the block will land on release. */
   insertLine?: "before" | "after";
   /** This row's ⋯ menu is open — hold the hover treatment (the Library's
    *  menuNodeId rule; losing it read as the row deselecting itself). */
@@ -1434,7 +1447,7 @@ interface QueueItemProps {
   /** A queue drag is live: rows take no pointer events, so hover fills,
    *  card grows and hover-revealed buttons stay dark under a passing drag
    *  — mid-drag the line and the drop targets are the only affordances
-   *  (the nav rail's rule, applied at home; user, 2026-08-30). dnd-kit is
+   *  (the nav rail's rule, applied at home). dnd-kit is
    *  unaffected: its tracking is window-level and rect-based. */
   dragLive?: boolean;
 }
@@ -1505,7 +1518,7 @@ function QueueRow({
       data-selected={selected || undefined}
       {...(bodyDrag ? listeners : {})}
       className={cx(
-        "group relative grid items-center gap-3 rounded-lg px-2 py-1.5",
+        "group relative grid items-center gap-3 rounded-lg px-3 py-1.5",
         lean && LEAN_ROW,
         // the DR cell is a sixth column only while it renders: an empty auto
         // column would still cost a gap and inset the duration
@@ -1524,7 +1537,7 @@ function QueueRow({
         // a contiguous run reads as ONE block: the fill continues and the
         // border is drawn by the data-sel-run span on the run's outer
         // boundary only (overlapping per-row rings doubled up and read
-        // brighter between neighbors — user, 2026-08-27)
+        // brighter between neighbors)
         selected && "bg-veil2",
         selected && !selStart && "rounded-t-none",
         selected && !selEnd && "rounded-b-none",
@@ -1560,7 +1573,7 @@ function QueueRow({
           aria-hidden
           data-insert-line
           className={cx(
-            "absolute inset-x-1 z-20 h-[2px] rounded-full bg-gold shadow-[0_0_6px_rgb(var(--gold-rgb)_/_0.6)]",
+            "absolute inset-x-1 z-20 h-[2px] rounded-full bg-accent shadow-[0_0_6px_rgb(var(--accent-rgb)_/_0.6)]",
             insertLine === "before" ? "-top-px" : "-bottom-px",
           )}
         />
@@ -1647,7 +1660,7 @@ function QueueCard({
   listItem,
 }: QueueItemProps): React.JSX.Element {
   const leanCard = useLeanQueue();
-  // in the keyed list a card is reached with the arrows and moved with Option (K1, K8): the
+  // in the keyed list a card is reached with the arrows and moved with Option: the
   // sortable's own Tab stop and its buttons' leave the Tab order
   const inList = useInListKeys();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -1701,7 +1714,7 @@ function QueueCard({
           aria-hidden
           data-insert-line
           className={cx(
-            "absolute inset-y-2 z-20 w-[2px] rounded-full bg-gold shadow-[0_0_6px_rgb(var(--gold-rgb)_/_0.6)]",
+            "absolute inset-y-2 z-20 w-[2px] rounded-full bg-accent shadow-[0_0_6px_rgb(var(--accent-rgb)_/_0.6)]",
             insertLine === "before" ? "-left-[3px]" : "-right-[3px]",
           )}
         />
@@ -1724,9 +1737,9 @@ function QueueCard({
 
           <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 group-kbd:opacity-100 transition-opacity flex items-center justify-center">
             <span
-              className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
+              className="h-11 w-11 rounded-full bg-accent text-bg flex items-center justify-center
                          transition-all duration-150 motion-safe:hover:scale-110
-                         hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]"
+                         hover:shadow-[0_0_24px_rgb(var(--accent-rgb)_/_0.6)]"
             >
               <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
             </span>
@@ -1740,11 +1753,11 @@ function QueueCard({
 
           {/* selection is a STATUS on the art (the card-chip grammar): the
               ring alone whispered under the artwork and moved selections
-              were kept without anyone noticing (user, 2026-08-28) */}
+              were kept without anyone noticing */}
           {selected && (
             <span
               data-sel-check
-              className="absolute top-1.5 right-1.5 z-10 h-6 w-6 rounded-full bg-gold text-bg flex items-center justify-center shadow-lg"
+              className="absolute top-1.5 right-1.5 z-10 h-6 w-6 rounded-full bg-accent text-bg flex items-center justify-center shadow-lg"
             >
               <Check size={13} strokeWidth={3} />
             </span>
@@ -1781,7 +1794,7 @@ function QueueCard({
             {md?.title ?? md?.name ?? "—"}
           </div>
           <div className="text-[11px] text-dim truncate mt-0.5">
-            {[artist, md?.album].filter(Boolean).join(" — ")}
+            {[artist, md?.album].filter(Boolean).join(FACT_SEP)}
           </div>
           <div className="microlabel mt-1">
             {String((item.position ?? 0) + 1).padStart(2, "0")} · {fmtTime(md?.duration)}

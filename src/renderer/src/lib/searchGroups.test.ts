@@ -1,6 +1,7 @@
 /**
- * The Search screen's grouping rules: the hidden set's seed and toggle, the
- * nav order, what shows and how much, the row order and the "more" count.
+ * The Search screen's grouping rules: the scope (Everything or one category) and
+ * what it leaves out, the nav order, what shows and how much, the row order and
+ * the "more" count.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -8,8 +9,8 @@ import {
   moreCount,
   orderByNav,
   orderRows,
-  seedHidden,
-  toggleHidden,
+  hiddenFor,
+  sanitizeScope,
   type SearchCategoryId,
   type SearchGroup,
 } from "./searchGroups";
@@ -40,29 +41,31 @@ const five = (): SearchGroup<Row>[] => [
   group("radio", 0, 0, { pending: true }),
 ];
 
-describe("seedHidden", () => {
-  it("takes the stored set, keeping category ids only", () => {
-    expect([...seedHidden(["radio", "settings", "bogus"], ["favorites"])]).toEqual(["radio"]);
+describe("the scope", () => {
+  it("reads a stored category or Everything, and anything else as Everything", () => {
+    expect(sanitizeScope("radio")).toBe("radio");
+    expect(sanitizeScope("everything")).toBe("everything");
+    expect(sanitizeScope("settings")).toBe("everything");
+    expect(sanitizeScope(undefined)).toBe("everything");
   });
 
-  it("falls back to the nav's hidden screens, keeping category ids only", () => {
-    expect([...seedHidden(null, ["favorites", "now-playing"])]).toEqual(["favorites"]);
+  it("leaves out nothing for Everything and every other category for one", () => {
+    expect(hiddenFor("everything").size).toBe(0);
+    expect([...hiddenFor("presets")].sort()).toEqual([
+      "favorites",
+      "library",
+      "playlists",
+      "radio",
+    ]);
   });
 
-  it("is empty with neither", () => {
-    expect(seedHidden(undefined, null).size).toBe(0);
-  });
-});
-
-describe("toggleHidden", () => {
-  it("hides and shows one category", () => {
-    expect([...toggleHidden(new Set(), "radio", 5)]).toEqual(["radio"]);
-    expect(toggleHidden(new Set(["radio"]), "radio", 5).size).toBe(0);
-  });
-
-  it("shows everything again when the last visible category is hidden", () => {
-    const hidden = new Set<SearchCategoryId>(["library", "presets", "playlists", "favorites"]);
-    expect(toggleHidden(hidden, "radio", 5).size).toBe(0);
+  it("makes one category the whole screen, its own cap and nothing else shown", () => {
+    const one = layoutGroups(five(), hiddenFor("library"));
+    expect(one.shown.map((g) => g.id)).toEqual(["library"]);
+    expect(one.isolated).toBe(true);
+    const all = layoutGroups(five(), hiddenFor("everything"));
+    expect(all.shown.map((g) => g.id)).toEqual(["library", "presets", "favorites", "radio"]);
+    expect(all.isolated).toBe(false);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { redactUrl } from "./netlog";
+import { getNetRequests, noteRequest, redactUrl } from "./netlog";
 
 describe("what the request log keeps of a URL", () => {
   it("blanks a key or a token in its query, whatever its name's case", () => {
@@ -15,5 +15,23 @@ describe("what the request log keeps of a URL", () => {
     const plain = "https://musicbrainz.org/ws/2/artist?query=artist:%22Keane%22&fmt=json&limit=3";
     expect(redactUrl(plain)).toBe(plain);
     expect(redactUrl("not a url")).toBe("not a url");
+  });
+});
+
+describe("a request made elsewhere, put in the log", () => {
+  it("keeps it as the log keeps every request, its URL blanked of a token", () => {
+    noteRequest("art", "https://upload.wikimedia.org/a.jpg?token=t1", {
+      status: 200,
+      ms: 12,
+      error: false,
+    });
+    expect(getNetRequests().at(-1)).toMatchObject({
+      service: "art",
+      method: "GET",
+      url: "https://upload.wikimedia.org/a.jpg?token=REDACTED",
+      status: 200,
+      ms: 12,
+      error: false,
+    });
   });
 });

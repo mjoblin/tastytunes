@@ -41,10 +41,10 @@ export const REFRAIN_KEY: SceneKey = {
 export const REFRAIN_SETTINGS: SceneSettingDef[] = [
   { key: "path", label: "Path", kind: "toggle", default: true },
   { key: "marks", label: "Marks", kind: "toggle", default: true },
-  // the Motion switch holds the rows still (user, 2026-09-15): no slide on arrival, no swell
+  // the Motion switch holds the rows still: no slide on arrival, no swell
   // on a kick, no easing of the light or the window; the map still changes as lines are sung.
-  // The path's fade-in is NOT motion and rides whatever the switch says (the user runs with
-  // Motion off, and the fade gated on it read as the pop it was meant to cure); only the OS's
+  // The path's fade-in is NOT motion and rides whatever the switch says (with Motion off, a
+  // fade gated on it read as the pop it was meant to cure); only the OS's
   // reduce-motion preference makes the steps instant
   { key: "motion", label: "Motion", kind: "toggle", default: true },
 ];
@@ -96,7 +96,7 @@ function build(lines: readonly { t: number; text: string }[]): Built {
 const ARRIVE = 0.45;
 const STEP = 0.4;
 /** A path segment fades in over this long, and the head's glow hands over to the next step
- *  over the same (user, 2026-09-15: they popped — a first cut eased out over 0.35 s, which is
+ *  over the same (they popped: a first cut eased out over 0.35 s, which is
  *  two thirds there in a tenth of a second and reads as a pop; a smoothstep over half a second
  *  reads as a fade). */
 const FADE = 0.5;
@@ -181,7 +181,7 @@ export class Refrain implements Scene {
     if (!built || built.rows.length === 0) {
       // no words: the title, modest and dim with the artist beneath, and only after a wait —
       // a track change has a wordless moment while the new lyrics load, and a full-screen
-      // title flashing there distracted (user, 2026-09-15)
+      // title flashing there distracted
       if (f.title !== this.titleFor) {
         this.titleFor = f.title;
         this.titleSince = f.now;
@@ -231,15 +231,14 @@ export class Refrain implements Scene {
       path.push(r);
       stepLine.push(i);
     }
-    // a step is DRAWN the way a hand draws a line (user, 2026-09-15: "like a human hand might
-    // draw it"): the pen's way on the minimum-jerk profile over the stroke's own time — a step
-    // is quick, a reach back takes longer, and every line has its own tempo — and the stroke
-    // LANDS AS THE LINE STARTS (user: "the end of the draw lands at the time the line
-    // starts"), so it runs on the lyric's clock, beginning its own time before the line and
-    // never earlier than the line before it. The step to the NEXT line with words joins the
-    // path once its stroke is due. Its glow: full while the pen is on it, easing down once
-    // the pen leaves for the next. Neither is the rows' motion: only reduce-motion draws the
-    // path whole, and then only to the line being sung.
+    // a step is DRAWN the way a hand draws a line: the pen's way on the minimum-jerk profile
+    // over the stroke's own time — a step is quick, a reach back takes longer, and every line
+    // has its own tempo — and the stroke LANDS AS THE LINE STARTS, so it runs on the lyric's
+    // clock, beginning its own time before the line and never earlier than the line before
+    // it. The step to the NEXT line with words joins the path once its stroke is due. Its
+    // glow: full while the pen is on it, easing down once the pen leaves for the next.
+    // Neither is the rows' motion: only reduce-motion draws the path whole, and then only to
+    // the line being sung.
     const pos = f.position;
     const secsOf = (k: number): number => {
       const line = stepLine[k];
@@ -268,7 +267,7 @@ export class Refrain implements Scene {
     };
 
     // the lit state eases: the current row up to 1, a sung row back to a rest level that
-    // rises a little with every singing (user, 2026-09-15: a line sung often ends up brighter
+    // rises a little with every singing (a line sung often ends up brighter
     // than one sung once), an unsung row stays dark
     for (let r = 0; r < built.rows.length; r++) {
       const sung = sungSoFar[r];
@@ -295,7 +294,7 @@ export class Refrain implements Scene {
     } else this.top = 0;
     const y0 = h * 0.5 - ((Math.min(visible, n) - 1) * pitch) / 2;
     const yOf = (r: number): number => y0 + (r - this.top) * pitch;
-    // the tile keeps the same margin on the left: the path draws there too (user, 2026-09-15)
+    // the tile keeps the same margin on the left: the path draws there too
     const left = w * 0.17;
     const maxText = w - left - w * 0.06;
 

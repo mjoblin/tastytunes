@@ -1,5 +1,5 @@
 // A PRESET'S ⋯ MENU and the album a preset references. Moved out of PresetsScreen.tsx as it was
-// (0.15.0, the hygiene pass).
+// (0.15.0).
 import { useState } from "react";
 import { type PresetItem } from "@shared/smoip";
 import { type MediaNode } from "@shared/model";
@@ -15,22 +15,22 @@ import { PopoverStop, usePresetVolumePopover } from "./presetVolume";
 
 /**
  * THE ARTWORK IS THE FINGERPRINT: a media preset's album in the library is the one album whose
- * art URL is the preset's (the streamer keeps no object id worth trusting, Asset re-mints them
- * on a rescan, but the art id survives; 44/44 of the author's UPnP presets matched this way).
- * One home: the repair chip finds the album's current id with it, the ⋯ menu's Open in Library
- * and Go to artist find the album.
+ * art URL is the preset's (the streamer keeps no object id worth trusting, Asset re-mints them on
+ * a rescan, but the art id survives; 44/44 UPnP presets tested matched this way). One home: the
+ * repair chip finds the album's current id with it, the ⋯ menu's Open in Library and Go to artist
+ * find the album.
  *
- * A preset with no picture (0.13.0-rc.6, his preset 24, left "[No title]" by a repair that saved
- * a blank) is found by what it last played (listeningRecord.presetLastAlbum): that play's
- * picture, or its album and artist, in every library that has it. `by` says which way it was
- * found and `last` names the album History has, for the repair's words.
+ * A preset with no picture (0.13.0-rc.6, one left "[No title]" by a repair that saved a blank) is
+ * found by what it last played (listeningRecord.presetLastAlbum): that play's picture, or its
+ * album and artist, in every library that has it. `by` says which way it was found and `last`
+ * names the album History has, for the repair's words.
  *
- * AND A COVER CAN CHANGE TOO (0.15.0-rc.2, his preset 22 "Dark All Day", 2026-11-08): Asset gave
- * the album a new cover id (the old one still served from its cache), so the picture matched
- * nothing and the repair offered nothing, with the album in the library under its own name. An
- * album preset whose picture matches nothing goes on to History, then to its own name (the
- * streamer names an album preset after the album), each match shown before it is saved. A station
- * or a saved queue never does: a name is no fingerprint for those.
+ * AND A COVER CAN CHANGE TOO (0.15.0-rc.2): Asset gave the album a new cover id (the old one
+ * still served from its cache), so the picture matched nothing and the repair offered nothing,
+ * with the album in the library under its own name. An album preset whose picture matches nothing
+ * goes on to History, then to its own name (the streamer names an album preset after the album),
+ * each match shown before it is saved. A station or a saved queue never does: a name is no
+ * fingerprint for those.
  */
 export async function presetAlbums(preset: PresetItem): Promise<{
   albums: MediaNode[];
@@ -67,10 +67,10 @@ export async function presetAlbums(preset: PresetItem): Promise<{
   };
 }
 
-/** A library album's preset, by its class: the Evo calls a library album's preset type "UPnP"
- *  (read 2026-10-17; the mock had "MEDIA"), a station "Radio", an input "Input", and a saved
- *  queue is a "MediaQueue" with a collage of covers. One home: the ⋯ menu's library verbs and the
- *  repair's fallbacks past the picture. */
+/** A library album's preset, by its class: the streamer calls a library album's preset type
+ *  "UPnP" (read 2026-10-17; the mock had "MEDIA"), a station "Radio", an input "Input", and a
+ *  saved queue is a "MediaQueue" with a collage of covers. One home: the ⋯ menu's library verbs
+ *  and the repair's fallbacks past the picture. */
 export function isAlbumPreset(preset: PresetItem): boolean {
   return (
     /^stream\.media/.test(preset.class ?? "") &&
@@ -86,12 +86,11 @@ async function presetAlbum(preset: PresetItem): Promise<MediaNode | null> {
 }
 
 /**
- * A PRESET'S ⋯ (0.12.0, his call after a user's email asked why a preset plays rather than
- * opening): a click still recalls (a preset is the streamer's button, and the streamer keeps no
- * track list for it), and the ⋯, where the trash used to be, holds the rest. Play; Open in
- * Library and Go to artist for a media preset (by its art, presetAlbum; a station or a saved
- * queue has nothing to open); Rename… in place; Preset volume…; Delete preset, last and
- * confirmed, only here. Right-click opens it too.
+ * A PRESET'S ⋯ (0.12.0): a click still recalls rather than opening (a preset is the streamer's
+ * button, and the streamer keeps no track list for it), and the ⋯, where the trash used to be,
+ * holds the rest. Play; Open in Library and Go to artist for a media preset (by its art,
+ * presetAlbum; a station or a saved queue has nothing to open); Rename… in place; Preset volume…;
+ * Delete preset, last and confirmed, only here. Right-click opens it too.
  */
 export function usePresetMenu(
   preset: PresetItem,

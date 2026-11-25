@@ -12,6 +12,19 @@ export function isStringArray(x: unknown): x is readonly string[] {
   return Array.isArray(x) && x.every((s) => typeof s === "string");
 }
 
+/** "a string", "a list", "null": what a value was, for a log line (the wire's check, the saved
+ *  files' checks). */
+export const kindOf = (v: unknown): string =>
+  v === null
+    ? "null"
+    : Array.isArray(v)
+      ? "a list"
+      : typeof v === "object"
+        ? "an object"
+        : typeof v === "boolean"
+          ? "a yes/no"
+          : `a ${typeof v}`;
+
 /** The message of whatever was thrown — an Error's, or the value as text. */
 export function errorMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e);

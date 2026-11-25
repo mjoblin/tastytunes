@@ -1,21 +1,21 @@
 import { knownServerHost } from "../media/upnpBrowser";
 import { loggedFetch } from "../netlog";
-import { allowed } from "./fetchGuard";
+import { allowed, localOnly } from "./fetchGuard";
 import { mediaType } from "@shared/keys";
 
 /**
- * A PICTURE, AND ONLY A PICTURE, FROM WHERE A PICTURE CAN COME (0.10.0, the whole-app
- * review). The renderer asks main for album art as a data URL (the scenes' palette, the
- * deck scenes' covers), and main used to fetch any http(s) URL and hand back whatever
- * came, which let a page that was not the app's read anything on the network through it.
+ * A PICTURE, AND ONLY A PICTURE, FROM WHERE A PICTURE CAN COME (0.10.0). The renderer asks
+ * main for album art as a data URL (the scenes' palette, the deck scenes' covers), and main
+ * used to fetch any http(s) URL and hand back whatever came, which let a page that was not
+ * the app's read anything on the network through it.
  * Now a URL on a private or loopback address is fetched only when it is the streamer's or
  * a media server's the app knows (lookups/fetchGuard); an address on the internet is
  * fetched as before. A redirect is followed by hand so every hop is checked, the answer
  * must be a picture (by its type, or by its first bytes when a server calls it
  * octet-stream), and it is refused past the size limit before it is all read.
- * ONE HOME FOR EVERY PICTURE FETCH (the 0.11 re-score, 2026-10-13): the thumbnails behind
- * the tt-art scheme fetched their origin with a bare fetch, any URL, uncapped, and stored
- * whatever came; they now come through fetchPicture too, with their own limits.
+ * ONE HOME FOR EVERY PICTURE FETCH: the thumbnails behind the tt-art scheme fetched their
+ * origin with a bare fetch, any URL, uncapped, and stored whatever came; they now come
+ * through fetchPicture too, with their own limits.
  */
 
 /** The hosts on the local network a picture may come from: the streamer, and the media
@@ -50,7 +50,8 @@ export interface PictureLimits {
   timeoutMs: number;
   headers?: Record<string, string>;
   /** Shown in the requests console (the renderer's own asks); the thumbnail cache's origin
-   *  fetches are not, or a first browse would fill it. */
+   *  fetches on the local network are not, or a first browse would fill it. A hop to the
+   *  internet always is. */
   logged: boolean;
 }
 
@@ -70,7 +71,12 @@ export async function fetchPicture(
   const init: RequestInit = { signal, redirect: "manual", headers: limits.headers };
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     if (!(await allowed(url, trusted))) return null;
-    const res = limits.logged ? await loggedFetch("art", url.href, init) : await fetch(url, init);
+    // a hop that leaves the local network is always logged: the requests console lists every
+    // request to the internet (0.16.0 left the thumbnail cache's origin fetches out of it)
+    const res =
+      limits.logged || !localOnly(url.hostname)
+        ? await loggedFetch("art", url.href, init)
+        : await fetch(url, init);
     if (res.status >= 300 && res.status < 400) {
       const next = res.headers.get("location");
       if (!next) return null;

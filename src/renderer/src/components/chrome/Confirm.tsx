@@ -10,10 +10,10 @@ import { cx } from "@/lib/format";
  * animated hover frame re-runs the backdrop blur).
  */
 /**
- * THE ACTION ROW of every popover that commits something (0.12.0, his call: the preset volume
+ * THE ACTION ROW of every popover that commits something (0.12.0: the preset volume
  * and the repair popovers had a lone button and no Cancel, unlike Delete): Cancel and the verb,
  * right-aligned, Cancel focused so Enter and Escape are both safe. The verb is red when it
- * destroys (alert, the default) and gold when it doesn't; `start` holds a different action on
+ * destroys (alert, the default) and the accent when it doesn't; `start` holds a different action on
  * the left (the preset volume's Clear); `busy` holds the verb while it runs.
  */
 export function ConfirmActions({
@@ -29,7 +29,7 @@ export function ConfirmActions({
   onCancel(): void;
   onConfirm(): void;
   modal?: boolean;
-  tone?: "alert" | "gold";
+  tone?: "alert" | "accent";
   start?: React.ReactNode;
   busy?: boolean;
 }): React.JSX.Element {
@@ -52,7 +52,7 @@ export function ConfirmActions({
         disabled={busy}
         className={cx(
           "px-2.5 py-1 rounded-lg text-[12px] hover:brightness-110 disabled:opacity-50",
-          tone === "gold" ? "bg-gold text-bg font-medium" : "bg-alert text-white",
+          tone === "accent" ? "bg-accent text-bg font-medium" : "bg-alert text-white",
           !modal && "motion-safe:active:scale-95 transition-all",
         )}
       >
@@ -66,12 +66,12 @@ export function ConfirmActions({
  * The destructive-action confirm: a small popover anchored under the control
  * that asked, with the question spelled out and an explicit pair of buttons.
  *
- * THIS REPLACES THE IN-PLACE "Sure?" MORPH for icon-button deletes (law
- * changed 2026-08-03, user call). The morph swapped a trash glyph for text
- * INSIDE the button, which resized it and shoved everything beside it — a
- * confirm whose arrival moves the thing you're aiming at. The popover leaves
- * the trigger untouched at any size, names what's about to happen, and gives
- * cancel a real button instead of "click anywhere else and hope".
+ * THIS REPLACES THE IN-PLACE "Sure?" MORPH for icon-button deletes. The morph
+ * swapped a trash glyph for text INSIDE the button, which resized it and shoved
+ * everything beside it — a confirm whose arrival moves the thing you're aiming
+ * at. The popover leaves the trigger untouched at any size, names what's about
+ * to happen, and gives cancel a real button instead of "click anywhere else and
+ * hope".
  *
  * Dismissal: Escape and click-away both cancel (PopoverCard's chrome), and
  * Cancel takes initial focus so Enter is always the SAFE answer — the
@@ -83,12 +83,12 @@ export function ConfirmActions({
  * card would fight the first. The rule that emerges: an in-place arm is fine
  * ONLY where the control's box cannot change; everywhere else, this popover.
  *
- * WHEN TO CONFIRM (the destructive-edit rule, user call 2026-07-24, restated
- * 2026-10-11 after this comment had drifted to "only what can't be undone" and
- * the Recent list's Clear shipped without one): confirm for WHOLE COLLECTIONS
- * (a playlist, the queue, the Recent list, a reset order) and for anything that
- * can't be undone (a preset slot, a token); instant + undo for ITEMS (a track,
- * a schedule, a favorite). A whole-collection confirm keeps its undo behind it.
+ * WHEN TO CONFIRM (the destructive-edit rule, restated after this comment had
+ * drifted to "only what can't be undone" and the Recent list's Clear shipped
+ * without one): confirm for WHOLE COLLECTIONS (a playlist, the queue, the
+ * Recent list, a reset order) and for anything that can't be undone (a preset
+ * slot, a token); instant + undo for ITEMS (a track, a schedule, a favorite). A
+ * whole-collection confirm keeps its undo behind it.
  *
  * ```
  * const confirm = useConfirmPopover()

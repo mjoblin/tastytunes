@@ -29,17 +29,20 @@ const ok = (name, cond, detail = '') => {
 }
 
 // Sandboxed userData plus sunk external URLs: the smoke must neither touch a
-// real settings file nor reach any real service from CI.
+// real settings file nor reach any real service from CI. (The installed build
+// ignores the ListenBrainz override, and a fresh profile has no token to send.)
 const ud = mkdtempSync(join(tmpdir(), 'tt-smoke-'))
 const sink = 'http://127.0.0.1:9/'
+// TT_ARGS: the arguments the README tells an owner to launch with (the Linux leg's --no-sandbox)
+const args = (process.env.TT_ARGS ?? '').split(' ').filter(Boolean)
 const app = await _electron.launch({
   executablePath: exe,
+  args,
   env: {
     ...process.env,
     TASTYTUNES_USER_DATA: ud,
     TASTYTUNES_SSDP_TARGET: '127.0.0.1:1',
     TASTYTUNES_UPDATE_URL: sink,
-    TASTYTUNES_LB_URL: sink,
     TASTYTUNES_LYRICS_URL: sink,
     TASTYTUNES_RADIO_URL: sink,
     TASTYTUNES_ARTIST_URL: sink,
@@ -98,5 +101,6 @@ try {
   await app.close().catch(() => {})
 }
 
-console.log(failed === 0 ? 'WINDOWS SMOKE: PASS' : `WINDOWS SMOKE: ${failed} FAILURE(S)`)
+const leg = process.platform === 'linux' ? 'LINUX' : 'WINDOWS'
+console.log(failed === 0 ? `${leg} SMOKE: PASS` : `${leg} SMOKE: ${failed} FAILURE(S)`)
 process.exit(failed === 0 ? 0 : 1)

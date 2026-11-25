@@ -38,7 +38,7 @@ export async function getJson(service: ServiceId, url: string): Promise<Fetched>
 // of every speculative one still waiting (cover art for rows on screen),
 // behind only the urgent ones already there. The pace is the same either way.
 // GENTLE (same day, after a log showing four refusals in ten at the published
-// pace — user: "i don't want the app to be too demanding on musicbrainz"):
+// pace; the app should never be a demanding client of MusicBrainz):
 // a 503 pauses the gate, two seconds doubling to thirty, the refused request
 // is retried ONCE after the pause, and a success forgets the pause; and the
 // speculative lane holds at most MB_SPECULATIVE_MAX waiting requests — beyond

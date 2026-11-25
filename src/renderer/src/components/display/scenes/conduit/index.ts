@@ -251,10 +251,9 @@ interface Pulse {
 // They used to be 2D strokes on the overlay from a guessed vanishing point; in the scene
 // they sit at a real depth, bloom with the rest of the light and pass behind the signs.
 // Each is a TAPERED RIBBON (two triangles), not a line segment: WebGL draws every line one
-// pixel wide whatever is asked, and at that width they were hairlines the eye slid past (the
-// user, 2026-09-12: "make the speed lines more obvious"). A ribbon has a width in world
-// units, so it grows in perspective as it nears, and it is wide at the head and a sliver at
-// the tail, a dart of light rather than a stroke.
+// pixel wide whatever is asked, and at that width they were hairlines the eye slid past. A
+// ribbon has a width in world units, so it grows in perspective as it nears, and it is wide
+// at the head and a sliver at the tail, a dart of light rather than a stroke.
 const STREAK_POOL = 240;
 /** A ribbon's width at its head, in world units, at a hit of no strength and of full. */
 const STREAK_WIDTH_MIN = 4;
@@ -518,8 +517,7 @@ export class Conduit implements ThreeScene {
       // both sides: the circle faces +z, AWAY from the camera, and with front-side culling it
       // never drew. The sprite sun was large enough to hide the tube's open end behind it;
       // the shader sun is not, and the end showed as a dark disc round the light (THE
-      // CRESCENT, found by the user from a crop: "the end of the tunnel being bigger than
-      // the size consumed by the sun")
+      // CRESCENT: the tunnel's open end was larger than the disc of the sun)
       new THREE.MeshBasicMaterial({ color: new THREE.Color(), side: THREE.DoubleSide }),
     );
     this.cap.frustumCulled = false;
@@ -859,7 +857,7 @@ void main() {
     const release = f.drop?.release ?? 0;
     // the lean-in follows the build closely; the LETTING GO is slow (tau 1.6 s) whichever way
     // the release flag reads: released over a third of a second, the widening frame right
-    // after the drop read as the camera being pushed back (the user, 2026-09-07)
+    // after the drop read as the camera being pushed back
     const leanAim = build * (1 - release);
     this.lean = easeTowards(this.lean, leanAim, f.dt, leanAim < this.lean ? 1.6 : 0.12);
     this.camera.fov = 62 - 7 * this.lean;
@@ -1031,18 +1029,17 @@ void main() {
       sign.mesh.scale.set(1, 1, sign.height);
       sign.mesh.position.set(0, 0, zOfSeconds(at));
       const near = clamp(1 - at / aheadSecs);
-      // toward the light the signs thin out and warm toward it (the user's word: fade a little
-      // the closer they are to the sun)
+      // toward the light the signs thin out and warm toward it
       // the same for a line being heard and one that is done: when the gold released, the
       // weight used to drop from a protected 0.85 to the distance fade, which read as the sign
-      // fading out after its line (the user, 2026-09-07). Only the color changes now
+      // fading out after its line. Only the color changes now
       const far = clamp((at / aheadSecs - 0.55) / 0.45);
       const fog = 1 - far;
-      // a sign sweeps past whole (no dissolve, at the user's word); it goes gold as its line
+      // a sign sweeps past whole (no dissolve); it goes gold as its line
       // is heard and eases back to the color it had once the line is done
       const isNow = i === lyric.index;
       sign.glow = easeTowards(sign.glow, isNow ? 1 : 0, f.dt, isNow ? 0.2 : 0.8);
-      // a finished line keeps its weight (only its color eases back: the user's word) and
+      // a finished line keeps its weight (only its color eases back) and
       // slides off the frame like a road sign overhead; only its last sliver, letters the
       // size of the frame right at the corner, thins out, from three seconds out to gone at
       // one and a half (an earlier fade from seven read as fading after the line)

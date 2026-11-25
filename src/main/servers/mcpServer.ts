@@ -20,9 +20,14 @@ import {
   albumTracksOf,
   trackPosition,
 } from "@shared/model";
-import { resumeRun, resumeTarget } from "@shared/model";
+import { playlistFullSentence, resumeRun, resumeTarget } from "@shared/model";
 import { playStatsFromRecord } from "../data/playStats";
-import { MCP_CLUSTERS, mcpClusterEnabled } from "@shared/mcpCatalog";
+import {
+  MCP_CLUSTERS,
+  mcpClusterEnabled,
+  type McpClusterInfo,
+  type McpToolInfo,
+} from "@shared/mcpCatalog";
 import { app } from "electron";
 import type { MenuCommand } from "@shared/ipc";
 import type { DeviceManager } from "../device/deviceManager";
@@ -36,8 +41,12 @@ import {
   type ResumeOffer,
   type ToolContext,
   type ToolImpl,
+  type Target,
   err,
+  streamerHostOf,
+  strictInput,
 } from "./mcp/toolkit";
+import { remoteStreamers } from "../device/remoteStreamer";
 import { deviceTools } from "./mcp/deviceTools";
 import { libraryTools } from "./mcp/libraryTools";
 import { historyTools } from "./mcp/historyTools";
@@ -46,15 +55,41 @@ import { audioTools } from "./mcp/audioTools";
 import { editTools } from "./mcp/editTools";
 import { sceneTools } from "./mcp/sceneTools";
 import { mediaType, nameKey } from "@shared/keys";
+import { acceptBothForSdk } from "./mcp/accept";
 
+/**
+ * The address another computer on the local network reaches: a private IPv4 on a physical
+ * interface first (0.16.0: the first external address found could be a VPN's, and the setup line
+ * Settings showed then reached nothing).
+ */
 function lanAddress(): string | null {
-  for (const addrs of Object.values(networkInterfaces())) {
-    for (const a of addrs ?? []) {
-      if (a.family === "IPv4" && !a.internal) return a.address;
-    }
-  }
-  return null;
+  const vpn = /^(utun|tun|tap|ppp|wg|ipsec|zt|tailscale|gpd)/i;
+  const privateRange = (ip: string): boolean =>
+    /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
+  const found: { name: string; address: string }[] = [];
+  for (const [name, addrs] of Object.entries(networkInterfaces()))
+    for (const a of addrs ?? [])
+      if (a.family === "IPv4" && !a.internal) found.push({ name, address: a.address });
+  const rank = (c: { name: string; address: string }): number =>
+    (vpn.test(c.name) ? 2 : 0) + (privateRange(c.address) ? 0 : 1);
+  return found.sort((x, y) => rank(x) - rank(y))[0]?.address ?? null;
 }
+
+/**
+ * WHAT A CLIENT SHOWS THE MODEL ONCE (0.16.0, the server's instructions): how to begin, how
+ * library items are addressed, why genres alone won't do, and what is off until the user says.
+ */
+const INSTRUCTIONS = [
+  "TastyTunes controls a Cambridge Audio StreamMagic streamer and knows the user's local music library, listening history, playlists, favorites and presets.",
+  "Call get_status first: it gives the local time and today's date, what is playing, and which tool groups are off.",
+  "Library items are addressed by server_udn and object_id, from search_library, list_albums or list_tracks; a tool that takes tracks takes those ids, or a title with an artist and album.",
+  "To find music by style or era, read library_facets and list_artists and use what you know about the artists, because genre tags are often missing.",
+  "Dynamic range, loudness, tempo and key exist only for analyzed tracks, and answers that use them say how many were measured.",
+  "Don't replace the queue unless the user asks.",
+  "A tool that takes device acts on that streamer, by its name from list_devices, without moving the TastyTunes window; a tool that doesn't acts on the window's streamer, and connect_device is the one tool that moves the window.",
+  "The history tools take local days (YYYY-MM-DD) or a named period.",
+  "Some editing tools are off until the user turns them on in Settings › Integrations.",
+].join(" ");
 
 /** A JSON-RPC request is a few kilobytes; a megabyte is room for any of them. */
 const MAX_BODY_BYTES = 1_000_000;
@@ -82,6 +117,30 @@ function tokenMatches(header: string | undefined, token: string): boolean {
   return want.length === got.length && timingSafeEqual(want, got);
 }
 
+/** A tool's MCP annotations from the catalog (its own hints, its cluster's read-only flag): every
+ *  hint said outright, since a client assumes a tool may destroy and reach the world unless told. */
+function annotationsOf(
+  cluster: McpClusterInfo,
+  tool: McpToolInfo,
+): {
+  readOnlyHint: boolean;
+  destructiveHint?: boolean;
+  idempotentHint?: boolean;
+  openWorldHint: boolean;
+} {
+  const readOnly = cluster.readOnly === true || tool.hints?.readOnly === true;
+  return {
+    readOnlyHint: readOnly,
+    ...(readOnly
+      ? {}
+      : {
+          destructiveHint: tool.hints?.destructive === true,
+          idempotentHint: tool.hints?.idempotent === true,
+        }),
+    openWorldHint: tool.hints?.openWorld === true,
+  };
+}
+
 export class McpBridge {
   private http: Server | null = null;
   private active: { bind: McpSettings["bind"]; port: number } | null = null;
@@ -93,11 +152,18 @@ export class McpBridge {
   /** A menu command to the main window (set_display_mode); index.ts wires this to
    *  sendMenuCommand, which raises the window if there is none. */
   sendCommand: ((command: MenuCommand) => void) | null = null;
+  /** Whether the main window exists; index.ts wires it to app/windows. */
+  windowOpen: (() => boolean) | null = null;
   /** Display mode as the renderer last reported it (store.setDisplayMode → IPC.displayModeReport):
    *  renderer state main would not otherwise know. */
   private displayModeOn = false;
 
-  constructor(private dm: DeviceManager) {}
+  /** The agent's connections to streamers the window isn't showing (0.16.0), the one pool. */
+  private readonly remotes = remoteStreamers;
+
+  constructor(private dm: DeviceManager) {
+    remoteStreamers.log = (text) => this.dm.log("info", "agents", text);
+  }
 
   reportDisplayMode(on: boolean): void {
     this.displayModeOn = on;
@@ -131,6 +197,8 @@ export class McpBridge {
     this.http = null;
     this.active = null;
     if (!restarting) {
+      // the server off, no agent is left to use a background connection
+      this.remotes.closeAll();
       this.dm.setMcpStatus({ running: false, url: null, error: null }, "stopped");
     }
   }
@@ -190,7 +258,7 @@ export class McpBridge {
     // test), so a request that carries a browser's Origin is refused unless the page is on
     // this machine; the body must be JSON by its exact type and no larger than a request
     // needs; and while the server is reachable from the network, a request from another
-    // machine must carry the token from Settings › AI agents (one from this machine is
+    // machine must carry the token from Settings › Integrations (one from this machine is
     // held to the checks above, as on the localhost bind).
     const reject = (status: number, message: string, extra: Record<string, string> = {}): void => {
       res.writeHead(status, { "content-type": "application/json", ...extra });
@@ -243,6 +311,9 @@ export class McpBridge {
       }
       const body: unknown = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
 
+      // a client that sends no Accept, or */* (Home Assistant's rest_command, curl), is served
+      // like one that lists both types; the transport alone would refuse it with a 406
+      acceptBothForSdk(req);
       const mcpServer = this.buildServer();
       const transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: undefined, // stateless
@@ -271,7 +342,10 @@ export class McpBridge {
 
   /** A fresh server per request, registering only the currently-enabled tools. */
   private buildServer(): McpServer {
-    const server = new McpServer({ name: "tastytunes", version: app.getVersion() });
+    const server = new McpServer(
+      { name: "tastytunes", version: app.getVersion() },
+      { instructions: INSTRUCTIONS },
+    );
     const impls = this.toolImpls();
     const mcp = getSettings().mcp;
     const { disabledTools } = mcp;
@@ -288,19 +362,23 @@ export class McpBridge {
           {
             title: tool.title,
             description: tool.description,
-            inputSchema: impl.inputSchema,
-            annotations: { readOnlyHint: cluster.readOnly === true, openWorldHint: false },
+            inputSchema: strictInput(tool.name, impl.inputSchema),
+            annotations: annotationsOf(cluster, tool),
           },
           (async (args: Record<string, unknown>) => {
             try {
               return await impl.handler(args ?? {});
             } catch (e) {
-              return err((e as Error).message);
+              // a refusal at a playlist bound says its own sentence, never its IPC token
+              return err(playlistFullSentence(e) ?? (e as Error).message);
             }
           }) as never,
         );
       }
     }
+    // a fresh server per request can never tell a client its list changed: say so (0.16.0; the SDK
+    // claims listChanged as soon as a tool is registered)
+    server.server.registerCapabilities({ tools: { listChanged: false } });
     return server;
   }
 
@@ -329,6 +407,66 @@ export class McpBridge {
     const target = resumeTarget(run, tracks);
     if (!target) return { reason: `"${run.album}" was played to the end.` };
     return { run, node, target, position: tracks.indexOf(target) + 1, total: tracks.length };
+  }
+
+  /** The streamer a call acts on (ToolContext.target): by device, on this network only
+   *  (mcp/toolkit streamerHostOf). */
+  private async target(device?: string): Promise<Target> {
+    const snap = this.dm.snapshot();
+    const windowHost = snap.connection.phase === "connected" ? snap.connection.host : null;
+    let host: string | null = null;
+    if (device != null) {
+      const named = streamerHostOf(device, [...snap.devices, ...getSettings().knownDevices]);
+      if ("error" in named) throw new Error(named.error);
+      host = named.host;
+    }
+    if (host == null || host === windowHost) {
+      // the window's streamer: an agent's own connection to it, if it had one, gives way, and a
+      // sleep timer armed there goes over to the window's connection unless it has its own
+      if (host != null) {
+        const sleep = this.remotes.drop(host);
+        if (sleep && this.dm.snapshot().sleep == null) this.dm.setSleep(sleep);
+      }
+      const s = this.connected();
+      return {
+        window: true,
+        host: s.connection.host,
+        name: s.systemInfo?.name ?? s.connection.host,
+        snapshot: () => this.connected(),
+        command: (cmd) => this.dm.command(cmd),
+        queueAdd: (udn, id, action, from, opts) => this.dm.queueAdd(udn, id, action, from, opts),
+        queueTracks: (items, mode) => this.dm.queueTracks(items, mode),
+        ensureAwake: () => this.dm.ensureAwake(),
+        setSleep: (sleep) => this.dm.setSleep(sleep),
+      };
+    }
+    const remote = this.remotes.get(host);
+    if (!(await remote.ready())) {
+      this.remotes.forget(host);
+      throw new Error(
+        `Couldn't reach ${device} at ${host}. It may be off the network, or asleep in eco standby.`,
+      );
+    }
+    const snapshotOf = (): ConnectedSnapshot => ({
+      ...this.dm.snapshot(),
+      connection: { phase: "connected", host },
+      ...remote.cache,
+      sleep: remote.sleeper.current,
+      lastRecalledPresetId: null,
+      held: null,
+      playlistActivation: remote.queueOps.activation,
+    });
+    return {
+      window: false,
+      host,
+      name: remote.name,
+      snapshot: snapshotOf,
+      command: (cmd) => remote.command(cmd),
+      queueAdd: (udn, id, action, from, opts) => remote.queueAdd(udn, id, action, from, opts),
+      queueTracks: (items, mode) => remote.queueOps.queueTracks(items, mode),
+      ensureAwake: () => remote.ensureAwake(),
+      setSleep: (sleep) => remote.setSleep(sleep),
+    };
   }
 
   private connected(): ConnectedSnapshot {
@@ -367,6 +505,7 @@ export class McpBridge {
     const ctx: ToolContext = {
       dm: this.dm,
       connected: () => this.connected(),
+      target: (device) => this.target(device),
       kickIndex: () => this.kickIndex(),
       resumeOffer: () => this.resumeOffer(),
       mutateSchedules: (fn) => this.mutateSchedules(fn),
@@ -377,6 +516,7 @@ export class McpBridge {
       },
       sendCommand: (command) => this.sendCommand?.(command),
       displayModeOn: () => this.displayModeOn,
+      windowOpen: () => this.windowOpen?.() ?? false,
     };
     return {
       ...deviceTools(ctx),

@@ -35,6 +35,10 @@ export function registerCache(cache: RegisteredCache): void {
 export class DiskCache<T> implements RegisteredCache {
   private map: Map<string, Entry<T>> | null = null;
   private timer: NodeJS.Timeout | null = null;
+  /** A read moved an entry's access time since the last write. A read never writes the file on
+   *  its own (a busy cache read many times a second rewrote megabytes for a timestamp): the bump
+   *  rides along with the next write, or the quit's flush. */
+  private bumped = false;
 
   constructor(
     private readonly name: string,
@@ -66,12 +70,12 @@ export class DiskCache<T> implements RegisteredCache {
     return this.load().has(key);
   }
 
-  /** undefined = never cached; null = cached definitive miss. Reads bump LRU. */
+  /** undefined = never cached; null = cached definitive miss. Reads bump LRU, in memory. */
   get(key: string): T | null | undefined {
     const entry = this.load().get(key);
     if (entry === undefined) return undefined;
     entry.at = Date.now();
-    this.scheduleWrite();
+    this.bumped = true;
     return entry.v;
   }
 
@@ -129,10 +133,10 @@ export class DiskCache<T> implements RegisteredCache {
     return { entries, bytes };
   }
 
-  /** Write any pending changes now (stats, app quit). */
+  /** Write any pending changes now (stats, app quit), reads' bumps among them. */
   flush(): void {
-    if (!this.timer) return;
-    clearTimeout(this.timer);
+    if (!this.timer && !this.bumped) return;
+    if (this.timer) clearTimeout(this.timer);
     this.timer = null;
     this.write();
   }
@@ -147,6 +151,7 @@ export class DiskCache<T> implements RegisteredCache {
 
   private write(): void {
     if (!this.map) return;
+    this.bumped = false;
     try {
       mkdirSync(join(app.getPath("userData"), "cache"), { recursive: true });
       const tmp = `${this.file}.tmp`;

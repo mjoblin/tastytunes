@@ -70,21 +70,21 @@ describe("thumbKey", () => {
 
   it("keys the streamer's own pictures by content alone, so a rotated id finds the same file", () => {
     const key = artKeyOf(edition("1"));
-    expect(thumbKey(key, "http://192.168.50.45:8050/art/26:3:1", true)).toBe(key);
-    expect(thumbKey(key, "http://192.168.50.45:8050/art/27:3:1", true)).toBe(key);
+    expect(thumbKey(key, "http://192.168.1.45:8050/art/26:3:1", true)).toBe(key);
+    expect(thumbKey(key, "http://192.168.1.45:8050/art/27:3:1", true)).toBe(key);
   });
 });
 
 describe("isDeviceArt", () => {
   it("is the streamer's host whatever the port", () => {
-    expect(isDeviceArt("http://192.168.50.45:8050/art/1", "192.168.50.45")).toBe(true);
+    expect(isDeviceArt("http://192.168.1.45:8050/art/1", "192.168.1.45")).toBe(true);
     expect(isDeviceArt("http://127.0.0.1:8124/art/p1.svg", "127.0.0.1:8123")).toBe(true);
   });
 
   it("is no other host, and nothing without a streamer or a URL", () => {
-    expect(isDeviceArt("http://10.0.1.154:9790/minimserver/x.jpg", "192.168.50.45")).toBe(false);
+    expect(isDeviceArt("http://10.0.1.154:9790/minimserver/x.jpg", "192.168.1.45")).toBe(false);
     expect(isDeviceArt("http://localhost:8124/art/p1.svg", "127.0.0.1:8123")).toBe(false);
     expect(isDeviceArt("http://10.0.1.154/x.jpg", null)).toBe(false);
-    expect(isDeviceArt("not a url", "192.168.50.45")).toBe(false);
+    expect(isDeviceArt("not a url", "192.168.1.45")).toBe(false);
   });
 });

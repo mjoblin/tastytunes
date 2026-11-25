@@ -60,7 +60,8 @@ export interface AnalysisFeatures {
   beats: { bpm: number; confidence: number; downbeat: number; count: number; times: string } | null;
   sections: { count: number; bounds: string; kinds: string; energy: string } | null;
   chroma: { fps: number; data: string } | null;
-  key: { tonic: number; mode: "major" | "minor"; confidence: number } | null;
+  /** `v`: the estimator's version (KEY_VERSION; absent = 1, estimated again on read). */
+  key: { tonic: number; mode: "major" | "minor"; confidence: number; v?: number } | null;
   changes: string;
   stereo: { fps: number; pan: string; width: string } | null;
   timbre: { fps: number; brightness: string; noisiness: string } | null;
@@ -193,7 +194,7 @@ export const FEATURES_VERSION = 13; // 13: beat and drop times stored as gaps (a
 
 /** A stored analysis's music features when they are the current version's, else null: an older
  *  version's tempo may sit an octave off (the 0.9.0 octave check), so none of its facts is said
- *  until the track is measured again (0.12.0, his library held 47 such). */
+ *  until the track is measured again (0.12.0). */
 export function currentFeatures<F extends { version: number }>(f: F | null | undefined): F | null {
   return f != null && f.version === FEATURES_VERSION ? f : null;
 }
@@ -219,6 +220,77 @@ export function keyName(
   return key && key.confidence >= KEY_CONFIDENCE_FLOOR && PITCH_NAMES[key.tonic] != null
     ? `${PITCH_NAMES[key.tonic]} ${key.mode}`
     : null;
+}
+
+/**
+ * THE KEY ESTIMATOR'S VERSION (0.16.0). Version 1 scored each of the 24 keys by a raw dot product
+ * of the mean chroma with the Krumhansl-Kessler profiles: the minor profile's weights sum higher
+ * (44.51 against 41.79), so a dense mix, whose chroma is high in every pitch class, read minor
+ * nearly always, and the scores sat so close that the confidence rarely cleared its floor (a
+ * library's worth of stored analyses read 99% minor, one in fifty above the floor). Version 2
+ * correlates them, mean-centered, the method as published. A stored key of another version is never said: keyFromStored estimates it
+ * again from the stored chroma, which every analysis keeps, so nothing is measured again.
+ */
+export const KEY_VERSION = 2;
+
+const KEY_PROFILES = {
+  major: [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88],
+  minor: [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17],
+} as const;
+
+export interface EstimatedKey {
+  /** 0 = C … 11 = B. */
+  tonic: number;
+  mode: "major" | "minor";
+  confidence: number;
+}
+
+/**
+ * A key from chroma frames (frames × 12, any scale): each key's profile correlated with the
+ * track's mean pitch-class profile, the best fit winning. Its confidence is the lead over the
+ * runner-up, eight times the gap in correlation (the floor of 0.3 is a lead of 0.0375, which about
+ * three tracks in four clear), scaled down when even the best fit is weak (a correlation under
+ * 0.5: drums, noise, speech). Null when there is too little to read or nothing fits.
+ */
+export function keyOfChroma(data: ArrayLike<number>): EstimatedKey | null {
+  const frames = Math.floor(data.length / 12);
+  if (frames < 4) return null;
+  const mean = new Array<number>(12).fill(0);
+  for (let f = 0; f < frames; f++) for (let p = 0; p < 12; p++) mean[p] += data[f * 12 + p];
+  const centered = (xs: readonly number[]): number[] => {
+    const m = xs.reduce((s, v) => s + v, 0) / xs.length;
+    return xs.map((v) => v - m);
+  };
+  const norm = (xs: readonly number[]): number => Math.sqrt(xs.reduce((s, v) => s + v * v, 0));
+  const scores: { tonic: number; mode: "major" | "minor"; r: number }[] = [];
+  for (const mode of ["major", "minor"] as const) {
+    const profile = centered(KEY_PROFILES[mode]);
+    const profileNorm = norm(profile);
+    for (let tonic = 0; tonic < 12; tonic++) {
+      const x = centered(Array.from({ length: 12 }, (_, p) => mean[(p + tonic) % 12]));
+      const d = norm(x) * profileNorm;
+      scores.push({ tonic, mode, r: d > 0 ? x.reduce((s, v, i) => s + v * profile[i], 0) / d : 0 });
+    }
+  }
+  scores.sort((a, b) => b.r - a.r);
+  const [first, second] = scores;
+  if (first.r <= 0) return null;
+  const lead = Math.max(0, Math.min(1, (first.r - second.r) * 8));
+  return { tonic: first.tonic, mode: first.mode, confidence: lead * Math.min(1, first.r / 0.5) };
+}
+
+/** A stored analysis's key as the current estimator gives it: the stored key when this version
+ *  made it, else estimated again from the stored chroma (bytes, each 0 to 255), else none. Main's
+ *  summaries and the renderer's decode both read it, so the rows, Info, the scenes and the agents'
+ *  tools say one key. */
+export function keyFromStored(
+  f: Pick<AnalysisFeatures, "key" | "chroma"> | null | undefined,
+): EstimatedKey | null {
+  if (f == null) return null;
+  if (f.key != null && f.key.v === KEY_VERSION)
+    return { tonic: f.key.tonic, mode: f.key.mode, confidence: f.key.confidence };
+  if (f.chroma == null) return null;
+  return keyOfChroma(Uint8Array.from(atob(f.chroma.data), (c) => c.charCodeAt(0)));
 }
 
 /** A key as a person or an agent writes it, for a filter: "A minor", "F# major", "B♭ minor",
@@ -249,4 +321,20 @@ export function keyMatches(
     (want.tonic == null || key.tonic === want.tonic) &&
     (want.mode == null || key.mode === want.mode)
   );
+}
+
+/** How fast an analysis nobody is waiting on reads a file (the album being played, measured beside
+ *  the streamer's own read of the same server): a server that is read no faster sends no faster. */
+export const UNHURRIED_BYTES_PER_SECOND = 2 * 1024 * 1024;
+
+/** A reader's pace: given the bytes just read, how long to wait before the next read so the
+ *  whole stays at UNHURRIED_BYTES_PER_SECOND or under. Both of the analysis's reads keep it: the
+ *  file in pieces (the window) and the whole file for a lossy one (main). */
+export function unhurried(perSecond = UNHURRIED_BYTES_PER_SECOND): (bytes: number) => number {
+  const started = Date.now();
+  let total = 0;
+  return (bytes) => {
+    total += bytes;
+    return Math.max(0, (total / perSecond) * 1000 - (Date.now() - started));
+  };
 }

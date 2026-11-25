@@ -11,7 +11,7 @@ import { version } from "../../../../../../package.json";
  * Cathode finish is the glass, so this scene draws only the screen). A line is
  * typed at a natural pace, keystroke by keystroke with pauses at the punctuation,
  * and never stretched to fill its time: the words are timed by the line, not by
- * the word (the user's call). A line that arrives before the last is finished is
+ * the word. A line that arrives before the last is finished is
  * completed at once. The lines already sung scroll up as the log, each with its
  * time, dimming as they age like phosphor. The cursor blinks on the beat. The
  * status line at the top is the data: the track, the position, the tempo and key,
@@ -20,7 +20,7 @@ import { version } from "../../../../../../package.json";
  * pixel (with a rise, never a pop); a drop flashes the
  * phosphor. A track with no words gets a boot log instead: what the analysis
  * found. (The sections and drops used to be ticked off in the log as they passed; both
- * read as noise beside the words — user, 2026-09-15 — so the status line alone names the section.)
+ * read as noise beside the words, so the status line alone names the section.)
  */
 export const TERMINAL_KEY: SceneKey = {
   reads: [
@@ -200,7 +200,7 @@ export class Terminal implements Scene {
     // THE BACKFILL. The scene is rebuilt whenever the view remounts, so the log is rebuilt
     // too, from what the track itself says happened before now: every line already sung, at
     // its time, in time order. One pass, once. Leaving and returning, or seeking back, no
-    // longer starts the screen over (the user's ask)
+    // longer starts the screen over
     if (!this.backfilled && lines) {
       this.backfilled = true;
       const events: Array<{ t: number; text: string; sys: boolean }> = [];
@@ -228,7 +228,7 @@ export class Terminal implements Scene {
         else this.log.splice(at, 0, entry);
       }
     }
-    // a drop flashes the screen; it no longer prints a divider (user, 2026-09-15)
+    // a drop flashes the screen; it no longer prints a divider
     if (f.drop?.onDrop) this.flash = 1;
 
     // THE TYPING. A new line: the unfinished one is completed into the log at once
@@ -299,7 +299,7 @@ export class Terminal implements Scene {
       let meter = "";
       for (let i = 0; i < 6; i++) meter += METER[clamp(Math.floor((f.bands[i] ?? 0) * 7.99), 0, 7)];
       bits.push(meter);
-      // the loudness, named for what it is: LOAD read as the machine's CPU (the user's worry)
+      // the loudness, named for what it is: LOAD read as the machine's CPU
       bits.push(`LEVEL ${String(Math.round(f.loud * 100)).padStart(3, " ")}%`);
       ctx.fillStyle = ink(0.7);
       ctx.fillText(bits.join("   "), margin, top + sRow + smallPx);
@@ -345,7 +345,7 @@ export class Terminal implements Scene {
       if (baseY < top) break;
       ctx.fillStyle = ink(e.sys ? alpha * 0.7 : alpha);
       // a line without a time (the boot lines, the measure) leaves the stamp column blank: a
-      // dim --:-- and a > were both tried and the user preferred the space
+      // dim --:-- and a > were both tried, and the space read best
       if (e.stamp) ctx.fillText(e.stamp, margin, baseY);
       const x0 = margin + stampW;
       const shownRows = rs.length ? rs : [""];

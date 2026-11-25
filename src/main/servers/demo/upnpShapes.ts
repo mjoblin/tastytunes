@@ -1,6 +1,6 @@
-// THE MEDIA SERVER'S SHAPES (0.15.0, his A on the decision page "Hygiene Pass Decisions"): how a
-// UPnP media server answers, as the servers on the live network answer, in one home for the app
-// repo's two servers that play one: the demo (demoStreamer, demo/demoLibrary) and the unit tests'
+// THE MEDIA SERVER'S SHAPES (0.15.0): how a UPnP media server answers, as the servers on the
+// live network answer, in one home for the app repo's two servers that play one: the demo
+// (demoStreamer, demo/demoLibrary) and the unit tests'
 // fake streamer (media/__fixtures__/fakeStreamer, the server CI's tests run against). Each fork
 // keeps its own library and its own knobs; the wire shapes are these, so a live truth lands here
 // once and both serve it. The harness mock (ops dev/mock-streamer.mjs) keeps its own copy.
@@ -81,7 +81,7 @@ export const didlLooseTrack = (
 ): string =>
   `<item id="${id}" parentID="${parent}" restricted="true"><dc:title>${xmlEsc(title)}</dc:title><upnp:class>object.item.audioItem.musicTrack</upnp:class><upnp:artist>${xmlEsc(artist)}</upnp:artist>${didlArt(art)}<res duration="0:03:00.000" protocolInfo="*:*:*:*">file:///tmp/usm/1/singles/${id}.flac</res></item>`;
 
-/** What Asset answers for an id it no longer has (his library, 2026-10-28): HTTP 200 and this
+/** What Asset answers for an id it no longer has (read 2026-10-28): HTTP 200 and this
  *  for metadata, an empty listing for children. */
 export const ASSET_BLANK =
   '<container id="-1" parentID="-1" restricted="0" searchable="1"><dc:title></dc:title><dc:creator> </dc:creator><upnp:genre>Unknown</upnp:genre><upnp:class>object.container</upnp:class></container>';

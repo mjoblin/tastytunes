@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { type Schedule, trackPosition } from "@shared/model";
+import { type Schedule, presetVolumeKey, trackPosition } from "@shared/model";
 import { resumeTarget } from "@shared/model";
 import { getSettings } from "../../data/persist";
 import { randomUUID } from "node:crypto";
@@ -10,10 +10,13 @@ import {
   type ToolImpl,
   ok,
   err,
+  acted,
+  queueGrew,
   guardSlot,
   scheduleOut,
   freshObjectId,
   defineTool,
+  DEVICE_ARG,
 } from "./toolkit";
 
 // The MCP bridge's edit tools (the writes with a contract: queue edits, preset saves, schedules),
@@ -24,30 +27,50 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
   const { dm } = ctx;
   return {
     // ---- queue editing (opt-in cluster)
+    // the queue edits take device, as list_queue does: ids from another streamer's queue once
+    // removed or moved whatever held them in the window's
     remove_queue_item: defineTool({
-      inputSchema: { id: z.number().int().describe("Queue item id from list_queue.") },
+      inputSchema: {
+        device: DEVICE_ARG,
+        id: z.number().int().describe("Queue item id from list_queue."),
+      },
       handler: async (a) => {
-        const s = ctx.connected();
+        const t = await ctx.target(a.device);
+        const s = t.snapshot();
         const item = (s.queue?.items ?? []).find((i) => i.id === a.id);
         if (!item) return err(`No queue item ${String(a.id)}. Use list_queue.`);
-        await dm.command({ type: "queueDelete", id: a.id });
-        return ok(`Removed "${item.metadata?.title ?? `item ${String(a.id)}`}" from the queue.`);
+        // with the queue it left, once the streamer says so (0.16.0: a list_queue straight after
+        // two removals still counted one of them)
+        return acted(
+          t,
+          () => t.command({ type: "queueDelete", id: a.id }),
+          `Removed "${item.metadata?.title ?? `item ${String(a.id)}`}" from the queue.`,
+          queueGrew,
+        );
       },
     }),
     clear_queue: defineTool({
-      handler: async () => {
-        const s = ctx.connected();
+      inputSchema: { device: DEVICE_ARG },
+      handler: async (a) => {
+        const t = await ctx.target(a.device);
+        const s = t.snapshot();
         const n = s.queue?.total ?? s.queue?.items?.length ?? 0;
-        await dm.command({ type: "queueClear" });
-        return ok(`Queue cleared (${n} items removed).`);
+        return acted(
+          t,
+          () => t.command({ type: "queueClear" }),
+          `Queue cleared (${n} items removed).`,
+          queueGrew,
+        );
       },
     }),
-    resume_playback: defineTool({
-      handler: async () => {
+    resume_album: defineTool({
+      inputSchema: { device: DEVICE_ARG },
+      handler: async (a) => {
         const s = ctx.connected();
+        const t = await ctx.target(a.device);
         // awake before the album is browsed, which can be on the streamer's own drive (the queue
         // write wakes it in any case: DeviceManager.queueAdd)
-        await ctx.dm.ensureAwake();
+        await t.ensureAwake();
         const offer = await ctx.resumeOffer();
         if ("reason" in offer) return err(offer.reason);
         // the album's OWN browse listing supplies the container and track ids —
@@ -67,7 +90,7 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           return err("The album could not be browsed as an album-sized container.");
         const target = resumeTarget(offer.run, tracks);
         if (!target) return err("The run reached the album's end; nothing to resume.");
-        await ctx.dm.queueAdd(udn, fresh.id, "PLAY_FROM_HERE", target.id);
+        await t.queueAdd(udn, fresh.id, "PLAY_FROM_HERE", target.id);
         return ok(
           `Resuming "${offer.node.title}" from track ${tracks.indexOf(target) + 1}, "${target.title}".`,
         );
@@ -75,17 +98,19 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
     }),
     move_queue_item: defineTool({
       inputSchema: {
+        device: DEVICE_ARG,
         id: z.number().int().describe("Queue item id from list_queue."),
         to_position: z.number().int().min(0).describe("New 0-based position."),
       },
       handler: async (a) => {
-        const s = ctx.connected();
+        const t = await ctx.target(a.device);
+        const s = t.snapshot();
         const item = (s.queue?.items ?? []).find((i) => i.id === a.id);
         if (!item || item.position == null)
           return err(`No queue item ${String(a.id)}. Use list_queue.`);
         const total = s.queue?.total ?? 0;
         if (a.to_position >= total) return err(`to_position must be below ${total}.`);
-        await dm.command({
+        await t.command({
           type: "queueMove",
           id: a.id,
           from: item.position,
@@ -175,6 +200,45 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         );
       },
     }),
+    // A LIBRARY ITEM TO A PRESET WITHOUT PLAYING IT (0.16.0): "wake me at 7 with this album" had
+    // to play the album aloud first. The Library's Save as preset: the item by its ids, the slot's
+    // name, and the artist recorded beside it for the Presets filter.
+    save_media_to_preset: defineTool({
+      inputSchema: {
+        slot: z.number().int().min(1).max(99).describe("Preset slot 1–99."),
+        server_udn: z.string().describe("From a listing (list_albums, search_library)."),
+        object_id: z.string().describe("The album, track or other item's id."),
+        name: z
+          .string()
+          .optional()
+          .describe("Optional name (the firmware derives one from the item otherwise)."),
+        overwrite: z.boolean().optional().describe("Must be true to replace an occupied slot."),
+      },
+      handler: async (a) => {
+        const s = ctx.connected();
+        guardSlot(s, a.slot, a.overwrite === true);
+        // an id from before a re-mint is found again by content first
+        const fresh = await freshObjectId(s.connection.host, a.server_udn, a.object_id);
+        if ("error" in fresh) return err(fresh.error);
+        const pool = indexPools().find((p) => p.udn === a.server_udn);
+        const node =
+          pool?.albums.find((n) => n.id === fresh.id) ??
+          pool?.tracks.find((n) => n.id === fresh.id);
+        await presetSave(s.connection.host, a.server_udn, fresh.id, a.slot);
+        if (typeof a.name === "string" && a.name.length > 0)
+          await dm.command({ type: "presetRename", slot: a.slot, name: a.name });
+        if (node?.artist)
+          ctx.saveSettings({
+            presetArtists: {
+              ...getSettings().presetArtists,
+              [presetVolumeKey(s.systemInfo?.udn, a.slot)]: node.artist,
+            },
+          });
+        return ok(
+          `Saved ${node ? `"${a.name || node.title}"` : "it"} to preset ${String(a.slot)}, without playing it.`,
+        );
+      },
+    }),
     // ---- schedules (opt-in cluster; list_schedules lives with Status & lists)
     create_schedule: defineTool({
       inputSchema: {
@@ -204,10 +268,27 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           .optional()
           .describe("Wake only: volume to set after the preset settles."),
         enabled: z.boolean().optional().describe("Default true."),
+        device: z
+          .string()
+          .optional()
+          .describe(
+            "Another streamer it acts on, by name or host from list_devices (its own presets). Default: the streamer the TastyTunes window shows, whichever that is when it fires.",
+          ),
       },
-      handler: (a) => {
+      handler: async (a) => {
         if (a.action === "standby" && (a.preset_id != null || a.volume_percent != null)) {
           return err("preset_id and volume_percent only apply to wake schedules.");
+        }
+        // a schedule names its streamer by udn (0.16.0): reached now, to learn who it is
+        let streamer: Schedule["streamer"] = null;
+        if (a.device != null) {
+          const t = await ctx.target(a.device);
+          const udn = t.snapshot().systemInfo?.udn;
+          if (!udn) return err(`${t.name} didn't say who it is. Try again in a moment.`);
+          // named whenever it was asked for, the window's own streamer too (0.16.0: one named while
+          // the window showed it was saved with none, and later fired on whatever the window showed;
+          // the scheduler takes the window's udn as the window)
+          streamer = { udn, name: t.name };
         }
         const sched: Schedule = {
           id: randomUUID(),
@@ -217,6 +298,7 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
           action: a.action === "wake" ? "on" : "standby",
           presetId: a.preset_id ?? null,
           volumePercent: a.volume_percent ?? null,
+          ...(streamer ? { streamer } : {}),
         };
         ctx.mutateSchedules((list) => [...list, sched]);
         return ok({

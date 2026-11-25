@@ -83,8 +83,8 @@ export function lensNavigation(d: {
     d.setArtistPage(null);
   };
 
-  /** THE ARTIST PAGE (2026-10-11, the user: "we get to an album page from the albums lens.
-   *  but we can't get to an artist page from the artist lens"): opened over the Artists lens,
+  /** THE ARTIST PAGE (the Albums lens reached an album page, but the Artists lens reached no
+   *  artist page): opened over the Artists lens,
    *  so its crumb trail reads Library › Artists › <artist>, the Artists crumb returns to the
    *  columns with the artist selected, and Back undoes it like any move. From a folder or a
    *  search the root is re-seated first (moveTo's one history entry). */
@@ -128,9 +128,9 @@ export function lensNavigation(d: {
    *  to land on. The landing used to be a side effect each caller remembered,
    *  and the Tracks lens once forgot it. */
   const landOn = (to: Landing): void => {
-    // AN ARTIST LANDS ON THEIR PAGE (user, 2026-10-11, "yes, build it": an album's name opens
-    // the album, so an artist's opens the artist; the navigator is the page's Artists crumb,
-    // the artist selected there). It used to land on the Artists lens focused on the name.
+    // AN ARTIST LANDS ON THEIR PAGE (an album's name opens the album, so an artist's opens
+    // the artist; the navigator is the page's Artists crumb, the artist selected there). It
+    // used to land on the Artists lens focused on the name.
     if ("artist" in to) return openArtistPage(to.artist);
     if (to.returnTo) lensReturnTo = to.returnTo;
     d.pendingTrack.current = to.track ?? null;
@@ -145,7 +145,7 @@ export function lensNavigation(d: {
     if (!node.serverUdn || !d.lens) return;
     // a track's album (the Tracks lens's link or Go to album): land on THE
     // TRACK, scrolled to and washed, exactly as the Queue's link does through
-    // openRefInLibrary — one gesture, one landing (user, 2026-09-02). From the
+    // openRefInLibrary — one gesture, one landing. From the
     // Artists lens the artist rides between the lens crumb and the album — the
     // trail says the path you took, and the crumb is the way back to the lens
     // focused on them

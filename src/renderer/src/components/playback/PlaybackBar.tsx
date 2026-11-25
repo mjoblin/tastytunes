@@ -57,7 +57,7 @@ export function PlaybackBar(): React.JSX.Element {
         // SIDES share the leftover equally (both 1fr) so the transport stays
         // centred whatever the window width, and the middle is capped — so on
         // a wide window the title fills its side up to the transport instead
-        // of truncating at a fixed 280px (user, 2026-08-17). Minimums keep
+        // of truncating at a fixed 280px. Minimums keep
         // the volume slider unsqueezed at the 800px window minimum:
         // 160 + 320 + 215 + gaps 48 + padding 32 = 775.
         // CONSTANT GEOMETRY, keyed on the SETTING AND ON EVIDENCE, never the
@@ -66,8 +66,8 @@ export function PlaybackBar(): React.JSX.Element {
         // 108px and the seek's centerline holds its place whether or not the
         // playing track has a waveform (radio, AirPlay, USB and unanalyzed
         // tracks don't) — the wave fills the reserved room, the plain line
-        // rests on the same center. Evidence joined the key 2026-09-01 (user
-        // call): a household with no local media server never pays the
+        // rests on the same center. Evidence is in the key so that a
+        // household with no local media server never pays the
         // height. The bar animates at exactly two legitimate moments: the
         // toggle, and the once-ever first waveform (the gate cards' doctrine,
         // one level down).
@@ -75,12 +75,14 @@ export function PlaybackBar(): React.JSX.Element {
         "shrink-0 border-t border-edge grid grid-cols-[minmax(160px,1fr)_minmax(320px,520px)_minmax(215px,1fr)] items-center gap-6 px-4 transition-[height,background-color] duration-300",
         // the panel tint in light mode only, as the navigation's (hooks/useChromeGround)
         ground,
+        // the bar belongs to the music: everything in it is gold, its sliders and menus included
+        "music-gold",
       )}
     >
       {/* now playing mini */}
       {/* the face opens Now Playing — and is INERT, hover included, while Now
           Playing is already showing: a hover that promises a click doing
-          nothing is a lie (user, 2026-09-02: "nothing happens when I click") */}
+          nothing is a lie */}
       <button
         className={cx(
           "flex items-center gap-3 min-w-0 text-left rounded-lg p-1.5 -m-1.5 transition-colors",
@@ -211,7 +213,7 @@ export function PlaybackBar(): React.JSX.Element {
         {connected && !powered && (
           // Standby note lives beside its remedy (the power lamp), in the
           // space the volume cluster vacates — no layout shift anywhere.
-          <div data-standby-note className="flex items-center gap-1.5 text-[12px] text-amber pr-1">
+          <div data-standby-note className="flex items-center gap-1.5 text-[12px] text-accent pr-1">
             {waking ? (
               <span className="motion-safe:animate-pulse">Waking…</span>
             ) : (
@@ -234,13 +236,15 @@ export function PlaybackBar(): React.JSX.Element {
           className={cx(
             "tip-top p-2 rounded-full flex items-center justify-center transition-all",
             powered
-              ? "bg-gold text-bg shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.35)] motion-safe:hover:scale-110 hover:shadow-[0_0_20px_rgb(var(--gold-rgb)_/_0.5)]"
+              ? "bg-golddim text-gold shadow-[0_0_12px_rgb(var(--gold-rgb)_/_0.15)] motion-safe:hover:scale-110 hover:bg-gold/25"
               : connected
-                ? "bg-veil2 text-faint hover:bg-golddim hover:text-gold motion-safe:hover:scale-110"
+                ? "bg-veil2 text-faint hover:text-gold motion-safe:hover:scale-110"
                 : "bg-veil2 text-faint/40",
           )}
         >
-          <Power size={16} strokeWidth={2.2} />
+          {/* the power glyph's circle sits about a pixel below its box's middle; lifted half a
+              pixel so it reads centered in the round button */}
+          <Power size={16} strokeWidth={2.2} className="-translate-y-[0.5px]" />
         </button>
       </div>
     </footer>

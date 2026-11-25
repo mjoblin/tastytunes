@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { version } from "../../../../../package.json";
 import { type AppSettings, type UpdateCheckResult } from "@shared/model";
@@ -6,33 +6,43 @@ import { REPO_URL } from "@shared/ipc";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { HeaderChip, PrimaryButton } from "@/components/chrome/Chrome";
-import { SettingRow, Toggle } from "@/components/settings/SettingsKit";
+import {
+  SettingRow,
+  Toggle,
+  type SectionProps,
+  SettingsCard,
+} from "@/components/settings/SettingsKit";
 import { FACT_SEP } from "@/lib/mediaFacts";
+
+/** How long Not now steps the nav's Update button back to a dot. */
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // The Updates section, split out of SettingsScreen.tsx 2026-09-13 (the Settings split: the screen had held every
 // section and control at 2,142 lines); the shared rows and controls live in ./SettingsKit.
 
-export function UpdatesSection({
-  settings,
-  save,
-}: {
-  settings: AppSettings;
-  save(patch: Partial<AppSettings>): Promise<void>;
-}): React.JSX.Element {
+export function UpdatesSection({ settings, save }: SectionProps): React.JSX.Element {
   const update = useStore((s) => s.update);
   // Manual-check feedback: 'checking' while in flight, then the outcomes the
   // consent panel won't announce itself ('none' / 'error'; 'update' clears
   // this — the panel and the dots take over).
   const [manual, setManual] = useState<"checking" | UpdateCheckResult | null>(null);
-  const checkNow = async (): Promise<void> => {
+  const checkNow = useCallback(async (): Promise<void> => {
     setManual("checking");
     const res = await tt.updateCheckNow();
     setManual(res.status === "update" ? null : res);
-  };
+  }, []);
+  // Check for Updates… (the app menu, Help elsewhere) arrives here asking: check as the tab opens
+  const checkAsk = useStore((s) => s.updateCheckAsk);
+  const clearCheckAsk = useStore((s) => s.clearUpdateCheckAsk);
+  useEffect(() => {
+    if (!checkAsk) return;
+    clearCheckAsk();
+    void checkNow();
+  }, [checkAsk, clearCheckAsk, checkNow]);
 
   return (
     <section className="space-y-3">
-      <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">
+      <SettingsCard>
         <SettingRow label="Version" hint="The build you're running.">
           <span className="flex items-center gap-2.5">
             <span className="font-mono text-[12px] text-dim">v{version}</span>
@@ -53,14 +63,14 @@ export function UpdatesSection({
 
         <Toggle
           label="Automatically check for updates"
-          hint="Check for version updates at launch and every few hours. When a new version is available, a dot appears on the tastytunes name in the left nav and on this tab. TastyTunes will not download or install itself."
+          hint="Check for version updates at launch and every few hours. When a new version is available, an Update button appears beside the tastytunes name, and the menu bar or system tray menu offers it. TastyTunes will not download or install itself."
           checked={settings.updateCheck}
           onChange={(updateCheck) => void save({ updateCheck })}
         />
-      </div>
+      </SettingsCard>
 
       {update ? (
-        <UpdatePanel />
+        <UpdatePanel snooze={settings.updateSnooze} save={save} />
       ) : (
         <div className="rounded-xl ring-1 ring-edge bg-panel/70 px-4 py-3 flex items-center justify-between gap-3">
           <span className="text-[12.5px] text-dim min-w-0">
@@ -96,9 +106,22 @@ export function UpdatesSection({
 
 /** The self-update consent panel (moved here from the Info modal — Updates
  *  is its home now; the nav dot deep-links to this tab). */
-function UpdatePanel(): React.JSX.Element | null {
+function UpdatePanel({
+  snooze,
+  save,
+}: {
+  snooze: AppSettings["updateSnooze"];
+  save: SectionProps["save"];
+}): React.JSX.Element | null {
   const update = useStore((s) => s.update);
   if (!update) return null;
+  // NOT NOW (0.16.0): the nav's Update button steps back to a dot for a week, for this version
+  const snoozed = snooze != null && snooze.version === update.version && snooze.until > Date.now();
+  const notNow = (): void => {
+    if (update.version) {
+      void save({ updateSnooze: { version: update.version, until: Date.now() + WEEK_MS } });
+    }
+  };
 
   return (
     <div className="w-full rounded-xl ring-1 ring-gold/40 bg-golddim px-4 py-3">
@@ -125,12 +148,23 @@ function UpdatePanel(): React.JSX.Element | null {
             </span>
           </span>
           {update.canDownload ? (
-            <PrimaryButton
-              onClick={() => void tt.updateDownload()}
-              className="shrink-0 text-[12.5px] px-3.5 py-1.5"
-            >
-              Download
-            </PrimaryButton>
+            <span className="shrink-0 flex items-center gap-3">
+              {!snoozed && (
+                <button
+                  onClick={notNow}
+                  data-update-not-now
+                  className="text-[12px] text-faint hover:text-dim transition-colors"
+                >
+                  Not now
+                </button>
+              )}
+              <PrimaryButton
+                onClick={() => void tt.updateDownload()}
+                className="shrink-0 text-[12.5px] px-3.5 py-1.5"
+              >
+                Download
+              </PrimaryButton>
+            </span>
           ) : (
             <HeaderChip
               onClick={() => void tt.openExternal(update.url)}
@@ -189,12 +223,22 @@ function UpdatePanel(): React.JSX.Element | null {
               {update.error}
             </span>
           </span>
-          <HeaderChip
-            onClick={() => void tt.updateDownload()}
-            className="shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
-          >
-            Try again
-          </HeaderChip>
+          {/* a cause that won't pass (a folder that can't be written) loops on Try again: the
+              release page is the way round it */}
+          <span className="shrink-0 flex items-center gap-2">
+            <HeaderChip
+              onClick={() => void tt.updateDownload()}
+              className="text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
+            >
+              Try again
+            </HeaderChip>
+            <HeaderChip
+              onClick={() => void tt.openExternal(update.url)}
+              className="flex items-center gap-1.5 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
+            >
+              Release page <ExternalLink size={12} />
+            </HeaderChip>
+          </span>
         </div>
       )}
     </div>

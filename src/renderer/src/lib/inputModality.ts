@@ -1,6 +1,5 @@
 /**
- * THE FOCUS RING WAITS FOR THE KEYBOARD (0.11.0, user 2026-10-10: "the accessibility borders
- * often seem to turn on when i don't want them"). Chromium's :focus-visible lights after ANY
+ * THE FOCUS RING WAITS FOR THE KEYBOARD (0.11.0). Chromium's :focus-visible lights after ANY
  * key, so a clicked chip rang at the next hotkey (space, the arrows, J/K/L) and a menu closed
  * with Escape rang the trigger useDialogFocus handed focus back to. The usual remedy is to
  * track how the person is getting around: Tab or Shift+Tab marks the root
@@ -14,7 +13,7 @@ export const KEYBOARD_NAV_ATTR = "data-keyboard-nav";
 
 /**
  * Escape with nothing left to close lets go of the keyboard as a pointer press does
- * (hooks/useShortcuts; his look, 2026-10-30: the ring stayed on a nav item Tab had reached
+ * (hooks/useShortcuts; the ring stayed on a nav item Tab had reached
  * after Escape, and a click took it away). Focus leaves the control, so Space and the arrows are
  * the app's again rather than the hidden control's, and the mark goes. The next Tab carries on
  * from where focus was (Chromium keeps the place), as Escape in a text box already releases it

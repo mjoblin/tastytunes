@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/sortable";
 import { Crosshair, Footprints, Library, Radio, RadioTower } from "lucide-react";
 import { isPreAmpMode, type PresetItem } from "@shared/smoip";
-import { presetVolumeKey } from "@shared/model";
+import { presetVolumeHolds, presetVolumeKey } from "@shared/model";
 import { ViewOptions } from "@/components/library/lenses/ViewOptions";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -30,7 +30,13 @@ import { gridColumnsOf, ListKeysContext, useListKeys } from "@/hooks/useListKeys
 import { openMenuOn } from "@/lib/menuAt";
 import { cx, matchesFilter } from "@/lib/format";
 import { FilterInput } from "@/components/controls/FilterInput";
-import { HeaderChip, ScreenTitle, GAP_BETWEEN, GAP_WITHIN } from "@/components/chrome/Chrome";
+import {
+  HeaderChip,
+  ScreenTitle,
+  GAP_BETWEEN,
+  GAP_WITHIN,
+  pageEdges,
+} from "@/components/chrome/Chrome";
 import { TUNING_WINDOW_MS } from "@/hooks/useStationTuning";
 import { PresetCard, PresetRow } from "@/components/presets/PresetTiles";
 
@@ -43,6 +49,7 @@ export function PresetsScreen(): React.JSX.Element {
   );
   const systemInfo = useStore((s) => s.systemInfo);
   const presetVolumes = useStore((s) => s.settings.presetVolumes);
+  const presetVolumeNames = useStore((s) => s.settings.presetVolumeNames);
   const presetArtists = useStore((s) => s.settings.presetArtists);
   const cards = presetsLayout === "cards";
   const filter = useStore((s) => s.screenFilters.presets);
@@ -66,14 +73,24 @@ export function PresetsScreen(): React.JSX.Element {
   // Feature 10: per-preset volume overrides. Absolute volume needs pre-amp
   // mode — control-bus devices only nudge, so the affordance hides there.
   const canSetVolume = isPreAmpMode(zoneState);
-  const volumeFor = (id: number): number | null =>
-    presetVolumes[presetVolumeKey(systemInfo?.udn, id)] ?? null;
+  // A level holds only for the preset it was set for (main/device/presetSlots), so it carries the
+  // preset's name: one moved, replaced or deleted in any app never lends its level to other music.
+  const nameOf = (id: number): string | null => allItems.find((p) => p.id === id)?.name ?? null;
+  const volumeFor = (id: number): number | null => {
+    const key = presetVolumeKey(systemInfo?.udn, id);
+    const level = presetVolumes[key];
+    return level != null && presetVolumeHolds(presetVolumeNames, key, nameOf(id)) ? level : null;
+  };
   const saveVolume = async (id: number, level: number | null): Promise<void> => {
     const key = presetVolumeKey(systemInfo?.udn, id);
     const next = { ...presetVolumes };
+    const names = { ...presetVolumeNames };
+    const name = nameOf(id);
     if (level == null) delete next[key];
     else next[key] = level;
-    await saveSettings({ presetVolumes: next });
+    if (level == null || name == null) delete names[key];
+    else names[key] = name;
+    await saveSettings({ presetVolumes: next, presetVolumeNames: names });
   };
   // Pointer AND keyboard (the playlists pattern): device presets deserve the
   // same reorderability without a mouse as everything else that sorts.
@@ -94,7 +111,7 @@ export function PresetsScreen(): React.JSX.Element {
   // URL or name against the current track. Stateless means it also works at
   // startup, when every flag reads false.
   // A LIT PRESET MEANS "THIS IS PLAYING" — so nothing lights while the streamer
-  // is asleep or on its way back (user report 2026-07-26: clicking a preset in
+  // is asleep or on its way back (clicking a preset in
   // standby scrolled to the PREVIOUSLY-played one first, then to the clicked
   // one). Wake-on-intent holds a play-shaped command for ~3s (ensureAwake:
   // ON → readiness → 2.5s settle) and the waking device re-announces its
@@ -199,7 +216,7 @@ export function PresetsScreen(): React.JSX.Element {
     void tt.command({ type: "presetMove", from: active.id as number, to: over.id as number });
   };
 
-  // FROM THE KEYBOARD (0.14.0, his K1 to K8): Presets one Tab stop; up and down through the
+  // FROM THE KEYBOARD (0.14.0): Presets one Tab stop; up and down through the
   // rows, all four in the cards; Enter recalls as a click does, "." the preset's More menu (its
   // repair there too), and Option with up or down moves it, ONE presetMove on Option's release
   // (shown moved until the streamer's new list arrives). Presets aren't removed in the app.
@@ -253,7 +270,7 @@ export function PresetsScreen(): React.JSX.Element {
     [presetGap, cards],
   );
 
-  // A REPAIR IS MAINTENANCE, NOT PLAYBACK (user, 2026-07-27: repairing a preset
+  // A REPAIR IS MAINTENANCE, NOT PLAYBACK (repairing a preset
   // scrolled the list to the last-played one). Writing a slot makes the device
   // re-push /presets/list — measured ~4.3s later on the Evo, where the mock
   // broadcasts instantly — and the follow effect must not treat anything that
@@ -303,11 +320,12 @@ export function PresetsScreen(): React.JSX.Element {
     <div className="h-full flex flex-col">
       <header className="drag-region flex items-center gap-4 px-8 pt-8 pb-4">
         <ScreenTitle>Presets</ScreenTitle>
-        <span className="font-mono text-[11px] text-faint">
+        {/* one line that shortens rather than wraps, as the Queue's facts do */}
+        <span className="min-w-0 truncate whitespace-nowrap font-mono text-[11px] text-faint">
           {allItems.length} / {presets?.max_presets ?? "—"} slots
         </span>
         <div className="flex-1" />
-        <div className={`flex items-center ${GAP_BETWEEN}`}>
+        <div className={`flex min-w-0 items-center ${GAP_BETWEEN}`}>
           <FilterInput
             value={filter}
             onChange={(t) => setScreenFilter("presets", t)}
@@ -315,7 +333,7 @@ export function PresetsScreen(): React.JSX.Element {
             total={allItems.length}
           />
           <div className={`flex items-center ${GAP_WITHIN}`}>
-            {/* Rows or Cards and the cards' size, gap and Fill rows (0.14.0, his D5 pick) */}
+            {/* Rows or Cards and the cards' size, gap and Fill rows (0.14.0) */}
             <ViewOptions kind="presets" />
             <HeaderChip
               data-tip="Scroll to the playing preset"
@@ -349,7 +367,8 @@ export function PresetsScreen(): React.JSX.Element {
         aria-label="Presets"
         className={cx(
           "flex-1 overflow-y-auto",
-          cards ? "px-8 pb-8 pt-2" : "px-6 pb-6 pt-1 divide-y divide-edge/50",
+          pageEdges(),
+          cards ? "px-8" : "px-5 divide-y divide-edge/50",
         )}
       >
         <ListKeysContext.Provider value={true}>

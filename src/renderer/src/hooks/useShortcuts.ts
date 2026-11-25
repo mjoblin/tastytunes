@@ -6,6 +6,15 @@ import { modalHasKeyboard } from "@/lib/keyboardOwner";
 import { releaseKeyboard } from "@/lib/inputModality";
 import { useStore, type Screen } from "@/store";
 import { SCREENS, IS_MAC } from "@/lib/screens";
+import { raisePace } from "@/lib/volumePace";
+
+/** The volume arrows' pace (lib/volumePace): a held Up is paced, a held Down never. */
+const volumePace = raisePace();
+/** The seek keys' pace: a held J or L scrubs at the volume's pace, never at the key's repeat. */
+const seekPace = raisePace();
+
+/** The transport keys that repeat while held, each paced; every other held key acts once. */
+const REPEATS = new Set(["ArrowUp", "ArrowDown", "j", "l"]);
 
 // Derived from the shared registry — the screen lookup runs before the
 // transport switch, so a registry key can shadow a transport shortcut (the
@@ -143,8 +152,8 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
       // while it works. dnd-kit marks its activators with aria-roledescription
       // ('sortable' from useSortable, 'draggable' from bare useDraggable).
       //
-      // MATCHES, NOT CLOSEST (user report 2026-07-27: "up/down scrolls after I
-      // click a preset"). Rows put the attributes on the grip button, so the
+      // MATCHES, NOT CLOSEST (up and down scrolled after a click on a
+      // preset). Rows put the attributes on the grip button, so the
       // activator IS the focused element and either test works — but preset and
       // queue CARDS spread them on the tile root, which makes every button
       // inside the card "within a sortable". Clicking a card leaves focus on
@@ -251,6 +260,10 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
 
       if (s.connection.phase !== "connected") return;
 
+      // A HELD KEY ACTS ONCE: its repeat, about 30 a second, would skip 30 tracks, recall a preset
+      // (and its level) 30 times, or flutter play and pause; only the paced keys repeat.
+      if (e.repeat && !REPEATS.has(e.key)) return;
+
       if (!transportOnly && e.key === "f") {
         s.setDisplayMode(!s.displayMode);
         return;
@@ -265,13 +278,12 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         return;
       }
 
+      // where it lands near the end is the device layer's to say (main/device/commandFrames
+      // seekLanding: past the track's last second, the next track)
       const seekTo = (delta: number): void => {
         const playhead = s.playhead;
-        const duration = s.playState?.metadata?.duration;
         if (playhead == null) return;
-        let next = playhead.secs + delta;
-        if (duration != null) next = Math.min(next, duration - 1);
-        void tt.command({ type: "seek", positionSecs: Math.max(0, next) });
+        void tt.command({ type: "seek", positionSecs: Math.max(0, playhead.secs + delta) });
       };
 
       switch (e.key) {
@@ -287,18 +299,19 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
           void tt.command({ type: "previousTrack" });
           break;
         case "ArrowUp":
+        case "ArrowDown": {
           e.preventDefault();
-          void tt.command({ type: "volumeStepChange", delta: e.shiftKey ? 5 : 1 });
+          // A HELD UP steps at most every VOLUME_REPEAT_MS (lib/volumePace): the key's repeat
+          // (about 30 a second) would otherwise climb faster than anyone hears it happen
+          if (!volumePace(e.repeat, e.key === "ArrowUp")) break;
+          const by = e.shiftKey ? 5 : 1;
+          void tt.command({ type: "volumeStepChange", delta: e.key === "ArrowUp" ? by : -by });
           break;
-        case "ArrowDown":
-          e.preventDefault();
-          void tt.command({ type: "volumeStepChange", delta: e.shiftKey ? -5 : -1 });
-          break;
+        }
         case "j":
-          seekTo(-10);
-          break;
         case "l":
-          seekTo(10);
+          if (!seekPace(e.repeat, true)) break;
+          seekTo(e.key === "j" ? -10 : 10);
           break;
         case "m":
           void tt.command({ type: "setMute", mute: !(s.zoneState?.mute ?? false) });

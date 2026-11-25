@@ -1,4 +1,11 @@
-import { FEATURES_VERSION, TEMPO_CONFIDENCE_FLOOR, type AnalysisFeatures } from "@shared/model";
+import {
+  FEATURES_VERSION,
+  KEY_VERSION,
+  TEMPO_CONFIDENCE_FLOOR,
+  keyFromStored,
+  keyOfChroma,
+  type AnalysisFeatures,
+} from "@shared/model";
 import { Fft, b64, unb64, type Strip } from "./featureStrip";
 import { feed, type Sink, type Tape } from "./stream/tape";
 import { ONSET_HOP_MS, type Onsets } from "./onsets";
@@ -9,8 +16,8 @@ import { ONSET_HOP_MS, type Onsets } from "./onsets";
  * heard: the BEAT GRID (tempo and beat times, from the onset flux; a
  * confidence gates it, since rubato defeats it), SECTIONS (novelty in the
  * strip and the chroma; the most repeated loud kind is chorus-like), CHROMA
- * and KEY (twelve pitch classes twice a second; Krumhansl-Kessler profiles
- * for the key, right about three times in four), CHORD CHANGES (chroma
+ * and KEY (twelve pitch classes twice a second; the Krumhansl-Kessler profiles
+ * correlated for the key, shared/model's keyOfChroma), CHORD CHANGES (chroma
  * novelty), the STEREO IMAGE (pan and width per strip frame), TIMBRE
  * (brightness and noisiness per strip frame), SILENCES, and DROPS (a sudden
  * return after three seconds of chill or one second of near silence).
@@ -125,7 +132,8 @@ export function featuresFrom(
 ): Features {
   const beats = trackBeats(flux, onsets);
   const chroma = sinks.chroma.chroma();
-  const key = keyOf(chroma);
+  // the one estimator (shared/model), which a stored key of an older version is read again by
+  const key = keyOfChroma(chroma.data);
   const changes = chordChanges(chroma);
   const stereo = sinks.stereo.stereo();
   const timbre = sinks.timbre.timbre();
@@ -381,36 +389,6 @@ export class ChromaSink implements Sink {
   chroma(): Chroma {
     return { fps: CHROMA_FPS, data: this.data };
   }
-}
-
-// Krumhansl-Kessler key profiles
-const MAJOR = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
-const MINOR = [6.33, 2.68, 3.52, 5.38, 2.6, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
-
-function keyOf(chroma: Chroma): Key | null {
-  const frames = chroma.data.length / 12;
-  if (frames < 4) return null;
-  const mean = new Float64Array(12);
-  for (let f = 0; f < frames; f++) for (let p = 0; p < 12; p++) mean[p] += chroma.data[f * 12 + p];
-  const scores: { tonic: number; mode: "major" | "minor"; r: number }[] = [];
-  for (const [mode, profile] of [
-    ["major", MAJOR],
-    ["minor", MINOR],
-  ] as const) {
-    for (let tonic = 0; tonic < 12; tonic++) {
-      let r = 0;
-      for (let p = 0; p < 12; p++) r += mean[(p + tonic) % 12] * profile[p];
-      scores.push({ tonic, mode, r });
-    }
-  }
-  scores.sort((a, b) => b.r - a.r);
-  const [first, second] = scores;
-  if (!first || first.r <= 0) return null;
-  return {
-    tonic: first.tonic,
-    mode: first.mode,
-    confidence: Math.max(0, Math.min(1, ((first.r - (second?.r ?? 0)) / first.r) * 8)),
-  };
 }
 
 /** Chord changes: peaks of the cosine distance between the second before a frame and the
@@ -812,7 +790,7 @@ function assembleSections(
   };
 }
 
-/** A DROP, as a listener means it (the user's words, 2026-09-07): THREE OR MORE SECONDS OF
+/** A DROP, as a listener means it: THREE OR MORE SECONDS OF
  *  NOTABLE REDUCTION (chill: the beat gone or the level well down) OR ONE OR MORE SECONDS OF
  *  DEFINITE REDUCTION (a breath: near silence) OR A BRIEF TOTAL CUT after a second and a
  *  half of reduced beat, each followed by a SUDDEN return, with the music present before
@@ -943,8 +921,8 @@ export function findDrops(strip: Strip, onsets: Onsets, beats: Beats | null): Dr
     // breath and the cut are then read from the gasp's last frame as well as from the return,
     // and the better reading stands, so no drop reads less than it did. Forests, 1:21: six
     // tenths of near silence, half a second with the level up and the bass gone, the slam at
-    // 1:21.7; read from the slam alone the breath was nil and the drop cleared Loose only
-    // (the user, 2026-09-12, paused in the middle of it: "we didn't detect it"). The riser's
+    // 1:21.7; read from the slam alone the breath was nil and the drop cleared Loose only.
+    // The riser's
     // bass may sit 15 dB under the drop's rather than the chill rule's 21: a sweep has some
     // low content. Without the gasp behind it a level-up stretch is the tail of an ordinary
     // lull and is left alone (a first cut read past any such stretch and re-binned every
@@ -1014,8 +992,8 @@ export function findDrops(strip: Strip, onsets: Onsets, beats: Beats | null): Dr
       .slice(0, 16)
       .sort((a, c) => a.r - c.r);
   // THE INSTANT: the return frame, placed on the moment the listener calls the drop. A
-  // pickup bar often precedes the drop proper (MitiS, By My Side: the bass slams at 1:30.4,
-  // gaps for a fill at 1:31.2, the drop lands on the downbeat at 1:31.4): when the beat grid
+  // pickup bar often precedes the drop proper (the bass slams, gaps for a fill for a few tenths,
+  // and the drop lands on the next downbeat): when the beat grid
   // is confident and knows its downbeat, the first downbeat within a bar and a half that is
   // SLAMMED (a strong non-hat onset within a tenth and the bass up after it) AND preceded by a
   // bass gap is the drop; else the first beat at or just after the return (a slammed one if
@@ -1095,8 +1073,8 @@ export function findDrops(strip: Strip, onsets: Onsets, beats: Beats | null): Dr
 
 /** How much lull a drop needs, by the display's taste: seconds of chill, OR seconds of
  *  breath, OR a brief total CUT right before the slam after at least `cutChill` seconds of
- *  reduced beat (the gasp: MitiS, Reconnect, two tenths of silence at 1:31.2 after two
- *  seconds without the bass, then the kick on the one). */
+ *  reduced beat (the gasp: two tenths of silence after two seconds without the bass, then the
+ *  kick on the one). */
 export const DROP_TIERS = {
   loose: { chill: 2, breath: 1, cut: 0.1, cutChill: 1 },
   normal: { chill: 3, breath: 1, cut: 0.15, cutChill: 1.5 },
@@ -1232,6 +1210,7 @@ export function featuresToStored(f: Features): AnalysisFeatures {
           tonic: f.key.tonic,
           mode: f.key.mode,
           confidence: Math.round(f.key.confidence * 1000) / 1000,
+          v: KEY_VERSION,
         }
       : null,
     changes: b64(tenthsGaps(f.changes)),
@@ -1305,7 +1284,8 @@ export function featuresFromStored(st: AnalysisFeatures): Features {
     beats,
     sections,
     chroma,
-    key: st.key ? { tonic: st.key.tonic, mode: st.key.mode, confidence: st.key.confidence } : null,
+    // a key the older estimator made is estimated again from the chroma beside it
+    key: keyFromStored(st),
     changes: fromTenthsGaps(unb64(st.changes)),
     stereo,
     timbre,

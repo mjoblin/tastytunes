@@ -1,4 +1,4 @@
-import { BrowserWindow, screen } from "electron";
+import { BrowserWindow, screen, type WebContents } from "electron";
 import { join } from "node:path";
 import { IPC, type MenuCommand, type StreamerCommand } from "@shared/ipc";
 import { getSettings, updateSettings } from "../data/persist";
@@ -8,6 +8,8 @@ import { currentUpdateState } from "./updater";
 import { homeWorkArea, isOnScreen } from "./windowPlacement";
 import { deviceManager } from "./runtime";
 import { reloadOnCrash } from "./crashReload";
+import { windowStuck } from "./bootFailure";
+import { devOverride } from "./devOverride";
 
 // The main window and the mini player, and the callbacks the app menu and the tray use to
 // reach them (split out of index.ts in the 0.11.0 sweep).
@@ -70,6 +72,18 @@ export function focusMain(): void {
   mainWindow.focus();
 }
 
+/** How long the main window has to come up: its page asks for the app's state (IPC.getSnapshot)
+ *  first thing once its script runs, so a page that loads blank or a script that fails never
+ *  asks, and the stuck dialog says so (app/bootFailure windowStuck). */
+const READY_MS = 30_000;
+let mainAsked = false;
+
+/** The main window's page asked for the app's state: it is up. */
+export function noteWindowAsked(sender: WebContents): void {
+  if (mainWindow && !mainWindow.isDestroyed() && sender === mainWindow.webContents)
+    mainAsked = true;
+}
+
 export function createWindow(): void {
   // Reopen at the remembered size/position — but only place it if the saved
   // spot is still on a connected display (mirrors the mini-player logic), and
@@ -100,6 +114,8 @@ export function createWindow(): void {
     // hidden until Alt reveals it (no-op on macOS).
     autoHideMenuBar: true,
     webPreferences: {
+      // no text box in the app needs it, and off the Mac it fetches its dictionaries from Google
+      spellcheck: false,
       preload: join(__dirname, "../preload/index.cjs"),
       sandbox: true,
     },
@@ -148,7 +164,18 @@ export function createWindow(): void {
     persistBounds();
   });
 
-  reloadOnCrash(mainWindow, "main", (text) => deviceManager.log("warn", "app", text));
+  reloadOnCrash(
+    mainWindow,
+    "main",
+    (text) => deviceManager.log("warn", "app", text),
+    () => void windowStuck("stopped"),
+  );
+  // the window has a while to come up (its page asks for the app's state, noteWindowAsked)
+  mainAsked = false;
+  const made = mainWindow;
+  setTimeout(() => {
+    if (!mainAsked && !made.isDestroyed()) void windowStuck("never-ready");
+  }, READY_MS);
 
   // A window created (or reloaded) after a state change missed the push.
   mainWindow.webContents.on("did-finish-load", () => {
@@ -158,8 +185,9 @@ export function createWindow(): void {
     }
   });
 
-  if (process.env["ELECTRON_RENDERER_URL"]) {
-    void mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
+  const devPage = devOverride("ELECTRON_RENDERER_URL");
+  if (devPage) {
+    void mainWindow.loadURL(devPage);
   } else {
     void mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
   }
@@ -201,6 +229,8 @@ export function toggleMiniPlayer(): void {
     ...(process.platform === "darwin" ? { type: "panel" as const } : {}),
     fullscreenable: false,
     webPreferences: {
+      // no text box in the app needs it, and off the Mac it fetches its dictionaries from Google
+      spellcheck: false,
       preload: join(__dirname, "../preload/index.cjs"),
       sandbox: true,
     },
@@ -252,15 +282,28 @@ export function toggleMiniPlayer(): void {
     miniWindow = null;
   });
 
-  if (process.env["ELECTRON_RENDERER_URL"]) {
-    void miniWindow.loadURL(`${process.env["ELECTRON_RENDERER_URL"]}?mini=1`);
+  const devPage = devOverride("ELECTRON_RENDERER_URL");
+  if (devPage) {
+    void miniWindow.loadURL(`${devPage}?mini=1`);
   } else {
     void miniWindow.loadFile(join(__dirname, "../renderer/index.html"), { query: { mini: "1" } });
   }
 }
 
+/**
+ * START-UP'S WINDOW STEP (0.16.0). A Dock click or a second launch can arrive while
+ * start-up is still moving the tokens and serving the window's handlers (index.ts); a window made
+ * then would load ahead of them, and start-up would make a second. Until start-up reaches the
+ * step that makes the window, there is nothing for either to do.
+ */
+let windowStep = false;
+export function markWindowStep(): void {
+  windowStep = true;
+}
+
 /** Show and focus the main window, recreating it if it's been closed. */
 export function showMainWindow(): void {
+  if (!windowStep) return;
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow();
     return;
@@ -281,26 +324,30 @@ export const trayDeps = {
 // (closed on macOS while the app lives on), recreate it and send after load —
 // the renderer subscribes to pushes at module scope, so did-finish-load is late
 // enough. Menu commands never go to the mini player.
+let menuDeliveries = 0;
+
 export function sendMenuCommand(command: MenuCommand): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow();
     const target = mainWindow;
+    // both copies carry one delivery mark, so the window applies the click once: a toggle
+    // (the palette, Get Info) sent twice would open and close again
+    const delivery = ++menuDeliveries;
     target?.webContents.once("did-finish-load", () => {
       if (!target || target.isDestroyed()) return;
-      target.webContents.send(IPC.push, { kind: "menu", command });
+      target.webContents.send(IPC.push, { kind: "menu", command, delivery });
       // AND ONCE MORE, a beat later. `did-finish-load` says the PAGE loaded,
       // not that the renderer is listening — the app wires its push handler
       // during module execution, and on a slow machine anything that delays
       // that (an emulated CPU, a cold disk) drops the only delivery on the
-      // floor and the window opens on the wrong screen. Menu commands are
-      // idempotent — 'go to Device' twice is 'go to Device' — so the cheap
-      // repeat is strictly better than the race. Reported from a Windows VM
-      // where the panel's "Connect a streamer" opened the app but not the
-      // Device screen; unreproducible on faster hardware, which is itself
-      // the tell.
+      // floor and the window opens on the wrong screen. The window applies a
+      // delivery once, so the cheap repeat is strictly better than the race,
+      // toggles included. Seen on a Windows VM where the panel's "Connect a
+      // streamer" opened the app but not the Device screen; unreproducible on
+      // faster hardware, which is itself the tell.
       setTimeout(() => {
         if (target && !target.isDestroyed()) {
-          target.webContents.send(IPC.push, { kind: "menu", command });
+          target.webContents.send(IPC.push, { kind: "menu", command, delivery });
         }
       }, 400);
     });

@@ -1,6 +1,6 @@
 import { isHiRes, LOSSLESS_CODECS, type MediaFormat } from "@shared/model";
 import { cdToc, isCdPlayback, type ZoneNowPlaying, type ZonePlayState } from "@shared/smoip";
-import { nameKey } from "@shared/keys";
+import { matchesQuery } from "@shared/keys";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -146,7 +146,7 @@ export function deriveNowPlaying(
 
   // THE CD (see isCdPlayback): a disc's table of contents is never a track's title. Stopped,
   // the disc itself is what is loaded, so it reads as its album and artist over its track
-  // count and length; playing, now_playing's line1 names the track (the owner's readout),
+  // count and length; playing, now_playing's line1 names the track,
   // whatever play_state's title turns out to hold.
   if (isCdPlayback(md, display)) {
     const toc = cdToc(md?.title);
@@ -213,15 +213,12 @@ export function controlSet(nowPlaying: ZoneNowPlaying | null): Set<string> {
 // ------------------------------------------------------------------ list filter
 
 /**
- * Tokenized, case-insensitive list filter: every whitespace-separated token in
- * `filter` must appear somewhere in the joined haystack, so "maiden beast"
- * matches across artist + title.
+ * The list filter: every word of `filter` somewhere in the joined fields, accents and punctuation
+ * folded, so "maiden beast" matches across artist and title and "motorhead" finds Motörhead
+ * (shared/keys' matchesQuery, the Library's search's own).
  */
 export function matchesFilter(filter: string, fields: Array<string | null | undefined>): boolean {
-  const hay = nameKey(fields.filter(Boolean).join(" "));
-  return nameKey(filter)
-    .split(/\s+/)
-    .every((token) => hay.includes(token));
+  return matchesQuery(filter, fields);
 }
 
 // ------------------------------------------------------------ signal quality lamp
@@ -260,6 +257,14 @@ export const SIGNAL_COLORS: Record<SignalQuality, string> = {
 export const signalGlow = (color: string): string =>
   `0 0 8px color-mix(in srgb, ${color} 70%, transparent)`;
 
+/** The connection lamp's three states, said in its tooltip wherever it shows (the device picker and
+ *  the Device screen; 0.16.0's settings diet moved the legend from a Settings tab to the lamps). */
+export const LED_TIPS = {
+  on: "Connected: a live link to the streamer",
+  busy: "Connecting: establishing or re-establishing the connection",
+  off: "Not connected",
+} as const;
+
 export const SIGNAL_LABELS: Record<SignalQuality, string> = {
   hires: "hi-res lossless",
   lossless: "lossless",
@@ -279,6 +284,6 @@ export const activeSourceId = (
   nowPlaying: { source: { id: string | null } | null } | null,
 ): string | null => zoneState?.source ?? nowPlaying?.source?.id ?? null;
 
-/** A count in the user's locale style — "4,590 tracks" (user, 2026-09-01);
+/** A count in the user's locale style — "4,590 tracks";
  *  one home, so every large number the app prints agrees. */
 export const fmtCount = (n: number): string => n.toLocaleString();

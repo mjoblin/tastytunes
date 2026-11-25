@@ -9,6 +9,7 @@ import {
   performerLine,
 } from "@shared/model";
 import { cx, fmtTime, matchesFilter } from "@/lib/format";
+import { useWidth } from "@/hooks/useWidth";
 import { useStore } from "@/store";
 import { scrollToVisible } from "@/lib/scroll";
 import { useWindowedList } from "@/hooks/useWindowedList";
@@ -56,25 +57,49 @@ let artistsMem: {
   /** An artist to scroll into a comfortable spot on the next render (set by
    *  focusArtistsLens; consumed once). */
   reveal: string | null;
+  /** The narrow view's two columns (0.16.0-rc.8): Artists and Albums, or Albums and Tracks, kept
+   *  like the rest so a trip to an artist's page and back returns to the same level. */
+  pair: "artists" | "tracks";
 } = {
   artist: null,
   album: null,
   filter: "",
   scroll: { artists: 0, albums: 0, tracks: 0, cards: 0 },
   reveal: null,
+  pair: "artists",
 };
 
 /** Point the Artists lens at an artist before opening it — the Tracks and
  *  Albums lenses' artist links. Keys match the lens's own: the lowercased,
  *  trimmed name. The lens then REVEALS the row near the top of its column. */
 export function focusArtistsLens(name: string): void {
-  artistsMem = { ...artistsMem, artist: nameKey(name), album: null, reveal: nameKey(name) };
+  const key = nameKey(name);
+  // the artist already picked keeps its album and the narrow view's level: opening their page
+  // points the lens here too, so the way back finds it as it was (0.16.0-rc.8)
+  const same = artistsMem.artist === key;
+  artistsMem = {
+    ...artistsMem,
+    artist: key,
+    album: same ? artistsMem.album : null,
+    reveal: key,
+    pair: same ? artistsMem.pair : "artists",
+  };
 }
 
 /** How far from the column's top a revealed artist lands — about a row and
  *  a half of context above it, so the eye reads where it is rather than
- *  finding the row pinned to the edge (user call, 2026-09-01). */
+ *  finding the row pinned to the edge. */
 const REVEAL_PAD = 84;
+/** The Artists column's width (proportional: fixed widths starved the tracks column), and the
+ *  filter box's above it, so the box lines up with the column it filters. */
+const ARTISTS_COLUMN = "w-[24%] min-w-[220px] max-w-[320px]";
+/** THE COLUMNS AT THEIR LEAST (0.16.0-rc.8): the Artists column's 220, the Albums column's 250, the
+ *  Tracks column's 300 and the two 24px gaps. Narrower than this (the smallest windows), the lens
+ *  shows two columns at a time, sliding over as an album is picked: Artists and Albums, then
+ *  Albums and Tracks (an artist with only loose tracks: Artists and Tracks). */
+const THREE_COLUMNS_MIN = 220 + 250 + 300 + 2 * 24;
+/** The gap between the columns (gap-6), which the narrow slide measures by. */
+const COLUMN_GAP = 24;
 /** Past this many artists the column renders only the rows near the viewport
  *  (useWindowedList); below it, every row, exactly as before (0.11.0 sweep, for review). */
 const WINDOW_ARTISTS_ABOVE = 150;
@@ -132,8 +157,8 @@ export function ArtistsLens({
    *  one step in from the selected artist (the Albums heading's link, a double-click), and
    *  the cards' click. */
   onOpenArtistPage?(name: string): void;
-  /** The Library's one Rows or Cards choice (libraryLayout; his pick, 2026-10-25): rows are the
-   *  three columns, cards the grid (ArtistCards). */
+  /** The Artists view's own Rows or Cards (lensArtistsLayout, 0.16.0): rows are the three
+   *  columns, cards the grid (ArtistCards). */
   cards: boolean;
   cardSize: number;
   cardGap: number;
@@ -165,8 +190,8 @@ export function ArtistsLens({
   // THE ARTIST YOU ASKED FOR IS ALWAYS IN THE COLUMN. Albums only is the
   // standing preference for browsing; a landing (Elsewhere's Go to artist, a
   // track's name link, the Queue) names one artist, and a credit-only name
-  // hidden by the filter left the lens open on nothing (user, 2026-09-12:
-  // Ellie Goulding, "credited on 1 track"). The selection is the exception,
+  // hidden by the filter left the lens open on nothing (an artist credited
+  // on a single track). The selection is the exception,
   // so the setting is untouched and the row leaves with the next selection.
   const baseArtists = useMemo(
     () =>
@@ -189,7 +214,11 @@ export function ArtistsLens({
   // artist out empties the albums/tracks columns rather than showing content
   // for a row that isn't on screen; clearing the filter brings it back.
   const selectedArtist = shownArtists.find((a) => a.key === mem.artist) ?? null;
-  const selectedAlbum = selectedArtist?.albums.find((a) => nodeKey(a) === mem.album) ?? null;
+  // AN ARTIST WITH ONE ALBUM OPENS IT (0.16.0): its tracks show with the artist, one click, where
+  // the tracks column used to wait on a second one; with several, one is picked
+  const soleAlbum = selectedArtist?.albums.length === 1 ? selectedArtist.albums[0] : null;
+  const selectedAlbum = selectedArtist?.albums.find((a) => nodeKey(a) === mem.album) ?? soleAlbum;
+  const selectedAlbumKey = selectedAlbum ? nodeKey(selectedAlbum) : null;
   // the album's own tracks, the index's one rule (albumTracksOf): another artist's album of the
   // same title keeps its tracks, a featured track ("Daft Punk; Julian Casablancas" on Daft Punk's
   // album) stays in, and two editions of one album split by the art their tracks carry
@@ -197,6 +226,46 @@ export function ArtistsLens({
   // an artist with no albums shows their loose tracks directly (vibin rule)
   const looseTracks =
     selectedArtist && selectedArtist.albums.length === 0 ? selectedArtist.tracks : null;
+  // NARROW: the columns' own width, read as it changes; below the three columns' least, two at a
+  // time, the pair following the last column acted in (an artist picked: Artists and Albums; an
+  // album: Albums and Tracks)
+  const [attachCols, colsWidth] = useWidth();
+  const narrow = colsWidth < THREE_COLUMNS_MIN;
+  const pair = mem.pair;
+  // THE SLIDE: narrow, the three columns stand side by side at half the view each and the view
+  // clips them; Albums and Tracks are the Artists and Albums moved one column over (a transform,
+  // eased while a pick moves them, never while the window is resized). An artist with only loose
+  // tracks shows them beside the artists, the empty Albums column out of the way.
+  const colW = narrow ? Math.max(0, (colsWidth - COLUMN_GAP) / 2) : 0;
+  const shifted = narrow && pair === "tracks" && looseTracks == null;
+  const [sliding, setSliding] = useState(false);
+  const slideTo = (next: "artists" | "tracks"): void => {
+    if (next === pair) return;
+    // eased only when the columns will move (an artist with loose tracks moves none)
+    if (narrow && (next === "tracks" && looseTracks == null) !== shifted) setSliding(true);
+    setMem({ pair: next });
+  };
+  const showArtistsCol = !narrow || !shifted;
+  const showAlbumsCol = !narrow || looseTracks == null;
+  const showTracksCol = !narrow || shifted || looseTracks != null;
+  /** A column's place on the slide: its width and the view's offset, the ease while sliding. */
+  const slide = narrow
+    ? {
+        className: cx(
+          "shrink-0",
+          sliding &&
+            "motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.22,1,0.36,1)]",
+        ),
+        style: {
+          width: colW,
+          transform: shifted ? `translateX(-${colW + COLUMN_GAP}px)` : undefined,
+        },
+      }
+    : null;
+  /** Focus a column that may only now be shown (the narrow slide): after the render that shows it. */
+  const focusSoon = (focus: () => void): void => {
+    requestAnimationFrame(() => focus());
+  };
   // headline format + per-row deviation notes, decided together so they agree
   const albumFmt = albumFormat(albumTracks ?? []);
 
@@ -250,7 +319,7 @@ export function ArtistsLens({
   useEffect(() => keepSelectionInSight(), [shownArtists]);
   const albumsColRef = useRef<HTMLDivElement | null>(null);
   const tracksColRef = useRef<HTMLDivElement | null>(null);
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): each column one Tab stop, up and down within it,
+  // FROM THE KEYBOARD (0.14.0): each column one Tab stop, up and down within it,
   // left and right between the three; Enter is a row's click (an artist or an album picked, a
   // track played), "." its More menu
   const artistKeys = useListKeys({
@@ -259,28 +328,42 @@ export function ArtistsLens({
     onEnter: (i) => {
       const a = shownArtists[i];
       if (a) setMem({ artist: a.key === mem.artist ? null : a.key, album: null });
+      slideTo("artists");
     },
     onMenu: (i, el) => {
       const a = shownArtists[i];
       if (a) actions.openMenu(lensArtistNode(a), keyedEvent(el));
     },
     reveal: (i) => void scrollColTo(i, REVEAL_PAD),
-    onRight: () => albumKeys.focus(),
+    onRight: () => (narrow && looseTracks != null ? trackKeys.focus() : albumKeys.focus()),
   });
   const columnAlbums = selectedArtist?.albums ?? [];
   const albumKeys = useListKeys({
     count: columnAlbums.length,
-    initial: () => columnAlbums.findIndex((alb) => nodeKey(alb) === mem.album),
+    initial: () => columnAlbums.findIndex((alb) => nodeKey(alb) === selectedAlbumKey),
     onEnter: (i) => {
       const alb = columnAlbums[i];
-      if (alb) setMem({ album: nodeKey(alb) === mem.album ? null : nodeKey(alb) });
+      // narrow, beside the artists: the album already picked shows its tracks (the click's rule)
+      const shownAlready = narrow && pair === "artists" && alb && nodeKey(alb) === selectedAlbumKey;
+      if (alb && !shownAlready) setMem({ album: nodeKey(alb) === mem.album ? null : nodeKey(alb) });
+      slideTo("tracks");
     },
     onMenu: (i, el) => {
       const alb = columnAlbums[i];
       if (alb && isAlbumClass(alb.upnpClass)) actions.openMenu(alb, keyedEvent(el));
     },
-    onLeft: () => artistKeys.focus(),
-    onRight: () => trackKeys.focus(),
+    onLeft: () => {
+      if (narrow && pair === "tracks") {
+        slideTo("artists");
+        focusSoon(() => artistKeys.focus());
+      } else artistKeys.focus();
+    },
+    onRight: () => {
+      if (narrow && pair === "artists") {
+        slideTo("tracks");
+        focusSoon(() => trackKeys.focus());
+      } else trackKeys.focus();
+    },
   });
   const trackKeys = useListKeys({
     count: visibleTracks.length,
@@ -292,15 +375,15 @@ export function ArtistsLens({
       const t = visibleTracks[i];
       if (t) sel.rowMenu(t, keyedEvent(el));
     },
-    onLeft: () => albumKeys.focus(),
+    onLeft: () => (narrow && !showAlbumsCol ? artistKeys.focus() : albumKeys.focus()),
   });
   // Restore each column's remembered spot once, after first paint.
   useEffect(() => {
     requestAnimationFrame(() => {
       // the artists column defers to a pending reveal (below): under
       // StrictMode's double mount a second restore used to land AFTER the
-      // reveal's frame and put the old scroll back (user, 2026-09-01: "same
-      // as before" in the dev build while the built app passed)
+      // reveal's frame and put the old scroll back (in the dev build, while
+      // the built app passed)
       if (!artistsMem.reveal) artistsColRef.current?.scrollTo({ top: artistsMem.scroll.artists });
       albumsColRef.current?.scrollTo({ top: artistsMem.scroll.albums });
       tracksColRef.current?.scrollTo({ top: artistsMem.scroll.tracks });
@@ -357,8 +440,10 @@ export function ArtistsLens({
     label: string,
     detail?: string,
     link?: React.ReactNode,
+    lead?: React.ReactNode,
   ): React.JSX.Element => (
     <div className="shrink-0 pb-1.5 mb-1.5 border-b border-edge flex items-baseline gap-2">
+      {lead}
       <span className="microlabel">{label}</span>
       {detail && <span className="font-mono text-[10.5px] text-faint tabular-nums">{detail}</span>}
       {link}
@@ -387,12 +472,20 @@ export function ArtistsLens({
       {/* the filter sits ABOVE the columns (left — over the artists column
           it scopes), so all three columns' headings and rows stay aligned */}
       <div className={`shrink-0 pb-3 flex items-center ${GAP_BETWEEN}`}>
-        <FilterInput
-          value={mem.filter}
-          onChange={(filter) => setMem({ filter })}
-          shown={shownArtists.length}
-          total={artists.length}
-        />
+        {/* in the columns, the box is the Artists column's width, so it reads as that column's */}
+        <div className={cards || narrow ? "contents" : cx(ARTISTS_COLUMN, "shrink-0")}>
+          <FilterInput
+            value={mem.filter}
+            onChange={(filter) => {
+              setMem({ filter });
+              // narrow, beside the tracks: the column being filtered comes back into view
+              if (narrow) slideTo("artists");
+            }}
+            shown={shownArtists.length}
+            total={artists.length}
+            fill={!cards && !narrow}
+          />
+        </div>
         <Chip
           state={albumsOnly ? "active" : "idle"}
           aria-pressed={albumsOnly}
@@ -443,18 +536,31 @@ export function ArtistsLens({
           }}
         />
       ) : (
-        <div className="min-h-0 flex-1 flex gap-6">
+        <div
+          ref={attachCols}
+          // clipped, never a scroll box: focus moved into a column mid-slide can't scroll the view
+          className={cx("min-h-0 flex-1 flex gap-6", narrow && "overflow-clip")}
+          data-lens-columns={narrow ? 2 : 3}
+        >
           {/* Artists ------------------------------------------------------- */}
           {/* proportional columns: fixed widths starved the tracks column (and
           its titles) at normal window sizes — tracks gets the largest share */}
-          <div className="w-[24%] min-w-[220px] max-w-[320px] shrink-0 min-h-0 flex flex-col">
+          <div
+            className={cx(
+              slide ? slide.className : cx(ARTISTS_COLUMN, "shrink-0"),
+              "min-h-0 flex flex-col",
+            )}
+            style={slide?.style}
+            inert={!showArtistsCol}
+            data-lens-artists-column
+          >
             {colHeading(
               "Artists",
               mem.filter || albumsOnly
                 ? `${shownArtists.length}/${artists.length}`
                 : String(artists.length),
             )}
-            <div className="min-h-0 flex-1 flex gap-1">
+            <div className="group/az min-h-0 flex-1 flex gap-1">
               <div
                 {...artistKeys.container}
                 ref={(el) => {
@@ -484,7 +590,10 @@ export function ArtistsLens({
                           if (selected && el) selectedRowRef.current = el;
                         }}
                         data-artist-row={a.name}
-                        onClick={() => setMem({ artist: selected ? null : a.key, album: null })}
+                        onClick={() => {
+                          setMem({ artist: selected ? null : a.key, album: null });
+                          slideTo("artists");
+                        }}
                         // a double-click opens the artist's page (the page re-selects the
                         // artist, so the two clicks' toggle never shows on the way back)
                         onDoubleClick={() => onOpenArtistPage?.(a.name)}
@@ -500,17 +609,17 @@ export function ArtistsLens({
                         className={cx(
                           // the eqbars' column only while the artist plays: the row's buttons float
                           // (below), so a name has the row's whole width at rest
-                          "group relative grid items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+                          "group relative grid items-center gap-2.5 rounded-lg px-3 py-1.5 cursor-pointer transition-colors",
                           playing ? "grid-cols-[44px_1fr_auto]" : "grid-cols-[44px_1fr]",
-                          // SELECTED is "open here" — the Playlists sidebar's amber, so it
+                          // SELECTED is "open here" — the Playlists sidebar's accent, so it
                           // reads apart from gold (= playing); a row that is both keeps
-                          // the playing signals (gold title, eqbars) on the amber fill
-                          // (user, 2026-09-02: the selection "didn't look distinctive").
+                          // the playing signals (gold title, eqbars) on the accent fill
+                          // (a plainer selection did not read as distinct).
                           // PLAYING is the app-wide row treatment — fill, ring and glow
                           // (row-playing), the same as ContainerRow and every track row —
                           // and it rides on top of the selection: a fill and an edge.
                           playing && "row-playing",
-                          selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
+                          selected ? "bg-accentdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                         )}
                       >
                         <ArtistArt name={a.name} src={a.ownArt} cover={a.artUrl} />
@@ -525,7 +634,7 @@ export function ArtistsLens({
                           <div
                             className={cx(
                               "text-[13.5px] truncate",
-                              playing ? "text-gold" : selected ? "text-amber" : "text-ink",
+                              playing ? "text-gold" : selected ? "text-accent" : "text-ink",
                             )}
                           >
                             {a.name}
@@ -543,7 +652,7 @@ export function ArtistsLens({
                         )}
                         {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu
                       is open: the ↗ to the artist's page, as an album row's ↗ opens the album
-                      (user, 2026-10-11: a click here selects, the ↗ goes there), and the ⋯,
+                      (a click here selects, the ↗ goes there), and the ⋯,
                       the same artist menu the right-click opens */}
                         <div
                           className={cx(
@@ -587,13 +696,28 @@ export function ArtistsLens({
                   {win.padBottom > 0 && <div style={{ height: win.padBottom }} />}
                 </ListKeysContext.Provider>
               </div>
-              {/* the A-Z rail: fast travel for a long first column, in name order */}
-              {letterStarts && <AzRail letters={[...letterStarts.keys()]} onJump={jumpToLetter} />}
+              {/* the A-Z rail: fast travel for a long first column, in name order; shown while the
+                  pointer is over the column or a letter has the keyboard (0.16.0: always on, it
+                  floated between the columns) */}
+              {letterStarts && (
+                <AzRail letters={[...letterStarts.keys()]} onJump={jumpToLetter} quiet />
+              )}
             </div>
           </div>
 
           {/* Albums -------------------------------------------------------- */}
-          <div className="w-[28%] min-w-[250px] max-w-[400px] shrink-0 min-h-0 flex flex-col">
+          <div
+            className={cx(
+              slide ? slide.className : "w-[28%] min-w-[250px] max-w-[400px] shrink-0",
+              "min-h-0 flex flex-col",
+              !showAlbumsCol && "hidden",
+            )}
+            style={slide?.style}
+            onTransitionEnd={(e) => {
+              if (e.target === e.currentTarget) setSliding(false);
+            }}
+            data-lens-albums-column
+          >
             {colHeading(
               "Albums",
               selectedArtist ? String(selectedArtist.albums.length) : undefined,
@@ -603,9 +727,19 @@ export function ArtistsLens({
                 <button
                   data-lens-artist-page
                   onClick={() => onOpenArtistPage(selectedArtist.name)}
-                  className="ml-auto text-[11.5px] text-amber hover:brightness-110 transition-all"
+                  className="ml-auto text-[11.5px] text-accent hover:brightness-110 transition-all"
                 >
                   Artist page →
+                </button>
+              ),
+              // narrow, beside the tracks: the way back to the artists, where their column was
+              narrow && pair === "tracks" && (
+                <button
+                  data-lens-back-to-artists
+                  onClick={() => slideTo("artists")}
+                  className="text-[11.5px] text-accent hover:brightness-110 transition-all"
+                >
+                  ‹ Artists
                 </button>
               ),
             )}
@@ -628,7 +762,7 @@ export function ArtistsLens({
                 <div className="text-[12.5px] text-faint pt-2 px-1">No albums</div>
               ) : (
                 selectedArtist.albums.map((alb, ai) => {
-                  const selected = nodeKey(alb) === mem.album;
+                  const selected = nodeKey(alb) === selectedAlbumKey;
                   const playing = actions.isPlayingAlbum(alb);
                   const menuOpen = actions.menuNodeId === alb.id;
                   const badge = index.copyBadge(alb);
@@ -637,7 +771,13 @@ export function ArtistsLens({
                       key={nodeKey(alb)}
                       {...albumKeys.item(ai)}
                       data-lens-album-row={alb.title}
-                      onClick={() => setMem({ album: selected ? null : nodeKey(alb) })}
+                      onClick={() => {
+                        // narrow, beside the artists: the album already picked shows its tracks,
+                        // never unpicked into an empty column
+                        if (!(narrow && pair === "artists" && selected))
+                          setMem({ album: selected ? null : nodeKey(alb) });
+                        slideTo("tracks");
+                      }}
                       onPointerDown={(e) => {
                         if ((e.target as HTMLElement).closest("button")) return;
                         actions.dragAlbum([alb], e, alb.title);
@@ -645,24 +785,28 @@ export function ArtistsLens({
                       className={cx(
                         // the row's buttons float (below), as the artist rows' do: a title has
                         // the row's whole width at rest
-                        "group relative grid grid-cols-[44px_1fr] items-center gap-2.5 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
-                        // SELECTED is "open here" — the Playlists sidebar's amber, so it
+                        "group relative grid grid-cols-[44px_1fr] items-center gap-2.5 rounded-lg px-3 py-1.5 cursor-pointer transition-colors",
+                        // SELECTED is "open here" — the Playlists sidebar's accent, so it
                         // reads apart from gold (= playing); a row that is both keeps
-                        // the playing signals (gold title, eqbars) on the amber fill
-                        // (user, 2026-09-02: the selection "didn't look distinctive").
+                        // the playing signals (gold title, eqbars) on the accent fill
+                        // (a plainer selection did not read as distinct).
                         // PLAYING is the app-wide row treatment — fill, ring and glow
                         // (row-playing), the same as ContainerRow and every track row —
                         // and it rides on top of the selection: a fill and an edge.
                         playing && "row-playing",
-                        selected ? "bg-amberdim" : playing ? "bg-gold/10" : "hover:bg-veil",
+                        selected ? "bg-accentdim" : playing ? "bg-gold/10" : "hover:bg-veil",
                       )}
                     >
-                      <MediaArt src={alb.artUrl} kind="album" />
+                      <MediaArt
+                        src={alb.artUrl}
+                        fallbackArt={{ artist: alb.albumArtist ?? alb.artist, album: alb.title }}
+                        kind="album"
+                      />
                       <div className={cx("min-w-0", NAME_FADE.idle[menuOpen ? "on" : "hover"])}>
                         <div
                           className={cx(
                             "flex items-center gap-2 text-[13.5px]",
-                            playing ? "text-gold" : selected ? "text-amber" : "text-ink",
+                            playing ? "text-gold" : selected ? "text-accent" : "text-ink",
                           )}
                         >
                           {/* no position cell in this list, so the playing marker
@@ -683,9 +827,9 @@ export function ArtistsLens({
                         </div>
                       </div>
                       {/* THE ROW'S BUTTONS FLOAT over its end, shown on hover and while its menu
-                      is open (user, 2026-10-11: "do the same for the album rows too"), the
-                      title fading under them: the ↗ opens the album, the ⋯ its menu (a plain
-                      folder has none; its slot stays, so every ↗ sits on one line) */}
+                      is open, as the artist rows' do, the title fading under them: the ↗ opens
+                      the album, the ⋯ its menu (a plain folder has none; its slot stays, so
+                      every ↗ sits on one line) */}
                       <div
                         className={cx(
                           "absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2.5 transition-opacity",
@@ -731,7 +875,15 @@ export function ArtistsLens({
           </div>
 
           {/* Tracks -------------------------------------------------------- */}
-          <div className="relative flex-1 min-w-0 min-h-0 flex flex-col">
+          <div
+            className={cx(
+              "relative min-h-0 flex flex-col",
+              slide ? slide.className : "flex-1 min-w-0",
+            )}
+            style={slide?.style}
+            inert={!showTracksCol}
+            data-lens-tracks-column
+          >
             {colHeading(
               "Tracks",
               selectedAlbum

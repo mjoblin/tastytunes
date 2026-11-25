@@ -32,12 +32,15 @@ let moduleUrl = "";
 
 beforeAll(() => {
   dir = mkdtempSync(join(tmpdir(), "jsonstore-"));
-  const source = readFileSync(fileURLToPath(new URL("./jsonStore.ts", import.meta.url)), "utf-8");
-  const { outputText } = ts.transpileModule(source, {
-    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
-  });
+  // the store and the one module it imports (data/savedFiles), each transpiled beside the other
+  const transpile = (name: string): string =>
+    ts.transpileModule(
+      readFileSync(fileURLToPath(new URL(`./${name}.ts`, import.meta.url)), "utf-8"),
+      { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } },
+    ).outputText;
+  writeFileSync(join(dir, "savedFiles.mjs"), transpile("savedFiles"));
   const module = join(dir, "jsonStore.mjs");
-  writeFileSync(module, outputText);
+  writeFileSync(module, transpile("jsonStore").replace('"./savedFiles"', '"./savedFiles.mjs"'));
   moduleUrl = pathToFileURL(module).href;
   writer = join(dir, "writer.mjs");
   writeFileSync(writer, WRITER);

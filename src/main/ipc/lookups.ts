@@ -1,4 +1,4 @@
-import { BrowserWindow } from "electron";
+import { BrowserWindow, session } from "electron";
 import { IPC } from "@shared/ipc";
 import type {
   ArtistChoice,
@@ -22,7 +22,11 @@ import {
   resolveChoice,
   setChoice,
 } from "../data/artistChoices";
-import { fetchArtistImages, fetchArtistInfo, knownArtistImage } from "../lookups/artistInfo";
+import {
+  fetchArtistImages,
+  fetchArtistInfoForCredit,
+  knownArtistImage,
+} from "../lookups/artistInfo";
 import { checkFanartKey, fetchFanartPhotos } from "../lookups/fanart";
 import { keepChoiceCopy } from "../lookups/choiceCopies";
 import { fetchCommonsPhotos, fetchWikimediaSizes, wikimediaFile } from "../lookups/commons";
@@ -37,6 +41,7 @@ import { scrobbler } from "../lookups/scrobbler";
 import { fetchTrackInfo } from "../lookups/trackInfo";
 import { artistIndex } from "../media/artistIndex";
 import * as mediaIndex from "../media/mediaIndex";
+import { albumArtElsewhere } from "../media/albumArtElsewhere";
 import { demoHost } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
 import { nameKey } from "@shared/keys";
@@ -200,7 +205,7 @@ export function registerLookupsIpc(): void {
   handle(IPC.mcpTokenReveal, async () => (await getSecret("mcpToken")) ?? "");
   handle(IPC.mcpTokenNew, () => newMcpToken());
   handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
-    getSettings().artistInfo ? fetchArtistInfo(artist, !!force) : null,
+    getSettings().artistInfo ? fetchArtistInfoForCredit(artist, !!force) : null,
   );
   handle(IPC.fetchAlbumInfo, (_e, artist: string, album: string, force?: boolean) =>
     getSettings().artistInfo ? fetchAlbumInfo(artist, album, !!force, true) : null,
@@ -213,7 +218,7 @@ export function registerLookupsIpc(): void {
     (_e, releaseId: string, count: number | null, secs: number | null) => {
       if (!getSettings().artistInfo) return null;
       const demo = demoHost();
-      const conn = deviceManager.snapshot().connection;
+      const conn = deviceManager.connectionNow;
       const fromDemo = demo != null && conn.phase === "connected" && conn.host === demo;
       return fetchDiscTracks(releaseId, count, secs, fromDemo ? `http://${demo}` : undefined);
     },
@@ -225,15 +230,29 @@ export function registerLookupsIpc(): void {
       ? fetchTrackInfo(query, !!force)
       : null,
   );
-  handle(IPC.albumArt, (_e, artist: string, album: string) =>
-    getSettings().albumArtLookup && typeof artist === "string" && typeof album === "string"
-      ? fetchCoverArt(artist, album)
-      : null,
-  );
+  // an album's cover when its own is missing or failed: the same album in another library first
+  // (never on the streamer's own address, re-minted on every wake; no request leaves the
+  // network), then the Cover Art Archive with the lookups on
+  handle(IPC.albumArt, (_e, artist: string, album: string, failed?: string | null) => {
+    if (typeof artist !== "string" || typeof album !== "string") return null;
+    const elsewhere = albumArtElsewhere(
+      mediaIndex.pools(),
+      artist,
+      album,
+      connectedHost(),
+      typeof failed === "string" ? failed : null,
+    );
+    if (elsewhere) return elsewhere;
+    return getSettings().albumArtLookup ? fetchCoverArt(artist, album) : null;
+  });
   handle(IPC.lookupCacheStats, () => lookupCacheStats());
   handle(IPC.clearLookupCaches, () => clearLookupCaches());
   handle(IPC.artThumbsStats, () => artThumbsStats());
-  handle(IPC.clearArtThumbs, () => clearArtThumbs());
+  handle(IPC.clearArtThumbs, async () => {
+    // the windows' own cache of web pictures goes with it (app/boot HTTP_CACHE_BYTES)
+    await session.defaultSession.clearCache().catch(() => {});
+    return clearArtThumbs();
+  });
   handle(IPC.radioSearch, (_e, query: string) => radioSearch(query));
   handle(IPC.radioTop, () => radioTop());
   handle(IPC.radioByTags, (_e, tags: string[]) => radioByTags(tags));

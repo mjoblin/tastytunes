@@ -29,6 +29,9 @@ export function registerMediaIpc(): void {
     const server = servers.find((x) => x.udn === serverUdn);
     if (server) await mediaIndex.rebuild(streamerHost(), server);
   });
+  handle(IPC.mediaIndexRemove, (_e, serverUdn: unknown) => {
+    if (typeof serverUdn === "string" && serverUdn) mediaIndex.removeIndex(serverUdn);
+  });
   // a server's own Recently added list: chosen, off, or back to the one found by its name
   handle(IPC.setRecentlyAddedList, async (_e, serverUdn: unknown, choice: unknown) => {
     if (typeof serverUdn !== "string" || !serverUdn) return;
@@ -94,7 +97,7 @@ export function registerMediaIpc(): void {
   );
   handle(IPC.contentResolve, (_e, ref: ContentRef) => deviceManager.contentResolve(ref));
   handle(IPC.mediaNodeInfo, (_e, query: MediaInfoQuery, purpose: unknown) => {
-    const conn = deviceManager.snapshot().connection;
+    const conn = deviceManager.connectionNow;
     // anything but an explicit act is a show: a show never rebuilds an index
     return lookupMediaInfo(
       conn.phase === "connected" ? conn.host : null,
@@ -105,7 +108,7 @@ export function registerMediaIpc(): void {
 }
 
 /**
- * ONCE MORE UNDER THE CURRENT IDS (0.13.0-rc.6, his preset 24): a Library play or a preset save
+ * ONCE MORE UNDER THE CURRENT IDS (0.13.0-rc.6): a Library play or a preset save
  * whose id its server answered as gone (a re-minted library, upnpBrowser's ObjectGoneError) goes
  * again with the same album's and track's current ids, found by a rebuild of that server's index
  * (mediaIndex.currentIdFor); with none found the refusal stands, and the renderer says so.

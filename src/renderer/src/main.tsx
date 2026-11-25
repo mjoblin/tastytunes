@@ -47,12 +47,23 @@ declare global {
   }
 }
 
+// A menu click sent to a window still loading comes twice with one delivery mark (main/app/windows):
+// the second copy is the first again, never a second click.
+let lastDelivery: number | null = null;
+const seenDelivery = (delivery: number | undefined): boolean => {
+  if (delivery == null) return false;
+  if (delivery === lastDelivery) return true;
+  lastDelivery = delivery;
+  return false;
+};
+
 // Subscribe to pushes before fetching the snapshot so nothing slips between them.
 // Menu clicks carry side effects (settings round-trips) that don't fit
 // applyPush's pure state merge, so they route to their own action.
 window.__ttUnwirePush?.();
 window.__ttUnwirePush = tt.onPush((msg) => {
-  if (msg.kind === "menu") useStore.getState().applyMenu(msg.command);
+  if (msg.kind === "menu" && !seenDelivery(msg.delivery))
+    useStore.getState().applyMenu(msg.command);
   else useStore.getState().applyPush(msg);
 });
 void tt.getSnapshot().then((snapshot) => useStore.getState().init(snapshot));
@@ -72,7 +83,7 @@ if (isTray) document.documentElement.classList.add("tray");
 // lights float OVER the content, so every screen header reserves room for
 // them. Everywhere else the frame is native and sits ABOVE the web contents,
 // where that reservation is just a band of dead space at the top of the
-// window (user report 2026-08-03, Windows). One class, one CSS var.
+// window (on Windows). One class, one CSS var.
 if (!/mac/i.test(navigator.platform)) document.documentElement.classList.add("native-frame");
 
 const root = (window.__ttRoot ??= ReactDOM.createRoot(document.getElementById("root")!));

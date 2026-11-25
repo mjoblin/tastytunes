@@ -1,9 +1,13 @@
-import { useEffect, useState, useEffectEvent } from "react";
+import { useEffect, useRef, useState, useEffectEvent } from "react";
 import { playKey, type EmbeddedArt, type EmbeddedArtQuery } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { artSrc } from "@/lib/artSrc";
 import { Lru } from "@/lib/lru";
+
+/** The album a lookup names, for telling the next track of one album from another album's. */
+const albumOf = (q: EmbeddedArtQuery | null): string | null =>
+  q && "album" in q && q.album ? `${q.artist ?? ""}|${q.album}` : null;
 
 /**
  * The best artwork for a BIG surface (the Now Playing hero, Display mode, the
@@ -24,7 +28,7 @@ import { Lru } from "@/lib/lru";
 const SMALL_PX = 600;
 /** The embedded pictures asked for, by query: each answer is a data URL that can run to a
  *  megabyte, so the recent ones are kept (the big surfaces ask about the tracks around the one
- *  playing) and the rest let go (0.12.0-rc.2, the 0.11 re-score; the map grew for a session). */
+ *  playing) and the rest let go (0.12.0-rc.2; the map grew for a session). */
 const pending = new Lru<string, Promise<EmbeddedArt | null>>(24);
 
 function embedded(query: EmbeddedArtQuery): Promise<EmbeddedArt | null> {
@@ -57,8 +61,20 @@ export function useBestArt(
   const enabled = useStore((s) => s.settings.artFromFiles) && fileLookup;
   const [best, setBest] = useState<string | null>(serverUrl ?? null);
   const queryKey = query ? JSON.stringify(query) : null;
+  const lastServer = useRef(serverUrl);
+  const lastAlbum = useRef(albumOf(query));
   const findBest = useEffectEvent(() => {
-    setBest(serverUrl ?? null);
+    // A NEW SERVER PICTURE SHOWS AT ONCE; THE SAME ONE (the next track of an album) keeps what is
+    // shown while the file is asked (0.16.0: every track stepped back to the server's small cover
+    // and forward to the file's again a moment later, and the wash behind the window flickered).
+    // No server picture on either track is the same only within one album: a server that sends no
+    // addresses had kept the last album's cover from its file until the next one's arrived
+    const album = albumOf(query);
+    const sameAlbumWithout = serverUrl == null && album != null && album === lastAlbum.current;
+    if (serverUrl !== lastServer.current || !query || (serverUrl == null && !sameAlbumWithout))
+      setBest(serverUrl ?? null);
+    lastServer.current = serverUrl;
+    lastAlbum.current = album;
     if (!query) return;
     let live = true;
     void (async () => {
@@ -73,8 +89,10 @@ export function useBestArt(
       if (
         serverWidth != null &&
         (serverWidth >= SMALL_PX || (probe !== serverUrl && serverWidth >= 480))
-      )
+      ) {
+        setBest(serverUrl ?? null);
         return;
+      }
       if (enabled) {
         const art = await embedded(query);
         if (!live) return;
@@ -88,8 +106,14 @@ export function useBestArt(
         const cover = await tt
           .recentCover(playKey(query.title, query.artist, query.album))
           .catch(() => null);
-        if (live && cover) setBest(cover);
+        if (!live) return;
+        if (cover) {
+          setBest(cover);
+          return;
+        }
       }
+      // nothing better: the server's own (what was kept from the last track goes)
+      setBest(serverUrl ?? null);
     })();
     return () => {
       live = false;

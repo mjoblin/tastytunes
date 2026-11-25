@@ -8,8 +8,8 @@ import { fetchPicture } from "./artFetch";
 import { mediaType } from "@shared/keys";
 
 /**
- * ALBUM ART THUMBNAILS for servers that cannot be asked for a size (2026-09-14,
- * from a user's USB report: the streamer's own USB server ignores every size
+ * ALBUM ART THUMBNAILS for servers that cannot be asked for a size (measured
+ * 2026-09-14: the streamer's own USB server ignores every size
  * hint and serves the embedded picture whole — 1400 × 1400, 827 KB, ~0.8 s a
  * request, no cache headers — and its art URL carries the stick's mount
  * counter, so Chromium re-fetched every card on every visit and a URL-keyed
@@ -23,7 +23,7 @@ import { mediaType } from "@shared/keys";
  * the fetch is the cost (the stick's 0.8 s) and the resize is nothing: the
  * album header's 160 px thumb is on disk by the time its card has drawn, so
  * a click lands on the picture — it used to fetch the origin again, and the
- * user saw the art pop in on the card and then a blank header (2026-09-14). A
+ * user saw the art pop in on the card and then a blank header. A
  * second asker while the fetch is in flight waits for it, whichever tier. Keyed
  * by CONTENT (server, album title, album artist) on the streamer's own art server,
  * so a rotated id finds the same file, and by content AND URL everywhere else,
@@ -164,7 +164,7 @@ const ORIGIN_MAX_BYTES = 20 * 1024 * 1024;
 
 /** An origin picture, through the one picture fetch (lookups/artFetch): on the local network
  *  only from the streamer or a known media server, every redirect checked, capped, and only a
- *  picture (the 0.11 re-score: this was a bare fetch of any URL, buffered whole, storing
+ *  picture (this was once a bare fetch of any URL, buffered whole, storing
  *  whatever came). */
 export async function fetchOrigin(
   url: string,

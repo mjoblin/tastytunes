@@ -104,6 +104,16 @@ describe("parseUrlAction", () => {
       screen: "recently-played",
     });
     expect(parse("tastytunes://screen/nowhere").ok).toBe(false);
+    // a bare screen is refused with a reason, not thrown (it named no screen to read)
+    expect(parse("tastytunes://screen")).toEqual({
+      ok: false,
+      reason: "Screen takes the name of a screen, such as Queue.",
+    });
+    expect(parse("tastytunes://screen/").ok).toBe(false);
+    // an object's own names only: the names every object carries are no screen
+    expect(parse("tastytunes://screen/constructor").ok).toBe(false);
+    expect(parse("tastytunes://screen/__proto__").ok).toBe(false);
+    expect(parse("tastytunes://screen/toString").ok).toBe(false);
   });
 
   it("is forgiving about how the link arrives", () => {
@@ -111,8 +121,16 @@ describe("parseUrlAction", () => {
     expect(action("TASTYTUNES://Toggle-Play")).toEqual(toggle);
     expect(action("tastytunes://toggle-play/")).toEqual(toggle);
     expect(action("tastytunes:toggle-play")).toEqual(toggle);
-    expect(action("tastytunes://toggle-play?from=deck#x")).toEqual(toggle);
+    expect(action("tastytunes://toggle-play?#x")).toEqual(toggle);
+    expect(action("tastytunes://toggle-play#x")).toEqual(toggle);
     expect(action("  tastytunes://toggle-play  ")).toEqual(toggle);
+  });
+
+  it("refuses a link with options rather than act on it without them", () => {
+    expect(action("tastytunes://volume/30?device=Kitchen")).toBe(
+      "TastyTunes links take no options, and this one has “device=Kitchen”.",
+    );
+    expect(parse("tastytunes://toggle-play?from=deck#x").ok).toBe(false);
   });
 
   it("refuses what is not one of its links, and names an unknown verb", () => {

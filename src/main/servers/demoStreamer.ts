@@ -394,7 +394,7 @@ function buildDemo(host: string): {
 
   function handlePresetSave(body: Dict, res: ServerResponse): void {
     const didl = String(body.didl ?? "");
-    // a preset saved from a DIDL with an empty title is listed "[No title]" (his slot 24, 2026-10-28)
+    // a preset saved from a DIDL with an empty title is listed "[No title]" (read 2026-10-28)
     const title = didl.match(/<dc:title>(.*?)<\/dc:title>/)?.[1] || "[No title]";
     const artU = didl.match(/<upnp:albumArtURI>(.*?)<\/upnp:albumArtURI>/)?.[1] ?? null;
     const list = DATA["/presets/list"] as { presets: Array<Dict & { id: number }> };
@@ -1199,6 +1199,11 @@ function buildDemo(host: string): {
           const item = items.find((i) => i.id === params.queue_id);
           if (item) setQueue(items, item);
         } else if (frame.path === "/zone/play_control" && typeof params.position === "number") {
+          // a seek to the track's full length is dropped without a word (live 2026-11-25, as the
+          // mock: docs/streamer.md); anything short of it lands
+          const length = (DATA["/zone/play_state"] as { metadata?: { duration?: number | null } })
+            .metadata?.duration;
+          if (length != null && params.position >= length) return;
           // echo seek: report the new playhead shortly after
           DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], position: params.position };
           DATA["/zone/play_state/position"] = { position: params.position };

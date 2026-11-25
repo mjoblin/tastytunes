@@ -33,7 +33,7 @@ export function RowHeart({
       className={cx(
         "p-1.5 rounded-lg transition-all motion-safe:active:scale-90",
         favorited
-          ? "text-gold hover:text-ink"
+          ? "text-accent hover:text-ink"
           : cx(
               "text-dim hover:text-ink hover:bg-veil2",
               held ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",

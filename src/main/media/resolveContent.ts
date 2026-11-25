@@ -1,4 +1,5 @@
 import {
+  pools,
   revalidate,
   searchAllIndexes,
   searchIndex,
@@ -72,6 +73,51 @@ function best(ref: ContentRef, items: MediaNode[]): MediaNode | null {
   if (ref.album == null) return hits[0];
   return hits.find((n) => n.album != null && nameKey(n.album) === nameKey(ref.album)) ?? hits[0];
 }
+
+/**
+ * The index's best track for a ref, asking no server and revalidating nothing: an agent's track
+ * named by content, or a row's content given its ids (a history line, a queue entry), read where
+ * the index stands (0.16.0). The same matching as resolveContent's (title, then the performer
+ * sets, the album telling twins apart), the server the ref's picture names answering first. Made
+ * once for many refs: the index's tracks by title, built once.
+ */
+export function indexFinder(): (
+  ref: ContentRef,
+) => { serverUdn: string; serverName: string; node: MediaNode } | null {
+  const groups = pools();
+  const byTitle = new Map<string, { udn: string; serverName: string; node: MediaNode }[]>();
+  for (const g of groups)
+    for (const node of g.tracks) {
+      const key = nameKey(node.title);
+      const list = byTitle.get(key);
+      const entry = { udn: g.udn, serverName: g.serverName, node };
+      if (list) list.push(entry);
+      else byTitle.set(key, [entry]);
+    }
+  return (ref) => {
+    if (!ref.title.trim()) return null;
+    const candidates = byTitle.get(nameKey(ref.title));
+    if (!candidates) return null;
+    const preferred = serverUdnForArt(ref.artUrl);
+    const order = [...new Set(candidates.map((c) => c.udn))].sort((a, b) =>
+      a === preferred ? -1 : b === preferred ? 1 : 0,
+    );
+    for (const udn of order) {
+      const here = candidates.filter((c) => c.udn === udn);
+      const hit = best(
+        ref,
+        here.map((c) => c.node),
+      );
+      if (hit) return { serverUdn: udn, serverName: here[0].serverName, node: hit };
+    }
+    return null;
+  };
+}
+
+/** indexFinder for one ref. */
+export const bestInIndexes = (
+  ref: ContentRef,
+): { serverUdn: string; serverName: string; node: MediaNode } | null => indexFinder()(ref);
 
 export async function resolveContent(
   host: string,

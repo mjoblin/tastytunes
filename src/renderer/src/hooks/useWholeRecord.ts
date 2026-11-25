@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import type { ListeningEvent } from "@shared/model";
+import { type ListeningEvent, eventsOfYears, yearsOldestFirst } from "@shared/model";
 import { useStore } from "@/store";
 import { narrowToStreamer } from "@/lib/historyStreamers";
 
@@ -22,13 +22,9 @@ export function useWholeRecord(streamer: string | null): {
     if (years == null) void loadYears();
     else for (const y of years) if (loaded[y] == null) void loadYear(y);
   }, [years, loaded, loadYears, loadYear]);
-  const events = useMemo(() => {
-    const out: ListeningEvent[] = [];
-    for (const y of Object.keys(loaded)
-      .map(Number)
-      .sort((a, b) => a - b))
-      out.push(...(loaded[y] ?? []));
-    return narrowToStreamer(out, streamer);
-  }, [loaded, streamer]);
+  const events = useMemo(
+    () => narrowToStreamer(eventsOfYears(loaded, yearsOldestFirst(loaded)), streamer),
+    [loaded, streamer],
+  );
   return { events, years, allLoaded: years != null && years.every((y) => loaded[y] != null) };
 }

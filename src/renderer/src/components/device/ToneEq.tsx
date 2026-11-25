@@ -12,12 +12,12 @@ import { audioCaps, EQ_GAIN_MAX, EQ_GAIN_MIN } from "@shared/smoip";
 const BAND_LABELS = ["80", "120", "315", "800", "2k", "5k", "8k"];
 const GAIN_SPAN = EQ_GAIN_MAX - EQ_GAIN_MIN;
 
-// NO built-in preset curves — a deliberate user decision (2026-07-19), don't
-// re-add. Mirroring the official app's preset NAMES with invented curves
-// would mislead: its presets are client-side state inside the Cambridge app
-// (invisible on the wire), so "TV" here could never sound like "TV" there.
-// Presets in TastyTunes are exactly the user's own saved gain-sets
-// (settings.eqPresets); the one built-in affordance is the Flat RESET button.
+// NO built-in preset curves, deliberately; don't re-add. Mirroring the official
+// app's preset NAMES with invented curves would mislead: its presets are
+// client-side state inside the Cambridge app (invisible on the wire), so "TV"
+// here could never sound like "TV" there. Presets in TastyTunes are exactly the
+// user's own saved gain-sets (settings.eqPresets); the one built-in affordance
+// is the Flat RESET button.
 
 const gainsMatch = (bands: Array<{ gain: number }>, gains: number[]): boolean =>
   gains.length >= bands.length && bands.every((b, i) => Math.abs(b.gain - gains[i]) < 0.05);
@@ -217,7 +217,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
               {/* The scale column mirrors a band column's exact structure —
                   the h-36 block plus INVISIBLE value/freq spacers — so its
                   labels sit level with the tracks: "0" lands exactly on the
-                  zero tick (it used to float mid-column, user catch). */}
+                  zero tick (it used to float mid-column). */}
               <div className="flex flex-col items-end gap-1 pr-1.5">
                 <div className="relative h-36 w-5 text-right">
                   <span className="absolute right-0 top-0 -translate-y-1/2 text-[10px] text-faint leading-none">
@@ -264,7 +264,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                       className={cx(
                         "group/chip flex items-center rounded-full ring-1 transition-all",
                         active
-                          ? "ring-gold/50 bg-golddim text-gold"
+                          ? "ring-accent/50 bg-accentdim text-accent"
                           : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
                       )}
                     >
@@ -292,7 +292,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
                     setSavePos({ x: r.left, y: r.bottom + 6 });
                   }}
                   data-eq-save-preset
-                  className="rounded-full px-3 py-1 text-[12px] ring-1 ring-edge bg-panel/70 text-amber hover:brightness-110 hover:ring-edge2 transition-all motion-safe:active:scale-95"
+                  className="rounded-full px-3 py-1 text-[12px] ring-1 ring-edge bg-panel/70 text-accent hover:brightness-110 hover:ring-edge2 transition-all motion-safe:active:scale-95"
                 >
                   Save as preset…
                 </button>
@@ -378,7 +378,7 @@ export function ToneEq({ label = true }: { label?: boolean } = {}): React.JSX.El
               />
               <span className="w-12 text-[10.5px] text-faint shrink-0">R</span>
               {/* centered = "0", matching the tilt readout (a lone middot
-                  here read as a mystery speck — user catch) */}
+                  here read as a mystery speck) */}
               <span
                 className="font-mono text-[11px] text-dim w-8 text-right shrink-0"
                 data-balance-value
@@ -452,7 +452,7 @@ function SaveEqPresetPopover({
       <button
         onClick={() => void onSave(trimmed)}
         disabled={!canSave}
-        className="w-full px-3 py-2 rounded-lg bg-amber text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95 transition-all"
+        className="w-full px-3 py-2 rounded-lg bg-accent text-bg text-[13px] font-medium disabled:opacity-50 motion-safe:active:scale-95 transition-all"
         data-eq-save-commit
       >
         {replaces ? "Replace preset" : "Save preset"}
@@ -479,7 +479,7 @@ function ToneSwitch({
       onClick={() => onChange(!checked)}
       className={cx(
         "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-        checked ? "bg-gold" : "bg-veil2 ring-1 ring-edge",
+        checked ? "bg-accent" : "bg-veil2 ring-1 ring-edge",
       )}
     >
       <span
@@ -574,7 +574,7 @@ function BandSlider({
         onPointerCancel={() => setDragGain(null)}
       >
         {/* bare track + always-visible thumb — a mixing-desk fader, not a
-            bar chart (a zero-anchored fill read as "gold bars", user pass) */}
+            bar chart (a zero-anchored fill read as gold bars) */}
         <div ref={trackRef} className="relative w-[3px] h-full rounded-full bg-veil2">
           {/* hairline 0 dB tick across the track */}
           <div
@@ -583,11 +583,11 @@ function BandSlider({
           />
           <div
             className={cx(
-              "absolute left-1/2 -translate-x-1/2 translate-y-1/2 h-3.5 w-3.5 rounded-full bg-gold",
+              "absolute left-1/2 -translate-x-1/2 translate-y-1/2 h-3.5 w-3.5 rounded-full bg-accent",
               "transition-shadow",
               dragging
-                ? "shadow-[0_0_10px_rgb(var(--gold-rgb)_/_0.8)]"
-                : "group-hover:shadow-[0_0_8px_rgb(var(--gold-rgb)_/_0.7)]",
+                ? "shadow-[0_0_10px_rgb(var(--accent-rgb)_/_0.8)]"
+                : "group-hover:shadow-[0_0_8px_rgb(var(--accent-rgb)_/_0.7)]",
             )}
             style={{ bottom: `${ratio * 100}%` }}
           />
@@ -596,7 +596,7 @@ function BandSlider({
       <span
         className={cx(
           "font-mono text-[10px] leading-none",
-          shown !== 0 ? "text-gold" : "text-faint",
+          shown !== 0 ? "text-accent" : "text-faint",
         )}
         data-eq-gain={label}
       >
@@ -699,7 +699,7 @@ function CenteredSlider({
           style={{ left: `${centerRatio * 100}%` }}
         />
         <div
-          className="absolute inset-y-0 rounded-full bg-gold"
+          className="absolute inset-y-0 rounded-full bg-accent"
           style={{
             left: `${Math.min(ratio, centerRatio) * 100}%`,
             right: `${(1 - Math.max(ratio, centerRatio)) * 100}%`,
@@ -707,8 +707,8 @@ function CenteredSlider({
         />
         <div
           className={cx(
-            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-gold",
-            "shadow-[0_0_8px_rgb(var(--gold-rgb)_/_0.7)] transition-opacity",
+            "absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full bg-accent",
+            "shadow-[0_0_8px_rgb(var(--accent-rgb)_/_0.7)] transition-opacity",
             dragging ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
           )}
           style={{ left: `${ratio * 100}%` }}

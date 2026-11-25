@@ -1,3 +1,4 @@
+import type { SearchScope } from "@/lib/searchGroups";
 import { create } from "zustand";
 import { contentPlayId, PLAYING_SETTLE_MS } from "@/lib/playingEntry";
 import type { InfoList, InfoPage } from "@/lib/infoSteps";
@@ -91,7 +92,7 @@ export interface LibrarySpot {
 /**
  * One step of navigation history: the spot being LEFT — a screen, plus the
  * Library's snapshot when that screen was the Library. ONE STACK across
- * screens and within the Library (2026-08-23, user ask): back undoes the most
+ * screens and within the Library: back undoes the most
  * recent navigation whatever kind it was — the browser rule, and the only one
  * people can predict. Two stacks (screen-level and folder-level) made ⌘← in an
  * album mean "parent folder" even when you had just arrived from the Queue.
@@ -113,7 +114,7 @@ export interface LibraryNodeTarget {
   /** A track to land on: scrolled to and flashed once the album's listing lands. */
   track?: string;
   /** The track's id and length, so of two tracks with its title the landing finds the one meant
-   *  (components/library/landing; a user's twins, 0.12.0-rc.3). */
+   *  (components/library/landing; twin tracks, 0.12.0-rc.3). */
   trackId?: string | null;
   trackSecs?: number | null;
   /** The target's own class, for the stand-in node the Library lands on (an artist opened
@@ -153,13 +154,28 @@ export interface LastStation {
   radioBrowserUuid: string | null;
 }
 
+/** The album being played, analyzed while it plays (lib/albumOnPlay): told by its queue entry's
+ *  album and artist, as the playing album is; the track being measured counted from 1, and how
+ *  many. Shown where the album's DR will land, never in the Library's header (nobody asked). */
+export interface AlbumPass {
+  id: number;
+  entry: {
+    title: string | null;
+    artist: string | null;
+    album: string | null;
+    duration: number | null;
+  };
+  at: number;
+  of: number;
+}
+
 /** EXPERIMENT (0.7 exploration): the Analyze-audio sweep's live position. */
 export interface AnalysisProgress {
   /** albumDrKey of the album under the needle. */
   key: string;
   album: string;
   /** The track being measured, counted from 1, so the first reads "1/12" ("0/12" felt like
-   *  nothing had started, his look 2026-10-30); 0 until the first begins, and no count shows. */
+   *  nothing had started); 0 until the first begins, and no count shows. */
   at: number;
   /** 0 while the sweep is still counting (browse in flight). */
   total: number;
@@ -200,6 +216,8 @@ export type ToastAction =
   | { label: string; undo: () => void; screen?: never };
 let toastNonce = 0;
 let playStatsLoading = false;
+/** An undo's closure: it undoes, or refuses with the sentence the toast shows instead. */
+export type UndoRun = () => void | Promise<void> | { refused: string };
 let undoNonce = 0;
 /** Monotonic id for search asks — see librarySearchTarget. */
 let librarySearchSeq = 0;
@@ -273,7 +291,7 @@ interface TTState {
    * Same-host reconnects deliberately keep the last state (a blip must not
    * flash the UI empty), but the last power push before an eco power-off says
    * "standby" — and trusting it walled Now Playing with the sleeping face for
-   * a beat after every power-on (user, 2026-08-30). A WALL needs current
+   * a beat after every power-on. A WALL needs current
    * certainty; the stale value stays readable for ordinary rows.
    */
   systemPowerFresh: boolean;
@@ -357,7 +375,9 @@ interface TTState {
    *  redo doubles the closure engineering; the shape allows adding it later.
    *  Entries are exact-inverse closures; the toast Undo buttons and Cmd-Z
    *  consume the SAME entries, so they can never double-restore. */
-  undoStack: Array<{ id: number; label: string; run(): void | Promise<void> }>;
+  /** `queue`: the entry acts on the streamer's queue, so it goes when another streamer is chosen
+   *  (its ids and order mean nothing there). `run` may refuse, with the sentence shown instead. */
+  undoStack: Array<{ id: number; label: string; run: UndoRun; queue?: boolean }>;
   /** The nav-rail row a live drag is hovering (drag-to-rail) — the Nav
    *  reads it for the drop highlight; null outside a drag. */
   navDropTarget: Screen | null;
@@ -409,6 +429,10 @@ interface TTState {
   settingsJump: string | null;
   jumpToSettingsTab: (tab: string) => void;
   clearSettingsJump: () => void;
+  /** One-shot: Check for Updates… asked the feed, so Settings › Updates checks as it opens
+   *  (UpdatesSection consumes and clears it, showing the check's outcome). */
+  updateCheckAsk: boolean;
+  clearUpdateCheckAsk: () => void;
   /** One-shot deep link into History's Timeline at a moment (the album
    *  header's "last played" fact); the Timeline consumes and clears it. */
   historyJump: { at: number; nonce: number } | null;
@@ -438,11 +462,13 @@ interface TTState {
    * `query` seeds the box (the Library→Search pivot: "Search everywhere for
    * <artist>"); without it the recalled query is merely selected.
    */
-  searchRequest: { id: number; query?: string } | null;
+  searchRequest: { id: number; query?: string; scope?: SearchScope } | null;
   /** A pivot ("Search everywhere for X" from a ⋯ menu) is an ordinary
    *  navigation: the one history records where it left, so ⌘← returns there.
    *  (Until 2026-08-23 a parallel back-pointer recorded by the pivot did this.) */
-  requestSearch: (query?: string) => void;
+  /** `scope` narrows the Search screen for now (a pivot's Everything, a link's one category),
+   *  the remembered scope kept. */
+  requestSearch: (query?: string, scope?: SearchScope) => void;
   clearSearchRequest: () => void;
   /** One-shot ask: open Playlists with this playlist selected (search results
    *  OPEN a playlist rather than playing it — containers open, leaves play). */
@@ -455,7 +481,7 @@ interface TTState {
   /** Push an undoable action; returns the entry id for a toast button to
    *  target. `label` names the ORIGINAL action, Title Case ("Move 3
    *  Tracks") — the menu shows "Undo <label>", the toast "Undid <label>". */
-  pushUndo: (label: string, run: () => void | Promise<void>) => number;
+  pushUndo: (label: string, run: UndoRun, opts?: { queue?: boolean }) => number;
   /** Run and consume one undo entry — the top for Cmd-Z, a specific id for
    *  a toast button. False when there is nothing (left) to undo. */
   runUndo: (id?: number) => boolean;
@@ -491,6 +517,8 @@ interface TTState {
   /** EXPERIMENT: the running sweep's position (null = idle). */
   analysisProgress: AnalysisProgress | null;
   setAnalysisProgress: (p: AnalysisProgress | null) => void;
+  /** The album being played, analyzed while it plays; null when no such pass runs. */
+  albumPass: AlbumPass | null;
   setPaletteOpen: (open: boolean) => void;
   setDisplayMode: (on: boolean) => void;
   setLyricsOpen: (open: boolean) => void;
@@ -684,6 +712,8 @@ export const useStore = create<TTState>((set, get) => ({
     set({ settingsJump: tab });
   },
   clearSettingsJump: () => set({ settingsJump: null }),
+  updateCheckAsk: false,
+  clearUpdateCheckAsk: () => set({ updateCheckAsk: false }),
   historyJump: null,
   jumpToHistory: (at) => {
     get().setScreen("recently-played");
@@ -703,11 +733,11 @@ export const useStore = create<TTState>((set, get) => ({
     })),
   clearLibrarySearchTarget: () => set({ librarySearchTarget: null }),
   searchRequest: null,
-  requestSearch: (query) =>
+  requestSearch: (query, scope) =>
     set((s) => ({
       ...navTo(s, "search"),
       screen: "search",
-      searchRequest: { id: ++searchSeq, query },
+      searchRequest: { id: ++searchSeq, query, scope },
     })),
   clearSearchRequest: () => set({ searchRequest: null }),
   playlistsJump: null,
@@ -766,10 +796,10 @@ export const useStore = create<TTState>((set, get) => ({
   setNavDragActive: (active) => {
     if (get().navDragActive !== active) set({ navDragActive: active });
   },
-  pushUndo: (label, run) => {
+  pushUndo: (label, run, opts) => {
     const id = ++undoNonce;
     // Cap ~20: an undo stack is a pocket, not an archive.
-    const undoStack = [...get().undoStack, { id, label, run }].slice(-20);
+    const undoStack = [...get().undoStack, { id, label, run, queue: opts?.queue }].slice(-20);
     set({ undoStack });
     void tt.undoLabelSet(label);
     return id;
@@ -781,7 +811,12 @@ export const useStore = create<TTState>((set, get) => ({
     const undoStack = stack.filter((e) => e !== entry);
     set({ undoStack });
     void tt.undoLabelSet(undoStack[undoStack.length - 1]?.label ?? null);
-    void entry.run();
+    const ran = entry.run();
+    if (ran != null && "refused" in ran) {
+      get().showToast({ kind: "error", text: ran.refused });
+      return true;
+    }
+    void ran;
     get().showToast({ kind: "success", text: `Undid ${entry.label}` });
     return true;
   },
@@ -794,7 +829,7 @@ export const useStore = create<TTState>((set, get) => ({
    * and resets to the source list; ARRIVING from another screen picks up where
    * the last visit left off.
    *
-   * This reverses T3 (2026-07-17), which bumped on every navigation because
+   * This reverses the old rule (2026-07-17), which bumped on every navigation because
    * "Library means the front door" and there was no other way back to the top.
    * There are two now — re-clicking the nav row from inside the screen, and the
    * breadcrumb root — so the reset keeps its escape hatch while a browse tree
@@ -830,6 +865,7 @@ export const useStore = create<TTState>((set, get) => ({
   setAlbumDrEntry: (key, entry) => set((s) => ({ albumDr: { ...s.albumDr, [key]: entry } })),
   analysisProgress: null,
   setAnalysisProgress: (analysisProgress) => set({ analysisProgress }),
+  albumPass: null,
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   setDisplayMode: (displayMode) => {
     set({ displayMode });
@@ -937,7 +973,12 @@ export const useStore = create<TTState>((set, get) => ({
           const prevHost = "host" in s.connection ? s.connection.host : null;
           const nextHost = "host" in msg.state ? msg.state.host : null;
           if (msg.state.phase === "connecting" && prevHost != null && nextHost !== prevHost) {
+            // the queue's undo entries were the other streamer's
+            const undoStack = s.undoStack.filter((e) => !e.queue);
+            if (undoStack.length !== s.undoStack.length)
+              void tt.undoLabelSet(undoStack[undoStack.length - 1]?.label ?? null);
             return {
+              undoStack,
               connection: msg.state,
               playState: null,
               stationTunedAt: null,
@@ -1034,6 +1075,8 @@ export const useStore = create<TTState>((set, get) => ({
           if (frames.length > FRAME_RING_SIZE) frames.splice(0, frames.length - FRAME_RING_SIZE);
           return { frames };
         }
+        case "notice":
+          return { toast: { kind: "error", text: msg.text, id: ++toastNonce } };
         case "log": {
           const logs = [...s.logs, msg.entry];
           if (logs.length > LOG_RING_SIZE) logs.splice(0, logs.length - LOG_RING_SIZE);
@@ -1171,6 +1214,24 @@ export const useStore = create<TTState>((set, get) => ({
         break;
       case "screen":
         s.setScreen(command.screen as Screen);
+        break;
+      // Settings › Updates, from the menus, the tray and the system's notice; Check for Updates…
+      // also asks the feed (the section runs the check, so its outcome shows there)
+      case "updates":
+        s.jumpToSettingsTab("updates");
+        if (command.check) set({ updateCheckAsk: true });
+        break;
+      // an agent's analyze_album: the album's Analyze audio (its sweep queue and busy guard, so a
+      // repeated delivery is one run), the album found in the index main named it from
+      case "analyzeAlbum":
+        void Promise.all([import("@/lib/audioAnalysis"), tt.mediaIndexPools()]).then(
+          ([m, pools]) => {
+            const album = pools
+              .find((p) => p.udn === command.serverUdn)
+              ?.albums.find((n) => n.id === command.albumId);
+            if (album) void m.analyzeAlbum(album, command.serverUdn, []);
+          },
+        );
         break;
       // View › Back/Forward (⌘[ ⌘]): the Info window's own pages while it is open, nothing
       // behind another modal, else the app's (lib/keyboardOwner, lib/infoSteps)

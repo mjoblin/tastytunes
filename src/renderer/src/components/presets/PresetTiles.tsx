@@ -62,7 +62,7 @@ function PresetNameEdit({
       }}
       onBlur={() => finish(true)}
       className={cx(
-        "w-full min-w-0 rounded-md bg-panel ring-1 ring-edge2 px-1.5 py-0.5 outline-none focus:ring-gold/60",
+        "w-full min-w-0 rounded-md bg-panel ring-1 ring-edge2 px-1.5 py-0.5 outline-none focus:ring-accent/60",
         className,
       )}
     />
@@ -119,7 +119,7 @@ export function PresetRow({
         // FIVE columns for five children — the sixth column outlived the
         // trailing grip when it moved into the position cell (OrderHandle),
         // and an empty grid track still costs its gap.
-        "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5",
+        "group grid grid-cols-[26px_44px_1fr_auto_auto] items-center gap-3 rounded-lg px-3 py-1.5",
         "cursor-default",
         isDragging && "z-10 bg-raised shadow-xl",
         // hold the hover highlight while this row's volume popover is open —
@@ -317,9 +317,9 @@ export function PresetCard({
             {/* hover overlay — the whole card recalls the preset; the chip is the affordance */}
             <div className="absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 group-kbd:opacity-100 transition-opacity flex items-center justify-center">
               <span
-                className="h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center
+                className="h-11 w-11 rounded-full bg-accent text-bg flex items-center justify-center
                          transition-all duration-150 motion-safe:hover:scale-110
-                         hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]"
+                         hover:shadow-[0_0_24px_rgb(var(--accent-rgb)_/_0.6)]"
               >
                 <Play size={18} fill="currentColor" strokeWidth={0} className="translate-x-[1px]" />
               </span>
@@ -352,7 +352,7 @@ export function PresetCard({
           />
         )}
 
-        {/* the gold speaker shows a set volume (presence and color are the status, the tooltip
+        {/* the speaker shows a set volume (presence and color are the status, the tooltip
           carries the percentage, a click adjusts it); setting one is the ⋯ menu's Preset
           volume… (0.12.0: the hover-revealed speaker went with the menu's arrival) */}
         {volume != null && (
@@ -364,7 +364,7 @@ export function PresetCard({
             onPointerDown={(e) => e.stopPropagation()}
             data-preset-volume
             className={cx(
-              "tip-bottom absolute top-2 right-2 z-10 text-gold hover:text-ink transition-all",
+              "tip-bottom absolute top-2 right-2 z-10 text-accent hover:text-ink transition-all",
               cardChip(),
             )}
           >

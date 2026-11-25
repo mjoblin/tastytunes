@@ -2,7 +2,7 @@ import { useState } from "react";
 import { URL_EXAMPLES, URL_SCHEME } from "@shared/urlActions";
 import { CopyRow, useCopied } from "@/components/settings/SettingsKit";
 
-// Settings › Behavior's list of tastytunes:// links (0.12.0, the URL scheme), one to copy for
+// Settings › Integrations' list of tastytunes:// links (0.12.0, the URL scheme), one to copy for
 // every verb, in shared/urlActions' order. A label for every example is required by the type,
 // so a verb added there is a compile error here until it is described.
 
@@ -36,8 +36,8 @@ export function ActionLinks(): React.JSX.Element {
     <div data-action-links>
       <div className="text-[13.5px]">Action links</div>
       <div className="text-[11.5px] text-faint max-w-sm">
-        Use these links on an Elgato Stream Deck or in a launcher like Raycast to control the
-        streamer without switching to TastyTunes.
+        Use these links on a programmable keypad or in an app launcher to control the streamer
+        without switching to TastyTunes.
       </div>
       <button
         onClick={() => setOpen(!open)}

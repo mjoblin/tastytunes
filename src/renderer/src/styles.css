@@ -15,8 +15,8 @@
 @custom-variant focus-kbd (:root[data-keyboard-nav] &:focus-visible);
 /* KEYBOARD REVEAL (0.13.0 round 4, the accessibility second layer): what a group shows on hover it
    shows while keyboard focus is anywhere in it, so a row's or a card's hidden buttons appear when
-   Tab reaches them instead of being focused invisible (the 0.11 re-score). Every hover reveal
-   carries this twin (the lint rule hover-reveal-keyboard). And since 0.14.0 (his K1 to K5) a
+   Tab reaches them instead of being focused invisible. Every hover reveal
+   carries this twin (the lint rule hover-reveal-keyboard). And since 0.14.0 a
    keyed list's CURRENT item shows them too while the list has the keyboard, as a hovered row does
    (the list holds the focus, hooks/useListKeys, so focus-within never reaches the row). */
 @custom-variant group-kbd {
@@ -31,18 +31,26 @@
   }
 }
 
-/* Runtime-tintable accent: useArtAccent() overrides this per album.
-   --gold-rgb is the STATIC state/brand gold (per theme, never art-tinted). */
+/* Two colors, two meanings (0.16.0): GOLD is TastyTunes and what's playing (the wordmark, the
+   playing markers, the hi-res lamp; static per theme, never art-tinted); the ACCENT is what you
+   click or select. Its color is a choice (Settings › Appearance › Accent color): sand by default,
+   gold, sage or the dusty teal by a class on :root (useAccentChoice, the classes below the light
+   theme), or the playing album's, set inline by useArtAccent. Each is named once per theme, gold
+   as the brand's own, so choosing it makes the app one color as it was before 0.16.0. */
 :root {
-  --amber-rgb: 240 168 72;
+  --accent-sand-rgb: 188 169 136;
+  --accent-sage-rgb: 154 168 138;
+  --accent-teal-rgb: 132 172 162;
+  --accent-gold-rgb: var(--gold-rgb);
+  --accent-rgb: var(--accent-sand-rgb);
   --gold-rgb: 240 168 72;
   /* optical-size correction for the chosen display face (useDisplayFont
      overrides per face); 1 = Fraunces, the default. Applied via the
      .font-display zoom rule below so all display text stays visually matched. */
   --font-display-scale: 1;
   /* signal-quality lamps (SIGNAL_COLORS in lib/format.ts reads these).
-     GOLD / BLUE / GREY, not amber / green / grey (2026-08-21, a colour-vision
-     request): amber and green both land on the yellow side for red-green
+     GOLD / BLUE / GREY, not amber / green / grey (2026-08-21):
+     amber and green both land on the yellow side for red-green
      colour blindness (~1 in 12 men) and the two good lamps collapsed into
      one; gold and blue sit on the blue-yellow axis those eyes keep, and the
      luminance steps with quality so greyscale still reads brighter = better.
@@ -98,7 +106,7 @@
    left to right along the well's bottom edge after 300 ms in view, only while
    the image is pending; the picture eases in when it lands (.art-in). It began
    as a faint band sweeping the whole well: too dramatic, and its angle looked
-   wrong (user, 2026-09-14). The line takes the theme's dim ink, fading in
+   wrong. The line takes the theme's dim ink, fading in
    and out at its ends, so light and dark need no rule of their own. Reduced
    motion shows the plain well. */
 @keyframes art-shimmer {
@@ -123,7 +131,7 @@
   display: block;
   width: 50%;
   height: 100%;
-  /* soft at both ends, not a solid strip (user, 2026-09-14) */
+  /* soft at both ends, not a solid strip */
   background: linear-gradient(to right, transparent, var(--color-dim) 50%, transparent);
   opacity: 0.55;
   animation: art-shimmer 1.4s linear infinite;
@@ -154,12 +162,12 @@
   --font-wordmark: "Fraunces Variable", Georgia, serif;
 
   /* warm near-black "faceplate" palette (dark is the default theme). Lifted from #0e0d0b to
-     #12110f, where the navigation panel's tint sat over it (user call, 2026-11-01: the main area
+     #12110f, where the navigation panel's tint sat over it (the main area
      matching the navigation panel as it was, after #1c1a17 read brighter than expected in the
      installed app); panel, raised and the playing tile by the same step. The text levels
      stay where they were, set by their steps from each other rather than by their contrast on
-     the ground: in dark, elegance wins over the contrast floor (user call, 2026-10-31,
-     decisions/0016), and a dim lifted to hold its contrast read too close to the ink */
+     the ground: in dark, elegance wins over the contrast floor,
+     and a dim lifted to hold its contrast read too close to the ink */
   --color-bg: #12110f;
   --color-panel: #191715;
   --color-raised: #211e1a;
@@ -173,14 +181,14 @@
      the playhead readouts on every screen, Device's field labels, Settings'
      hint lines. Still the app's quietest text token. */
   --color-faint: #82786a;
-  --color-amber: rgb(var(--amber-rgb));
-  --color-amberdim: rgb(var(--amber-rgb) / 0.14);
+  --color-accent: rgb(var(--accent-rgb));
+  --color-accentdim: rgb(var(--accent-rgb) / 0.14);
   /* fixed gold for brand + "currently playing" — never tinted by album art */
   --color-gold: rgb(var(--gold-rgb));
   --color-golddim: rgb(var(--gold-rgb) / 0.16);
   --color-goldtile: #362c1b; /* playing tile: lifted and warmed toward gold */
   --color-led: #67dd8b;
-  /* triple form so alert can be used at partial alpha the way gold/amber are */
+  /* triple form so alert can be used at partial alpha the way gold and the accent are */
   --alert-rgb: 224 101 79;
   --color-alert: rgb(var(--alert-rgb));
   /* neutral overlay tints that flip with the theme (hover washes, tracks) */
@@ -190,14 +198,17 @@
 
 /* light theme: warm paper + aluminum faceplate */
 :root.light {
-  /* Both accents need the darker light-tuning: the dark theme's bright amber
-     (240 168 72) all but vanishes on paper. useArtAccent applies the same
-     clamp when tinting per-album. */
-  --amber-rgb: 178 118 16;
+  /* Gold and the accent both need the darker light-tuning: a bright dark-theme color all but
+     vanishes on paper. useArtAccent applies the same clamp when tinting per-album. Sand on paper
+     is a stonier sand than the dark theme's, so its text reads apart from gold's brown. */
+  --accent-sand-rgb: 131 121 98;
+  --accent-sage-rgb: 114 128 97;
+  --accent-teal-rgb: 90 132 122;
+  --accent-rgb: var(--accent-sand-rgb);
   --gold-rgb: 178 118 16;
   /* Selection washes need more pigment on paper than on the dark faceplate,
      where a faint tint over near-black already reads as a lit chip. */
-  --color-amberdim: rgb(var(--amber-rgb) / 0.18);
+  --color-accentdim: rgb(var(--accent-rgb) / 0.18);
   --color-golddim: rgb(var(--gold-rgb) / 0.2);
   /* Deeper signal colors — the dark theme's bright lamps wash out on paper. */
   --signal-hires: #b27610;
@@ -210,26 +221,28 @@
   /* Firmer ink and edges: paper offers no glow to carry definition. */
   --color-edge: rgb(30 20 5 / 0.14);
   --color-edge2: rgb(30 20 5 / 0.26);
-  /* LIGHT-MODE LEGIBILITY (0.13.0, his calls 2026-10-24, held to decisions/0016: 4.5:1 where the
+  /* LIGHT-MODE LEGIBILITY (0.13.0, held to 4.5:1 where the
      text sits, measured on the darkest tenth of its real backgrounds). Each text color a step
      darker than it was (#241d12, #5f5749, #736c5c), its warmth kept: the old ones were tuned on
      bare paper, and most text sits on darker tinted panels and the wash (faint measured a median
-     3.9:1 where it sat). Dark mode is left as it is (0016's named exception). */
+     3.9:1 where it sat). Dark mode is left as it is. Faint a step darker again in 0.16.0-rc.8
+     (#60594a): the lower part of a screen, where the album's wash darkens, and the selected
+     navigation item had it at 4.0 to 4.5 to 1; at #565043 the darkest measured holds 4.6. */
   --color-ink: #1a140b;
   --color-dim: #4a4338;
-  --color-faint: #60594a;
-  /* gold and amber AS TEXT, a step deeper than the fills, rings and icons keep (gold text measured
+  --color-faint: #565043;
+  /* gold and the accent AS TEXT, a step deeper than the fills, rings and icons keep (gold text measured
      2.6:1); deeper still on their own wash (an active nav item); and a button's fill under
-     paper-colored text (3.3:1 on the light gold). Amber follows the album art, so its deeper
+     paper-colored text (3.3:1 on the light gold). The accent follows the album art, so its deeper
      forms are mixes, matching #7b5009 and #8a5a0a on the default gold. */
   --color-goldink: #7b5009;
   --color-goldink-wash: #654309;
   --color-goldbutton: #8a5a0a;
-  --color-amberink: color-mix(in srgb, rgb(var(--amber-rgb)) 69%, black);
-  --color-amberink-wash: color-mix(in srgb, rgb(var(--amber-rgb)) 57%, black);
-  --color-amberbutton: color-mix(in srgb, rgb(var(--amber-rgb)) 78%, black);
-  /* the alert and the LED's green AS TEXT (0.15.0, the 0.14 re-score: 4.07 and 2.79 to 1 on the
-     page, under 0016's floor), and the alert deeper still on its own wash; the LED's dot and the
+  --color-accentink: color-mix(in srgb, rgb(var(--accent-rgb)) 69%, black);
+  --color-accentink-wash: color-mix(in srgb, rgb(var(--accent-rgb)) 57%, black);
+  --color-accentbutton: color-mix(in srgb, rgb(var(--accent-rgb)) 78%, black);
+  /* the alert and the LED's green AS TEXT (0.15.0: 4.07 and 2.79 to 1 on the
+     page, under the 4.5:1 floor), and the alert deeper still on its own wash; the LED's dot and the
      icons keep the bright forms */
   --color-alertink: #a53d2c;
   --color-alertink-wash: #8f3424;
@@ -240,6 +253,34 @@
   --color-alert: rgb(var(--alert-rgb));
   --color-veil: rgb(30 20 5 / 0.05);
   --color-veil2: rgb(30 20 5 / 0.12);
+}
+
+/* THE ACCENT'S CHOICES: after the light theme, which they match in weight, so either theme's
+   values follow the class. Named accent-choice-, since Tailwind owns accent-<color> (accent-gold is
+   its accent-color utility). Gold's deeper inks on paper are the light theme's mixes of it, which
+   match gold's own (#7b5009, #8a5a0a). */
+:root.accent-choice-gold {
+  --accent-rgb: var(--accent-gold-rgb);
+}
+:root.accent-choice-sage {
+  --accent-rgb: var(--accent-sage-rgb);
+}
+:root.accent-choice-teal {
+  --accent-rgb: var(--accent-teal-rgb);
+}
+
+/* THE PLAYBACK SURFACES BELONG TO THE MUSIC: inside .music-gold (the playback bar, the mini
+   player, the tray panel) the accent is the gold, so a shared control there (a slider's fill, a
+   menu's chosen option, a toggle that is on) wears gold beside the transport rather than the
+   accent. Each form maps to gold's own, the light theme's deeper
+   inks included, and none of it follows the album art. */
+.music-gold {
+  --accent-rgb: var(--gold-rgb);
+  --color-accent: var(--color-gold);
+  --color-accentdim: var(--color-golddim);
+  --color-accentink: var(--color-goldink);
+  --color-accentink-wash: var(--color-goldink-wash);
+  --color-accentbutton: var(--color-goldbutton);
 }
 
 html,
@@ -264,15 +305,14 @@ body {
   outline: 2px solid color-mix(in srgb, var(--color-ink) 70%, transparent);
   outline-offset: 2px;
 }
-/* THE RING WAITS FOR THE KEYBOARD (0.11.0, user 2026-10-10: "the accessibility borders often
-   seem to turn on when i don't want them"): Chromium's :focus-visible lights after any key, so
+/* THE RING WAITS FOR THE KEYBOARD (0.11.0): Chromium's :focus-visible lights after any key, so
    a clicked chip rang at the next hotkey and a menu closed with Escape rang its trigger. The
    ring shows once Tab has moved focus (lib/inputModality marks the root, a pointer press
    clears it): a keyboard user keeps every ring, a pointer user sees none. */
 :root:not([data-keyboard-nav]) :focus-visible {
   outline: none;
 }
-/* THE RING IS ALWAYS ROUNDED (user, 2026-10-06): an outline follows its element's radius, so a
+/* THE RING IS ALWAYS ROUNDED: an outline follows its element's radius, so a
    square element (the wordmark, the volume slider, the time) drew a square ring. A focused
    element with no radius of its own takes one; in the base layer, so every rounded-*
    utility (a pill, a circle) keeps its own shape */
@@ -292,7 +332,7 @@ select:focus-visible,
 [contenteditable]:focus-visible {
   outline: none;
 }
-/* A KEYED LIST'S CURRENT ITEM WEARS THE RING (0.14.0, his K5; hooks/useListKeys): the list holds
+/* A KEYED LIST'S CURRENT ITEM WEARS THE RING (0.14.0, hooks/useListKeys): the list holds
    the focus and names its current item, so the ring is drawn on the item while the list has the
    keyboard, and on the list itself once Escape has given the arrows back */
 [data-list-keys][data-list-active]:focus-visible {
@@ -441,8 +481,8 @@ img {
 .led-busy {
   background: transparent;
   box-shadow:
-    inset 0 0 0 2px var(--color-amber),
-    0 0 6px rgb(var(--amber-rgb) / 0.8);
+    inset 0 0 0 2px var(--color-accent),
+    0 0 6px rgb(var(--accent-rgb) / 0.8);
   animation: led-pulse 1.1s ease-in-out infinite;
 }
 .led-off {
@@ -531,7 +571,7 @@ img {
    neutral elevation (light). Overrides the resting ring utilities on hover. */
 .card-hover-glow:hover,
 .card-glow-held {
-  /* bloom radii/spread at 75% of the original 26/62+12 (user call) —
+  /* bloom radii/spread at 75% of the original 26/62+12 —
      the 2px definition ring is outline, not glow, and keeps its size */
   box-shadow:
     0 0 0 2px rgb(255 255 255 / 0.32),
@@ -648,13 +688,13 @@ img {
   box-shadow:
     0 0 0 1px rgb(255 255 255 / 0.08),
     0 24px 80px -12px rgb(0 0 0 / 0.85),
-    0 0 120px -30px rgb(var(--amber-rgb) / 0.25);
+    0 0 120px -30px rgb(var(--accent-rgb) / 0.25);
 }
 :root.light .art-glow {
   box-shadow:
     0 0 0 1px rgb(30 20 5 / 0.12),
     0 20px 55px -12px rgb(60 42 8 / 0.38),
-    0 0 90px -30px rgb(var(--amber-rgb) / 0.18);
+    0 0 90px -30px rgb(var(--accent-rgb) / 0.18);
 }
 
 /* Big library grids: offscreen cards skip layout and paint entirely
@@ -707,7 +747,7 @@ img {
   /* overflow-y-auto makes overflow-x compute to auto too, and with CLASSIC
      (always-shown) scrollbars Chromium's scrollable-overflow math conjures a
      few phantom px under the vertical bar — a horizontal scrollbar with
-     nothing to see (user hit it on the Queue). Vertical scrollers never
+     nothing to see (seen on the Queue). Vertical scrollers never
      scroll sideways in this app; anything that genuinely needs both axes
      says overflow-x-auto explicitly (utilities layer, wins over base). */
   .overflow-y-auto {
@@ -846,6 +886,25 @@ img {
   );
 }
 
+/* a page scroller whose content dissolves at BOTH edges (0.16.0): under the header at the top,
+   by fade-top's rule (clear where a header's words reach down into it, --fade-top-clear, solid
+   by --fade-top-solid), and over its last --fade-bottom above the playback bar, so a row passing
+   either edge fades out instead of being cut through its letters. No veil or blur, as History's.
+   The scroller pads each end past its ramp, so content at rest and the last row at full scroll
+   sit clear of it (Chrome's pageEdges; the Library page sets its own). */
+.fade-edges {
+  --fade-edges: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent var(--fade-top-clear, 0px),
+    #000 var(--fade-top-solid, 20px),
+    #000 calc(100% - var(--fade-bottom, 28px)),
+    transparent 100%
+  );
+  -webkit-mask-image: var(--fade-edges);
+  mask-image: var(--fade-edges);
+}
+
 /* display mode hides the cursor after idle */
 .cursor-hidden,
 .cursor-hidden * {
@@ -885,10 +944,9 @@ img {
 /* THE SCENE TILE LETS THE PAGE THROUGH, A LITTLE (Now Playing, the dark theme): a slight
    opacity, so the page and the ambient wash, when it is on, show through the whole tile
    evenly, at a few percent. Not a blend: a lighten blend handed every pixel darker than the
-   panel to the panel, which is most of any scene, and the tile went transparent (the user,
-   2026-09-12: "i wanted it to be subtle"). One compositor layer at an alpha, nothing
-   measurable beside the scene's own render. On paper (the light theme) the tile stays
-   sealed. */
+   panel to the panel, which is most of any scene, and the tile went transparent. One
+   compositor layer at an alpha, nothing measurable beside the scene's own render. On paper
+   (the light theme) the tile stays sealed. */
 .scene-float {
   opacity: 0.92;
 }
@@ -896,15 +954,15 @@ img {
   opacity: 1;
 }
 
-/* THE LIBRARY'S DOORS (0.12.0-rc.3, his ask: our own entry points looked like the streamer's).
+/* THE LIBRARY'S DOORS (0.12.0-rc.3: our own entry points looked like the streamer's).
    Three wide doors, each a picture of its lens from the reader's library (DoorArt) under its
    title. Every size follows the door's own width: --front is the front item's size, and the
    rest of a composition is a fraction of it, so the crate, the cluster and the waveforms scale
-   with the window. FLAT (his call, 2026-10-23, the cards read as dated): the door is the app's
+   with the window. FLAT (the cards read as dated): the door is the app's
    card surface with the neutral edge, no blurred backdrop and no fade; the pictures stand
    straight at full brightness, each with the hairline every album picture has and a ring of the
    door's surface where they overlap; and the words sit on that surface below the pictures, never
-   over them (WCAG AA where the text sits, decisions/0016). A door is at most 480px wide (his call: on a wide screen a third
+   over them (WCAG AA where the text sits). A door is at most 480px wide (on a wide screen a third
    of the row was a long, short strip), and past that the row leaves the room to its right, as
    the source cards below do; at most 320px tall, what the widest door's picture and words need
    to clear the top and each other (at 300 the front cover touched the title). A door under 250px drops its outer pair; a row under 720px
@@ -918,7 +976,7 @@ img {
   .lib-doors-row {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 480px));
-    /* 24px apart, half again the first 16 (his call, 2026-10-23) */
+    /* 24px apart, half again the first 16 */
     gap: 24px;
     padding-top: 8px;
   }
@@ -928,7 +986,7 @@ img {
     height: clamp(196px, 26cqi, 320px);
     border-radius: 18px;
     /* the card surface at half, as the source cards and every album card are, so the ambient
-       wash shows through (his eye, 2026-10-23: they sat heavy as the page's only opaque cards) */
+       wash shows through (they sat heavy as the page's only opaque cards) */
     background: color-mix(in oklab, var(--color-raised) 50%, transparent);
     box-shadow: 0 0 0 1px var(--color-edge);
   }
@@ -939,8 +997,8 @@ img {
     overflow: hidden;
   }
   /* the band's top sits low enough that the front item clears the door's top by 24px: at the
-     480px cap the front cover (206px) all but fills the band (210px of 300) and touched the top
-     (his eye, 2026-10-21); a narrower door has the room already and keeps 2% */
+     480px cap the front cover (206px) all but fills the band (210px of 300) and touched the top;
+     a narrower door has the room already and keeps 2% */
   .lib-door-art {
     position: absolute;
     z-index: 1;
@@ -1157,28 +1215,36 @@ img {
 }
 
 /* LIGHT-MODE LEGIBILITY, THE RULES (0.13.0; the colors are the light tokens above). Light only,
-   unlayered so they win over the utilities they adjust: dark mode is left exactly as it is
-   (decisions/0016). Held by the suite's text survey (S139). */
+   unlayered so they win over the utilities they adjust: dark mode is left exactly as it is.
+   Held by the suite's text survey (S139). */
 /* the system's own smoothing: antialiased (every text, both themes) lays down 12 to 30% less ink
    for dark text on paper; light text on the dark faceplate keeps it */
 :root.light body {
   -webkit-font-smoothing: auto;
   -moz-osx-font-smoothing: auto;
 }
-/* gold and amber as text take their deeper ink (an icon keeps the bright gold, a graphic at 3:1),
+/* gold and the accent as text take their deeper ink (an icon keeps the bright gold, a graphic at 3:1),
    their faded forms at full strength, and deeper still on their own wash */
 :root.light
   :is(.text-gold, .text-gold\/50, .text-gold\/70, .text-gold\/80, .text-gold\/90):not(svg) {
   color: var(--color-goldink);
 }
-:root.light :is(.text-amber, .text-amber\/70, .text-amber\/90):not(svg) {
-  color: var(--color-amberink);
+:root.light
+  :is(.text-accent, .text-accent\/50, .text-accent\/70, .text-accent\/80, .text-accent\/90):not(
+    svg
+  ) {
+  color: var(--color-accentink);
 }
-:root.light .bg-golddim.text-gold:not(svg) {
+:root.light .bg-golddim.text-gold:not(svg),
+/* the playing row's gold text sits on the row's own gold tint (its title 4.3:1 in the deeper ink,
+   5.5 in this), its faded forms too (History's "now") */
+:root.light
+  .row-playing
+  :is(.text-gold, .text-gold\/50, .text-gold\/70, .text-gold\/80, .text-gold\/90):not(svg) {
   color: var(--color-goldink-wash);
 }
-:root.light .bg-amberdim.text-amber:not(svg) {
-  color: var(--color-amberink-wash);
+:root.light .bg-accentdim.text-accent:not(svg) {
+  color: var(--color-accentink-wash);
 }
 /* the alert and the LED's green as text, as gold is (0.15.0) */
 :root.light :is(.text-alert, .hover\:text-alert:hover):not(svg) {
@@ -1193,12 +1259,12 @@ img {
 :root.light .text-led:not(svg) {
   color: var(--color-ledink);
 }
-/* a gold or amber button under paper-colored text takes the deeper fill */
+/* a gold or accent button under paper-colored text takes the deeper fill */
 :root.light .bg-gold.text-bg {
   background-color: var(--color-goldbutton);
 }
-:root.light .bg-amber.text-bg {
-  background-color: var(--color-amberbutton);
+:root.light .bg-accent.text-bg {
+  background-color: var(--color-accentbutton);
 }
 /* a faded form of faint is for a disabled control only: readable text (a menu's hint, a card's
    note, the palette's keys) is at full faint (the deeper fades, /30 to /50, dress disabled

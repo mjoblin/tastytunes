@@ -188,6 +188,19 @@ export const ONE_HOME = [
     },
   },
   {
+    id: "dev-overrides",
+    selector:
+      "MemberExpression[object.object.name='process'][object.property.name='env']:matches([property.value=/^(ELECTRON_RENDERER_URL|TASTYTUNES_(LB_URL|FANART_URL|SECRETS_PLAIN|UPDATE_FEED))$/], [property.name=/^(ELECTRON_RENDERER_URL|TASTYTUNES_(LB_URL|FANART_URL|SECRETS_PLAIN|UPDATE_FEED))$/])",
+    files: ["^src/main/"],
+    allow: ["^src/main/app/devOverride\\.ts$"],
+    message:
+      "The overrides that could redirect a window, a token, a secret's encryption or the update feed are read through app/devOverride, which an installed build ignores",
+    bad: {
+      file: "src/main/lookups/scrobbler.ts",
+      code: "const u = process.env['TASTYTUNES_LB_URL'];",
+    },
+  },
+  {
     id: "void-command",
     was: "S96",
     selector:
@@ -403,7 +416,7 @@ export const ONE_HOME = [
   },
   {
     id: "scroll-into-view",
-    was: "none (docs/renderer.md banned it in prose; HistoryTimeline's month rail still called it, found 2026-10-13)",
+    was: "none (a prose rule banned it; HistoryTimeline's month rail still called it, found 2026-10-13)",
     selector: "CallExpression[callee.property.name='scrollIntoView']",
     files: [`^${R}`],
     message:
@@ -425,7 +438,7 @@ export const ONE_HOME = [
   },
   {
     id: "hover-reveal-keyboard",
-    was: "none (0.13.0 round 4, the accessibility second layer: the 0.11 re-score found two dozen controls hidden from the keyboard)",
+    was: "none (0.13.0 round 4, the accessibility second layer: two dozen controls were hidden from the keyboard)",
     // a class string that reveals on a group's hover (or hides on it) with no keyboard twin (one
     // with focus-visible: is focus-reveal's to report)
     selector: String.raw`:matches(Literal[value=/group-hover(\/[a-z]+)?:opacity-(0|100)(?![\w-])/]:not([value=/((group|focus)-kbd|focus-visible):opacity-/]), TemplateElement[value.raw=/group-hover(\/[a-z]+)?:opacity-(0|100)(?![\w-])/]:not([value.raw=/((group|focus)-kbd|focus-visible):opacity-/]))`,
@@ -439,7 +452,7 @@ export const ONE_HOME = [
   },
   {
     id: "menu-anchor",
-    was: "none (0.13.0: his try of round 4, a Queue row's ⋯ pressed from the keyboard opened its menu in the window's top-left corner)",
+    was: "none (0.13.0, after round 4: a Queue row's ⋯ pressed from the keyboard opened its menu in the window's top-left corner)",
     // a point read straight off the pointer, { x: e.clientX, y: e.clientY }: a menu's comes from
     // menuAt, which places a key press's under its control (it has no pointer: 0, 0). A hover
     // (RowAction) and the drags follow the pointer itself, and keep it.
@@ -518,7 +531,7 @@ export const ONE_HOME = [
   },
   {
     id: "name-key",
-    was: "none (0.15.0, the hygiene pass: the 0.11 re-score found 81 name keys hand-rolled in 42 files, none normalizing Unicode)",
+    was: "none (0.15.0, the hygiene pass: 81 name keys were hand-rolled in 42 files, none normalizing Unicode)",
     // a string trimmed and lowercased in one chain, either order (optional links included)
     selector:
       "CallExpression[callee.property.name='toLowerCase'][callee.object.callee.property.name='trim'], CallExpression[callee.property.name='trim'][callee.object.callee.property.name='toLowerCase']",
@@ -559,12 +572,27 @@ export const ONE_HOME = [
     // the media browser's queue write, called bare
     selector: "CallExpression[callee.type='Identifier'][callee.name='queueAdd']",
     files: ["^src/main/"],
-    allow: ["device/(deviceManager|queueOps)\\.ts$", "\\.test\\.ts$"],
+    // an agent's connection to another streamer (0.16.0) is the device layer too, and wakes first
+    allow: ["device/(deviceManager|queueOps|remoteStreamer)\\.ts$", "\\.test\\.ts$"],
     message:
-      "Queue writes go through DeviceManager.queueAdd, which wakes the streamer first; the media browser's queueAdd is the device layer's alone",
+      "Queue writes go through DeviceManager.queueAdd (or RemoteStreamer.queueAdd for an agent's other streamer), which wakes the streamer first; the media browser's queueAdd is the device layer's alone",
     bad: {
       file: "src/main/servers/mcp/editTools.ts",
       code: 'await queueAdd(host, udn, id, "PLAY_NOW");',
+    },
+  },
+  {
+    id: "one-command-path",
+    was: "RemoteStreamer.command (0.16.0, an agent's connection to another streamer) repeated DeviceManager.command's rules and lost two of them: the fade take-over and the wait for the socket after a wake",
+    // a streamer command built into frames outside the one command path
+    selector: "CallExpression[callee.type='Identifier'][callee.name='commandFrames']",
+    files: ["^src/main/"],
+    allow: ["device/commandPath\\.ts$", "\\.test\\.ts$"],
+    message:
+      "Streamer commands go through device/commandPath's sendCommand (the fade take-over, the open socket, the wake and the wait after it, the volume limit), which every connection calls; commandFrames is its alone",
+    bad: {
+      file: "src/main/device/remoteStreamer.ts",
+      code: "const frames = commandFrames(cmd, state);",
     },
   },
   {
@@ -579,6 +607,77 @@ export const ONE_HOME = [
     bad: {
       file: "src/main/media/__fixtures__/fakeStreamer.ts",
       code: "const soap = (inner) => `<s:Envelope><s:Body>${inner}</s:Body></s:Envelope>`;",
+    },
+  },
+  {
+    id: "gold-roles",
+    was: "none (0.16.0: the accent took a color of its own, and a control written in gold would read as playing)",
+    // a gold color class, or the gold itself, in a string
+    selector: strings(String.raw`/[a-z]-gold|--gold-rgb/`),
+    files: [`^${R}`],
+    allow: [
+      // TastyTunes itself: the wordmarks, the update dot and the version chip
+      "components/Nav\\.tsx$",
+      "App\\.tsx$",
+      "overlays/InfoModal\\.tsx$",
+      "screens/SettingsScreen\\.tsx$",
+      "settings/UpdatesSection\\.tsx$",
+      // what's playing: its rows, tiles and bars, a station tuning in, the connected streamer
+      // and the source in use
+      "screens/(Queue|History|Playlists|Favorites)Screen\\.tsx$",
+      "queue/DiscQueue\\.tsx$",
+      "library/LibraryCards\\.tsx$",
+      "lenses/ArtistsLens\\.tsx$",
+      "media/(MediaRow|StationRow|Eqbars)\\.tsx$",
+      "presets/PresetTiles\\.tsx$",
+      "playback/TrayPanelTabs\\.tsx$",
+      "device/(SourcesPanel|DeviceSwitcher)\\.tsx$",
+      // the words being sung
+      "playback/(LyricLine|DisplayMode)\\.tsx$",
+      "overlays/LyricsPanel\\.tsx$",
+      // drawings: the Library's doors, the waveform, the listening stats, the scenes' palette
+      "library/(DoorArt|LibraryRoot)\\.tsx$",
+      "media/(Waveform\\.tsx|waveformDraw\\.ts)$",
+      "history/HistoryStats\\.tsx$",
+      "lib/statsCard\\.ts$",
+      "display/palette\\.ts$",
+      // the playback bar, which belongs to the music (styles.css .music-gold), and the mini player
+      // and the tray panel beside it
+      "playback/(Transport|PlaybackBar|TrayPanel|VolumeCluster|VolumeDial|MiniPlayer)\\.tsx$",
+    ],
+    message:
+      "Gold is TastyTunes and what's playing; what you click, select or are shown arriving takes the accent (styles.css, two colors, two meanings)",
+    bad: {
+      file: `${R}components/controls/Switch.tsx`,
+      code: 'const c = on ? "bg-gold" : "bg-veil2";',
+    },
+  },
+  {
+    id: "color-conversions",
+    was: "lib/artAccent and components/display/palette (0.16.0's hygiene: each had its own rgbToHsl and hslToRgb)",
+    // a function by either name, declared or assigned, outside lib/color
+    selector:
+      "FunctionDeclaration[id.name=/^(rgbToHsl|hslToRgb)$/], VariableDeclarator[id.name=/^(rgbToHsl|hslToRgb)$/]",
+    files: [`^${R}`],
+    allow: ["lib/color\\.ts$"],
+    message:
+      "Color conversions have one home, lib/color (rgbToHsl, hslToRgb, roundRgb): import them",
+    bad: {
+      file: `${R}components/display/scenes/tide/colors.ts`,
+      code: "function hslToRgb(h, s, l) { return [h, s, l]; }",
+    },
+  },
+  {
+    id: "accessibility-never-asks",
+    was: "app/mediaKeys (0.16.0-rc.9: the media keys' permission is checked, and Settings opens the pane)",
+    // the prompting form shows a system dialog, which no launch (and no test run) may raise
+    selector:
+      "CallExpression[callee.property.name='isTrustedAccessibilityClient']:not([arguments.0.value=false])",
+    message:
+      "isTrustedAccessibilityClient only checks (false): asking shows a system dialog; Settings opens the Accessibility pane instead",
+    bad: {
+      file: "src/main/app/mediaKeys.ts",
+      code: "systemPreferences.isTrustedAccessibilityClient(true);",
     },
   },
 ];

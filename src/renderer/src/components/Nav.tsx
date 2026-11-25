@@ -38,7 +38,7 @@ export function Nav(): React.JSX.Element {
   const setPaletteOpen = useStore((s) => s.setPaletteOpen);
   const queueTotal = useStore((s) => s.queue?.total ?? null);
   // while the CD is the source the Queue screen opens on the disc, so its count is the disc's
-  // ("CD 10", user, 2026-09-26), and none until the streamer says how many
+  // ("CD 10"), and none until the streamer says how many
   const discCount = useDiscCount();
   const ground = useChromeGround("nav");
   const settings = useStore((s) => s.settings);
@@ -60,6 +60,16 @@ export function Nav(): React.JSX.Element {
   );
 
   const collapsed = settings.navCollapsed;
+  // AN UPDATE SAID IN WORDS (0.16.0): beside the wordmark an Update button (under the tt when the
+  // panel is collapsed), where the dot alone went unseen; after Not now in Settings › Updates (a
+  // week, for that version), the dot it was
+  const snooze = settings.updateSnooze;
+  const updateSnoozed =
+    update != null &&
+    snooze != null &&
+    snooze.version === update.version &&
+    snooze.until > Date.now();
+  const updateChip = update != null && !updateSnoozed;
   const toggleCollapsed = async (): Promise<void> => {
     await saveSettings({ navCollapsed: !collapsed });
   };
@@ -137,12 +147,12 @@ export function Nav(): React.JSX.Element {
       className={cx(
         "w-full flex items-center rounded-lg h-9 text-[13.5px] transition-colors",
         collapsed ? "justify-center px-0" : "gap-3 px-3",
-        screen === id ? "bg-amberdim text-amber" : "text-dim hover:text-ink hover:bg-veil",
+        screen === id ? "bg-accentdim text-accent" : "text-dim hover:text-ink hover:bg-veil",
         // While a rail-capable drag is live, hover must not suggest
         // droppability — only a real target lights, via the class below.
         navDragActive && "pointer-events-none",
         // a live drag hovering this row: the drop glow (drag-to-rail)
-        navDropTarget === id && "ring-1 ring-gold/60 bg-golddim text-gold",
+        navDropTarget === id && "ring-1 ring-accent/60 bg-accentdim text-accent",
       )}
     >
       <Icon size={16} strokeWidth={1.8} className="shrink-0" />
@@ -175,14 +185,22 @@ export function Nav(): React.JSX.Element {
       className={cx(
         "shrink-0 flex flex-col border-r border-edge transition-all",
         collapsed ? "w-16" : "w-56",
-        // the panel tint in light mode only (user call, 2026-10-31): on paper a darker frame sits
+        // the panel tint in light mode only: on paper a darker frame sits
         // back from the page, but in dark a lighter one read as raised and the content as sunk
         // in a well, so dark keeps the window's one ground, as it has under the full-window wash
         ground,
       )}
     >
       {/* macOS traffic-light inset + wordmark; draggable like a title bar */}
-      <div className={cx("drag-region pt-11 pb-5", collapsed ? "px-0 text-center" : "px-5")}>
+      <div
+        className={cx(
+          "drag-region relative pt-11",
+          collapsed ? "px-0 text-center" : "px-5",
+          // collapsed with the chip under the tt: a little more room below it, so it belongs to the
+          // tt above and not to the rows below
+          collapsed && updateChip ? "pb-6" : "pb-5",
+        )}
+      >
         <button
           // the dot's promise: with an update pending, the wordmark lands on
           // Settings → Updates (the panel's home); otherwise it opens About
@@ -204,7 +222,7 @@ export function Nav(): React.JSX.Element {
               tasty<span className="text-gold">tunes</span>
             </>
           )}
-          {update && (
+          {update && !updateChip && (
             // no-drag + a 16px hit box: the dot pokes outside the button's
             // rect into the title-bar drag region, where un-exempted pixels
             // grab the window instead of clicking.
@@ -216,6 +234,25 @@ export function Nav(): React.JSX.Element {
             </span>
           )}
         </button>
+        {updateChip && (
+          <button
+            // a fresh chip in each place: moving between them is not something to animate
+            key={collapsed ? "collapsed" : "expanded"}
+            onClick={() => jumpToSettingsTab("updates")}
+            data-update-chip
+            data-tip={`v${update.version} available. Click for Updates.`}
+            aria-label={`v${update.version} available. Click for Updates.`}
+            className={cx(
+              "no-drag inline-flex items-center rounded-full bg-golddim text-gold px-[5px] py-[1.5px] text-[8.5px] font-semibold leading-none tracking-wide motion-safe:hover:scale-105 hover:bg-gold/25 transition-[background-color,scale]",
+              // collapsed: tucked under the tt
+              collapsed
+                ? "absolute top-[67px] left-1/2 -translate-x-1/2"
+                : "relative top-[7px] ml-1.5 align-top",
+            )}
+          >
+            Update
+          </button>
+        )}
         {/* demo-mode marker doubles as the exit — the Device screen's
             Disconnect works too, but this makes leaving obvious */}
         {!collapsed && connection.phase !== "idle" && connection.demo && (

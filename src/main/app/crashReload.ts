@@ -1,7 +1,7 @@
 import { app, type BrowserWindow } from "electron";
 
 /**
- * A RENDERER THAT DIES COMES BACK (0.12.0-rc.2, the 0.11 re-score's crash resilience). A window
+ * A RENDERER THAT DIES COMES BACK (0.12.0-rc.2). A window
  * whose renderer process is gone (a crash, the OS ending it under memory pressure, a GPU fault
  * taking it down) reloads rather than standing blank, and the log says which window and why.
  * Three reloads in a minute and it stops trying, so a page that dies as it loads cannot spin.
@@ -40,7 +40,18 @@ export function takeReload(times: number[], now: number): boolean {
   return true;
 }
 
-export function reloadOnCrash(win: BrowserWindow, name: string, log: (text: string) => void): void {
+let gone = 0;
+/** How many times a window's page has stopped unasked this session (a crash, the memory gone): a
+ *  whole-file decode handed out before one is not handed out again (main/ipc/audio). */
+export const windowsGone = (): number => gone;
+
+export function reloadOnCrash(
+  win: BrowserWindow,
+  name: string,
+  log: (text: string) => void,
+  /** The window was left closed, out of reloads (the main window's stuck dialog). */
+  leftClosed: () => void = () => {},
+): void {
   const times: number[] = [];
   // the app's quit, watched once for every window
   if (!quitWatched) {
@@ -50,6 +61,7 @@ export function reloadOnCrash(win: BrowserWindow, name: string, log: (text: stri
     });
   }
   win.webContents.on("render-process-gone", (_e, details) => {
+    if (details.reason !== "clean-exit") gone++;
     if (win.isDestroyed() || !reloads(details.reason, quitting)) {
       if (details.reason !== "clean-exit") log(`The ${name} window stopped (${details.reason})`);
       return;
@@ -58,6 +70,7 @@ export function reloadOnCrash(win: BrowserWindow, name: string, log: (text: stri
       log(
         `The ${name} window stopped (${details.reason}) and was left closed: ${CRASH_MAX_RELOADS} reloads in a minute`,
       );
+      leftClosed();
       return;
     }
     log(`The ${name} window stopped (${details.reason}) and was reloaded`);

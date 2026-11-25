@@ -6,7 +6,7 @@
 // 5xx) return the best partial answer for the moment but are never cached, so
 // the next request retries. `force` bypasses the cache read for a
 // user-driven refresh.
-import type { ArtistInfo } from "@shared/model";
+import { creditNames, type ArtistInfo } from "@shared/model";
 import { DiskCache } from "./diskCache";
 import { MB, WIKI, getJson, mbFetch, wikipediaFromRels, type Fetched, type MbRelation } from "./mb";
 import { nameKey } from "@shared/keys";
@@ -96,6 +96,28 @@ export function knownArtistImage(artist: string): string | null {
   return cache.get(key)?.image ?? null;
 }
 
+/** A credit that names a featured guest ("A feat. B", "A ft. B", "A featuring B"). */
+const FEATURED = /\s(?:feat\.?|ft\.?|featuring)\s/i;
+
+/**
+ * AN ARTIST BY A CREDIT, as a track or a service writes it (0.16.0): the whole credit first, then,
+ * for a credit naming a featured guest, its lead name, so "Dusk Parade feat. June Vale" finds Dusk
+ * Parade. Liner notes' Artist tab and an agent's get_artist_info both ask it; before, the tab asked
+ * the whole credit alone and found no one for a featured credit. The lead name is asked only after
+ * the whole credit is a settled miss (the service answered and knows no such artist), and only for
+ * a featured credit: a band named "A and B" or "A & B" is one artist, and a request that failed
+ * once is no answer, so neither ever shows A in its place.
+ */
+export async function fetchArtistInfoForCredit(
+  credit: string,
+  force = false,
+): Promise<ArtistInfo | null> {
+  const whole = await fetchArtistInfo(credit, force);
+  if (whole || !FEATURED.test(credit) || !knowsArtist(credit)) return whole;
+  const lead = creditNames(credit)[0];
+  return lead && nameKey(lead) !== nameKey(credit) ? fetchArtistInfo(lead, force) : null;
+}
+
 /** Whether another artist fits without the cache dropping one: the photos fetched ahead stop at
  *  nine in ten of the cap, so a library larger than it never churns its own photos. */
 export function artistCacheHasRoom(): boolean {
@@ -108,7 +130,7 @@ export function knowsArtist(artist: string): boolean {
 }
 
 // THE ARTICLE'S OTHER IMAGES (0.13.0 round 7, the picture chooser): the images in the artist's
-// Wikipedia article (its media list, no key needed: decisions/0001), as Wikimedia thumbnails, the
+// Wikipedia article (its media list, no key needed), as Wikimedia thumbnails, the
 // lead picture first. Cached per article, settled answers only, like the summary.
 const mediaCache = new DiskCache<string[]>("artistMedia", 1000);
 /** Artists whose details were refreshed: their article's images are asked again, once. */

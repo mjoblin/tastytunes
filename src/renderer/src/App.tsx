@@ -7,6 +7,7 @@ import { useShortcuts } from "@/hooks/useShortcuts";
 import { useIndexingToast } from "@/hooks/useIndexingToast";
 import { useDriveWaitToast } from "@/hooks/useDriveWaitToast";
 import { useWakeHold } from "@/hooks/useWakeHold";
+import { useAccentChoice } from "@/hooks/useAccentChoice";
 import { useArtAccent } from "@/hooks/useArtAccent";
 import { useArtLoadable } from "@/hooks/useArtLoadable";
 import { useMotionPreference } from "@/hooks/useMotionPreference";
@@ -14,6 +15,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { useDisplayFont } from "@/hooks/useDisplayFont";
 import { cx, deriveNowPlaying } from "@/lib/format";
 import { forgetDevice, lastSeenLabel } from "@/lib/devices";
+import { connectTrouble, STILL_TRYING_HINT } from "@/lib/connectTrouble";
+import { IS_WINDOWS } from "@/lib/screens";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { Nav } from "@/components/Nav";
 import { PlaybackBar } from "@/components/playback/PlaybackBar";
@@ -26,6 +29,7 @@ import { MediaInfoModal } from "@/components/overlays/MediaInfoModal";
 import { ArtistPictureHost } from "@/components/library/ArtistPictureDialog";
 import { useArtistChoicesKept } from "@/lib/artistPictures";
 import { useStopSkippedAnalysis } from "@/components/media/waveformAnalysis";
+import { useAnalyzeAlbumOnPlay } from "@/lib/albumOnPlay";
 import { LargeQueueConfirm } from "@/components/overlays/LargeQueueConfirm";
 import { SurfaceBoundary } from "@/components/chrome/SurfaceBoundary";
 import { DisplayMode } from "@/components/playback/DisplayMode";
@@ -53,8 +57,9 @@ export default function App(): React.JSX.Element {
   useIndexingToast();
   useDriveWaitToast();
   useArtistChoicesKept();
-  // a skipped track's measuring stops with its download (0.14.0, his A3)
+  // a skipped track's measuring stops with its download (0.14.0)
   useStopSkippedAnalysis();
+  useAnalyzeAlbumOnPlay();
 
   const screen = useStore((s) => s.screen);
   const connection = useStore((s) => s.connection);
@@ -102,7 +107,8 @@ export default function App(): React.JSX.Element {
       : null,
   );
   const { art: ambientArtUrl } = useDecodedArt(ambientBest);
-  useArtAccent(settings.accentFollowsArt ? artActive : null, theme);
+  useAccentChoice(settings.accent);
+  useArtAccent(settings.accent === "art" ? artActive : null, theme);
   useMotionPreference(settings.motion);
   // Queue playback knows the next track's art before it's needed — warm it so
   // the swap is instant on album/playlist runs.
@@ -122,10 +128,9 @@ export default function App(): React.JSX.Element {
 
   // Full-window ambient: the nav/bar drop their panel tint so the wash is even.
   const setAmbientWindowActive = useStore((s) => s.setAmbientWindowActive);
-  const ambientWindow = ambientVisible && settings.ambientCoverage === "window";
   useEffect(() => {
-    setAmbientWindowActive(ambientWindow);
-  }, [ambientWindow, setAmbientWindowActive]);
+    setAmbientWindowActive(ambientVisible);
+  }, [ambientVisible, setAmbientWindowActive]);
 
   const content = (() => {
     if (screen === "device") return <DeviceScreen />;
@@ -165,18 +170,12 @@ export default function App(): React.JSX.Element {
 
   // Always mounted (with a null src when it shouldn't show) so the wash can
   // fade out on its own instead of vanishing in a frame.
-  const ambient = (
-    <AmbientArt
-      src={ambientVisible ? (ambientArtUrl ?? null) : null}
-      vignette={settings.vignette}
-    />
-  );
-  const coverWindow = settings.ambientCoverage === "window";
+  const ambient = <AmbientArt src={ambientVisible ? (ambientArtUrl ?? null) : null} />;
 
   return (
     <div className="relative h-full">
       {/* full-window ambient art, behind the translucent chrome */}
-      {coverWindow && ambient}
+      {ambient}
 
       <div className="relative h-full flex flex-col">
         <div className="flex-1 flex min-h-0 relative">
@@ -186,7 +185,6 @@ export default function App(): React.JSX.Element {
           </SurfaceBoundary>
           <main className="flex-1 min-w-0 min-h-0 relative">
             {/* main-area-only ambient art, behind the screen content */}
-            {!coverWindow && ambient}
             <div className="relative h-full">
               <SurfaceBoundary surface="this screen" shape="screen" resetKey={screen}>
                 {content}
@@ -275,7 +273,7 @@ function ToastHost(): React.JSX.Element | null {
           onClick={dismissToast}
           style={
             {
-              "--toast-accent": toast.kind === "error" ? "var(--alert-rgb)" : "var(--gold-rgb)",
+              "--toast-accent": toast.kind === "error" ? "var(--alert-rgb)" : "var(--accent-rgb)",
             } as React.CSSProperties
           }
           className={cx(
@@ -289,15 +287,15 @@ function ToastHost(): React.JSX.Element | null {
             "bg-panel/70 shadow-[0_10px_40px_rgb(0_0_0_/_0.55)] text-[12.5px] cursor-pointer max-w-[520px]",
             toast.kind === "error"
               ? "ring-alert/45"
-              : "ring-gold/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--gold-rgb)_/_0.10)]",
+              : "ring-accent/35 shadow-[0_10px_40px_rgb(0_0_0_/_0.55),0_0_24px_rgb(var(--accent-rgb)_/_0.10)]",
           )}
         >
           {toast.kind === "error" ? (
             <CircleAlert size={14} className="text-alert shrink-0" />
           ) : toast.kind === "working" ? (
-            <Loader2 size={14} className="text-gold shrink-0 motion-safe:animate-spin" />
+            <Loader2 size={14} className="text-accent shrink-0 motion-safe:animate-spin" />
           ) : (
-            <CircleCheck size={14} className="text-gold shrink-0" />
+            <CircleCheck size={14} className="text-accent shrink-0" />
           )}
           <span className="flex-1 min-w-0">{toast.text}</span>
           {toast.action && (
@@ -316,7 +314,7 @@ function ToastHost(): React.JSX.Element | null {
                 "ml-2 shrink-0 text-[12px] px-3 py-1.5 rounded-md ring-1 font-medium transition-all",
                 toast.kind === "error"
                   ? "ring-alert/40 text-alert hover:bg-alert/10 hover:ring-alert/60"
-                  : "ring-gold/35 text-gold hover:bg-golddim hover:ring-gold/55",
+                  : "ring-accent/35 text-accent hover:bg-accentdim hover:ring-accent/55",
               )}
             >
               {toast.action.label}
@@ -335,13 +333,14 @@ function ConnectGate(): React.JSX.Element {
   const discovering = useStore((s) => s.discovering);
   // Forgetting is the one unreconstructible act on this screen — an eco
   // streamer that's off can't re-teach itself until it next wakes — and a
-  // tester lost one to a stray click (rc.1, 2026-08-31). The anchored
+  // stray click lost one in testing (rc.1). The anchored
   // popover, never the in-place morph: the × must not move under the cursor.
   const forgetConfirm = useConfirmPopover();
   const knownDevices = useStore((s) => s.settings.knownDevices);
   const lastHost = useStore((s) => s.settings.lastHost);
   // Never connected to anything = a true first run: the gate doubles as the
-  // welcome screen (connect() stamps lastHost on the first attempt).
+  // welcome screen (lastHost is stamped once a connect succeeds, so a mistyped
+  // first address leaves it the welcome screen, the demo still on offer).
   const firstRun = lastHost == null;
   // If the device we lost had ECO standby configured, the honest hint is
   // that it may have LEFT THE NETWORK on purpose (eco powers the network
@@ -351,13 +350,31 @@ function ConnectGate(): React.JSX.Element {
   const busy =
     connection.phase === "connecting" ||
     (connection.phase === "disconnected" && connection.reconnecting);
+  // A Mac that asks before an app reaches the local network (macOS 15 and later) drops both the
+  // search and an IP typed by hand when the ask was declined, so the still-looking note names
+  // the setting there (main's app/localNetwork), and so does a reconnect's no route to host
+  const [localNetworkPrivacy, setLocalNetworkPrivacy] = useState(false);
+  useEffect(() => {
+    void tt
+      .localNetworkPrivacy()
+      .then(setLocalNetworkPrivacy)
+      .catch(() => {});
+  }, []);
+  // What the last failed try said, in plain words, kept across the retries (the phase flips
+  // between connecting and disconnected on each, and only the disconnected one carries a reason)
+  const [trouble, setTrouble] = useState<string | null>(null);
+  useEffect(() => {
+    if (!busy) setTrouble(null);
+    else if (connection.phase === "disconnected")
+      setTrouble(connectTrouble(connection.reason, { localNetworkPrivacy }));
+  }, [busy, connection, localNetworkPrivacy]);
 
   // A failing reconnect gets RECONNECT_GRACE_MS of benefit of the doubt (a
   // blip should read as a blip), then the gate stops being a wall: the
   // retry demotes to a status line and the full surface — found streamers,
   // remembered streamers, manual entry — comes back. Eco standby skips the
   // doubt: eco powers the network off, so the device is not coming back on
-  // its own (the multi-streamer eco report, 2026-08-30). The reconnect
+  // its own. The reconnect
   // itself keeps running underneath; if the device returns, it still wins.
   const [stuck, setStuck] = useState(false);
   useEffect(() => {
@@ -383,16 +400,6 @@ function ConnectGate(): React.JSX.Element {
     prevDiscovering.current = discovering;
   }, [discovering]);
   const stillLooking = !busy && devices.length === 0 && sweeps >= 3;
-  // A Mac that asks before an app reaches the local network (macOS 15 and later) drops both the
-  // search and an IP typed by hand when the ask was declined, so the still-looking note names
-  // the setting there (main's app/localNetwork)
-  const [localNetworkPrivacy, setLocalNetworkPrivacy] = useState(false);
-  useEffect(() => {
-    void tt
-      .localNetworkPrivacy()
-      .then(setLocalNetworkPrivacy)
-      .catch(() => {});
-  }, []);
   // THE ADDRESS IN PLACE (0.10.0, the first five minutes): typing a streamer's IP opens a
   // field here rather than sending a new owner off to the Device screen
   const [ipOpen, setIpOpen] = useState(false);
@@ -408,8 +415,8 @@ function ConnectGate(): React.JSX.Element {
   // whether or not the sweep can see it right now, so sliding between
   // "answering" and "remembered" changes only the card's brightness — which
   // transition-colors already fades. The first cut let the third line come
-  // and go with liveness and the card resized with every sweep (user,
-  // 2026-08-30). Only a never-connected stranger gets the two-line card,
+  // and go with liveness and the card resized with every sweep.
+  // Only a never-connected stranger gets the two-line card,
   // and a stranger never transitions to remembered (only connecting writes
   // the book, and a connect leaves this gate).
   const foundUdns = new Set(devices.map((d) => d.udn).filter(Boolean));
@@ -440,7 +447,7 @@ function ConnectGate(): React.JSX.Element {
       {maybeEco && (
         <div
           data-eco-hint
-          className="flex items-center gap-2 text-[12.5px] text-amber/90 border border-amber/20 bg-amberdim/40 rounded-full px-4 py-1.5"
+          className="flex items-center gap-2 text-[12.5px] text-accent/90 border border-accent/20 bg-accentdim/40 rounded-full px-4 py-1.5"
         >
           <Moon size={12} strokeWidth={2} />
           The streamer may be in eco standby, which turns its network off. Wake it at the device.
@@ -448,12 +455,20 @@ function ConnectGate(): React.JSX.Element {
       )}
       {busy && !stuck ? (
         <>
-          <Loader2 size={40} className="spin text-amber" />
+          <Loader2 size={40} className="spin text-accent" />
           <div className="font-display text-xl text-dim">
             {connection.phase === "connecting"
               ? `Connecting to ${connection.host}…`
               : `Reconnecting to ${(connection as { host: string }).host}…`}
           </div>
+          {/* a way out before the gate counts it stuck: a mistyped address otherwise waits */}
+          <button
+            onClick={() => void tt.disconnect()}
+            data-gate-cancel
+            className="text-[13px] text-faint hover:text-dim transition-colors"
+          >
+            Cancel
+          </button>
         </>
       ) : (
         <>
@@ -474,9 +489,22 @@ function ConnectGate(): React.JSX.Element {
             </>
           )}
           {busy && stuck && (
-            <div data-still-trying className="flex items-center gap-2 text-[12.5px] text-faint">
-              <Loader2 size={12} className="spin" />
-              Still trying {(connection as { host: string }).host}. It may be off or in eco standby.
+            <div
+              data-still-trying
+              className="flex items-start gap-2 text-[12.5px] text-faint max-w-md text-left leading-relaxed"
+            >
+              <Loader2 size={12} className="spin shrink-0 mt-[4px]" />
+              {/* Stop follows the sentence inline, so it stays beside it however the line wraps */}
+              <span>
+                Still trying {(connection as { host: string }).host}. {trouble ?? STILL_TRYING_HINT}{" "}
+                <button
+                  onClick={() => void tt.disconnect()}
+                  data-gate-stop
+                  className="ml-1 text-dim hover:text-ink underline underline-offset-2 decoration-edge2 hover:decoration-current transition-colors"
+                >
+                  Stop
+                </button>
+              </span>
             </div>
           )}
           {gateRows.length > 0 ? (
@@ -499,7 +527,7 @@ function ConnectGate(): React.JSX.Element {
                     </div>
                     {/* Stacked on purpose — in a 288px card these wrap mid-
                         phrase as one line, and a deliberate stack reads
-                        calmer than an accidental wrap (user, 2026-08-30). */}
+                        calmer than an accidental wrap. */}
                     <div className="font-mono text-[10.5px] text-faint truncate">
                       {row.model}
                       {FACT_SEP}
@@ -546,7 +574,17 @@ function ConnectGate(): React.JSX.Element {
           {stillLooking && localNetworkPrivacy && (
             <div data-local-network className="text-[12.5px] text-faint max-w-sm leading-relaxed">
               Your Mac may be blocking TastyTunes from your local network. Allow it in System
-              Settings › Privacy & Security › Local Network.
+              Settings › Privacy & Security › Local Network, and if TastyTunes is already on there,
+              turn it off and on.
+            </div>
+          )}
+          {stillLooking && IS_WINDOWS && (
+            <div
+              data-windows-firewall
+              className="text-[12.5px] text-faint max-w-sm leading-relaxed"
+            >
+              Windows may be blocking TastyTunes from your local network. Allow it in Windows
+              Security › Firewall & network protection › Allow an app through firewall.
             </div>
           )}
           <div className="flex items-center gap-4">
@@ -554,8 +592,8 @@ function ConnectGate(): React.JSX.Element {
               onClick={() => void tt.discover()}
               disabled={discovering}
               // Fixed width: the label alternates with the background sweep
-              // and the row must not breathe with it (user, 2026-08-30).
-              className="min-w-[128px] text-center text-[13px] px-4 py-2 rounded-lg bg-amber text-bg font-medium hover:brightness-110 transition-all disabled:opacity-50"
+              // and the row must not breathe with it.
+              className="min-w-[128px] text-center text-[13px] px-4 py-2 rounded-lg bg-accent text-bg font-medium hover:brightness-110 transition-all disabled:opacity-50"
             >
               {discovering ? "Searching…" : "Find streamers"}
             </button>
@@ -576,7 +614,7 @@ function ConnectGate(): React.JSX.Element {
                 data-tip="The whole app against a built-in streamer with sample libraries."
                 className="tip-bottom flex items-center gap-1.5 text-[13px] px-4 py-2 motion-safe:active:scale-95"
               >
-                <Sparkles size={14} className="text-gold/80" />
+                <Sparkles size={14} className="text-accent/80" />
                 Try the demo
               </HeaderChip>
             )}
@@ -601,7 +639,7 @@ function ConnectGate(): React.JSX.Element {
               <button
                 type="submit"
                 disabled={!ip.trim()}
-                className="rounded-lg bg-amber text-bg font-medium text-[13px] px-4 py-2 disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all"
+                className="rounded-lg bg-accent text-bg font-medium text-[13px] px-4 py-2 disabled:opacity-40 hover:brightness-110 motion-safe:active:scale-95 transition-all"
               >
                 Connect
               </button>
@@ -609,7 +647,9 @@ function ConnectGate(): React.JSX.Element {
           )}
           {ipOpen && (
             <div className="text-[11.5px] text-faint max-w-sm leading-snug">
-              Your streamer's display shows its IP under Settings › Network.
+              Your streamer's display shows its IP under Settings › Network. For a streamer without
+              a display, find it in the StreamMagic app's network settings, or in your router's list
+              of connected devices.
             </div>
           )}
           {!firstRun && (
@@ -617,7 +657,7 @@ function ConnectGate(): React.JSX.Element {
               onClick={() => void tt.demoStart()}
               className="mt-4 flex items-center gap-2 text-[13px] text-faint hover:text-dim transition-colors"
             >
-              <Sparkles size={14} className="text-gold/70" />
+              <Sparkles size={14} className="text-accent/70" />
               Try the built-in demo, no streamer needed →
             </button>
           )}
@@ -634,7 +674,7 @@ function ConnectGate(): React.JSX.Element {
  *  covers the gap between the wake finishing and the streamer arriving (see
  *  useWakeHold). The copy keys on it so the face reads asleep → Waking… →
  *  gone; keying on `waking` alone made it read asleep → Waking… → asleep
- *  again for the seconds the recall was still in flight (the reported
+ *  again for the seconds the recall was still in flight (a visible
  *  flip-flop).
  */
 function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
@@ -649,9 +689,9 @@ function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
       <button
         onClick={() => void tt.command({ type: "power", power: "ON" })}
         className={cx(
-          "h-24 w-24 rounded-full ring-2 ring-amber/50 text-amber flex items-center justify-center",
-          "hover:bg-amberdim hover:shadow-[0_0_40px_rgb(var(--amber-rgb)_/_0.35)] transition-all",
-          busy && "motion-safe:animate-pulse bg-amberdim",
+          "h-24 w-24 rounded-full ring-2 ring-accent/50 text-accent flex items-center justify-center",
+          "hover:bg-accentdim hover:shadow-[0_0_40px_rgb(var(--accent-rgb)_/_0.35)] transition-all",
+          busy && "motion-safe:animate-pulse bg-accentdim",
         )}
         title="Power on"
       >
@@ -660,11 +700,11 @@ function StandbyGate({ busy }: { busy: boolean }): React.JSX.Element {
       {/* EVERY LINE HOLDS ITS HEIGHT whether or not it has content — the face
           is a centred flex column, so a line that unmounts re-centres the
           whole stack and the lamp visibly jumps as the copy changes. This was
-          fixed once, lost, and reported again (2026-08-03); the tray panel's
+          fixed once and then lost again; the tray panel's
           standby face reserves all three lines for the same reason. */}
       <div>
         <div className="font-display text-2xl text-dim flex items-center justify-center gap-2.5 min-h-[32px]">
-          <Moon size={20} strokeWidth={1.8} className="text-amber/70" />
+          <Moon size={20} strokeWidth={1.8} className="text-accent/70" />
           {systemInfo?.name ?? "Streamer"} is asleep
         </div>
         <div className="text-[13px] text-faint mt-1.5 min-h-[19px]">

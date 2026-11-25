@@ -133,7 +133,7 @@ const track = (title: string | null, queueId: number | null, state = "pause"): Z
 const station = (state: string, title: string | null): ZonePlayState =>
   ps(state, { class: "stream.radio", source: "IR", station: "Mock FM 101.5", radio_id: 7, title });
 
-describe("what a recall changes (0.15.0-rc.2, his preset 22 recalled from standby)", () => {
+describe("what a recall changes (0.15.0-rc.2, a preset recalled from standby)", () => {
   it("is unmoved by the play state's own transitions: a wake's stop, pause and play of what was held", () => {
     const held = recallSignature(track("She's Leaving You", 8805344, "pause"));
     expect(recallSignature(track("She's Leaving You", 8805344, "stop"))).toBe(held);

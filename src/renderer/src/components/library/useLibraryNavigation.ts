@@ -1,8 +1,8 @@
-// THE LIBRARY'S NAVIGATION, lifted out of LibraryScreen (0.15.0, his A on the decision page
-// "Hygiene Pass Decisions": the screen in two rounds, its hooks first): what a move records and
-// where it lands, the three ways to arrive, the crumb trail, Backspace and history's restores, and
-// the scroll a listing comes back to. The state stays the screen's (the search hook reads it
-// first) and comes in here, as it does to lensNavigation; the moves go back under their old names.
+// THE LIBRARY'S NAVIGATION, lifted out of LibraryScreen (0.15.0, the screen in two rounds, its
+// hooks first): what a move records and where it lands, the three ways to arrive, the crumb
+// trail, Backspace and history's restores, and the scroll a listing comes back to. The state
+// stays the screen's (the search hook reads it first) and comes in here, as it does to
+// lensNavigation; the moves go back under their old names.
 import { useEffect, useEffectEvent, useLayoutEffect, useRef } from "react";
 import type { MediaIndexPools, MediaIndexStatus, MediaNode } from "@shared/model";
 import { useStore, type LibrarySpot } from "@/store";
@@ -234,8 +234,8 @@ export function useLibraryNavigation(d: {
   // The FRONT DOOR was asked for — "Library" re-invoked while already here, so
   // the nonce bumped: reset to the source list.
   // Otherwise you simply CAME BACK from another screen: restore where the last
-  // visit left off. (T3 used to reset here too; see setScreen for why that
-  // reversed.)
+  // visit left off. (The old front-door rule used to reset here too; see
+  // setScreen for why that reversed.)
   const libraryResetNonce = useStore((s) => s.libraryResetNonce);
   const clearLibraryTarget = useStore((s) => s.clearLibraryTarget);
   /** Nonce this mount has already acted on — null until the first run. */
@@ -246,7 +246,7 @@ export function useLibraryNavigation(d: {
     // naturally idempotent the way the old always-reset version was: its first
     // run RESTORES, so a second run falling through to moveTo(null, []) undoes
     // the restore it just made — the screen restored and instantly reset,
-    // which read as "restore doesn't work" in dev while the built app was
+    // which looked as if restore did not work in dev while the built app was
     // fine. The skip is the idempotence now.
     if (handledNonce.current === libraryResetNonce) return;
     // First action of a fresh mount = plain navigation back (a front-door

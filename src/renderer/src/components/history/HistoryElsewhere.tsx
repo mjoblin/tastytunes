@@ -12,7 +12,12 @@ import { RowMenu } from "@/components/media/RowMenu";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { useIndexPools } from "@/hooks/useIndexPools";
 import { useWholeRecord } from "@/hooks/useWholeRecord";
-import { heardElsewhere, type HeardArtist, type HeardTrack } from "@shared/elsewhere";
+import {
+  heardElsewhere,
+  mostHeardFirst,
+  type HeardArtist,
+  type HeardTrack,
+} from "@shared/elsewhere";
 import { openArtistInLibrary, openRefInLibrary } from "@/lib/mediaActions";
 import type { MediaRef } from "@/lib/mediaRef";
 import { cx, fmtCount, fmtRelative, matchesFilter } from "@/lib/format";
@@ -31,13 +36,13 @@ import { ListKeysContext, useListKeys, type ListItemAttrs } from "@/hooks/useLis
  * artist the library holds goes to their page there. Nothing here can be
  * played: there is nothing of it to play.
  *
- * SHAPE (user, 2026-09-11, after the first build listed every track and every
- * radio song in three modes): "413 tracks by 363 artists … 2 of them in your
- * library" — the track-level link to the library was empty and the tracks
- * "largely unknown to me; artists I recognize". What he wants of a row: "does
- * it relate to something I own; get more information on it". So the unit is
- * the artist, the relation is at the artist's level (albums of their own in
- * the library, or a credit), and the information is in-app.
+ * SHAPE (after the first build listed every track and every radio song in
+ * three modes): the track-level link to the library came up nearly empty,
+ * and the tracks were largely unknown where the artists were recognized. A
+ * row has to say whether it relates to something in the library, and get
+ * more information on it. So the unit is the artist, the relation is at the
+ * artist's level (albums of their own in the library, or a credit), and the
+ * information is in-app.
  */
 type Sort = "heard" | "recent";
 let elsewhereMem: { sort: Sort; reversed: boolean; ownedOnly: boolean; open: string[] } = {
@@ -90,7 +95,7 @@ async function trackArt(t: HeardTrack): Promise<string | null> {
 /** THE ARTIST'S PICTURE COMES FROM ANY OF THEIR TRACKS, not the most-heard
  *  one alone: that one is often a radio song with no album name, or a play
  *  from before covers were captured, and the row stayed blank while its third
- *  track had a cover (user, 2026-09-12: "should I be seeing more album art?").
+ *  track had a cover.
  *  Saved covers for every track first, then the archive for the first few
  *  that name an album. */
 async function artistArt(tracks: readonly HeardTrack[]): Promise<string | null> {
@@ -110,8 +115,8 @@ async function artistArt(tracks: readonly HeardTrack[]): Promise<string | null> 
 /** How long a row must stay on screen before it asks for its picture: a flick
  *  through a hundred rows then asks for nothing, and stopping on ten asks for
  *  ten. Every row that merely passed through the viewport used to queue a
- *  MusicBrainz search, one a second for as long as the scroll had been (user,
- *  2026-09-12: "i don't want the app to be too demanding on musicbrainz"). */
+ *  MusicBrainz search, one a second for as long as the scroll had been, too
+ *  heavy a load on MusicBrainz. */
 const DWELL_MS = 500;
 /** Asked only once the row has DWELLED on screen: a list of hundreds must not
  *  fire hundreds of lookups. A picture found is kept for the session; a miss
@@ -235,14 +240,12 @@ export function HistoryElsewhere({
         ...a.where,
       ]),
     );
-    kept.sort((a, b) =>
-      sort === "heard" ? b.heard - a.heard || b.lastAt - a.lastAt : b.lastAt - a.lastAt,
-    );
+    kept.sort((a, b) => (sort === "heard" ? mostHeardFirst(a, b) : b.lastAt - a.lastAt));
     return reversed ? kept.reverse() : kept;
   }, [pool, filter, sort, reversed]);
   useEffect(() => onCounts(artists.length, pool.length), [onCounts, artists.length, pool.length]);
 
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the list one Tab stop; up and down through the
+  // FROM THE KEYBOARD (0.14.0): the list one Tab stop; up and down through the
   // artists and an open artist's tracks, as the Timeline's sessions and their plays; Enter opens
   // or closes an artist, or opens a track the library holds, as its click does; "." the row's
   // More menu. An open artist's About links stay Tab stops of their own.
@@ -299,7 +302,7 @@ export function HistoryElsewhere({
               },
             ]
           : []),
-        { label: "Search the library", run: () => requestSearch(q) },
+        { label: "Search the library", run: () => requestSearch(q, "library") },
         { label: "Look it up", run: () => lookUp(q, "recording") },
         { label: "Copy", run: () => copy(t.artist ? `${t.artist} - ${t.title}` : t.title) },
       ],
@@ -314,7 +317,7 @@ export function HistoryElsewhere({
       ...menuAt(e),
       items: [
         ...(a.inLibrary ? [{ label: "Go to artist", run: () => openArtistInLibrary(a.name) }] : []),
-        { label: "Search the library", run: () => requestSearch(a.name) },
+        { label: "Search the library", run: () => requestSearch(a.name, "library") },
         { label: "Look it up", run: () => lookUp(a.name, "artist") },
         { label: "Copy", run: () => copy(a.name) },
       ],
@@ -459,7 +462,7 @@ function Meta({
   return (
     // ONE WIDTH for every row: the time reads "Sep 4" on one and "23 hr ago" on
     // the next, and a column that shrank to its text moved the actions beside
-    // it from row to row (user, 2026-09-12). w-20 holds the longest, "59 min ago".
+    // it from row to row. w-20 holds the longest, "59 min ago".
     <div className="shrink-0 w-20 text-right">
       <div className="text-[11.5px] tabular-nums text-faint">{fmtRelative(lastAt, now)}</div>
       <div className="text-[10.5px] mt-0.5 text-faint/70 tabular-nums">{count}</div>
@@ -527,7 +530,7 @@ function ArtistRow({
         // THE DISCLOSURE IS A MARK, NOT AN ACTION: the Timeline's session rows'
         // chevron, at the row's far edge, always there, turned when open. It sat
         // among the hover actions first, pinned while open, and read as a boxed
-        // third button between two others (user, 2026-09-11: "a bit weird").
+        // third button between two others.
         meta={
           <span className="flex items-center gap-2">
             <Meta count={times(a.heard, "time", "times")} lastAt={a.lastAt} now={now} />

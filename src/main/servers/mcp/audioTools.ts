@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { EQ_GAIN_MAX, EQ_GAIN_MIN, brightnessOptions } from "@shared/smoip";
+import { creditNames } from "@shared/model";
 import { getSettings } from "../../data/persist";
-import { fetchArtistInfo } from "../../lookups/artistInfo";
+import { fetchArtistInfoForCredit } from "../../lookups/artistInfo";
 import { fetchAlbumInfo } from "../../lookups/albumInfo";
 import { fetchLyrics } from "../../lookups/lyrics";
 import { type ToolContext, type ToolImpl, ok, err, toneCaps, defineTool } from "./toolkit";
@@ -152,8 +153,10 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
         const s = ctx.connected();
         const name = a.artist ?? s.playState?.metadata?.artist ?? null;
         if (!name) return err("No artist playing — pass artist explicitly.");
-        const info = await fetchArtistInfo(name);
-        if (!info) return ok(`No artist match for "${name}".`);
+        // the whole credit, then its lead name (artistInfo's fetchArtistInfoForCredit)
+        const info = await fetchArtistInfoForCredit(name);
+        if (!info)
+          return err(`No artist found for "${name}". Pass artist with the artist's name alone.`);
         return ok({
           name: info.name,
           summary: info.summary,
@@ -178,8 +181,14 @@ export function audioTools(ctx: ToolContext): Record<string, ToolImpl> {
         const artist = a.artist ?? s.playState?.metadata?.artist ?? null;
         const album = a.album ?? s.playState?.metadata?.album ?? null;
         if (!artist || !album) return err("No album playing — pass artist and album explicitly.");
-        const info = await fetchAlbumInfo(artist, album, false, true);
-        if (!info) return ok(`No album match for "${album}" by ${artist}.`);
+        const lead = creditNames(artist)[0];
+        const info =
+          (await fetchAlbumInfo(artist, album, false, true)) ??
+          (lead && lead !== artist ? await fetchAlbumInfo(lead, album, false, true) : null);
+        if (!info)
+          return err(
+            `No album found for "${album}" by ${artist}. Pass artist and album as the album credits them.`,
+          );
         return ok({
           title: info.title,
           year: info.year,

@@ -124,7 +124,7 @@ export function PlaylistsScreen(): React.JSX.Element {
   const [presetFor, setPresetFor] = useState<{ item: PlaylistItem; x: number; y: number } | null>(
     null,
   );
-  // A sort picker rather than manual ordering (user call 2026-07-24): manual
+  // A sort picker rather than manual ordering: manual
   // order fights the recency sort that already does useful work and needs an
   // `order` field maintained forever, for control a picker gives at a fraction
   // of the cost. 'updated' is the neutral default the store already writes in.
@@ -236,7 +236,7 @@ export function PlaylistsScreen(): React.JSX.Element {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // FROM THE KEYBOARD (0.14.0, his K1 to K9): the playlists one Tab stop, Enter opens one as its
+  // FROM THE KEYBOARD (0.14.0): the playlists one Tab stop, Enter opens one as its
   // click does; its tracks another, "." a track's More menu, Delete removes it with Undo, and
   // Option with up or down moves it, ONE change to the playlist on Option's release
   const listKeys = useListKeys({
@@ -263,7 +263,7 @@ export function PlaylistsScreen(): React.JSX.Element {
       preview: (from, to) => setMovePreview({ from, to }),
       commit: (from, to) => {
         if (!selected) return setMovePreview(null);
-        void tt.playlistSetItems(selected.id, arrayMove(selected.items, from, to));
+        moveItem(from, to);
       },
       cancel: () => setMovePreview(null),
     },
@@ -274,7 +274,32 @@ export function PlaylistsScreen(): React.JSX.Element {
     const from = ids.indexOf(String(e.active.id));
     const to = ids.indexOf(String(e.over.id));
     if (from < 0 || to < 0) return;
-    void tt.playlistSetItems(selected.id, arrayMove(selected.items, from, to));
+    moveItem(from, to);
+  };
+
+  /**
+   * A move, with its own undo (0.16.0 pushed none, so Cmd+Z after reordering a new playlist undid
+   * its creation as it stood). Undoing finds the track in the playlist as it is NOW, at its new
+   * place or by its content, and puts it back where it was.
+   */
+  const moveItem = (from: number, to: number): void => {
+    if (!selected) return;
+    const id = selected.id;
+    const item = selected.items[from];
+    void tt.playlistSetItems(id, arrayMove(selected.items, from, to));
+    if (!item) return;
+    const same = (x: PlaylistItem | undefined): boolean =>
+      !!x && x.title === item.title && x.artist === item.artist && x.objectId === item.objectId;
+    useStore.getState().pushUndo(`Move “${item.title}” in Playlist`, () => {
+      const current = useStore.getState().playlists.find((p) => p.id === id);
+      if (!current) return;
+      const at = same(current.items[to]) ? to : current.items.findIndex(same);
+      if (at < 0) return;
+      void tt.playlistSetItems(
+        id,
+        arrayMove(current.items, at, Math.min(from, current.items.length - 1)),
+      );
+    });
   };
 
   /**
@@ -445,7 +470,7 @@ export function PlaylistsScreen(): React.JSX.Element {
                   aria-current={selected?.id === p.id ? "true" : undefined}
                   className={cx(
                     "text-left rounded-lg px-3 py-2 transition-colors",
-                    selected?.id === p.id ? "bg-amberdim text-amber" : "hover:bg-veil text-ink",
+                    selected?.id === p.id ? "bg-accentdim text-accent" : "hover:bg-veil text-ink",
                   )}
                 >
                   <div className="flex items-center gap-2.5">
@@ -809,7 +834,7 @@ function TrackRow({
         onMenu(e);
       }}
       className={cx(
-        "group grid items-center gap-3 rounded-lg px-2 py-1.5",
+        "group grid items-center gap-3 rounded-lg px-3 py-1.5",
         // the DR cell is a sixth column only while it renders: an empty auto
         // column would still cost a gap and inset the duration
         dr !== undefined

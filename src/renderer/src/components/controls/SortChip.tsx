@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { cx } from "@/lib/format";
 import { PopoverChrome } from "@/hooks/usePopover";
+import { moveAmongItems, useMenuKeys } from "@/hooks/useMenuKeys";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { HeaderChip } from "@/components/chrome/Chrome";
 
 /**
  * The sort control chip + popover (lifted from LibraryScreen so the library
- * lenses share it): gold when any non-neutral sort or reverse is active;
+ * lenses share it): the accent when any non-neutral sort or reverse is active;
  * clicking the active sort flips its direction unless it's noReverse.
  */
 export function SortChip<T extends string>({
@@ -27,6 +28,9 @@ export function SortChip<T extends string>({
   onToggleReverse(): void;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
+  // an open list is a menu from the keyboard (hooks/useMenuKeys), as the facet pickers' are
+  const listRef = useRef<HTMLDivElement | null>(null);
+  useMenuKeys(open, listRef);
   return (
     <div className="relative">
       <HeaderChip
@@ -43,10 +47,13 @@ export function SortChip<T extends string>({
           <PopoverChrome onClose={() => setOpen(false)} />
           <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
           <div
+            ref={listRef}
+            tabIndex={-1}
+            onKeyDown={moveAmongItems}
             className={cx(
               // 224 px: the longest labels ("Duration (longest first)") and the hint each fit one
-              // line (at 192 the hint left "it" alone on a second, his eye on 0.13.0-rc.4)
-              "absolute right-0 top-full mt-1.5 z-30 w-56",
+              // line (at 192 the hint left "it" alone on a second, 0.13.0-rc.4)
+              "absolute right-0 top-full mt-1.5 z-30 w-56 outline-none",
               POPOVER_CARD,
               "p-1.5 space-y-0.5",
             )}
@@ -56,6 +63,7 @@ export function SortChip<T extends string>({
               return (
                 <button
                   key={s.value}
+                  aria-current={active || undefined}
                   onClick={() => {
                     // clicking the active sort flips its direction
                     if (active) {
@@ -69,7 +77,7 @@ export function SortChip<T extends string>({
                   aria-label={active && !s.noReverse ? `${s.label}, click to reverse` : s.label}
                   className={cx(
                     "w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left text-[13px] transition-colors",
-                    active ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
+                    active ? "text-accent bg-accentdim" : "text-dim hover:text-ink hover:bg-veil",
                   )}
                 >
                   <span className="min-w-0 flex-1 truncate">{s.label}</span>

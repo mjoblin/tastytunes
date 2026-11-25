@@ -141,7 +141,7 @@ describe("an album's arrival key", () => {
     const a = node({
       title: "Bootleg",
       artist: "The Garden",
-      artUrl: "http://192.168.50.101:26125/aa/7/cover.jpg",
+      artUrl: "http://192.168.1.101:26125/aa/7/cover.jpg",
     });
     expect(arrivalKey(a, true)).toBe("bootleg|the garden|/aa/7/cover.jpg");
     expect(arrivalKey(a, false)).toBe("bootleg|the garden");

@@ -41,6 +41,14 @@ beforeEach(() => {
   mkdirSync(dir(), { recursive: true });
 });
 
+/** The module as a launch reads it, from a choices file holding `text`: the sweep runs only once
+ *  the file was read whole. */
+async function readWhole(text: string): Promise<typeof import("./artistChoices")> {
+  writeFileSync(join(app.getPath("userData"), "artist-choices.json"), text);
+  vi.resetModules();
+  return import("./artistChoices");
+}
+
 describe("what a chosen picture can be", () => {
   it("is an image, a cover with its album, or a file the app copied in", () => {
     expect(isArtistChoice({ kind: "image", url: "https://thumb.wikimedia.org/x.jpg" })).toBe(true);
@@ -187,7 +195,8 @@ describe("a chosen picture's copy (0.14.0)", () => {
     expect(resolveChoice("Band", [])?.url).toBe("https://thumb.wikimedia.org/x.jpg");
   });
 
-  it("is kept by the sweep while its choice names it, and goes an hour after a new choice", () => {
+  it("is kept by the sweep while its choice names it, and goes an hour after a new choice", async () => {
+    const { choiceOf, setChoice, setCopy } = await readWhole("{}");
     const old = "eeeeeeeeeeeeeeeeeeeeeeee.jpg";
     writeFileSync(join(dir(), old), "x");
     setChoice("Other", { kind: "image", url: "https://thumb.wikimedia.org/o.jpg" });
@@ -203,7 +212,8 @@ describe("a chosen picture's copy (0.14.0)", () => {
 });
 
 describe("the copied files", () => {
-  it("go once no choice names them and they are over an hour old", () => {
+  it("go once no choice names them and they are over an hour old", async () => {
+    const { setChoice } = await readWhole("{}");
     const old = "aaaaaaaaaaaaaaaaaaaaaaaa.jpg";
     const fresh = "bbbbbbbbbbbbbbbbbbbbbbbb.png";
     const kept = "cccccccccccccccccccccccc.jpg";
@@ -217,6 +227,20 @@ describe("the copied files", () => {
     expect(left).toContain(kept);
     expect(left).not.toContain(old);
     setChoice("Other", null);
+  });
+
+  it("stay when the choices file wasn't read whole, so a choice can't take the others with it", async () => {
+    const orphan = "dddddddddddddddddddddddd.jpg";
+    writeFileSync(join(dir(), orphan), "x");
+    const twoHoursAgo = new Date(Date.now() - 7_200_000);
+    utimesSync(join(dir(), orphan), twoHoursAgo, twoHoursAgo);
+    // a choice this version can't read, and a file that isn't JSON at all
+    for (const text of [JSON.stringify({ someone: { kind: "later" } }), "{not json"]) {
+      const { setChoice } = await readWhole(text);
+      setChoice("Other", { kind: "image", url: "https://thumb.wikimedia.org/q.jpg" });
+      expect(readdirSync(dir())).toContain(orphan);
+      setChoice("Other", null);
+    }
   });
 });
 

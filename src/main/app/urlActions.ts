@@ -1,8 +1,13 @@
 import { app, Notification } from "electron";
 import type { StreamerCommand } from "@shared/ipc";
-import { parseUrlAction, staysInBackground, URL_SCHEME, type UrlAction } from "@shared/urlActions";
+import {
+  parseUrlAction,
+  SCREEN_LINK_NAMES,
+  staysInBackground,
+  URL_SCHEME,
+  type UrlAction,
+} from "@shared/urlActions";
 import { errorMessage } from "@shared/guards";
-import { MENU_SCREENS } from "./menu";
 import { deviceManager } from "./runtime";
 import { giveFocusBack, onUrl } from "./urlInbox";
 import { sendMenuCommand, showMainWindow, toggleMiniPlayer } from "./windows";
@@ -26,14 +31,8 @@ import { nameKey } from "@shared/keys";
 /** How long a verb waits for the streamer when it arrives with the app just launched. */
 const CONNECT_WAIT_MS = 15_000;
 
-/** The names a URL may give a screen: its key, and its name as the Go menu shows it
- *  ("history" for the History screen, whose key is recently-played), and Settings. */
-const SCREEN_NAMES: Readonly<Record<string, string>> = Object.fromEntries(
-  MENU_SCREENS.flatMap(([screen, label]): Array<[string, string]> => [
-    [screen, screen],
-    [label.toLowerCase().replace(/\s+/g, "-"), screen],
-  ]).concat([["settings", "settings"]]),
-);
+/** How long, once connected, a verb waits for the streamer's power and play state. */
+const SETTLE_WAIT_MS = 6_000;
 
 /** Takes the URLs; called once, in whenReady. */
 export function serveUrlActions(): void {
@@ -44,7 +43,13 @@ export function serveUrlActions(): void {
       // registration is a convenience; a failure leaves the scheme to the bundle's own claim
     }
   }
-  onUrl((url, stoleFocus) => void run(url, stoleFocus));
+  // a verb that throws is refused like any other, never left as an unhandled rejection
+  onUrl(
+    (url, stoleFocus) =>
+      void run(url, stoleFocus).catch((e: unknown) =>
+        refuse(url, "Couldn't run that TastyTunes link.", errorMessage(e)),
+      ),
+  );
 }
 
 function report(level: "info" | "warn", text: string): void {
@@ -61,16 +66,29 @@ function refuse(url: string, reason: string, detail?: string): void {
 }
 
 function connected(): boolean {
-  return deviceManager.snapshot().connection.phase === "connected";
+  return deviceManager.connectionNow.phase === "connected";
 }
 
+/** The streamer's power and play state, which arrive a moment after the socket opens: a verb sent
+ *  before them can't see that the streamer is already on, and an ON sent to a streamer that is
+ *  on restarts it. */
+function settled(): boolean {
+  const s = deviceManager.streamerNow;
+  return s.systemPower != null && s.playState != null;
+}
+
+/** Connected, then settled, within one wait; a model that never sends its power or play state is
+ *  still ready once the wait is up. */
 async function waitForStreamer(): Promise<boolean> {
   const until = Date.now() + CONNECT_WAIT_MS;
+  const pause = (): Promise<void> => new Promise((r) => setTimeout(r, 250));
   while (!connected()) {
     if (Date.now() > until) return false;
-    await new Promise((r) => setTimeout(r, 250));
+    await pause();
   }
-  return true;
+  const settledBy = Math.min(until, Date.now() + SETTLE_WAIT_MS);
+  while (!settled() && connected() && Date.now() < settledBy) await pause();
+  return connected();
 }
 
 const same = (a: string, b: string): boolean =>
@@ -81,7 +99,7 @@ const same = (a: string, b: string): boolean =>
 function commandFor(
   action: Exclude<UrlAction, { kind: "screen" | "mini" }>,
 ): StreamerCommand | string {
-  const s = deviceManager.snapshot();
+  const s = deviceManager.streamerNow;
   switch (action.kind) {
     case "command":
       return action.command;
@@ -106,7 +124,7 @@ function commandFor(
 }
 
 async function run(url: string, stoleFocus: boolean): Promise<void> {
-  const parsed = parseUrlAction(url, SCREEN_NAMES);
+  const parsed = parseUrlAction(url, SCREEN_LINK_NAMES);
   // the focus first, before any wait: a key press should not leave the app in front
   if (stoleFocus && (!parsed.ok || staysInBackground(parsed.action))) giveFocusBack();
   if (!parsed.ok) return refuse(url, parsed.reason);

@@ -1,4 +1,5 @@
 import { IPC } from "@shared/ipc";
+import { unhurried } from "@shared/model";
 import { broadcastAlbumDrs, broadcastAnalysisStats, broadcastSettings } from "../app/broadcast";
 import { streamerHost } from "../app/runtime";
 import { getSettings, updateSettings } from "../data/persist";
@@ -13,24 +14,40 @@ import {
   recordAlbumDrsFromTracks,
 } from "../lookups/audioAnalysis";
 import { pools } from "../media/mediaIndex";
-import { audioResUrl } from "../media/upnpBrowser";
+import { audioRes, audioResUrl } from "../media/upnpBrowser";
+import { windowsGone } from "../app/crashReload";
 import { loggedFetch } from "../netlog";
 import { closeAudioStream, openAudioStream, readAudioStream } from "../media/audioStream";
 import { handle } from "../app/guard";
 
 /**
- * THE LARGEST FILE THE ANALYSIS READS (0.12.0, from a user's email: 24/192 FLACs past about
+ * THE LARGEST FILE THE ANALYSIS READS (0.12.0: 24/192 FLACs past about
  * 5:40 had no waveform). The renderer decodes the whole file at its native rate, so a file costs
  * its own size again as samples (a 6-minute 24/192 track is about 525 MB of them); the cap is a
  * memory bound. It was 256 MiB, with the renderer holding three copies of the file and main two.
  * With those copies gone, 512 MiB (about 11 minutes of 24/192 music, 22 of 24/96) costs about
  * what 256 MiB did, measured 2026-10-17 on 24/192 FLACs: a 507 MB file raised the window's
  * process by 2.2 GB and main's by 0.6 GB, where the old code took 2.0 GB and 0.7 GB for a 249 MB
- * one (journal/0.12.0.md). The streaming decoder (0.14.0) retires the cap.
+ * one. The streaming decoder (0.14.0) retires the cap.
  * TASTYTUNES_ANALYSIS_MAX_BYTES lets a harness set it small.
  */
 const ANALYSIS_MAX_BYTES =
   Number(process.env["TASTYTUNES_ANALYSIS_MAX_BYTES"]) || 512 * 1024 * 1024;
+
+/**
+ * THE LONGEST FILE A WHOLE DECODE TAKES (0.16.0). The file's size bounds a lossless file's
+ * samples (about its own size again), never a lossy one's: an MP3 is a tenth of its samples, so a
+ * one-hour MP3 under the size cap decodes to about 1.3 GB of them and a two-hour mix to 2.5 GB,
+ * and the window holds about twice that while it decodes, as soon as the track plays. If the
+ * window dies it reloads onto the same track and starts again. The samples a decode would make
+ * (32-bit, at the file's own rate, every channel) are estimated from what the server says of the
+ * track before a byte is fetched, and past this the file is refused by its length; one handed
+ * out before a window stopped is not handed out again this session.
+ */
+const DECODED_MAX_BYTES = 1024 * 1024 * 1024;
+/** How long an unhurried whole-file read waits for the server's next bytes before giving up. */
+const PACED_IDLE_MS = 30_000;
+const handedOut = new Map<string, number>();
 
 // whether this session has asked for the summaries made before tempo and key to be remade
 let summariesRefreshed = false;
@@ -44,19 +61,46 @@ export function registerAudioIpc(): void {
   // THE EVIDENCE the playback bar keys its taller geometry on (settings.waveformSeen), set once:
   // a track's file opened for measuring, or an analysis served (stored or read back). Since
   // 0.14.0 a waveform draws while its file is measured, so waiting for the stored analysis let
-  // the seek strip grow for the first wave and the bar a moment later, two steps on a first run
-  // (his eye, 2026-11-01); the file opening comes before any wave, so the bar grows once.
+  // the seek strip grow for the first wave and the bar a moment later, two steps on a first run;
+  // the file opening comes before any wave, so the bar grows once.
   const noteWaveformSeen = (): void => {
     if (getSettings().waveformSeen) return;
     broadcastSettings(updateSettings({ waveformSeen: true }));
   };
-  handle(IPC.expTrackAudio, async (_e, serverUdn: string, objectId: string) => {
+  handle(IPC.expTrackAudio, async (_e, serverUdn: string, objectId: string, opts?: unknown) => {
+    // unhurried (shared/model): a measuring nobody is waiting on reads no faster than the pace,
+    // and is given up only when the server stops sending, not after a fixed two minutes
+    const paced =
+      typeof opts === "object" && opts != null && (opts as { pace?: unknown }).pace === true;
     const host = streamerHost();
     if (!host || typeof serverUdn !== "string" || typeof objectId !== "string") return null;
-    const url = await audioResUrl(host, serverUdn, objectId);
-    if (!url) return null;
+    const res0 = await audioRes(host, serverUdn, objectId);
+    if (!res0) return null;
+    const { url } = res0;
+    if (res0.secs != null) {
+      const perSec = (res0.rate ?? 48_000) * (res0.channels ?? 2) * 4;
+      if (res0.secs * perSec > DECODED_MAX_BYTES)
+        return { tooLong: { secs: res0.secs, maxSecs: Math.floor(DECODED_MAX_BYTES / perSec) } };
+    }
+    // a file whose decode a window stopped during is not tried again this session (a reload lands
+    // on the same playing track, and would decode it again)
+    const key = `${serverUdn}|${objectId}`;
+    const at = handedOut.get(key);
+    if (at != null && windowsGone() > at) return null;
+    handedOut.delete(key);
+    handedOut.set(key, windowsGone());
+    if (handedOut.size > 500) handedOut.delete(handedOut.keys().next().value as string);
     try {
-      const res = await loggedFetch("media-audio", url, { signal: AbortSignal.timeout(120_000) });
+      const quiet = new AbortController();
+      let idle: NodeJS.Timeout | null = null;
+      const stillSending = (): void => {
+        if (idle) clearTimeout(idle);
+        idle = setTimeout(() => quiet.abort(), PACED_IDLE_MS);
+      };
+      if (paced) stillSending();
+      const res = await loggedFetch("media-audio", url, {
+        signal: paced ? quiet.signal : AbortSignal.timeout(120_000),
+      });
       if (!res.ok || !res.body) return null;
       const declared = Number(res.headers.get("content-length") ?? 0);
       const tooLarge = (bytes: number) => ({ tooLarge: { bytes, maxBytes: ANALYSIS_MAX_BYTES } });
@@ -68,6 +112,7 @@ export function registerAudioIpc(): void {
       // one buffer the size the server declared (no second copy on the way to the renderer);
       // chunks gathered only when it declared none, or more arrived than it said
       const reader = res.body.getReader();
+      const due = paced ? unhurried() : null;
       let out: Buffer | null = declared > 0 ? Buffer.allocUnsafe(declared) : null;
       let chunks: Uint8Array[] = [];
       let total = 0;
@@ -86,7 +131,13 @@ export function registerAudioIpc(): void {
         if (out) out.set(value, total);
         else chunks.push(value);
         total += value.byteLength;
+        if (due) {
+          const wait = due(value.byteLength);
+          if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+          stillSending();
+        }
       }
+      if (idle) clearTimeout(idle);
       return out ? out.subarray(0, total) : Buffer.concat(chunks, total);
     } catch {
       return null;

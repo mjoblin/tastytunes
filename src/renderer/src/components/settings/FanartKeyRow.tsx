@@ -5,7 +5,7 @@ import { SecretKeyRow, type SecretKeySpec } from "@/components/settings/SecretKe
 
 /**
  * A PERSONAL FANART.TV KEY (0.13.0 round 11): fanart.tv's artist photos, the 1000 x 1000 ones Plex
- * offers, among Choose a picture's choices. The key is the reader's own (decisions/0001: none of
+ * offers, among Choose a picture's choices. The key is the reader's own (none of
  * ours ships), checked with fanart.tv as it is saved (a key it refuses is not kept), then kept
  * encrypted in the secrets store and shown only by how it ends (SecretKeyRow). It rides Liner
  * notes' artist lookups (fanart.tv looks an artist up by the MusicBrainz id they found), so it

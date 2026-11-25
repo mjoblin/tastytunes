@@ -4,6 +4,13 @@ import { SIGNAL_COLORS, SIGNAL_LABELS, cx, fmtKHz, signalGlow, signalQuality } f
 import type { SignalQuality } from "@/lib/format";
 import { PopoverCard } from "@/components/chrome/Overlay";
 
+/** The signal lamp's three colors and what each means, shown in the lamp's own popover. */
+const SIGNAL_LEGEND: [Exclude<SignalQuality, "unknown">, string, string][] = [
+  ["hires", "Hi-res lossless", "Lossless above CD quality (or MQA)."],
+  ["lossless", "Lossless", "Bit-perfect CD quality."],
+  ["lossy", "Lossy", "Compressed stream (internet radio, Bluetooth, AAC/MP3)."],
+];
+
 /**
  * The lamp glyph. Colour AND shape say the quality, so the lamp reads without
  * hue (a colour-vision request, 2026-08-21 — amber vs green was one lamp to
@@ -104,6 +111,24 @@ export function SignalLamp({
               <div key={label} className="flex items-baseline justify-between gap-3">
                 <span className="text-[11px] text-faint">{label}</span>
                 <span className="font-mono text-[11px] text-ink/90">{value}</span>
+              </div>
+            ))}
+          </div>
+          {/* what each color means, beside the lamp it describes (0.16.0's settings diet: the
+              legend had a Settings tab of its own); this one's own color reads in ink */}
+          <div data-signal-legend className="mt-3 pt-2.5 border-t border-edge space-y-1.5">
+            {SIGNAL_LEGEND.map(([q, label, desc]) => (
+              <div
+                key={q}
+                className={cx(
+                  "flex items-start gap-2 text-[11px] leading-snug",
+                  q === quality ? "text-ink" : "text-faint",
+                )}
+              >
+                <SignalDot quality={q} className="h-1.5 w-1.5 mt-[5px] shrink-0" />
+                <span>
+                  <span className="font-medium">{label}</span> {desc}
+                </span>
               </div>
             ))}
           </div>

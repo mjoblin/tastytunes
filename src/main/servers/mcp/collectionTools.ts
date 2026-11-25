@@ -6,11 +6,12 @@ import {
   heartPeersFrom,
   type Favorite,
   LARGE_QUEUE_TRACKS,
+  type PlaylistItem,
 } from "@shared/model";
 import { pools as indexPools } from "../../media/mediaIndex";
 import { isRadioMetadata } from "@shared/smoip";
 import { getSettings } from "../../data/persist";
-import { radioSearch, radioByTags } from "../../lookups/radioBrowser";
+import { radioFind } from "../../lookups/radioBrowser";
 import { LargeQueueError, refreshServers } from "../../media/upnpBrowser";
 import { searchServer as librarySearch } from "../../media/mediaIndex";
 import {
@@ -22,6 +23,16 @@ import {
   largeQueueAsk,
   freshObjectId,
   defineTool,
+  localTimeOrNull,
+  tracksArg,
+  readTrackRefs,
+  refsNote,
+  noTrackFound,
+  rowIds,
+  acted,
+  settle,
+  trackMoved,
+  DEVICE_ARG,
 } from "./toolkit";
 import { nameKey } from "@shared/keys";
 
@@ -42,9 +53,26 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         genre: z
           .string()
           .optional()
+          .describe("Style tag, e.g. 'jazz', matched against the directory's tags."),
+        country: z
+          .string()
+          .optional()
+          .describe("A two-letter country code ('NZ') or a country's name."),
+        language: z.string().optional().describe("A language, e.g. 'english' or 'german'."),
+        min_bitrate: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Only streams of at least this many kbps."),
+        sort: z
+          .enum(["popular", "votes", "bitrate"])
+          .optional()
           .describe(
-            "Style tag, e.g. 'jazz' — matched against the directory's tags, most-listened first.",
+            "Default 'popular' (most listened); 'votes' the listeners' votes; 'bitrate' the best stream first.",
           ),
+        limit: z.number().int().min(1).max(60).optional().describe("Default 15."),
+        offset: z.number().int().min(0).optional().describe("For paging; default 0."),
       },
       handler: async (a) => {
         // The directory gate lives at the source (radioBrowser.fetchRaw), so
@@ -59,39 +87,49 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         const q = a.query?.trim();
         const g = a.genre != null ? nameKey(a.genre) : undefined;
         if (!q && !g) return err("Pass query and/or genre.");
-        let stations;
-        if (g && !q) stations = await radioByTags([g]);
-        else {
-          stations = await radioSearch(q as string);
-          if (g)
-            stations = stations.filter((st) =>
-              st.tags
-                .toLowerCase()
-                .split(",")
-                .map((t) => t.trim())
-                .includes(g),
-            );
-        }
-        return ok(
-          stations.slice(0, 15).map((st) => ({
+        const offset = a.offset ?? 0;
+        const limit = a.limit ?? 15;
+        const stations = await radioFind({
+          name: q,
+          tag: g,
+          country: a.country,
+          language: a.language,
+          bitrateMin: a.min_bitrate,
+          order: a.sort === "votes" ? "votes" : a.sort === "bitrate" ? "bitrate" : "clickcount",
+          limit,
+          offset,
+        });
+        return ok({
+          offset,
+          returned: stations.length,
+          ...(stations.length === limit ? { more: "Page on with offset for more." } : {}),
+          stations: stations.map((st) => ({
             name: st.name,
             url: st.url,
-            country: st.country,
+            country_code: st.countryCode || null,
+            ...(st.language ? { language: st.language } : {}),
             codec: st.codec,
+            bitrate_kbps: st.bitrate || null,
+            votes: st.votes ?? 0,
             tags: st.tags,
           })),
-        );
+        });
       },
     }),
     play_radio: defineTool({
       inputSchema: {
         url: z.string().url().describe("Stream URL (from search_radio or a station favorite)."),
         name: z.string().min(1).describe("Display name for the station."),
+        device: DEVICE_ARG,
       },
       handler: async (a) => {
-        ctx.connected();
-        await dm.command({ type: "streamRadio", url: a.url, name: a.name });
-        return ok(`Tuning to ${String(a.name)}.`);
+        const t = await ctx.target(a.device);
+        return acted(
+          t,
+          () => t.command({ type: "streamRadio", url: a.url, name: a.name }),
+          `Tuning to ${String(a.name)}.`,
+          trackMoved,
+        );
       },
     }),
     // ---- favorites
@@ -104,7 +142,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
             name: p.name,
             tracks: p.items.length,
             seconds: p.items.reduce((n, i) => n + (i.durationSecs ?? 0), 0),
-            last_played: p.lastPlayedAt ?? null,
+            last_played: localTimeOrNull(p.lastPlayedAt),
             // surfaced because a run that skipped tracks is worth knowing
             // about before you play it again
             missing_last_time: p.lastMissing ?? [],
@@ -117,14 +155,19 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: (a) => {
         const p = dm.snapshot().playlists.find((x) => x.id === a.id);
         if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
+        // each row's place (edit_playlist's positions) and, when stored, its ids (0.16.0)
         return ok({
           id: p.id,
           name: p.name,
-          items: p.items.map((i) => ({
+          items: p.items.map((i, position) => ({
+            position,
             title: i.title,
             artist: i.artist,
             album: i.album,
             seconds: i.durationSecs ?? null,
+            ...(i.serverUdn && i.objectId
+              ? { server_udn: i.serverUdn, object_id: i.objectId }
+              : {}),
           })),
         });
       },
@@ -136,59 +179,118 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         const p = dm.snapshot().playlists.find((x) => x.id === a.id);
         if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
         if (p.items.length === 0) return err(`"${p.name}" is empty.`);
+        const t = await ctx.target();
+        const before = t.snapshot();
         const res = await dm.playlistActivate(a.id);
         const missed = res.missed.length;
         // Name a few and count the rest: a long playlist can miss dozens, and
         // twenty-two titles inline is noise an agent has to wade through.
         const sample = res.missed.slice(0, 3).join(", ");
         const more = res.missed.length - 3;
-        return ok(
+        return settle(
+          t,
+          before,
           missed > 0
             ? `Queued ${res.added} of ${res.total} from "${p.name}". ${missed} not found on any media server (${sample}${more > 0 ? `, +${more} more` : ""}).`
             : `Queued ${res.added} ${res.added === 1 ? "track" : "tracks"} from "${p.name}".`,
+          trackMoved,
         );
       },
     }),
     create_playlist: defineTool({
       inputSchema: {
         name: z.string().describe("Name for the new playlist."),
+        tracks: tracksArg(LARGE_QUEUE_TRACKS)
+          .optional()
+          .describe(
+            `The tracks, in order (up to ${LARGE_QUEUE_TRACKS}): each {server_udn, object_id} from a listing or {title, artist?, album?}. Stored with their ids; the play queue is not touched.`,
+          ),
         from_queue: z
           .boolean()
           .optional()
-          .describe("Seed it with the current play queue (default false — creates it empty)."),
+          .describe("Instead of tracks: seed it with the current play queue (default false)."),
       },
       handler: (a) => {
+        if (a.tracks != null && a.from_queue === true)
+          return err("Give tracks or from_queue, not both.");
         const s = dm.snapshot();
-        const items =
-          a.from_queue === true
-            ? (s.queue?.items ?? [])
-                .map((i) => i.metadata)
-                .filter((m): m is NonNullable<typeof m> => m != null)
-                .map((m) => ({
-                  title: m.title ?? "Unknown track",
-                  artist: m.artist ?? null,
-                  album: m.album ?? null,
-                  artUrl: m.art_url ?? null,
-                  serverUdn: null,
-                  serverName: null,
-                  objectId: null,
-                  durationSecs: m.duration ?? null,
-                }))
-            : [];
+        // tracks named by the agent (0.16.0), found in the index and kept with their ids, so the
+        // copy chosen is the copy played; the queue's entries carry no ids, so each is found in the
+        // index by its content, and kept by content when it isn't there
+        const fromQueue = (): PlaylistItem[] => {
+          const rows = (s.queue?.items ?? [])
+            .map((i) => i.metadata)
+            .filter((m): m is NonNullable<typeof m> => m != null);
+          const titled = rows.flatMap((m, i) =>
+            m.title
+              ? [
+                  {
+                    i,
+                    ref: {
+                      title: m.title,
+                      artist: m.artist ?? undefined,
+                      album: m.album ?? undefined,
+                    },
+                  },
+                ]
+              : [],
+          );
+          const found = readTrackRefs(titled.map((t) => t.ref));
+          const inIndex = new Map(found.at.map((at, k) => [titled[at].i, found.items[k]]));
+          return rows.map(
+            (m, i) =>
+              inIndex.get(i) ?? {
+                title: m.title ?? "Unknown track",
+                artist: m.artist ?? null,
+                album: m.album ?? null,
+                artUrl: m.art_url ?? null,
+                serverUdn: null,
+                serverName: null,
+                objectId: null,
+                durationSecs: m.duration ?? null,
+              },
+          );
+        };
+        const named = a.tracks != null ? readTrackRefs(a.tracks) : null;
+        if (named && named.items.length === 0) return noTrackFound(named);
+        const items = named ? named.items : a.from_queue === true ? fromQueue() : [];
         // The returned playlist, not a lookup by name: on a name collision
         // the stored name is uniquified, and finding by the REQUESTED name
         // would report the old playlist's id — an agent would then edit
         // the wrong list.
         const made = dm.collections.playlistCreate(a.name, items);
-        return ok(`Created "${made.name}" with ${made.items.length} tracks. id: ${made.id}`);
+        // an object, not a sentence with the id inside it (0.16.0), so every miss can be named
+        return ok({
+          id: made.id,
+          name: made.name,
+          added: made.items.length,
+          ...(named ? refsNote(named) : {}),
+        });
       },
     }),
     add_to_playlist: defineTool({
-      inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
+      inputSchema: {
+        id: z.string().describe("Playlist id from list_playlists."),
+        tracks: tracksArg(LARGE_QUEUE_TRACKS)
+          .optional()
+          .describe("Tracks to add at the end, in order. Default: the playing track."),
+      },
       handler: (a) => {
         const s = dm.snapshot();
         const p = s.playlists.find((x) => x.id === a.id);
         if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
+        if (a.tracks != null) {
+          const named = readTrackRefs(a.tracks);
+          if (named.items.length === 0) return noTrackFound(named);
+          const after = dm.collections.playlistAppend(a.id, named.items).find((x) => x.id === a.id);
+          return ok({
+            id: p.id,
+            name: p.name,
+            added: named.items.length,
+            tracks: after?.items.length ?? p.items.length + named.items.length,
+            ...refsNote(named),
+          });
+        }
         const md = s.playState?.metadata;
         // A playlist is an ordered list of TRACKS; a stream has no position
         // in one, and content identity needs a title and an artist.
@@ -209,6 +311,62 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
         return ok(`Added "${md.title}" to "${p.name}".`);
       },
     }),
+    edit_playlist: defineTool({
+      inputSchema: {
+        id: z.string().describe("Playlist id from list_playlists."),
+        rename: z.string().min(1).optional().describe("A new name."),
+        remove_positions: z
+          .array(z.number().int().min(0))
+          .optional()
+          .describe("Rows to take out, by position from get_playlist (0 = the first)."),
+        move: z
+          .strictObject({
+            from: z.number().int().min(0).describe("The row's position now."),
+            to: z.number().int().min(0).describe("Its position after the move."),
+          })
+          .optional()
+          .describe("Move one row, after any removals (positions as they stand then)."),
+      },
+      // 0.16.0: an agent could not rename a playlist or take a track out of one
+      handler: (a) => {
+        const p = dm.snapshot().playlists.find((x) => x.id === a.id);
+        if (!p) return err(`No playlist '${String(a.id)}'. Use list_playlists.`);
+        if (a.rename == null && a.remove_positions == null && a.move == null)
+          return err("Nothing to change: give rename, remove_positions or move.");
+        const bad = (a.remove_positions ?? []).filter((i) => i >= p.items.length);
+        if (bad.length > 0)
+          return err(
+            `"${p.name}" has ${p.items.length} rows (0 to ${p.items.length - 1}): no ${bad.join(", ")}.`,
+          );
+        const drop = new Set(a.remove_positions ?? []);
+        const items = p.items.filter((_, i) => !drop.has(i));
+        if (a.move != null) {
+          const { from, to } = a.move;
+          if (from >= items.length || to >= items.length)
+            return err(
+              `After the removals "${p.name}" has ${items.length} rows: move from and to are 0 to ${items.length - 1}.`,
+            );
+          const [row] = items.splice(from, 1);
+          items.splice(to, 0, row);
+        }
+        const said: string[] = [];
+        if (drop.size > 0 || a.move != null) {
+          dm.collections.playlistSetItems(a.id, items);
+          if (drop.size > 0)
+            said.push(`took out ${drop.size} ${drop.size === 1 ? "track" : "tracks"}`);
+          if (a.move != null) said.push(`moved row ${a.move.from} to ${a.move.to}`);
+        }
+        let name = p.name;
+        if (a.rename != null) {
+          const list = dm.collections.playlistRename(a.id, a.rename);
+          name = list.find((x) => x.id === a.id)?.name ?? a.rename;
+          said.push(`renamed it "${name}"`);
+        }
+        return ok(
+          `"${name}": ${said.join(", ")}. ${items.length} ${items.length === 1 ? "track" : "tracks"}.`,
+        );
+      },
+    }),
     delete_playlist: defineTool({
       inputSchema: { id: z.string().describe("Playlist id from list_playlists.") },
       handler: (a) => {
@@ -221,6 +379,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
     list_favorites: defineTool({
       handler: () => {
         const s = dm.snapshot();
+        const ids = rowIds();
         return ok(
           s.favorites.map((f) =>
             f.kind === "station"
@@ -231,6 +390,12 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
                   title: f.title,
                   artist: f.artist,
                   album: f.album,
+                  // the copy's ids, as stored at heart time, else found by content (0.16.0)
+                  ...(f.serverUdn && f.objectId
+                    ? { server_udn: f.serverUdn, object_id: f.objectId }
+                    : f.kind === "album"
+                      ? ids.album(f.title, f.artist)
+                      : ids.track(f)),
                 },
           ),
         );
@@ -247,12 +412,14 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
           ),
       },
       handler: async (a) => {
+        const t = await ctx.target();
+        const before = t.snapshot();
         const s = ctx.connected();
         const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
         if (!fav) return err(`No favorite '${String(a.key)}'. Use list_favorites.`);
         if (fav.kind === "station") {
           await dm.command({ type: "streamRadio", url: fav.url, name: fav.name });
-          return ok(`Tuning to ${fav.name}.`);
+          return settle(t, before, `Tuning to ${fav.name}.`, trackMoved);
         }
         const host = s.connection.host;
         const confirm = { confirmLarge: a.confirm_large === true };
@@ -269,7 +436,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
               undefined,
               confirm,
             );
-            return ok(`Playing ${fav.title}.`);
+            return settle(t, before, `Playing ${fav.title}.`, trackMoved);
           } catch (e) {
             if (e instanceof LargeQueueError) return err(largeQueueAsk(e.tracks, "play_favorite"));
             // stored id went stale — heal by content below (the app's model:
@@ -297,7 +464,7 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
               serverName: server.name,
               objectId: match.id,
             });
-            return ok(`Playing ${fav.title} (found on ${server.name}).`);
+            return settle(t, before, `Playing ${fav.title} (found on ${server.name}).`, trackMoved);
           }
         }
         return err(`Couldn't find "${fav.title}" on any media server right now.`);
@@ -305,10 +472,51 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
     }),
     add_favorite: defineTool({
       inputSchema: {
+        server_udn: z
+          .string()
+          .optional()
+          .describe("With object_id: favorite a library album or track, from a listing."),
+        object_id: z.string().optional().describe("The album's or track's id."),
         station_url: z.string().url().optional().describe("Favorite a station: its stream URL…"),
         station_name: z.string().optional().describe("…and its display name (both or neither)."),
       },
       handler: (a) => {
+        // A LIBRARY ITEM BY REFERENCE (0.16.0): an album or a track from a listing, as the
+        // Library's heart makes it (this copy's own, beside any other copy's); favorites are the
+        // app's own, so no streamer is needed
+        if (a.server_udn != null || a.object_id != null) {
+          if (a.server_udn == null || a.object_id == null)
+            return err("Pass both server_udn and object_id (from a listing).");
+          const pool = indexPools().find((p) => p.udn === a.server_udn);
+          const node =
+            pool?.albums.find((n) => n.id === a.object_id) ??
+            pool?.tracks.find((n) => n.id === a.object_id);
+          if (!pool || !node)
+            return err(
+              `No album or track '${a.object_id}' in that server's index. Use list_albums or list_tracks.`,
+            );
+          const media: Favorite = {
+            kind: node.isContainer ? "album" : "track",
+            addedAt: Date.now(),
+            title: node.title,
+            artist: node.artist,
+            album: node.isContainer ? null : node.album,
+            artUrl: node.artUrl,
+            serverUdn: pool.udn,
+            serverName: pool.serverName,
+            objectId: node.id,
+            titlePath: node.titlePath ?? null,
+            durationSecs: node.isContainer ? null : node.durationSecs,
+            rate: node.format?.rate ?? null,
+            bits: node.format?.bits ?? null,
+          };
+          const favorites = dm.snapshot().favorites;
+          if (heartOf(media, favorites, heartPeersFrom(indexPools())(media)))
+            return ok("Already a favorite.");
+          media.copy = copyMarkOf(media, media.addedAt);
+          dm.collections.favoriteAdd(media);
+          return ok(`Favorited the ${media.kind} "${media.title}".`);
+        }
         const s = ctx.connected();
         let fav: Favorite;
         if (a.station_url != null || a.station_name != null) {
@@ -363,8 +571,9 @@ export function collectionTools(ctx: ToolContext): Record<string, ToolImpl> {
     }),
     remove_favorite: defineTool({
       inputSchema: { key: z.string().describe("Favorite key from list_favorites.") },
+      // favorites are the app's own: no streamer needed (0.16.0)
       handler: (a) => {
-        const s = ctx.connected();
+        const s = dm.snapshot();
         const fav = s.favorites.find((f) => favoriteKey(f) === a.key);
         if (!fav) return err(`No favorite with key '${String(a.key)}'. Use list_favorites.`);
         dm.collections.favoriteRemove(a.key);

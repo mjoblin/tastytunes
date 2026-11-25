@@ -35,9 +35,9 @@ export function InfoModal(): React.JSX.Element | null {
       </div>
 
       <div className="mt-6 space-y-3">
-        {/* TOP of the stack at the user's call (2026-08-27): a way to reach a
-            person leads the doors. Links to the site's /contact, which lands
-            on the help page's write-to-me form. */}
+        {/* TOP of the stack: a way to reach a person leads the doors. Links to
+            the site's /contact, which lands on the help page's write-to-me
+            form. */}
         <button
           onClick={() => void tt.openExternal(CONTACT_URL)}
           className="w-full flex items-center justify-between rounded-xl ring-1 ring-edge bg-raised/70 px-4 py-3 text-left hover:ring-edge2"

@@ -1,18 +1,18 @@
-// A PRESET RECALL THAT LOADED NOTHING, DECIDED ONCE (0.15.0, his A on the decision page "Hygiene
-// Pass Decisions"). The streamer accepts a preset whose album its server no longer has and then
-// does nothing. The Presets screen used to decide that at 8 s from the click (so a wake from
-// standby ate 3 of them, and only while the screen was open), and the listening record at 15 s:
-// two clocks for one question. Now one, here in main, for every recall the app sends (the screen,
-// the tray, a link, an agent, a schedule): 8 s after the streamer is awake, a recall that changed
-// nothing about what plays has come to nothing. DeviceManager tells the record and the windows.
+// A PRESET RECALL THAT LOADED NOTHING, DECIDED ONCE (0.15.0). The streamer accepts a preset whose
+// album its server no longer has and then does nothing. The Presets screen used to decide that at
+// 8 s from the click (so a wake from standby ate 3 of them, and only while the screen was open),
+// and the listening record at 15 s: two clocks for one question. Now one, here in main, for every
+// recall the app sends (the screen, the tray, a link, an agent, a schedule): 8 s after the streamer
+// is awake, a recall that changed nothing about what plays has come to nothing. DeviceManager tells
+// the record and the windows.
 //
-// WHAT A RECALL CHANGES, AND ONLY THAT (0.15.0-rc.2, his preset 22 from rc.1 in a fresh account,
-// 2026-11-08): the watch compared the play state's transitions and the queue list too, and a wake
-// moves both with no recall at all: a station held through standby reaches `play` about 10 s after
-// the wake (docs/streamer.md), inside the window of a recall sent at 2.5 s, and the app re-reads the
-// queue at 2.5 s and 10 s. Either read as a load, so a dead preset recalled from standby got no
-// chip. A recall that lands changes the source, the station, or the queue entry and its title
-// (`connecting` without words first, ~100 ms after it is sent); a wake changes none of them.
+// WHAT A RECALL CHANGES, AND ONLY THAT (0.15.0-rc.2): the watch compared the play state's
+// transitions and the queue list too, and a wake moves both with no recall at all: a station held
+// through standby reaches `play` about 10 s after the wake, inside the window of a recall sent at
+// 2.5 s, and the app re-reads the queue at 2.5 s and 10 s. Either read as a load, so a dead preset
+// recalled from standby got no chip. A recall that lands changes the source, the station, or the
+// queue entry and its title (`connecting` without words first, ~100 ms after it is sent); a wake
+// changes none of them.
 
 import { isRadioMetadata, type ZonePlayState } from "@shared/smoip";
 

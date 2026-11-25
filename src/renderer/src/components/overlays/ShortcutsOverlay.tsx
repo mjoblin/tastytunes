@@ -61,7 +61,7 @@ const GROUPS: Array<{ title: string; rows: Array<[string, string]> }> = [
       ["F", "Full-screen display mode"],
       ["Tab", "Next display scene, in display mode (⇧Tab steps back)"],
       [
-        "⌘← / ⌘→",
+        `${MOD}← / ${MOD}→`,
         "Back / forward through everywhere you've been (mouse side buttons too; Backspace goes up a level in the Library)",
       ],
       [
@@ -98,7 +98,7 @@ export function ShortcutsOverlay(): React.JSX.Element | null {
             <div className="space-y-1.5">
               {group.rows.map(([keys, action]) => (
                 <div key={keys} className="flex items-baseline gap-4">
-                  <span className="font-mono text-[11px] text-amber w-28 shrink-0">{keys}</span>
+                  <span className="font-mono text-[11px] text-accent w-28 shrink-0">{keys}</span>
                   <span className="text-[12.5px] text-dim">{action}</span>
                 </div>
               ))}

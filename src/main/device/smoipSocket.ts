@@ -7,6 +7,7 @@
 
 import WebSocket from "ws";
 import type { SmoipFrame } from "@shared/smoip";
+import { errorMessage } from "@shared/guards";
 
 const SUBSCRIBED_PATHS = [
   "/presets/list",
@@ -58,6 +59,9 @@ export class SmoipSocket {
   private pongTimer: NodeJS.Timeout | null = null;
   /** When the device last pushed a frame: a socket that spoke seconds ago is alive. */
   private lastFrameAt = 0;
+  /** The error before a close, which is the close's real reason ("connect ECONNREFUSED …"): a
+   *  failed connect closes with only code 1006, which says nothing. */
+  private lastError: string | null = null;
 
   constructor(host: string, events: SmoipSocketEvents) {
     this.host = host;
@@ -80,6 +84,7 @@ export class SmoipSocket {
 
     ws.on("open", () => {
       this.attempt = 0;
+      this.lastError = null;
       this.events.onLog("info", `connected to ${url}`);
       this.events.onConnected();
       for (const path of SUBSCRIBED_PATHS) {
@@ -100,23 +105,36 @@ export class SmoipSocket {
         this.events.onLog("warn", `unparseable frame: ${raw.toString().slice(0, 200)}`);
         return;
       }
+      // valid JSON can still be null, a number or a list: a frame is an object with a path
+      if (frame === null || typeof frame !== "object" || typeof frame.path !== "string") {
+        this.events.onLog("warn", `a frame without a path: ${raw.toString().slice(0, 200)}`);
+        return;
+      }
       if (frame.path === "/queue/info" && !this.suppressQueueRefetch) {
         // The queue changed — fetch the full list.
         this.send("/queue/list");
       }
-      this.events.onFrame(frame);
+      // a frame that throws in its handler is logged and passed over, never out of the socket's
+      // message event (where it would be uncaught in main)
+      try {
+        this.events.onFrame(frame);
+      } catch (e) {
+        this.events.onLog("error", `${frame.path}: handling it failed (${errorMessage(e)})`);
+      }
     });
 
     ws.on("pong", () => this.clearPongTimer());
 
     ws.on("error", (err) => {
+      this.lastError = err.message;
       this.events.onLog("error", `websocket error: ${err.message}`);
     });
 
     ws.on("close", (code, reasonBuf) => {
       this.stopKeepalive();
       this.ws = null;
-      const reason = reasonBuf?.toString() || `closed (code ${code})`;
+      const reason = reasonBuf?.toString() || this.lastError || `closed (code ${code})`;
+      this.lastError = null;
       if (this.closedIntentionally) {
         this.events.onDisconnected("disconnected", false);
         return;

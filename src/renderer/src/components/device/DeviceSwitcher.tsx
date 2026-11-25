@@ -3,7 +3,7 @@ import { Loader2, MonitorSpeaker, RefreshCw } from "lucide-react";
 import { tt } from "@/api";
 import type { DiscoveredDevice } from "@shared/model";
 import { useStore } from "@/store";
-import { cx } from "@/lib/format";
+import { LED_TIPS, cx } from "@/lib/format";
 import { PopoverChrome } from "@/hooks/usePopover";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { FACT_SEP } from "@/lib/mediaFacts";
@@ -75,7 +75,7 @@ export function StreamerList({ onPick }: { onPick(): void }): React.JSX.Element 
           title="Find devices"
           onClick={() => void tt.discover()}
           disabled={discovering}
-          className="p-1 text-faint hover:text-gold transition-colors disabled:opacity-50"
+          className="p-1 text-faint hover:text-accent transition-colors disabled:opacity-50"
         >
           {discovering ? <Loader2 size={13} className="spin" /> : <RefreshCw size={13} />}
         </button>
@@ -107,6 +107,7 @@ export function StreamerList({ onPick }: { onPick(): void }): React.JSX.Element 
             >
               <span
                 className={cx("led", isConnected ? "led-on" : isBusy ? "led-busy" : "led-off")}
+                data-tip={LED_TIPS[isConnected ? "on" : isBusy ? "busy" : "off"]}
               />
               <span className="flex-1 min-w-0">
                 <span
@@ -143,7 +144,7 @@ export function DeviceSwitcher(): React.JSX.Element | null {
         onClick={() => setOpen((o) => !o)}
         className={cx(
           "tip-top p-2 rounded-md transition-colors",
-          open ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
+          open ? "text-accent bg-accentdim" : "text-dim hover:text-ink hover:bg-veil",
         )}
       >
         <MonitorSpeaker size={16} strokeWidth={1.8} />

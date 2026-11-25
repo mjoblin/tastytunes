@@ -23,6 +23,13 @@ export const DISPLAY_FONT_IDS = [
   "instrument-sans",
 ] as const;
 export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number];
+/** The accent, the color of what you click and choose (0.16.0; gold stays for the brand and what's
+ *  playing): a curated three, sand by default, gold itself for one color throughout, or the playing
+ *  album's own color. The array is the
+ *  single source of truth for valid ids (persist.ts coerces unknown values to the default; the
+ *  Appearance row is built from the same ids; styles.css draws each color). */
+export const ACCENT_IDS = ["sand", "gold", "sage", "teal", "art"] as const;
+export type AccentChoice = (typeof ACCENT_IDS)[number];
 /** Display mode's SCENE: what fills the screen (0.8.0). Sleeve is the art
  *  face; most of the rest are abstract scenes drawn from the track's feature
  *  strip and its timed lyrics; Hi-Fi and Turntable draw the player itself
@@ -56,7 +63,6 @@ export type QueueLayout = ScreenLayout | "albums";
 /** Motion effects: follow the OS Reduce Motion setting, or force on/off. */
 export type MotionMode = "system" | "on" | "off";
 export type AmbientArtMode = "off" | "now-playing" | "all";
-export type AmbientCoverage = "main" | "window";
 export type AlignH = "left" | "center" | "right";
 export type AlignV = "top" | "center" | "bottom";
 
@@ -80,6 +86,56 @@ export interface KnownDevice {
 /** LRU cap on the device book — nobody owns eight streamers; churners get
  *  least-recently-seen eviction for free. */
 export const KNOWN_DEVICES_MAX = 8;
+
+/** How stale a book entry's lastSeenAt may grow before a sighting writes it again: the book shows
+ *  it by the day, and a sweep every ten seconds wrote settings.json and pushed the settings to
+ *  every window for a timestamp nobody could see change. */
+export const SEEN_REFRESH_MS = 60 * 60 * 1000;
+
+type Sighting = Omit<KnownDevice, "lastSeenAt">;
+
+const sameAs = (d: KnownDevice, seen: Sighting): boolean =>
+  d.host === seen.host && d.friendlyName === seen.friendlyName && d.model === seen.model;
+
+/** The book after a connection to `dev`: it goes first, the rest newest-seen first (the caller
+ *  caps it). Null when it is already first, unchanged, and seen within SEEN_REFRESH_MS: nothing
+ *  worth a write. */
+export function bookAfterConnect(
+  book: readonly KnownDevice[],
+  dev: Sighting,
+  now: number,
+): KnownDevice[] | null {
+  const first = book[0];
+  if (first?.udn === dev.udn && sameAs(first, dev) && now - first.lastSeenAt < SEEN_REFRESH_MS)
+    return null;
+  const rest = book.filter((d) => d.udn !== dev.udn).sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+  return [{ ...dev, lastSeenAt: now }, ...rest];
+}
+
+/** The book after a sweep: each known streamer it saw is refreshed IN PLACE (a new address, name
+ *  or model at once, the time only once SEEN_REFRESH_MS old); strangers are not learned here.
+ *  Null when nothing changed. */
+export function bookAfterSweep(
+  book: readonly KnownDevice[],
+  seen: readonly { udn?: string | null; host: string; friendlyName?: string; model?: string }[],
+  now: number,
+): KnownDevice[] | null {
+  let changed = false;
+  const next = book.map((d) => {
+    const s = seen.find((x) => x.udn != null && x.udn === d.udn);
+    if (!s) return d;
+    const fresh: Sighting = {
+      udn: d.udn,
+      host: s.host,
+      friendlyName: s.friendlyName || d.friendlyName,
+      model: s.model || d.model,
+    };
+    if (sameAs(d, fresh) && now - d.lastSeenAt < SEEN_REFRESH_MS) return d;
+    changed = true;
+    return { ...fresh, lastSeenAt: now };
+  });
+  return changed ? next : null;
+}
 
 /**
  * How long a failing reconnect keeps the benefit of the doubt. Under this,
@@ -126,12 +182,11 @@ export interface AppSettings {
   resumeDismissedAt: number | null;
   theme: ThemePreference;
   displayFont: DisplayFont;
-  /** Blurred album-art backdrop. */
+  /** Blurred album-art backdrop, over the whole window with its vignette (0.16.0: the coverage
+   *  and vignette choices retired into this one, the whole window and the vignette their defaults). */
   ambientArt: AmbientArtMode;
-  /** Backdrop extent: the main content area, or the whole window (nav + bar too). */
-  ambientCoverage: AmbientCoverage;
-  vignette: boolean;
-  accentFollowsArt: boolean;
+  /** The accent's color, or "art" for the playing album's (a cover with no color shows sand). */
+  accent: AccentChoice;
   /** Preset grid: base card width in px. */
   presetCardSize: number;
   /** Preset grid: gap between cards in px. */
@@ -139,11 +194,11 @@ export interface AppSettings {
   /** Preset grid: stretch cards to fill each row (true) or keep them exact-size (false). */
   presetFillRows: boolean;
   /** The Library's album cards carry a format line under their names: the status lamp's glyph,
-   *  the format, and DR once measured (0.13.0-rc.4, his picks on "Card details"; on by default,
+   *  the format, and DR once measured (0.13.0-rc.4; on by default,
    *  for listeners who choose by format). */
   albumCardFormat: boolean;
   /** The Tracks view's cards carry the same line, each track's own format and DR, with a switch
-   *  of its own (0.13.0-rc.4, his note on "View Options"). */
+   *  of its own (0.13.0-rc.4). */
   trackCardFormat: boolean;
   /** Now Playing content placement. */
   nowPlayingAlignH: AlignH;
@@ -190,19 +245,27 @@ export interface AppSettings {
   queueLayout: QueueLayout;
   presetsLayout: ScreenLayout;
   libraryLayout: ScreenLayout;
-  /** The Tracks view's own Rows or Cards (0.13.0-rc.4, his note on "View Options": albums and
+  /** The Tracks view's own Rows or Cards (0.13.0-rc.4: albums and
    *  tracks keep separate display settings, with a button to match the other). An older file
    *  without it takes libraryLayout, the choice the Tracks view followed before (main's load). */
   lensTracksLayout: ScreenLayout;
+  /** The Artists view's own Rows or Cards (0.16.0): rows are its three columns, cards a grid of
+   *  artists. Before, it followed the albums' choice, so turning one turned the other. An older
+   *  file without it takes libraryLayout, the choice the Artists view followed (main's load). */
+  lensArtistsLayout: ScreenLayout;
+  /** An artist's page's own Rows or Cards for its albums (0.16.0), one choice for every artist's
+   *  page: a few albums read well as cards where the Albums view's hundreds may want rows. An
+   *  older file without it takes libraryLayout, the choice the page followed (main's load). */
+  artistPageLayout: ScreenLayout;
   /** Album-grid sort in the Library (tracks always sort by track number). */
   librarySort: "server" | "title" | "artist" | "year";
   librarySortReversed: boolean;
   /**
-   * VIEW DEFAULTS PERSIST (ruled 2026-08-06): a control that shapes how a
+   * VIEW DEFAULTS PERSIST: a control that shapes how a
    * screen presents — sort, partition, layout, a hide-this-kind toggle — is
    * the user naming their preferred default view, so it lives here. What
    * stays session-only is workspace state: filter text, selections, scroll,
-   * queries. The five below joined under that ruling; anything similar added
+   * queries. The five below joined under that rule; anything similar added
    * later belongs here too.
    */
   /** Albums lens sort (the native album grid above keeps librarySort). */
@@ -223,7 +286,7 @@ export interface AppSettings {
    *  A-Z rail, the most played first, or the newest arrival first (an artist's newest album). */
   lensArtistsSort: "name" | "plays" | "added";
   lensArtistsSortReversed: boolean;
-  /** The artist page's album order (0.13.0-rc.4, a user's question: the page's order, newest
+  /** The artist page's album order (0.13.0-rc.4: the page's order, newest
    *  first, was hidden behind the year each card cut off): by year, newest first, or by title. */
   artistPageSort: "year" | "title";
   artistPageSortReversed: boolean;
@@ -250,12 +313,11 @@ export interface AppSettings {
   searchSort: "relevance" | "name";
   searchSortReversed: boolean;
   /**
-   * Unified search: hidden result categories, plain ids sanitized on use
-   * (the navHidden pattern). null = never customized — the screen derives
-   * the default from navHidden (a screen hidden from the rail starts hidden
-   * in search); an array is the user's explicit chip choice and wins.
+   * The Search screen's scope (0.16.0, one Search): "everything", or one category's id (library,
+   * presets, favorites, playlists, radio), one at a time; a plain id sanitized on use
+   * (lib/searchGroups sanitizeScope). It replaced the hidden-categories set.
    */
-  searchHidden: string[] | null;
+  searchScope: string;
   /** Remembered sleep-timer action (pause vs standby). The countdown itself is not persisted. */
   sleepAction: SleepAction;
   /** Recently Played: collapse continuous sessions (radio/AirPlay/…) to one row, vs a row per song. */
@@ -268,6 +330,12 @@ export interface AppSettings {
   motion: MotionMode;
   /** Check GitHub releases for a newer version on launch and every few hours. */
   updateCheck: boolean;
+  /** "Not now" on an offered update: the nav's Update button steps back to a dot for that
+   *  version until the date. Internal state, not a preference: there is no row for it. */
+  updateSnooze: { version: string; until: number } | null;
+  /** The version a system notification last announced, so each version is announced once.
+   *  Internal state, not a preference. */
+  updateNotified: string | null;
   /** Lyrics panel on Now Playing — fetches from LRCLIB on demand when opened. */
   /**
    * Waveforms drawn from each track's audio file, read from the local media
@@ -297,7 +365,7 @@ export interface AppSettings {
    *  snaps back to. */
   nowPlayingArtShare: number | null;
   /** The picture's size in the Library's album and artist headers, dragged from its corner
-   *  (0.11.0, his ask after the artist page): one size for both, so moving between an artist
+   *  (0.11.0, after the artist page): one size for both, so moving between an artist
    *  and their albums keeps the picture still, and apart from Now Playing's, whose room is the
    *  whole hero (a fit, not a preference). Pixels, clamped at draw time to the header's cap, so
    *  a size dragged on a large monitor comes back there and still fits a small window. Null is
@@ -328,20 +396,20 @@ export interface AppSettings {
   displayDrops: "loose" | "normal" | "strict";
   /** A finish over every display-mode scene: plain, or a cathode glass (scanlines, a slight
    *  curve, phosphor glow, a vignette). Taste, so it is in-mode; never on the picker's tiles.
-   *  Cathode by default (user, 2026-09-07). */
+   *  Cathode by default. */
   displayFinish: "plain" | "cathode";
   /** The Cathode glass: how much the picture bows (deep is about twice a real tube, gentle
    *  about life), and whether it overscans so the picture meets the frame at the edges and
    *  only the corners fall behind the glass. In-mode, beside Finish. */
   displayCathodeCurve: "gentle" | "deep";
   displayCathodeFill: boolean;
-  /** The wall's corners (2026-09-15, user: they can "kill the mood of a fullscreen display"):
+  /** The wall's corners (they can spoil the mood of a fullscreen display):
    *  the track's name at the bottom left and the time at the bottom right, each its own
    *  switch, on by default; a shelf display often wants the clock without the title. In-mode,
    *  beside Finish. The tile has no corners. */
   displayCornerTitle: boolean;
   displayCornerClock: boolean;
-  /** The glass's flicker (2026-09-15, user: an accessibility concern): the cathode finish
+  /** The glass's flicker (an accessibility concern): the cathode finish
    *  breathes a mains hum into the brightness at ten hertz, three percent either way, which
    *  sits in the band photosensitive people are warned about; its own switch, on by default,
    *  off already under the system's reduced-motion setting. In-mode, in the Finish row. */
@@ -376,7 +444,7 @@ export interface AppSettings {
   artistInfo: boolean;
   /** Fill covers the media server doesn't have (MusicBrainz identifies the
    *  album, the Cover Art Archive supplies the image). Its own switch,
-   *  independent of the context panel — the user's call, 2026-08-24. */
+   *  independent of the context panel. */
   albumArtLookup: boolean;
   /**
    * Look stations up in the radio-browser.info directory. OFF means the app
@@ -395,6 +463,13 @@ export interface AppSettings {
    * preset id) so multi-streamer homes never cross-apply.
    */
   presetVolumes: Record<string, number>;
+  /**
+   * The name of the preset each presetVolumes level was set for, by the same key. A level holds for
+   * the preset now in its slot only when the names agree (presetVolumeHolds), so a preset moved,
+   * replaced or deleted (here or in another app) never lends its level to other music; main moves
+   * a level to its preset's new slot by this name, and drops it once no preset has the name.
+   */
+  presetVolumeNames: Record<string, string>;
   /**
    * queueContentHash of the queue at save time for queue presets saved
    * through this app, keyed via presetVolumeKey(udn, slot). Lets the
@@ -457,8 +532,8 @@ export interface AppSettings {
    * names are just the album title, so this is what lets the Presets filter
    * match "iron" against an Iron Maiden album preset. Presets saved by other
    * controllers have no entry (nothing to record from). Same lifecycle trade
-   * as presetVolumes: entries are keyed by slot and not remapped on
-   * move/delete.
+   * as queueSignatures: entries are keyed by slot, moved with a move made in
+   * TastyTunes and dropped with a delete made here (main/device/presetSlots).
    */
   presetArtists: Record<string, string>;
   /**
@@ -478,7 +553,7 @@ export interface AppSettings {
   eqPresets: Array<{ name: string; gains: number[] }>;
 }
 
-/** The card grids' size and gap, in px: Settings › Layout's sliders and the View options menu's. */
+/** The card grids' size and gap, in px: the View options menu's sliders. */
 export const CARD_SIZE_RANGE = { min: 120, max: 280 } as const;
 export const CARD_GAP_RANGE = { min: 8, max: 40 } as const;
 
@@ -488,7 +563,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mediaKeys: true,
   volumeLimitPercent: null,
   notifications: true,
-  // ON by default (user call, 2026-08-03, once the panel feature-completed):
+  // ON by default (once the panel feature-completed):
   // the panel is the app's reach-without-a-window face, and a default-off
   // switch buried mid-list meant most installs would never meet it. Existing
   // installs that TOUCHED the toggle keep their stored value; only settings
@@ -500,9 +575,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   theme: "dark",
   displayFont: "fraunces",
   ambientArt: "all",
-  ambientCoverage: "window",
-  vignette: true,
-  accentFollowsArt: false,
+  accent: "sand",
   presetCardSize: 160,
   presetGap: 12,
   presetFillRows: true,
@@ -520,6 +593,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   presetsLayout: "cards",
   libraryLayout: "cards",
   lensTracksLayout: "cards",
+  lensArtistsLayout: "cards",
+  artistPageLayout: "cards",
   librarySort: "server",
   librarySortReversed: false,
   lensAlbumsSort: "title",
@@ -537,13 +612,15 @@ export const DEFAULT_SETTINGS: AppSettings = {
   favoritesKind: "all",
   searchSort: "relevance",
   searchSortReversed: false,
-  searchHidden: null,
+  searchScope: "everything",
   sleepAction: "standby",
   recentsGrouped: true,
   historyView: "recent",
   historyTimelineMode: "sessions",
   motion: "system",
   updateCheck: true,
+  updateSnooze: null,
+  updateNotified: null,
   waveforms: true,
   waveformSeekBar: true,
   waveformNowPlaying: false,
@@ -580,6 +657,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   schedules: [],
   sleepFade: true,
   presetVolumes: {},
+  presetVolumeNames: {},
   queueSignatures: {},
   mcp: {
     enabled: false,
@@ -592,7 +670,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mediaIndexAuto: true,
   settingsTab: "appearance",
   trayTab: "queue",
-  // COMPRESSED by default (user call, 2026-08-03): the panel's job is a
+  // COMPRESSED by default: the panel's job is a
   // glance's worth of list in a corner of the screen, and the flat rows fit
   // ~11 where the floating ones fit 6. The detailed skin stays one chip away.
   trayRowDensity: "compressed",

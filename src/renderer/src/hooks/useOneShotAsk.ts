@@ -51,7 +51,12 @@ export function useOneShotAsk<T>(
 
   const token = claim ?? (ask as unknown as string | number);
   useEffect(() => {
-    if (ask == null) return;
+    // an ask cleared is forgotten (0.16.0): the same ask again (Check for Updates… a second time
+    // while Settings was still open) is a new one, not one already run
+    if (ask == null) {
+      claimed.current = null;
+      return;
+    }
     if (!ready) return;
     if (claimed.current === token) return;
     claimed.current = token;

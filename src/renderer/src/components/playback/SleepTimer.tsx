@@ -79,7 +79,7 @@ export function SleepTimer(): React.JSX.Element {
         onClick={() => setOpen((o) => !o)}
         className={cx(
           "tip-top p-2 rounded-md transition-colors",
-          open || sleep ? "text-gold bg-golddim" : "text-dim hover:text-ink hover:bg-veil",
+          open || sleep ? "text-accent bg-accentdim" : "text-dim hover:text-ink hover:bg-veil",
         )}
       >
         <Moon size={16} strokeWidth={1.9} fill={sleep ? "currentColor" : "none"} />
@@ -99,7 +99,7 @@ export function SleepTimer(): React.JSX.Element {
                     onClick={() => chooseAction(a)}
                     className={cx(
                       "px-2 py-0.5 rounded text-[11px] capitalize transition-colors",
-                      action === a ? "bg-golddim text-gold" : "text-dim hover:text-ink",
+                      action === a ? "bg-accentdim text-accent" : "text-dim hover:text-ink",
                     )}
                   >
                     {a}
@@ -117,7 +117,7 @@ export function SleepTimer(): React.JSX.Element {
                     onClick={() => arm(minutes)}
                     className={cx(
                       "rounded-lg py-2 text-[12px] transition-colors",
-                      on ? "bg-gold text-bg" : "bg-veil text-dim hover:text-ink hover:bg-veil2",
+                      on ? "bg-accent text-bg" : "bg-veil text-dim hover:text-ink hover:bg-veil2",
                     )}
                   >
                     {label}
@@ -130,7 +130,7 @@ export function SleepTimer(): React.JSX.Element {
                 className={cx(
                   "col-span-3 rounded-lg py-2 text-[12px] transition-colors",
                   endOfTrack
-                    ? "bg-gold text-bg"
+                    ? "bg-accent text-bg"
                     : canEndOfTrack
                       ? "bg-veil text-dim hover:text-ink hover:bg-veil2"
                       : "bg-veil text-faint/40 cursor-not-allowed",
@@ -167,7 +167,7 @@ export function SleepTimer(): React.JSX.Element {
 
             {/* Always present so the popover height never jumps between states. */}
             <div className="mt-2.5 flex items-center justify-between gap-2 border-t border-edge pt-2.5">
-              <span className={cx("text-[11.5px]", sleep ? "text-gold" : "text-faint")}>
+              <span className={cx("text-[11.5px]", sleep ? "text-accent" : "text-faint")}>
                 {statusLine ?? "Inactive"}
               </span>
               <button

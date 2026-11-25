@@ -31,7 +31,7 @@ export function Switch({
       className={cx(
         "relative shrink-0 rounded-full transition-colors",
         sm ? "h-4 w-7" : "h-5 w-9",
-        checked ? "bg-gold" : "bg-veil2 ring-1 ring-edge",
+        checked ? "bg-accent" : "bg-veil2 ring-1 ring-edge",
         disabled && "opacity-40 pointer-events-none",
       )}
     >

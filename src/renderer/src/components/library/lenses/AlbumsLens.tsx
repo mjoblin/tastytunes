@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from "react";
+import { albumSecs } from "@/lib/mediaFacts";
 import { AudioLines, Heart, ListEnd, ListPlus, ListStart, Play } from "lucide-react";
 import {
   albumDrKey,
@@ -8,6 +9,7 @@ import {
   type MediaIndexPools,
   type MediaNode,
   nameSortKey,
+  sharedYear,
 } from "@shared/model";
 import { useWindowedList } from "@/hooks/useWindowedList";
 import { ListKeysContext, useListKeys } from "@/hooks/useListKeys";
@@ -39,6 +41,7 @@ import { useCardDetails } from "@/components/library/useCardDetails";
 import { useLensIndex } from "./useLensIndex";
 import { ViewOptions } from "./ViewOptions";
 import { CARD_GRID_SCROLLER, useCardGrid, WINDOW_CARDS_ABOVE } from "./useCardGrid";
+import { useAlbumAnalyzing } from "@/lib/albumOnPlay";
 import { menuAt } from "@/lib/menuAt";
 import { nameKey } from "@shared/keys";
 
@@ -76,9 +79,9 @@ let albumsMem: {
   scroll: number;
 } = { genre: null, decade: null, dr: null, format: null, played: null, filter: "", scroll: 0 };
 
-/** The queue write's cap, shared by Play these and the album selection bar (user
- *  call, 2026-09-01 / 2026-09-02): queue writes are one call per track with no
- *  progress affordance, so no gesture may hand the queue fifty albums. */
+/** The queue write's cap, shared by Play these and the album selection bar: queue
+ *  writes are one call per track with no progress affordance, so no gesture may
+ *  hand the queue fifty albums. */
 
 /** Past this many tiles the grid windows its rows, cards (useCardGrid's threshold) and lines. */
 const WINDOW_TILES_ABOVE = WINDOW_CARDS_ABOVE;
@@ -116,10 +119,12 @@ export function AlbumsLens({
   const sort = !play.ready && RECORD_SORTS.has(sortSetting) ? "title" : sortSetting;
   const saveSettings = useStore((s) => s.saveSettings);
   const albumDr = useAlbumDr();
+  // an album being analyzed holds its DR's place (a sweep, or the pass while it plays)
+  const analyzingOf = useAlbumAnalyzing();
 
   // what the lenses derive from the pools, once per snapshot (useLensIndex)
   const index = useLensIndex(pools);
-  // each card's format line, while Settings › Layout shows it (useCardDetails)
+  // each card's format line, while View options shows it (useCardDetails)
   const detailsOf = useCardDetails(index);
   const all = index.albums;
 
@@ -269,8 +274,8 @@ export function AlbumsLens({
   // since 2026-09-13) over the tiles shown, keyed by nodeKey
   const tileKeys = useMemo(() => tiles.map((t) => nodeKey(t.node)), [tiles]);
 
-  // THE GRID SCROLLS ITS OWN COLUMN under a toolbar that stays put (user, 2026-10-11: "the
-  // filters/etc at the top are not pinned like they are for tracks"), the Tracks lens's frame:
+  // THE GRID SCROLLS ITS OWN COLUMN under a toolbar that stays put (the filters at the top
+  // were not pinned as the Tracks lens's are), the Tracks lens's frame:
   // the toolbar on the bare ground, the scroller's top edge the cut, no band of its own (a
   // sticky bar needs a background, and a band over the ambient wash read as a seam, the
   // History screens' lesson). The scroller spans the page's padding, so the cards' hover glow
@@ -302,7 +307,7 @@ export function AlbumsLens({
     setSelected: setSelA,
     rowClick: tileClick,
   } = useRowSelection({ keys: tileKeys });
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): one Tab stop, the arrows through the rows or the
+  // FROM THE KEYBOARD (0.14.0): one Tab stop, the arrows through the rows or the
   // cards, Enter opens the album, "." its More menu; a windowed list renders the current one
   const keys = useListKeys({
     count: tiles.length,
@@ -366,8 +371,9 @@ export function AlbumsLens({
     { node: rawNode, set }: (typeof tiles)[number],
     ti: number,
   ): React.JSX.Element => {
-    // a set tile is volume 1 wearing the base title and a count badge
-    const node = set ? { ...rawNode, title: set.base, year: null } : rawNode;
+    // a set tile is volume 1 wearing the base title and a count badge, and the year its volumes
+    // share (none when they differ)
+    const node = set ? { ...rawNode, title: set.base, year: sharedYear(set.volumes) } : rawNode;
     // a set's count, else which copy it is, only when there is another (useLensIndex.copyBadge),
     // the format left to a card's format line when it shows one
     const badge = set
@@ -386,6 +392,7 @@ export function AlbumsLens({
         badgeTip={set ? undefined : COPY_BADGE_TIP}
         item={keys.item(ti)}
         details={detailsOf?.(rawNode, set?.volumes)}
+        analyzing={set ? null : analyzingOf(rawNode)}
         // in Recently added order a card says when its album arrived, where the app knows
         note={sort === "added" && rawNode.addedAt ? fmtAdded(rawNode.addedAt) : undefined}
         selected={selA.has(nodeKey(rawNode))}
@@ -414,6 +421,10 @@ export function AlbumsLens({
         badge={badge}
         badgeTip={set ? undefined : COPY_BADGE_TIP}
         dr={albumDr[albumDrKey(node)]?.dr ?? null}
+        length={albumSecs(
+          set ? set.volumes.flatMap((v) => index.tracksOf(v)) : index.tracksOf(rawNode),
+        )}
+        analyzing={set ? null : analyzingOf(rawNode)}
         onArtistLink={
           actions.goToArtist && node.artist ? () => actions.goToArtist?.(node) : undefined
         }
@@ -432,13 +443,13 @@ export function AlbumsLens({
       <div className="flex items-start gap-3 pb-3 shrink-0">
         <div className="flex-1 min-w-0">
           {/* one row: filter, partition, then the two facet PICKERS.
-              Genre joined Decade as a PickerPill (user, 2026-08-31): real
+              Genre joined Decade as a PickerPill: real
               tag data made the chip rail read as overwhelm — dozens of
               genres spending rows — and the bounded picker already owned
               the same job for decades. The rail pattern retired with it. */}
           <div className={`flex flex-wrap items-center ${GAP_BETWEEN}`}>
-            {/* FILTER FIRST, on the LEFT — the lens sub-row rule (user
-                call 2026-08-16, matching the Artists lens): text filter,
+            {/* FILTER FIRST, on the LEFT — the lens sub-row rule
+                (matching the Artists lens): text filter,
                 then the partition, then the facets; the sort chip sits
                 alone on the right. This filter used to sit right, beside
                 the sort chip — the one text filter in the app next to a
@@ -477,8 +488,8 @@ export function AlbumsLens({
                 value={mem.genre}
                 onChange={(genre) => setMem({ genre })}
               />
-              {/* the DR facet appears with the first analyzed album (user,
-                2026-09-01: "show me all my DR13") */}
+              {/* the DR facet appears with the first analyzed album, so
+                every album at one DR is a click away */}
               <PickerPill
                 id="format"
                 neutral="Format"
@@ -537,7 +548,9 @@ export function AlbumsLens({
           onScroll={(e) => {
             albumsMem.scroll = e.currentTarget.scrollTop;
           }}
-          className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pb-2"
+          // pt-1 with its matching negative margin: room inside the scrollport for the playing
+          // row's 2px ring above the first row (box-shadows clip at the padding box)
+          className="min-h-0 flex-1 overflow-y-auto px-8 -mx-8 pt-1 -mt-1 pb-2"
           style={CARD_GRID_SCROLLER}
         >
           <ListKeysContext.Provider value={true}>
@@ -578,7 +591,7 @@ export function AlbumsLens({
               ) : (
                 <div
                   className={cx(
-                    !cards && "divide-y divide-edge/50 -mx-2",
+                    !cards && "divide-y divide-edge/50 -mx-3",
                     // selection mode adds scroll-room under the floating bar (the S45 rule)
                     selA.size > 0 && "pb-24",
                   )}

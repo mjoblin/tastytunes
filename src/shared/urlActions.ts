@@ -1,8 +1,8 @@
 import type { StreamerCommand } from "./ipc";
 
 /**
- * THE tastytunes:// URL SCHEME (0.12.0, the first round; filed 2026-10-11 from a Reddit ask for
- * a Stream Deck integration). One control surface for anything that can open a URL: a Stream
+ * THE tastytunes:// URL SCHEME (0.12.0, the first round, for a Stream Deck integration). One
+ * control surface for anything that can open a URL: a Stream
  * Deck's Website action, Raycast, Alfred, Keyboard Maestro, Shortcuts, a launcher. This module
  * is the verbs, pure: a URL in, an action or the reason it was refused out. main/app/urlActions
  * runs the action through the app's own command path (deviceManager.command), and
@@ -29,7 +29,7 @@ export type UrlParse =
   { ok: true; action: UrlAction; verb: string } | { ok: false; reason: string };
 
 /** One example of every verb, in the order Settings lists them; the unit test parses each.
- *  THREE SHAPES, EACH ONE MEANING (his call, 2026-10-17, before the scheme shipped): a bare verb
+ *  THREE SHAPES, EACH ONE MEANING (settled before the scheme shipped): a bare verb
  *  acts (play, next), thing/value sets a state (mute/on, volume/30), toggle-thing switches one
  *  (toggle-play, toggle-mute, toggle-power, toggle-mini). A bare mute, power, mini or toggle is
  *  refused with the toggle's name, so a link never leaves a reader guessing which it does. */
@@ -56,6 +56,23 @@ export const URL_EXAMPLES = [
   "toggle-mini",
 ] as const;
 
+/** THE SCREEN NAMES A LINK MAY USE, a promise from 1.0 (screen/<name>): a fixed table rather than
+ *  the Go menu's labels, which are layout and may be renamed. Each names a screen's key. */
+export const SCREEN_LINK_NAMES: Readonly<Record<string, string>> = {
+  "now-playing": "now-playing",
+  queue: "queue",
+  search: "search",
+  library: "library",
+  presets: "presets",
+  playlists: "playlists",
+  favorites: "favorites",
+  radio: "radio",
+  history: "recently-played",
+  "recently-played": "recently-played",
+  device: "device",
+  settings: "settings",
+};
+
 const PLAIN: Record<string, StreamerCommand> = {
   "toggle-play": { type: "togglePlayback" },
   play: { type: "play" },
@@ -73,14 +90,24 @@ function wholeIn(s: string | undefined, min: number, max: number): number | null
 }
 
 /**
- * Reads a tastytunes:// URL. The verb is case-insensitive; a trailing slash, a query and a
- * fragment are ignored (launchers and Windows' argv add them); the parts are %-decoded, so a
+ * Reads a tastytunes:// URL. The verb is case-insensitive; a trailing slash, an empty query and
+ * a fragment are ignored (launchers and Windows' argv add them); the parts are %-decoded, so a
  * source's name may carry spaces. `screens` maps the names a URL may use to the app's screen
  * keys (main builds it from the Go menu's list).
+ *
+ * A LINK WITH OPTIONS IS REFUSED, never acted on without them: a later version may give its links
+ * options (which streamer, say), and a version that ignored them would act on the window's
+ * streamer instead, "volume/30?device=Kitchen" turning up another room.
  */
 export function parseUrlAction(raw: string, screens: Readonly<Record<string, string>>): UrlParse {
-  const m = /^tastytunes:(?:\/\/)?([^?#]*)/i.exec(raw.trim());
+  const m = /^tastytunes:(?:\/\/)?([^?#]*)(?:\?([^#]*))?/i.exec(raw.trim());
   if (!m) return { ok: false, reason: "That isn't a TastyTunes link." };
+  const options = (m[2] ?? "").trim();
+  if (options !== "")
+    return {
+      ok: false,
+      reason: `TastyTunes links take no options, and this one has “${options}”.`,
+    };
   let parts: string[];
   try {
     parts = m[1]
@@ -150,7 +177,10 @@ export function parseUrlAction(raw: string, screens: Readonly<Record<string, str
       return ok({ kind: "source", name });
     }
     case "screen": {
-      const screen = parts.length === 2 ? screens[arg.toLowerCase()] : undefined;
+      if (!arg) return { ok: false, reason: "Screen takes the name of a screen, such as Queue." };
+      // the object's own names only: screen/constructor or screen/__proto__ is no screen
+      const name = arg.toLowerCase();
+      const screen = parts.length === 2 && Object.hasOwn(screens, name) ? screens[name] : undefined;
       if (!screen)
         return {
           ok: false,

@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { Disc3, Folder, Heart, MoreHorizontal, Play, UserRound } from "lucide-react";
-import { trackPosition, type MediaNode } from "@shared/model";
+import { performerLine, trackPosition, type MediaNode } from "@shared/model";
 import { cx } from "@/lib/format";
 import { isAlbumClass, isArtistClass, isMutedArt } from "@/lib/media";
 import { useArtistPicture } from "@/lib/artistPictures";
@@ -9,11 +9,10 @@ import { RowHeart } from "@/components/media/RowHeart";
 import { ArtImage } from "@/components/media/ArtImage";
 import { MediaArt } from "@/components/media/MediaArt";
 import { cardChip } from "@/components/chrome/Chrome";
-import { DrBadge, drTone, fmtLufs } from "@/components/media/Waveform";
+import { DrBadge, DrPending, drTone, fmtLufs } from "@/components/media/Waveform";
 import { SignalDot } from "@/components/device/SignalLamp";
 import type { CardDetails } from "@/components/library/useCardDetails";
-import { FACT_SEP } from "@/lib/mediaFacts";
-import { DurationCell } from "@/components/media/DurationCell";
+import { DURATION_WIDE, DurationCell } from "@/components/media/DurationCell";
 import { Eqbars } from "@/components/media/Eqbars";
 import { NameLine, NameLink } from "@/components/media/NameLine";
 import { artKeyOf, artSrc } from "@/lib/artSrc";
@@ -25,7 +24,7 @@ import { CARD_HELD, CARD_HOVER, CARD_TRANSITION } from "@/lib/cardHover";
 
 /**
  * Art-corner heart (top-right — the preset-card speaker-chip idiom):
- * hover-revealed control normally, but a set heart stays visible in gold —
+ * hover-revealed control normally, but a set heart stays visible in the accent —
  * presence + color IS the indicator. A DIRECT child of the (scaling) card,
  * not of the art tile: it still zooms with the hover animation, but its
  * tooltip escapes the art's overflow-hidden clip (tip grows inward via
@@ -59,7 +58,7 @@ function HeartChip({
         "tip-bottom tip-end absolute top-3.5 right-3.5 z-10 transition-all motion-safe:active:scale-90 cursor-pointer",
         cardChip(),
         favorited
-          ? "text-gold opacity-100"
+          ? "text-accent opacity-100"
           : cx(
               "text-dim hover:text-ink",
               held ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
@@ -83,6 +82,7 @@ export function ContainerCard({
   note,
   subtitle: line,
   details,
+  analyzing,
   onHeart,
   onEnter,
   onPlay,
@@ -114,8 +114,10 @@ export function ContainerCard({
    *  lens says what the row says ("12 albums"; 0.13.0 round 12). */
   subtitle?: string;
   /** An album's format line under its names (useCardDetails), absent where the surface has none
-   *  or Settings › Layout turns it off. */
+   *  or View options turns it off. */
   details?: CardDetails;
+  /** The album is being analyzed (useAlbumAnalyzing): with no DR yet, the format line holds its place. */
+  analyzing?: { at: number; of: number } | null;
   onHeart?(): void;
   /** The body click, with its event: a caller with a selection model reads the
    *  chord (⌘/ctrl, shift) and decides whether this click opens or picks. */
@@ -172,7 +174,7 @@ export function ContainerCard({
           whose whole-card click IS the play action) */}
       <button
         className="block w-full cursor-pointer"
-        // a keyed list is one Tab stop (K1): its cards are reached with the arrows
+        // a keyed list is one Tab stop: its cards are reached with the arrows
         tabIndex={inList ? -1 : undefined}
         onClick={onEnter}
         onPointerDown={(e) => {
@@ -229,11 +231,11 @@ export function ContainerCard({
             {badge && <CardBadge label={badge} tip={badgeTip} />}
           </div>
         )}
-        {details && <CardFormatLine details={details} />}
+        {details && <CardFormatLine details={details} analyzing={analyzing} />}
         {note && (
           // LAST, under the names: the card's own artist and year are what it
           // says about itself, and a surface's fact goes after them, never
-          // between them (user, 2026-09-11). Inside the card, so it lifts with
+          // between them. Inside the card, so it lifts with
           // it — a line outside is covered the moment the card glows.
           <div data-card-note className="text-[11px] text-faint/80 tabular-nums truncate text-left">
             {note}
@@ -250,7 +252,7 @@ export function ContainerCard({
               onClick={() => onPlay(ref.current)}
               data-tip="Play, replacing the queue"
               className={cx(
-                "pointer-events-auto tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
+                "pointer-events-auto tip-bottom absolute bottom-1.5 left-1.5 h-11 w-11 rounded-full bg-accent text-bg flex items-center justify-center transition-all duration-150 motion-safe:hover:scale-110 hover:shadow-[0_0_24px_rgb(var(--accent-rgb)_/_0.6)]",
                 menuOpen
                   ? "opacity-100"
                   : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
@@ -286,12 +288,11 @@ export function ContainerCard({
 }
 
 /**
- * A CARD'S ART ACTIONS, BESIDE ITS OWN BUTTON (0.14.0, his K4 pick on the design page "TastyTunes
- * 0.14.0 Design"): Play and More were spans drawn inside the card's button, a control within a
- * control that nothing could name or reach. They are real buttons now, laid over the art where
- * they were (the card's p-2 inset, the art's square), named for VoiceOver and kept out of the
- * Tab order: the keyboard reaches them through the card's More menu. The layer takes no pointer
- * itself, so the card under it still opens.
+ * A CARD'S ART ACTIONS, BESIDE ITS OWN BUTTON (0.14.0): Play and More were spans drawn inside
+ * the card's button, a control within a control that nothing could name or reach. They are real
+ * buttons now, laid over the art where they were (the card's p-2 inset, the art's square), named
+ * for VoiceOver and kept out of the Tab order: the keyboard reaches them through the card's More
+ * menu. The layer takes no pointer itself, so the card under it still opens.
  */
 export function ArtActions({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -302,8 +303,8 @@ export function ArtActions({ children }: { children: React.ReactNode }): React.J
 }
 
 /**
- * A TRACK'S CARD (0.13.0-rc.4, his picks on "Tracks as Cards": the Tracks lens follows the
- * Library's one Rows or Cards choice, and a track card's click plays). The album card's look for
+ * A TRACK'S CARD (0.13.0-rc.4: the Tracks lens follows the Library's one Rows or Cards choice,
+ * and a track card's click plays). The album card's look for
  * a track: its cover, the title, and under it what the caller says (the artist and the album, or
  * the figure the list is sorted by). Its click is a track row's: a selection chord picks, any
  * other click plays, so Play blooms in the middle as on the Queue's and the presets' cards; the
@@ -399,7 +400,7 @@ export function TrackCard({
           <span
             aria-hidden
             className={cx(
-              "absolute inset-0 m-auto h-11 w-11 rounded-full bg-amber text-bg flex items-center justify-center transition-all duration-150 motion-safe:group-hover:scale-105 hover:shadow-[0_0_24px_rgb(var(--amber-rgb)_/_0.6)]",
+              "absolute inset-0 m-auto h-11 w-11 rounded-full bg-accent text-bg flex items-center justify-center transition-all duration-150 motion-safe:group-hover:scale-105 hover:shadow-[0_0_24px_rgb(var(--accent-rgb)_/_0.6)]",
               menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
             )}
           >
@@ -438,8 +439,8 @@ export function TrackCard({
 }
 
 /**
- * A LINE WITH A COPY'S CHIP (0.13.0-rc.4, his pick on "Card details": the chip never takes more
- * than half the line, so the artist keeps the other half): two columns no wider than their text,
+ * A LINE WITH A COPY'S CHIP (0.13.0-rc.4: the chip never takes more than half the line, so the
+ * artist keeps the other half): two columns no wider than their text,
  * the line's free width shared equally between them, so each keeps up to half and either uses
  * what the other leaves, the chip at the line's right end, and either shortened with "…" past its
  * share. The name's column is always there, empty when there is no name.
@@ -468,13 +469,20 @@ export function CardBadge({ label, tip }: { label: string; tip?: string }): Reac
 }
 
 /**
- * AN ALBUM CARD'S FORMAT LINE (0.13.0-rc.4, his picks on "Card details"): the status lamp's glyph
+ * AN ALBUM CARD'S FORMAT LINE (0.13.0-rc.4): the status lamp's glyph
  * for its quality, its format, and DR's badge at the right once Audio analysis has measured it,
  * one tip over the line in two short lines (the format, then the dynamic range) so a tip under a
  * narrow card stays about its width. Held at its height when nothing is known, so every card in
  * a grid keeps one height.
  */
-function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Element {
+function CardFormatLine({
+  details,
+  analyzing,
+}: {
+  details: CardDetails;
+  /** The album is being analyzed: with no DR yet, the line's end holds its place. */
+  analyzing?: { at: number; of: number } | null;
+}): React.JSX.Element {
   const dr = details.dr != null && details.dr > 0 ? details.dr : null;
   const drWords =
     dr != null
@@ -486,8 +494,8 @@ function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Elemen
       data-card-format={details.label ?? ""}
       data-tip={tip || undefined}
       className={cx(
-        // text-dim, not the names' faint: new text clears 0016's floor in dark too (S139, the
-        // rc.4 gate: at faint/80 the line sat near 2.8 to 1 on the dark card)
+        // text-dim, not the names' faint: new text clears the contrast floor in dark too (at
+        // faint/80 the line sat near 2.8 to 1 on the dark card, 0.13.0-rc.4)
         "mt-1.5 h-4 flex items-center gap-1 min-w-0 text-[10.5px] text-dim tabular-nums text-left",
         tip && "tip-bottom tip-lines",
       )}
@@ -499,18 +507,26 @@ function CardFormatLine({ details }: { details: CardDetails }): React.JSX.Elemen
         </span>
       )}
       {details.label && <span className="truncate">{details.label}</span>}
-      {dr != null && (
+      {dr != null ? (
         <DrBadge
           dr={dr}
           titled={false}
           className="ml-auto shrink-0 font-mono text-[10px] leading-[13px]"
         />
+      ) : (
+        analyzing && (
+          <DrPending
+            at={analyzing.at}
+            of={analyzing.of}
+            className="ml-auto shrink-0 font-mono text-[10px] leading-[13px]"
+          />
+        )
       )}
     </div>
   );
 }
 
-/** Row-cluster heart: hover-revealed control, permanently gold when set. */
+/** Row-cluster heart: hover-revealed control, permanently the accent when set. */
 
 export function ContainerRow({
   node,
@@ -524,6 +540,8 @@ export function ContainerRow({
   badge,
   badgeTip,
   dr,
+  analyzing,
+  length,
   onArtistLink,
   onNavDrag,
   onHeart,
@@ -550,6 +568,11 @@ export function ContainerRow({
   /** EXPERIMENT (0.7): the album's recorded TT-DR for the data cluster;
    *  null renders the reserved cell empty (absence as absence). */
   dr?: number | null;
+  /** The album is being analyzed (useAlbumAnalyzing): with no DR yet, its cell holds the place. */
+  analyzing?: { at: number; of: number } | null;
+  /** The album's running time in seconds (albumSecs over its own tracks), in the time column a
+   *  track row has; null or absent when its tracks aren't known. */
+  length?: number | null;
   /** The album artist as a link (rows are the data view: names navigate;
    *  the row itself keeps opening the album). */
   onArtistLink?(): void;
@@ -575,7 +598,7 @@ export function ContainerRow({
     <div
       {...item}
       className={cx(
-        "group relative grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        "group relative grid grid-cols-[44px_1fr_auto_auto_auto_auto_auto_auto] items-center gap-3 rounded-lg px-3 py-1.5 cursor-pointer transition-colors",
         playing
           ? "row-playing bg-gold/10"
           : selected
@@ -613,6 +636,9 @@ export function ContainerRow({
       )}
       <MediaArt
         src={artistPic ?? artSrc(node.artUrl, 240, artKeyOf(node))}
+        fallbackArt={
+          album ? { artist: node.albumArtist ?? node.artist, album: node.title } : undefined
+        }
         kind={album ? "album" : artist ? "artist" : "folder"}
         className={muted ? "opacity-60 saturate-[.6]" : undefined}
       />
@@ -620,11 +646,9 @@ export function ContainerRow({
         <div className={cx("text-[13.5px] truncate", playing ? "text-gold" : "text-ink")}>
           {node.title}
         </div>
-        {(node.artist || badge) && (
-          <div className={badge ? CARD_BADGE_LINE : "flex min-w-0"}>
-            {!node.artist ? (
-              <span />
-            ) : onArtistLink ? (
+        {node.artist && (
+          <div className="flex min-w-0">
+            {onArtistLink ? (
               <NameLink
                 kind="artist"
                 name={node.artist}
@@ -634,43 +658,69 @@ export function ContainerRow({
             ) : (
               <div className="text-[12px] text-faint truncate">{node.artist}</div>
             )}
-            {badge && <CardBadge label={badge} tip={badgeTip} />}
           </div>
         )}
       </div>
+      {/* the copy's place in its own cell, centered on the row with the year and DR beside it (it
+          rode the artist's line, below them) */}
+      {badge ? <CardBadge label={badge} tip={badgeTip} /> : <span />}
       {/* The rows view is the data view: year and DR ride RESERVED cells on
           album rows (the duration-cell principle — alignment holds whether or
-          not a value exists; empty tracks collapse on non-album rows). */}
-      {album && (
-        <div className="w-9 text-right font-mono text-[11px] text-faint tabular-nums">
+          not a value exists). A folder's or an artist's row keeps both cells, empty and
+          narrow, so its buttons end where an album row's do. */}
+      {album ? (
+        <div className="w-9 text-right font-mono text-[11px] text-faint tabular-nums" data-row-year>
           {node.year ?? ""}
         </div>
+      ) : (
+        <span />
       )}
-      {album && (
+      {album ? (
         <div className="flex w-12 justify-end font-mono text-[10.5px]">
-          {dr != null && <DrBadge dr={dr} className="" />}
-        </div>
-      )}
-      {playing ? <Eqbars /> : <span />}
-      {album && onHeart ? (
-        <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
-      ) : (
-        <span />
-      )}
-      {menuable ? (
-        <button
-          aria-label="More actions"
-          tabIndex={inList ? -1 : undefined}
-          onClick={onMenu}
-          className={cx(
-            "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
-            menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+          {dr != null ? (
+            <DrBadge dr={dr} className="" />
+          ) : (
+            analyzing && <DrPending at={analyzing.at} of={analyzing.of} className="" />
           )}
-        >
-          <MoreHorizontal size={14} />
-        </button>
+        </div>
       ) : (
         <span />
+      )}
+      {/* the bars' cell keeps their width on every row, so the playing row's year and DR stay in
+          line with the others' */}
+      <span className="flex w-[13px] justify-center" data-row-bars>
+        {playing && <Eqbars />}
+      </span>
+      {/* the buttons in a track row's order, the ⋯ and then the heart beside the time, so where
+          albums and tracks share a list their buttons and times line up; a row without one keeps
+          its place */}
+      <div className="flex items-center gap-0.5">
+        {menuable ? (
+          <button
+            aria-label="More actions"
+            tabIndex={inList ? -1 : undefined}
+            onClick={onMenu}
+            className={cx(
+              "p-1.5 rounded-lg text-dim hover:text-ink hover:bg-veil2 transition-all",
+              menuOpen ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-kbd:opacity-100",
+            )}
+          >
+            <MoreHorizontal size={14} />
+          </button>
+        ) : (
+          <span aria-hidden className="w-[26px]" />
+        )}
+        {album && onHeart ? (
+          <RowHeart favorited={favorited === true} held={menuOpen} onHeart={onHeart} />
+        ) : (
+          <span aria-hidden className="w-[25px]" />
+        )}
+      </div>
+      {/* the album's running time where a track row has its own (unknown: the cell kept, empty) */}
+      {album && length != null && length > 0 ? (
+        <DurationCell secs={length} wide />
+      ) : (
+        <span aria-hidden className={cx("font-mono text-[11px]", DURATION_WIDE)} />
       )}
     </div>
   );
@@ -717,6 +767,8 @@ export function TrackRow({
   dr,
   lufs = null,
   meta,
+  badge,
+  badgeTip,
   showPosition = true,
   selStart = true,
   selEnd = true,
@@ -776,6 +828,12 @@ export function TrackRow({
   /** The track's integrated loudness (0.8.0), when known — the DR badge's
    *  tooltip carries it; the cell itself stays the DR number. */
   lufs?: number | null;
+  /** In a flat list (the Tracks lens, search results): which copy of its album the track is
+   *  from (the lens index's trackCopyBadge), the album rows' chip, set apart from the title
+   *  beside the row's buttons. */
+  badge?: string;
+  /** What the chip means (CardBadge). */
+  badgeTip?: string;
   /** The Tracks lens turns the number off: a track's position within ITS
    *  album reads as noise in a flat list across albums. The cell stays —
    *  the playing eqbars still live there (the flat-row rule). */
@@ -787,7 +845,9 @@ export function TrackRow({
       ref={ref}
       {...item}
       className={cx(
-        "group relative grid items-center gap-3 rounded-lg px-2 py-1.5 cursor-pointer transition-colors",
+        // 12px of inner room (0.16.0, was 8): the playing ring's room beside the bars and the
+        // time; a list that hangs its rows into the margin hangs them as far (-mx-3)
+        "group relative grid items-center gap-3 rounded-lg px-3 py-1.5 cursor-pointer transition-colors",
         TRACK_GRID[
           [
             showPosition && "pos",
@@ -866,12 +926,11 @@ export function TrackRow({
                 callback reads as text. The album shows only where it links. */}
             <NameLine
               artist={node.artist}
-              artistText={artistLabel}
+              artistText={artistLabel ?? performerLine(node, node.albumArtist)}
               album={onAlbumLink ? node.album : null}
               onArtist={onArtistLink ?? null}
               onAlbum={onAlbumLink ?? null}
               tone="faint"
-              sep={FACT_SEP}
             />
           </div>
         )}
@@ -879,6 +938,11 @@ export function TrackRow({
       {/* per-button reveal (not on the wrapper): a set heart must stay
           visible on the resting row while play/⋯ remain hover-only */}
       <div className="flex items-center gap-0.5">
+        {badge && (
+          <span className="mr-2 flex">
+            <CardBadge label={badge} tip={badgeTip} />
+          </span>
+        )}
         <RowAction
           icon={Play}
           label="Play"
@@ -908,7 +972,7 @@ export function TrackRow({
           {meta}
         </div>
       )}
-      <DurationCell secs={node.durationSecs} />
+      <DurationCell secs={node.durationSecs} wide />
     </div>
   );
 }

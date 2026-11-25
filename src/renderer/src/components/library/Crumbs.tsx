@@ -12,11 +12,8 @@ export interface CrumbItem {
   onClick?: () => void;
   /** Where you are: ink, not a hover target. */
   current?: boolean;
-  /** The way back to search results: gold with the glyph (the search bar's identity). */
+  /** The way back to search results: the accent with the glyph (the search bar's identity). */
   search?: boolean;
-  /** Drawn before the label: the album's cover once its header has scrolled away (the compact
-   *  bar, AlbumCrumbArt). */
-  lead?: React.ReactNode;
 }
 
 /** The trail keeps this many from the start (Library, the source, the volume)
@@ -74,14 +71,7 @@ export function Crumbs({ items }: { items: CrumbItem[] }): React.JSX.Element {
   const crumb = (it: CrumbItem): React.JSX.Element => {
     const long = it.label.length > 28;
     const text = <span className="block max-w-[14rem] truncate">{it.label}</span>;
-    const label = it.lead ? (
-      <span className="flex items-center gap-1.5">
-        {it.lead}
-        {text}
-      </span>
-    ) : (
-      text
-    );
+    const label = text;
     if (!it.onClick)
       return (
         <span className="px-1.5 py-0.5 text-ink" data-tip={long ? it.label : undefined}>
@@ -91,11 +81,11 @@ export function Crumbs({ items }: { items: CrumbItem[] }): React.JSX.Element {
     if (it.search)
       return (
         // the way back to the results this branch was entered from —
-        // gold, matching the search bar's identity
+        // the accent, matching the search bar's identity
         <button
           data-library-search-crumb
           onClick={it.onClick}
-          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-gold/90 hover:text-gold hover:bg-golddim transition-colors"
+          className="flex items-center gap-1 px-1.5 py-0.5 rounded text-accent/90 hover:text-accent hover:bg-accentdim transition-colors"
         >
           <Search size={11} />
           {label}

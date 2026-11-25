@@ -1,5 +1,6 @@
 // Time-driven actions: scheduled actions (alarms, fades, standby) and the sleep timer.
 
+import { nameKey } from "@shared/keys";
 import type { ZonePlayState } from "../smoip";
 
 // ----------------------------------------------------------- scheduled actions
@@ -22,6 +23,9 @@ export interface Schedule {
   volumePercent: number | null;
   /** Wake only, with a volume: ramp up to it instead of jumping (absent = true). */
   fadeIn?: boolean;
+  /** The streamer it acts on, by udn with its name to show (0.16.0, additive): absent is the
+   *  streamer the TastyTunes window shows, as every schedule before. A preset is that streamer's. */
+  streamer?: { udn: string; name: string } | null;
 }
 
 /**
@@ -51,6 +55,17 @@ export interface MissedSchedule {
 /** Cache key for a preset volume override — device-scoped so ids don't collide. */
 export function presetVolumeKey(udn: string | null | undefined, presetId: number): string {
   return `${udn ?? "device"}|${presetId}`;
+}
+
+/** Whether a preset's level (settings.presetVolumes) holds for the preset now in its slot: it was
+ *  set for a preset of this name, or before names were kept (main then adopts the slot's name). */
+export function presetVolumeHolds(
+  names: Readonly<Record<string, string>>,
+  key: string,
+  presetName: string | null | undefined,
+): boolean {
+  const recorded = names[key];
+  return recorded == null || (presetName != null && nameKey(recorded) === nameKey(presetName));
 }
 
 // ------------------------------------------------------------------- sleep timer

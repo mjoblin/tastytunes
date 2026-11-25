@@ -5,7 +5,6 @@ import { useStore } from "@/store";
 import { artSrc, artKeyOf } from "@/lib/artSrc";
 import type { MediaNode } from "@shared/model";
 import { HeaderArt } from "@/components/library/HeaderArt";
-import { ArtImage } from "@/components/media/ArtImage";
 import { HEADER_ART_PX, useHeaderArtSize } from "@/hooks/useHeaderArtSize";
 import { NameLink } from "@/components/media/NameLine";
 import { DrChip, LufsChip } from "@/components/media/Waveform";
@@ -40,7 +39,8 @@ export function AlbumHeader(
       albumDrShown: number | null;
       albumLufsShown: number | null;
       albumSweeping: boolean;
-      analysisProgress: Store["analysisProgress"];
+      /** How far the album's analysis has got (useAlbumAnalyzing), while albumSweeping. */
+      albumAnalyzing: { at: number; of: number } | null;
       albumComposerLine: string | null;
       playContainer(node: MediaNode, el: HTMLElement | null): Promise<void>;
       goToArtistFromLens(node: MediaNode): void;
@@ -62,7 +62,7 @@ export function AlbumHeader(
     albumDrShown,
     albumLufsShown,
     albumSweeping,
-    analysisProgress,
+    albumAnalyzing,
     albumComposerLine,
     playContainer,
     nodeFavorited,
@@ -85,7 +85,7 @@ export function AlbumHeader(
             edge from the first pending frame (a quick rise, not the line's 300 ms wait, which
             left a moment with no border; the ring is a shadow, so the size never moves) and
             settling back slowly when the picture lands; a cached picture lands before the
-            rise shows (user, 2026-09-14); its size is dragged from the corner, one size with
+            rise shows; its size is dragged from the corner, one size with
             the artist header's (HeaderArt, 0.11.0) */}
         <HeaderArt
           art={art}
@@ -101,8 +101,8 @@ export function AlbumHeader(
                 pinned to its bottom: a header without a composer line is
                 exactly the art's height on every album (the track list starts
                 at one place), the verbs sit on the art's bottom edge, and only
-                a composer line or a wrapped title grows the header (user call,
-                2026-09-05, measured: 153px of 160 without, ~180 with). A picture dragged
+                a composer line or a wrapped title grows the header (measured:
+                153px of 160 without, ~180 with). A picture dragged
                 larger leaves the column as it is, the verbs following the words rather than
                 pinned to a bottom edge far below them (0.11.0). */}
         <div className="min-w-0 pt-1 flex min-h-[160px] flex-col gap-1.5">
@@ -157,7 +157,7 @@ export function AlbumHeader(
             )}
             {/* the format TOKENS as chips, the DR chip (or the sweep's
                     pulse in its place) closing the row — two registers, one
-                    home (lib/mediaFacts; user call, 2026-09-01) */}
+                    home (lib/mediaFacts) */}
             {(allTracks.length > 0 || albumDrShown != null || albumSweeping) && (
               <div className="flex flex-wrap items-center gap-1.5 pt-1" data-album-chips>
                 {albumFormatChips(allTracks).map((b) => (
@@ -174,9 +174,10 @@ export function AlbumHeader(
                     data-album-analyzing
                   >
                     analyzing
-                    {analysisProgress != null &&
-                      analysisProgress.at > 0 &&
-                      ` ${analysisProgress.at}/${analysisProgress.total}`}
+                    {albumAnalyzing != null &&
+                      albumAnalyzing.at > 0 &&
+                      albumAnalyzing.of > 0 &&
+                      ` ${albumAnalyzing.at}/${albumAnalyzing.of}`}
                     …
                   </span>
                 ) : (
@@ -188,7 +189,7 @@ export function AlbumHeader(
               </div>
             )}
             {/* the credit gets 8px of air above (6px here + the group's
-                    2px rhythm) so it reads as its own thought (user, 2026-09-05) */}
+                    2px rhythm) so it reads as its own thought */}
             {albumComposerLine && (
               <div className="text-[12.5px] text-faint pt-1.5" data-album-composers>
                 {albumComposerLine}
@@ -200,10 +201,10 @@ export function AlbumHeader(
               data-tip="Replaces the queue"
               // no queue-ack flash on the album screen: the whole-header
               // pulse read as a glitch and even the art square was ruled
-              // extra (user, 2026-08-24) — the button's own press state and
+              // extra — the button's own press state and
               // the playing row lighting up are feedback enough here
               onClick={() => void playContainer(albumNode, null)}
-              className="tip-bottom flex items-center gap-2 px-4 py-2 rounded-full bg-amber text-bg text-[13px] font-medium motion-safe:active:scale-95 transition-all"
+              className="tip-bottom flex items-center gap-2 px-4 py-2 rounded-full bg-accent text-bg text-[13px] font-medium motion-safe:active:scale-95 transition-all"
             >
               <Play size={14} fill="currentColor" /> Play
             </button>
@@ -215,7 +216,7 @@ export function AlbumHeader(
               className={cx(
                 "tip-bottom p-2 rounded-full ring-1 ring-edge bg-panel/70 transition-all motion-safe:active:scale-90",
                 nodeFavorited(albumNode)
-                  ? "text-gold hover:text-ink"
+                  ? "text-accent hover:text-ink"
                   : "text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
               )}
             >
@@ -235,14 +236,14 @@ export function AlbumHeader(
       {/* a box set's volumes as the app's own picker — one pill per volume,
             the open one lit, on its own row above the tracks they switch (the
             app's Segmented-above-its-listing idiom; moved out of the header
-            column, which is sized to sit beside the art — user placement,
-            2026-08-27). The old faint ‹ › facts line went unnoticed as
+            column, which is sized to sit beside the art). The old faint ‹ › facts line went
+            unnoticed as
             navigation. */}
       {setSiblings && (
         <div className="-mt-1.5 pb-5 flex" data-album-set>
           {/* px-4 pills: a volume row is a few short labels with room to
                 spare, so they wear looser padding than the dense partition
-                controls (user, 2026-08-27) */}
+                controls */}
           <Segmented<string>
             className="[&>button]:px-4"
             value={albumNode.id}
@@ -262,34 +263,14 @@ export function AlbumHeader(
 }
 
 /**
- * THE COMPACT BAR (0.13.0 round 5; his call 2026-10-24, option B on the decision page): once the
- * header's verbs have scrolled away on a long album, the trail tightens instead of a bar arriving.
- * The album's crumb gains its cover (AlbumCrumbArt) and the header's Play, heart and menu join the
- * trail's right end (AlbumCompactVerbs), the same verbs with the same handlers, so the album keeps
- * its identity and its Play in reach. Pinning the header was ruled out: at the smallest window
- * (800x520) it left about 150px for tracks. LibraryScreen decides when (the verbs' row out of
- * view above the scroller's faded top).
+ * THE COMPACT BAR (0.13.0 round 5): once the header's verbs have scrolled away on a long album,
+ * the trail tightens instead of a bar arriving: the header's Play, heart and menu join the trail's
+ * right end (AlbumCompactVerbs), the same verbs with the same handlers, so the album keeps its Play
+ * in reach and the album's crumb names it. (Its cover beside the crumb went in 0.16.0: at 18px it
+ * barely read, and its arrival pushed the album's name aside.) Pinning the header was ruled out:
+ * at the smallest window (800x520) it left about 150px for tracks. LibraryScreen decides when (the
+ * verbs' row out of view above the scroller's faded top).
  */
-export function AlbumCrumbArt({
-  albumNode,
-  albumArt,
-}: {
-  albumNode: MediaNode;
-  albumArt: string | null;
-}): React.JSX.Element {
-  return (
-    <span
-      data-album-crumb-art
-      className="compact-in h-[18px] w-[18px] shrink-0 overflow-hidden rounded-[4px] bg-veil ring-1 ring-edge"
-    >
-      <ArtImage
-        src={artSrc(albumArt, 18, artKeyOf(albumNode))}
-        fallback={<Disc3 size={18} strokeWidth={1} className="text-faint" />}
-      />
-    </span>
-  );
-}
-
 export function AlbumCompactVerbs(
   p: Pick<Fav, "nodeFavorited" | "heartNode"> &
     Pick<Men, "openMenu"> & {
@@ -305,7 +286,7 @@ export function AlbumCompactVerbs(
         data-album-compact-play
         data-tip="Replaces the queue"
         onClick={() => void playContainer(albumNode, null)}
-        className="tip-bottom flex h-6 items-center gap-1.5 rounded-full bg-amber px-2.5 text-[12px] font-medium text-bg transition-all motion-safe:active:scale-95"
+        className="tip-bottom flex h-6 items-center gap-1.5 rounded-full bg-accent px-2.5 text-[12px] font-medium text-bg transition-all motion-safe:active:scale-95"
       >
         <Play size={11} fill="currentColor" /> Play
       </button>
@@ -316,7 +297,7 @@ export function AlbumCompactVerbs(
         onClick={() => heartNode(albumNode)}
         className={cx(
           "tip-bottom grid h-6 w-6 place-items-center rounded-full transition-all motion-safe:active:scale-90",
-          hearted ? "text-gold hover:text-ink" : "text-dim hover:bg-veil hover:text-ink",
+          hearted ? "text-accent hover:text-ink" : "text-dim hover:bg-veil hover:text-ink",
         )}
       >
         <Heart size={14} fill={hearted ? "currentColor" : "none"} />

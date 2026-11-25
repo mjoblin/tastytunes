@@ -15,6 +15,7 @@ import { app } from "electron";
 import electronUpdater from "electron-updater";
 import { version as appVersion } from "../../../package.json";
 import { REPO_URL } from "@shared/ipc";
+import { noteRequest } from "../netlog";
 import { type UpdateCheckResult, type UpdateState } from "@shared/model";
 import { getSettings } from "../data/persist";
 import {
@@ -23,11 +24,12 @@ import {
   isNewer,
   startUpdateCheck as startLegacyCheck,
 } from "./updateCheck";
+import { devOverride } from "./devOverride";
 
 const { autoUpdater } = electronUpdater;
 
 const RELEASES_PAGE = `${REPO_URL}/releases/latest`;
-const FEED = process.env["TASTYTUNES_UPDATE_FEED"];
+const FEED = devOverride("TASTYTUNES_UPDATE_FEED");
 const CHECK_EVERY_MS = 4 * 60 * 60 * 1000;
 
 let state: UpdateState = {
@@ -51,7 +53,12 @@ export function currentUpdateState(): UpdateState {
   return state;
 }
 
-const updaterUsable = (): boolean => app.isPackaged || !!FEED;
+// A packaged Linux build updates itself only as an AppImage (APPIMAGE names the file to replace);
+// run any other way it was told it was on the latest release (0.16.0), and is offered the release
+// page instead, as a development build is
+const updaterUsable = (): boolean =>
+  (app.isPackaged && !(process.platform === "linux" && !process.env["APPIMAGE"])) || !!FEED;
+let installing = false;
 
 export function startUpdater(onState: (s: UpdateState) => void): void {
   announce = onState;
@@ -100,6 +107,13 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
   }
 
   autoUpdater.on("update-available", (info) => {
+    // the 4-hourly check finding the same version again leaves a download under way, or done, as
+    // it is (0.16.0 turned Restart now back into Download; the update still installed on quit)
+    if (
+      (state.phase === "downloading" || state.phase === "downloaded") &&
+      state.version === info.version
+    )
+      return;
     setState({ phase: "available", version: info.version, canDownload: true, error: null });
   });
   autoUpdater.on("update-not-available", () => {
@@ -112,9 +126,18 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
     setState({ phase: "downloaded", percent: 100, error: null });
   });
   autoUpdater.on("error", (err) => {
-    // A failed background check stays quiet; a failure mid-consent-flow is
-    // the user's business.
-    if (state.phase === "downloading") {
+    // A failed background check stays quiet; a failure mid-consent-flow is the user's business,
+    // the install's included (0.16.0 said a download's alone: an AppImage in a folder the user
+    // can't write failed at the install, and Restart now then did nothing, for good). On macOS
+    // the download is said done before Squirrel has validated it, so its failure arrives while
+    // the phase is already "downloaded" with no check in flight (0.16.0-rc.8): said too, or Restart
+    // now would do nothing
+    if (
+      state.phase === "downloading" ||
+      installing ||
+      (state.phase === "downloaded" && checksInFlight === 0)
+    ) {
+      installing = false;
       setState({ phase: "error", error: err?.message ?? String(err) });
     }
   });
@@ -131,6 +154,8 @@ export function startUpdater(onState: (s: UpdateState) => void): void {
  *  stable line first (checkForUpdates). */
 const PRERELEASE = /-/.test(appVersion);
 let checking: ReturnType<typeof autoUpdater.checkForUpdates> | null = null;
+/** Counted before a check calls out, so an error said during the call is known to be its own. */
+let checksInFlight = 0;
 
 /**
  * A PRE-RELEASE BUILD REJOINS THE STABLE TRAIN (2026-10-06, the user: 0.9.0-rc.2 did not
@@ -145,9 +170,34 @@ let checking: ReturnType<typeof autoUpdater.checkForUpdates> | null = null;
  * download takes whichever check answered last.
  */
 function checkForUpdates(): ReturnType<typeof autoUpdater.checkForUpdates> {
-  if (!PRERELEASE) return autoUpdater.checkForUpdates();
+  // in the requests console as it ends (electron-updater's own request, outside loggedFetch)
+  const at = Date.now();
+  const logged = checkFeed();
+  void logged.then(
+    () =>
+      noteRequest("github", `${REPO_URL}/releases`, {
+        status: 200,
+        ms: Date.now() - at,
+        error: false,
+      }),
+    () =>
+      noteRequest("github", `${REPO_URL}/releases`, {
+        status: null,
+        ms: Date.now() - at,
+        error: true,
+      }),
+  );
+  return logged;
+}
+
+function checkFeed(): ReturnType<typeof autoUpdater.checkForUpdates> {
+  // one check at a time on every build, and known to be in flight: the error rule reads it, so a
+  // failed check never turns a waiting download into a failure (0.16.0-rc.8: a stable build's
+  // check went unmarked)
   if (checking) return checking;
+  checksInFlight++;
   checking = (async () => {
+    if (!PRERELEASE) return autoUpdater.checkForUpdates();
     autoUpdater.allowPrerelease = false;
     const stable = await autoUpdater.checkForUpdates();
     if (stable?.isUpdateAvailable) return stable;
@@ -155,6 +205,7 @@ function checkForUpdates(): ReturnType<typeof autoUpdater.checkForUpdates> {
     return autoUpdater.checkForUpdates();
   })().finally(() => {
     checking = null;
+    checksInFlight--;
   });
   return checking;
 }
@@ -202,5 +253,48 @@ export async function downloadUpdate(): Promise<void> {
 /** Consent step 2. */
 export function installUpdate(): void {
   if (state.phase !== "downloaded") return;
-  autoUpdater.quitAndInstall();
+  installing = true;
+  try {
+    autoUpdater.quitAndInstall();
+  } catch (err) {
+    installing = false;
+    setState({ phase: "error", error: err instanceof Error ? err.message : String(err) });
+  }
 }
+
+/** The version an update offers now (available to download, or downloaded), or null. */
+export function updateOffered(): string | null {
+  return state.canDownload || state.phase === "downloaded" ? state.version : null;
+}
+
+/**
+ * AN UPDATE WITH NO WINDOW TO CLICK THROUGH (0.16.0-rc.8): Download and Restart live in
+ * the window, so a window that never came up, or stopped and was left closed, left no route to the
+ * next version. The stuck dialog (app/bootFailure) calls this: checked if need be, downloaded,
+ * then installed and the app restarted. False when there is nothing to install.
+ */
+export async function updateFromMain(): Promise<boolean> {
+  if (!updaterUsable()) return false;
+  if (state.phase !== "downloaded") {
+    if (!state.canDownload) {
+      const found = await checkUpdatesOnDemand();
+      if (found.status !== "update") return false;
+    }
+    await downloadUpdate();
+  }
+  if (state.phase !== "downloaded") return false;
+  installUpdate();
+  // the install quits the app when it works; one that fails says so through the error event, so
+  // wait a moment for it rather than report an install that never happened (0.16.0-rc.8)
+  for (let waited = 0; waited < INSTALL_SETTLE_MS; waited += 250) {
+    if (phaseNow() === "error") return false;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  return phaseNow() !== "error";
+}
+
+/** The phase as it is now: the install's events change it behind a narrowed read. */
+const phaseNow = (): UpdateState["phase"] => state.phase;
+
+/** How long updateFromMain waits for an install's failure before taking it as under way. */
+const INSTALL_SETTLE_MS = 10_000;

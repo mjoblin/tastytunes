@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { ZoneNowPlaying, ZonePlayState } from "@shared/smoip";
-import { clampVolume, commandFrames, type CommandState } from "./commandFrames";
+import { clampVolume, commandFrames, seekLanding, type CommandState } from "./commandFrames";
 
 const idle: CommandState = {
   nowPlaying: null,
@@ -93,6 +93,55 @@ describe("volume", () => {
       { path: "/zone/state", params: { volume_step_change: -1 } },
     ]);
   });
+
+  it("a raise that would cross the limit stops at it; one below it stays a step change", () => {
+    const at = (volume_percent: number): CommandState => ({
+      ...idle,
+      volumeLimitPercent: 40,
+      zoneState: { volume_percent } as CommandState["zoneState"],
+    });
+    expect(commandFrames({ type: "volumeStepChange", delta: 20 }, at(39))).toEqual([
+      { path: "/zone/state", params: { volume_percent: 40 } },
+    ]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 5 }, at(36))).toEqual([
+      { path: "/zone/state", params: { volume_percent: 40 } },
+    ]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 5 }, at(30))).toEqual([
+      { path: "/zone/state", params: { volume_step_change: 5 } },
+    ]);
+    // no limit: the step goes as sent
+    expect(
+      commandFrames(
+        { type: "volumeStepChange", delta: 20 },
+        { ...at(39), volumeLimitPercent: null },
+      ),
+    ).toEqual([{ path: "/zone/state", params: { volume_step_change: 20 } }]);
+  });
+
+  it("holds the limit on a model read in steps alone, by the same share of its scale", () => {
+    // limit 50% on the 30-step scale is step 15
+    const steps = (volume_step: number): CommandState => ({
+      ...idle,
+      volumeLimitPercent: 50,
+      zoneState: { volume_step, volume_percent: null } as unknown as CommandState["zoneState"],
+    });
+    expect(commandFrames({ type: "setVolumeStep", step: 28 }, steps(10))).toEqual([
+      { path: "/zone/state", params: { volume_step: 15 } },
+    ]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 1 }, steps(15))).toEqual([]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 4 }, steps(13))).toEqual([
+      { path: "/zone/state", params: { volume_step: 15 } },
+    ]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 1 }, steps(10))).toEqual([
+      { path: "/zone/state", params: { volume_step_change: 1 } },
+    ]);
+    expect(
+      commandFrames(
+        { type: "setVolumeStep", step: 28 },
+        { ...steps(10), volumeLimitPercent: null },
+      ),
+    ).toEqual([{ path: "/zone/state", params: { volume_step: 28 } }]);
+  });
 });
 
 describe("tone and device controls", () => {
@@ -132,5 +181,72 @@ describe("what is not a plain socket write", () => {
     expect(commandFrames({ type: "queueClear" }, idle)).toBeNull();
     expect(commandFrames({ type: "streamRadio", url: "http://x", name: "X" }, idle)).toBeNull();
     expect(commandFrames({ type: "resumeHeld" }, idle)).toBeNull();
+  });
+});
+
+describe("a seek to a track's end (live 2026-11-25: the firmware drops one to the full length)", () => {
+  const library = {
+    controls: ["pause", "play_pause", "track_next", "track_previous", "seek"],
+  } as unknown as ZoneNowPlaying;
+  const at = (index: number, of: number, extra: Partial<ZonePlayState> = {}): CommandState => ({
+    ...idle,
+    nowPlaying: library,
+    playState: {
+      state: "play",
+      queue_index: index,
+      queue_length: of,
+      mode_repeat: "off",
+      metadata: { duration: 142 },
+      ...extra,
+    } as unknown as ZonePlayState,
+  });
+  const seek = (secs: number, s: CommandState) =>
+    commandFrames({ type: "seek", positionSecs: secs }, s);
+
+  it("lands a seek short of the last second where it was asked", () => {
+    expect(seek(130, at(2, 12))).toEqual([
+      { path: "/zone/play_control", params: { position: 130 } },
+    ]);
+    expect(seek(140.4, at(2, 12))).toEqual([
+      { path: "/zone/play_control", params: { position: 140 } },
+    ]);
+  });
+
+  it("goes to the next track for a seek into the last second, the full length included", () => {
+    for (const secs of [141, 141.6, 142, 999])
+      expect(seek(secs, at(2, 12))).toEqual([
+        { path: "/zone/play_control", params: { skip_track: 1 } },
+      ]);
+  });
+
+  it("with no track after it, lands two seconds short so the track ends on its own", () => {
+    expect(seek(142, at(11, 12))).toEqual([
+      { path: "/zone/play_control", params: { position: 140 } },
+    ]);
+    const noNext = {
+      ...at(2, 12),
+      nowPlaying: { controls: ["play_pause", "seek"] } as unknown as ZoneNowPlaying,
+    };
+    expect(seek(142, noNext)).toEqual([{ path: "/zone/play_control", params: { position: 140 } }]);
+  });
+
+  it("goes on past the queue's last track when the whole queue repeats", () => {
+    expect(seek(142, at(11, 12, { mode_repeat: "all" }))).toEqual([
+      { path: "/zone/play_control", params: { skip_track: 1 } },
+    ]);
+  });
+
+  it("lands short on a track that repeats, so it plays again as its own end would", () => {
+    expect(seek(142, at(2, 12, { mode_repeat: "one" }))).toEqual([
+      { path: "/zone/play_control", params: { position: 140 } },
+    ]);
+  });
+
+  it("says where a seek lands for the agents' tool as the frames send it", () => {
+    expect(seekLanding(30, at(2, 12))).toEqual({ at: 30 });
+    expect(seekLanding(-5, at(2, 12))).toEqual({ at: 0 });
+    expect(seekLanding(171, at(2, 12))).toEqual({ next: true });
+    expect(seekLanding(171, at(11, 12))).toEqual({ at: 140 });
+    expect(seekLanding(171, { ...idle, playState: null })).toEqual({ at: 171 });
   });
 });

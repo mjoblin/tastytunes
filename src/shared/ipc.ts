@@ -131,7 +131,12 @@ export type MenuCommand =
   | { id: "toggleNav" }
   | { id: "navBack" }
   | { id: "navForward" }
-  | { id: "screen"; screen: string };
+  | { id: "screen"; screen: string }
+  /** Settings › Updates, from the menus and the tray; check: and ask the feed now. */
+  | { id: "updates"; check?: boolean }
+  /** An agent's analyze_album: the album's Analyze audio, run in the window (analysis decodes
+   *  there), never raising one. */
+  | { id: "analyzeAlbum"; serverUdn: string; albumId: string };
 
 export type PushMessage =
   | { kind: "connection"; state: ConnectionState }
@@ -188,8 +193,12 @@ export type PushMessage =
   | { kind: "mcpStatus"; status: McpStatus }
   | { kind: "scheduleMissed"; missed: MissedSchedule | null }
   | { kind: "mediaIndex"; statuses: MediaIndexStatus[] }
-  | { kind: "menu"; command: MenuCommand }
+  /** A menu command; `delivery` marks the copies of one click sent to a window still loading
+   *  (main/app/windows), which applies it once. */
+  | { kind: "menu"; command: MenuCommand; delivery?: number }
   | { kind: "updateState"; state: UpdateState }
+  /** Something the windows should say (a save that failed, data/savedFiles saveFailed). */
+  | { kind: "notice"; text: string }
   /** Sent when a request starts (pending) and again when it settles — upsert by id. */
   | { kind: "netRequest"; entry: NetRequestEntry };
 
@@ -315,10 +324,30 @@ export interface Snapshot {
 
 // ------------------------------------------------------------------- preload API
 
+/** Open at login, as the system has it (main/app/loginItem): offered here ("yes"), shown but
+ *  working only in the installed app ("installed-only", a development run), or not offered ("no",
+ *  Linux); whether it is on; and whether macOS waits for the user to allow it in System Settings. */
+export interface LoginItemState {
+  available: "yes" | "installed-only" | "no";
+  on: boolean;
+  needsApproval: boolean;
+}
+
+/** The OS media keys (main/app/mediaKeys): the setting, whether the keys are bound, and whether
+ *  macOS needs the Accessibility permission for them. Bound false with no permission needed is
+ *  another app holding the keys. */
+export interface MediaKeysState {
+  on: boolean;
+  bound: boolean;
+  needsPermission: boolean;
+}
+
 export interface TastyTunesApi {
   getSnapshot(): Promise<Snapshot>;
   /** Cover Art Archive fallback for an album the server has no art for (null when off or unknown). */
-  albumArt(artist: string, album: string): Promise<string | null>;
+  /** An album's cover from another library or the Cover Art Archive; `failed`, the album's own
+   *  address that failed, is never offered back. */
+  albumArt(artist: string, album: string, failed?: string | null): Promise<string | null>;
   discover(): Promise<DiscoveredDevice[]>;
   connect(host: string): Promise<void>;
   disconnect(): Promise<void>;
@@ -334,6 +363,15 @@ export interface TastyTunesApi {
   reportRenderError(surface: string, message: string): Promise<void>;
   getSettings(): Promise<AppSettings>;
   setSettings(patch: Partial<AppSettings>): Promise<AppSettings>;
+  /** Open at login: the system's own login item (main/app/loginItem), read fresh each time. */
+  getLoginItem(): Promise<LoginItemState>;
+  /** Show the log file (main/app/logFile) in Finder or Explorer. */
+  revealLogFile(): Promise<void>;
+  setLoginItem(on: boolean): Promise<LoginItemState>;
+  /** The media keys as they stand, bound again first if they can be now (main/app/mediaKeys). */
+  getMediaKeys(): Promise<MediaKeysState>;
+  /** macOS: System Settings' Accessibility pane, where the media keys' permission is given. */
+  openAccessibilitySettings(): Promise<void>;
   /** Fetch album art via the main process (bypasses CORS) as a data URL. */
   fetchArt(url: string): Promise<{ dataUrl: string } | null>;
   /** The picture embedded in a track's audio file, for surfaces the server's
@@ -417,11 +455,18 @@ export interface TastyTunesApi {
    *  a Uint8Array (main sends a Buffer): the contract said ArrayBuffer until the typed
    *  handle held main's answer to it (0.11.0 sweep). */
   /** A track's bytes for the analysis decode; `tooLarge` when the file is past the size the
-   *  decode can hold (main/ipc/audio), refused before it is downloaded. */
+   *  decode can hold, `tooLong` when its samples would be (main/ipc/audio), each refused before
+   *  it is downloaded. */
   expTrackAudio(
     serverUdn: string,
     objectId: string,
-  ): Promise<Uint8Array | { tooLarge: { bytes: number; maxBytes: number } } | null>;
+    opts?: { pace?: boolean },
+  ): Promise<
+    | Uint8Array
+    | { tooLarge: { bytes: number; maxBytes: number } }
+    | { tooLong: { secs: number; maxSecs: number } }
+    | null
+  >;
   /** A track's file opened to be read in pieces for the analysis (0.14.0, no size limit): its
    *  stream's id and declared length, or null when the server wouldn't give it. */
   audioStreamOpen(
@@ -551,6 +596,8 @@ export interface TastyTunesApi {
   /** Force a media-index (re)build for one server (also the only way to
    *  build one for a Browse-only server). */
   mediaIndexRebuild(serverUdn: string): Promise<void>;
+  /** Remove the index of a server that is gone (main/media/mediaIndex removeIndex). */
+  mediaIndexRemove(serverUdn: string): Promise<void>;
   /** A server's own Recently added list (0.13.0 round 9): a container chosen in the Library,
    *  "off", or null for the one found by its name; read again at once, with no walk. */
   setRecentlyAddedList(
@@ -621,6 +668,11 @@ export const IPC = {
   reportRenderError: "tt:reportRenderError",
   getSettings: "tt:getSettings",
   setSettings: "tt:setSettings",
+  getLoginItem: "tt:getLoginItem",
+  revealLogFile: "tt:revealLogFile",
+  setLoginItem: "tt:setLoginItem",
+  getMediaKeys: "tt:getMediaKeys",
+  openAccessibilitySettings: "tt:openAccessibilitySettings",
   fetchArt: "tt:fetchArt",
   embeddedArt: "tt:embeddedArt",
   fetchLyrics: "tt:fetchLyrics",
@@ -702,6 +754,7 @@ export const IPC = {
   contentResolve: "tt:contentResolve",
   mediaNodeInfo: "tt:mediaNodeInfo",
   mediaIndexRebuild: "tt:mediaIndexRebuild",
+  mediaIndexRemove: "tt:mediaIndexRemove",
   setRecentlyAddedList: "tt:setRecentlyAddedList",
   recentListCandidates: "tt:recentListCandidates",
   displayModeReport: "tt:displayModeReport",

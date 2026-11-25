@@ -12,11 +12,17 @@ const AGAIN_MS = [3000, 10000];
  * longer one for anything else passing, and answers null only when all three found nothing. A
  * caller keeps that null for the session no more than any other failure: it is not an answer
  * about the cover. `live` says whether the caller still wants it.
+ *
+ * A PICTURE ALREADY IN HAND is answered as it is: the file's embedded cover and the log's own copy
+ * (lib/bestArt) arrive as data URLs, which main never fetches (0.16.0: refused three times over
+ * 13 s, the wash faded out a few seconds into every track whose server cover was small and whose
+ * file held a larger one).
  */
 export async function fetchArtSoon(
   url: string,
   live: () => boolean,
 ): Promise<{ dataUrl: string } | null> {
+  if (/^data:/i.test(url)) return { dataUrl: url };
   for (let i = 0; i <= AGAIN_MS.length; i++) {
     if (i > 0) await new Promise((r) => setTimeout(r, AGAIN_MS[i - 1]));
     if (!live()) return null;

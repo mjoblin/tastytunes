@@ -57,9 +57,10 @@ chmod +x TastyTunes-x86_64.AppImage
 ```
 
 You'll need a Cambridge Audio network player built on the StreamMagic
-platform, on the same network as your computer: Evo 75/150, CXN100 /
-CXN (V2), MXN10, AXN10, EXN100, Edge NQ, 851N. Developed and tested daily
-against an Evo 150.
+platform, on the same network as your computer. TastyTunes is developed and
+tested daily with an Evo 150, and is expected to work with the Evo 75,
+CXN100, CXN (V2), MXN10, AXN10, EXN100, Edge NQ and 851N. If you have one of
+those, an issue with the diagnostics log attached helps confirm it.
 
 ## Screenshots
 
@@ -102,9 +103,9 @@ An album's page lists its tracks with their format and dynamic range. An artist'
 
 ### Search everything
 
-Search your libraries, playlists, favorites, presets, and internet radio at once, with the results grouped by type.
+Search your libraries, playlists, favorites, presets, and internet radio at once, then narrow the results to any one of them.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Search results grouped by type">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/search.webp" alt="Search results from every category, with a filter for each">
 
 ### Synced lyrics
 
@@ -180,15 +181,15 @@ Themes, fonts, layouts and sort orders, and much more, stored on your machine.
 
 ### AI agents
 
-MCP tools that let local AI agents see and control the streamer.
+MCP tools that let local AI agents see and control your streamers.
 
-<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The AI agents settings tab">
+<img src="https://raw.githubusercontent.com/mjoblin/media/main/tastytunes/images/settings-agents.webp" alt="The Integrations settings tab">
 
 ## MCP server
 
 TastyTunes can host a local MCP server (off by default), so AI agents on your
 network (Claude Code, Cursor, anything that supports MCP over HTTP) can see and
-control the streamer:
+control the streamers on your network:
 
 ```bash
 claude mcp add --transport http tastytunes http://127.0.0.1:8555/mcp
@@ -200,14 +201,14 @@ The tools cover what the app itself does: playback and volume, presets and
 sources, library and radio, favorites, tone and EQ, sleep timers, the listening
 record (plays, last played, what was left unfinished), audio analysis, album art,
 the scenes and Display mode, etc. The editing
-ones, like queue and preset changes, are kept separate and off until you
-turn them on. Every tool can be enabled or disabled in Settings › AI agents.
+ones, like rearranging the queue, saving presets, editing playlists or removing
+favorites, are kept separate and off until you turn them on. Every tool can be enabled or disabled in Settings › Integrations.
 Agents are held to the same limits as the app: the volume limit, the power
 safeguards and the Connections settings. A call to a disabled tool is
 refused. Bind it to localhost, or to your network to reach the streamer from
 another machine. Bound to your network, it requires the token from Settings ›
-AI agents. The setup for each client (Claude Code, Cursor, VS Code, Gemini CLI,
-Codex CLI, Claude Desktop, ChatGPT) is at [tastytunes.app/agents](https://tastytunes.app/agents/).
+Integrations. The setup for each client (Claude Code, Cursor, VS Code, Gemini CLI,
+Codex CLI, Claude Desktop) is at [tastytunes.app/agents](https://tastytunes.app/agents/).
 
 ### Home Assistant
 
@@ -221,24 +222,24 @@ rest_command:
     method: post
     content_type: application/json
     headers:
-      Authorization: Bearer <token from Settings › AI agents>
+      Authorization: Bearer <token from Settings › Integrations>
     payload: '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"recall_preset","arguments":{"id":3}}}'
 ```
 
 Any enabled tool works the same way, such as `set_volume`, `set_power`, and
-`pause`. Bind the server to your network in Settings › AI agents, enable the
+`pause`. Bind the server to your network in Settings › Integrations, enable the
 tools the Home Assistant automation needs, copy the token into the
 `Authorization` header, and keep TastyTunes running.
 
 ## Action links
 
 A `tastytunes://` link controls the streamer from anything that can open a link,
-such as an Elgato Stream Deck's Website action, Raycast, Alfred, Keyboard Maestro,
-Shortcuts, or a browser bookmark. `tastytunes://preset/3` recalls preset 3,
+such as a programmable keypad, an app launcher, an automation app, or a browser
+bookmark. `tastytunes://preset/3` recalls preset 3,
 `tastytunes://volume/up` turns the volume up a step, and
 `tastytunes://toggle-play` plays or pauses. To keep the focus where it is, open
 links in the background where the launcher allows it, such as `open -g` in
-Terminal. Every link is listed in Settings › Behavior (on Linux, the AppImage
+Terminal. Every link is listed in Settings › Integrations (on Linux, the AppImage
 must be integrated with the desktop for links to work).
 
 ## Every feature
@@ -254,11 +255,10 @@ must be integrated with the desktop for links to work).
 ### Now Playing
 
 - Large artwork over an ambient blurred-art backdrop
-- Optional art-derived accent, with a gold tint following the current album
+- A choice of accent color (sand, gold, sage or dusty teal), or one taken from the current album's art
 - Format badges: codec, sample rate, bit depth, lossless, MQA
 - A signal-quality lamp: gold for hi-res lossless, blue for lossless and gray for lossy, each with its own shape so the states don't rely on color alone
-- The lamp's legend is in Settings › Status lamps
-- The full signal chain in a popover from the lamp
+- A popover from the lamp with the full signal chain and what each color means
 - Internet-radio display, track *x* of *y*, and the current lyric line under the track details
 - Album art can be optionally replaced by a scene visualizer, selected from the scene picker
 - Album art (or scene visualizer) can be resized
@@ -269,10 +269,10 @@ must be integrated with the desktop for links to work).
 
 ### Audio analysis
 
-- A waveform of the playing track in the seek bar and under the artwork on Now Playing (local media only). Can be disabled in Settings › Appearance (on by default)
+- A waveform of the playing track in the seek bar (local media only, on by default), and optionally under the artwork on Now Playing, set in Settings › Appearance
 - Dynamic range for every analyzed track and album (same as the DR database's TT-DR value), shown on Now Playing, in track rows and in album headers
 - Analyze audio on any album from its menu, or on the tracks shown in the Tracks view
-- Peak and loudness details under the Now Playing waveform, and a Dynamic range row in Info
+- Peak and loudness details under the Now Playing waveform (when it's shown), and a Dynamic range row in Info
 
 ### Scenes
 
@@ -289,6 +289,7 @@ must be integrated with the desktop for links to work).
 - Browse every local UPnP media server and the streamer's own USB storage
 - A local index for fast searching as you type
 - <kbd>⌘F</kbd> searches every library at once, grouped by server
+- A library search can widen to playlists, favorites, presets and radio without leaving the Library
 - Artists, Albums and Tracks views combining every library into one collection, with filters for genre, decade, format (codec, lossless, hi-res), dynamic range, and albums or compilations
 - The Albums view can be shown as cards or rows
 - The Artists view shows your artists, the selected artist's albums, and the selected album's tracks
@@ -336,6 +337,7 @@ must be integrated with the desktop for links to work).
 - Only the controls the streamer itself reports (based on source) are enabled
 - Pre-amp mode (absolute volume) and Control Bus mode (nudge), mute, and an optional volume limit
 - Scroll-wheel volume on the volume control and the mini player
+- A click far up the volume slider raises the volume by 5 rather than jumping there, and a held key raises it gradually
 
 ### Queue
 
@@ -383,7 +385,7 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 
 - ListenBrainz: a listen is submitted after half the track or four minutes of playing
 - Short tracks and radio aren't scrobbled
-- Failed submissions are retried until successful
+- Failed submissions are retried while TastyTunes is running (the most recent 100)
 
 ### History
 
@@ -414,20 +416,22 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 - On macOS and Windows, clicking the icon opens a compact panel: now playing with transport and volume, plus queue, presets, playlists and Recent
 - On Windows and Linux, closing the main window keeps TastyTunes running in the tray; Quit is in the icon's menu
 - On Linux there's no panel, just the icon and its menu
+- TastyTunes can open when you sign in to your computer (macOS and Windows), off by default, in Settings › Behavior
+- Opened at sign-in with the icon on, it starts in the menu bar or tray without opening a window
 
 ### Windows & control
 
 - Mini player: frameless, always on top, remembers its position
 - Command palette (<kbd>⌘K</kbd>): transport, sources, presets by name, screens, and much more
-- Keyboard controls throughout: single keys open specific screens, <kbd>space</kbd> toggles play, arrows seek and nudge volume, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the controls overlay
+- Keyboard controls throughout: single keys open specific screens, <kbd>space</kbd> toggles play, the left and right arrows skip tracks, the up and down arrows nudge volume, <kbd>J</kbd> and <kbd>L</kbd> seek, <kbd>/</kbd> filters lists; <kbd>?</kbd> shows the controls overlay
 - Back and forward through everywhere you've been, like a browser: <kbd>⌘←</kbd>/<kbd>⌘→</kbd> (Alt+arrows on Windows and Linux), the mouse side buttons, or View › Back/Forward, which also works from inside a text box (<kbd>⌘[</kbd>/<kbd>⌘]</kbd> on macOS)
 - Scroll positions are remembered in the Library, Search and Playlists
 - Every reorderable list (queue, presets, playlists, the navigation panel) can be reordered by keyboard as well as by drag
 - Keyboard focus is shown with a visible ring
 - Notices are announced to screen readers
 - Undo for queue edits, favorites, playlist additions and schedule deletions, from the notice that follows each change
-- OS media keys
-- `tastytunes://` links for an Elgato Stream Deck and launchers: playback, volume, presets, sources, power and screens
+- OS media keys (on macOS, once TastyTunes is allowed in System Settings › Privacy & Security › Accessibility)
+- `tastytunes://` links for programmable keypads, app launchers and automation apps: playback, volume, presets, sources, power and screens
 - A track-change notification with artwork when the window isn't focused
 
 ### Appearance
@@ -439,13 +443,15 @@ With Cambridge Audio's Evo CD transport (on an Evo streaming amplifier):
 
 ### Transparency
 
-- A requests console (<kbd>`</kbd>) listing every outbound request the app makes: service, method, status, timing
+- A requests console (<kbd>`</kbd>) listing the app's requests to online services: service, method, status, timing
 - A SMOIP console showing the raw streamer traffic
+- A diagnostics log saved on your computer, never sent anywhere, for attaching to a problem report
 
 ### Updates & packaging
 
-- An update is downloaded only when you click Download, and installed when you click Restart
-- Signed and notarized universal macOS builds (Intel and Apple Silicon); one signed Windows installer covering x64 and arm64 (native on Windows-on-ARM); Linux AppImages for x64 and arm64, including 64-bit Raspberry Pi OS
+- An update is downloaded only when you click Download, and installed when you click Restart or the next time you quit
+- Favorites, playlists, and settings are protected from damaged files, with a copy of each kept at every update
+- Signed and notarized universal macOS builds (Intel and Apple Silicon); one signed Windows installer covering x64 and arm64 (native on Windows-on-ARM); Linux AppImages for x64 (run on Ubuntu 24.04 for every release) and arm64 (for 64-bit Raspberry Pi OS)
 
 ## What leaves your machine
 
@@ -457,12 +463,13 @@ The complete list:
 | Library browsing | your media servers, on your LAN | always (it's the app) |
 | Lyrics | lrclib.net | on by default; toggleable |
 | Liner notes | musicbrainz.org · wikidata.org · wikipedia.org | on by default; toggleable |
-| Artist photos | musicbrainz.org · wikidata.org · wikipedia.org | with Liner notes on, for every artist in your library |
-| Picture suggestions | commons.wikimedia.org | with Liner notes on, when you look for an artist's picture |
+| Artist photos | musicbrainz.org · wikidata.org · wikipedia.org · upload.wikimedia.org | with Liner notes on, for every artist in your library |
+| Picture suggestions | commons.wikimedia.org · upload.wikimedia.org | with Liner notes on, when you look for an artist's picture |
 | fanart.tv photos | fanart.tv | off until you add your own key |
-| Missing album art | musicbrainz.org · coverartarchive.org | on by default; toggleable |
-| Radio directory | radio-browser.info | when you search or browse Radio |
+| Missing album art | musicbrainz.org · coverartarchive.org · archive.org | on by default; toggleable |
+| Radio directory | radio-browser.info | when you search (in Search or on the Radio screen) or browse Radio; toggleable |
 | Station logos | each station's own website or image host | when a station is shown |
+| Streaming album art | the streaming service's image host | while a streaming source such as Spotify or TIDAL plays |
 | Update check | github.com | on by default; toggleable |
 | Scrobbles | listenbrainz.org | off until you add your token |
 

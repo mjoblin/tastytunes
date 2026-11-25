@@ -40,7 +40,7 @@ export function DragChip({
       <div className="flex items-center gap-2.5 rounded-lg bg-raised ring-1 ring-edge2 shadow-xl px-2.5 py-1.5">
         <MediaArt src={artUrl} kind={artKind} />
         <div className="min-w-0 flex-1 text-[13px] text-ink truncate">{title}</div>
-        <span className="shrink-0 rounded-full bg-gold text-bg text-[10.5px] font-medium px-2 py-0.5">
+        <span className="shrink-0 rounded-full bg-accent text-bg text-[10.5px] font-medium px-2 py-0.5">
           {count} {noun ?? (count === 1 ? "track" : "tracks")}
         </span>
       </div>

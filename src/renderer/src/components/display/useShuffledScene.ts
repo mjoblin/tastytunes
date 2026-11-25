@@ -11,8 +11,8 @@ const DEFAULT_EXCLUDE: readonly string[] = ["sleeve"];
  * The scene a host shows for the playing track: the one its setting names,
  * or when that is Shuffle, the shuffle's draw for this track (never the one
  * before) on the display-wide order, cadence and exclusions. Each host draws
- * for itself: display mode and the Now Playing tile keep separate choices
- * (the user's call, 2026-09-12), so separate draws.
+ * for itself: display mode and the Now Playing tile keep separate choices,
+ * so separate draws.
  */
 export function useShuffledScene(
   chosen: DisplayScene,

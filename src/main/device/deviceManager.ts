@@ -4,10 +4,8 @@
 import { webContents, type WebContents } from "electron";
 import { type PushMessage, type Snapshot, type StreamerCommand } from "@shared/ipc";
 import {
-  presetVolumeKey,
   type ConnectionState,
   type DiscoveredDevice,
-  type FirmwareStatus,
   type FrameEntry,
   type LogEntry,
   type McpStatus,
@@ -21,8 +19,11 @@ import {
   type ContentRef,
   type KnownDevice,
   type PlaylistActivation,
+  type PlaylistItem,
   type QueueRestoreResult,
   KNOWN_DEVICES_MAX,
+  bookAfterConnect,
+  bookAfterSweep,
   RECONNECT_GRACE_MS,
   type HeldState,
 } from "@shared/model";
@@ -36,7 +37,6 @@ import type {
   SystemDisplaySpec,
   SystemPowerSpec,
   SystemSources,
-  SystemUpdate,
   ZoneAudio,
   ZoneAudioSpec,
   ZoneNowPlaying,
@@ -46,6 +46,13 @@ import type {
 } from "@shared/smoip";
 import { discoverStreamers } from "./discovery";
 import { SmoipSocket } from "./smoipSocket";
+import {
+  applyFrame,
+  emptyCache,
+  presetVolumeFor,
+  PresetVolumeAfterRecall,
+  type StreamerCache,
+} from "./streamerCache";
 import * as smoipHttp from "./smoipHttp";
 import { getSettings, updateSettings } from "../data/persist";
 import { getRecents } from "../data/recents";
@@ -55,10 +62,11 @@ import { getFavorites } from "../data/favorites";
 import { getPlaylists } from "../data/playlists";
 import { QueueOps } from "./queueOps";
 import { Collections } from "./collections";
-import { commandFrames } from "./commandFrames";
+import { type CommandConnection, openAgain, sendCommand } from "./commandPath";
 import { SleepCountdown } from "./sleepCountdown";
 import { TrackNotifier } from "./trackNotifier";
 import { VolumeFader } from "./volumeFader";
+import { LogRepeats } from "./logRepeats";
 import { heldFor, heldFrom, saveHeld } from "./heldState";
 import type { ResolvedContent } from "../media/resolveContent";
 import { scrobbler } from "../lookups/scrobbler";
@@ -67,55 +75,38 @@ import { errorMessage } from "@shared/guards";
 import { queueAdd } from "../media/upnpBrowser";
 import { demoHost, stopDemoStreamer } from "../servers/demoStreamer";
 import type { MediaQueueAction } from "@shared/model";
+import {
+  type SlotMaps,
+  dropSlotFacts,
+  healPresetVolumes,
+  moveSlotFacts,
+  renamedSlotFacts,
+  slotsAfterMove,
+} from "./presetSlots";
 import { RecallWatch, recallSignature } from "./recallWatch";
+import { checkDocument, checkFrame } from "./frameCheck";
+import { appLog } from "../app/appLog";
 
-interface Cache {
-  playState: ZonePlayState | null;
-  position: ZonePosition | null;
-  nowPlaying: ZoneNowPlaying | null;
-  zoneState: ZoneState | null;
-  queue: QueueList | null;
-  presets: Presets | null;
-  systemInfo: SystemInfo | null;
-  systemPower: SystemPower | null;
-  firmwareUpdate: FirmwareStatus | null;
-  sources: SystemSources | null;
-  zoneAudio: ZoneAudio | null;
-  audioSpec: ZoneAudioSpec | null;
-  systemDisplay: SystemDisplay | null;
-  displaySpec: SystemDisplaySpec | null;
-  powerSpec: SystemPowerSpec | null;
-}
-
-const emptyCache = (): Cache => ({
-  playState: null,
-  position: null,
-  nowPlaying: null,
-  zoneState: null,
-  queue: null,
-  presets: null,
-  systemInfo: null,
-  systemPower: null,
-  firmwareUpdate: null,
-  sources: null,
-  zoneAudio: null,
-  audioSpec: null,
-  systemDisplay: null,
-  displaySpec: null,
-  powerSpec: null,
-});
+/** How long a repeated log line is counted rather than written again (DeviceManager.log). */
+const REPEAT_WINDOW_MS = 10 * 60_000;
 
 export class DeviceManager {
   private socket: SmoipSocket | null = null;
   private connection: ConnectionState = { phase: "idle" };
   private devices: DiscoveredDevice[] = [];
   private discovering = false;
-  private cache: Cache = emptyCache();
+  private cache: StreamerCache = emptyCache();
   private frames: FrameEntry[] = [];
   private logs: LogEntry[] = [];
   private lastHealthCheckAt = 0;
   private lastSourceId: string | null = null;
   private queuePresetsTimer: NodeJS.Timeout | null = null;
+  /** The app's own preset writes still out (presetWrite). */
+  private presetWrites = 0;
+  /** The host connect() was asked to remember, stamped as lastHost once it connects. */
+  private remembering: string | null = null;
+  /** The wire's notes already logged on this connection (wireNote). */
+  private wireNoted = new Set<string>();
   /** Connected to the in-process demo device (labels the connection in the UI). */
   private demo = false;
   /** See Snapshot.lastRecalledPresetId — in-app recalls only, content-checked by consumers. */
@@ -156,7 +147,7 @@ export class DeviceManager {
     this.pushDevices();
     try {
       this.devices = await discoverStreamers();
-      this.log("info", "discovery", `found ${this.devices.length} streamer(s)`);
+      this.log("info", "discovery", `found ${this.devices.length} streamer(s)`, { counted: true });
     } catch (err) {
       this.log("error", "discovery", `discovery failed: ${(err as Error).message}`);
     } finally {
@@ -174,7 +165,7 @@ export class DeviceManager {
     if (!getSettings().lastHost && this.connection.phase === "idle" && this.devices.length > 0) {
       this.connect(this.devices[0].host);
     } else {
-      // The STRANDED courtesy (the multi-streamer eco report, 2026-08-30):
+      // The STRANDED courtesy (a multi-streamer household on eco standby):
       // the current target has been gone past the grace — eco standby powers
       // its network off, so it is not coming back on its own — and the sweep
       // finds exactly ONE streamer that isn't it. Connecting to the only
@@ -207,7 +198,7 @@ export class DeviceManager {
    * Keep sweeping while not connected, so a streamer that powers on later is
    * noticed without anyone clicking anything — the manager owns this (not the
    * connect gate) because the gate only sweeps while mounted and visible,
-   * which is exactly what stranded the multi-streamer household. Idle after a
+   * which is exactly what stranded a multi-streamer household. Idle after a
    * deliberate disconnect still sweeps (the gate lists what it finds) but
    * auto-connects nowhere: both courtesies carry their own guards.
    */
@@ -227,24 +218,17 @@ export class DeviceManager {
   /** Upsert one streamer into the device book: newest-first, UDN-keyed, LRU-capped. */
   private rememberDevice(dev: Omit<KnownDevice, "lastSeenAt">): void {
     if (!dev.udn) return; // identity or nothing — a host alone can't be remembered safely
-    const rest = getSettings().knownDevices.filter((d) => d.udn !== dev.udn);
-    const knownDevices = [{ ...dev, lastSeenAt: Date.now() }, ...rest].slice(0, KNOWN_DEVICES_MAX);
+    const next = bookAfterConnect(getSettings().knownDevices, dev, Date.now());
+    if (!next) return; // already first and unchanged: no write, no push
+    const knownDevices = next.slice(0, KNOWN_DEVICES_MAX);
     this.push({ kind: "settings", settings: updateSettings({ knownDevices }) });
   }
 
+  /** A sweep that sees a known streamer refreshes its entry in place; it writes the settings only
+   *  when an address, name or model changed, or the entry's time is an hour old. */
   private refreshKnownFromSweep(): void {
-    const known = getSettings().knownDevices;
-    for (const seen of this.devices) {
-      const match = seen.udn ? known.find((d) => d.udn === seen.udn) : undefined;
-      if (match) {
-        this.rememberDevice({
-          udn: match.udn,
-          host: seen.host,
-          friendlyName: seen.friendlyName || match.friendlyName,
-          model: seen.model || match.model,
-        });
-      }
-    }
+    const knownDevices = bookAfterSweep(getSettings().knownDevices, this.devices, Date.now());
+    if (knownDevices) this.push({ kind: "settings", settings: updateSettings({ knownDevices }) });
   }
 
   // one clock for a recall that loaded nothing (0.15.0): every recall the app sends is watched
@@ -258,9 +242,15 @@ export class DeviceManager {
       this.push({ kind: "presetRecallDead", id });
     },
   });
+  // a recall's own level, sent once the recall lands (device/streamerCache)
+  private readonly presetLevel = new PresetVolumeAfterRecall({
+    signature: () => recallSignature(this.cache.playState),
+    apply: (percent) => this.fire({ type: "setVolumePercent", percent }),
+  });
 
   connect(host: string, opts?: { remember?: boolean; demo?: boolean }): void {
     this.recallWatch.cancel();
+    this.presetLevel.cancel();
     // Leaving the demo for a real device shuts the demo server down (0.15.0: here, so no caller
     // has to remember it; an agent's connect_device left it running)
     if (demoHost() && host !== demoHost()) stopDemoStreamer();
@@ -268,15 +258,22 @@ export class DeviceManager {
     this.demo = opts?.demo === true;
     // A recall remembered from one device means nothing on another.
     this.setRecalledPreset(null);
-    // A timer armed for one device must never act on another.
-    if (this.sleeper.current && this.socket && this.socket.host !== host) this.setSleep(null);
+    // A timer armed for one device must never act on another, nor a fade one began (0.16.0-rc.8:
+    // a schedule's fade-in went on writing its steps to the streamer switched to)
+    if (this.socket && this.socket.host !== host) {
+      if (this.sleeper.current) this.setSleep(null);
+      this.fader.cancelFade(false);
+    }
     this.socket?.close();
     this.cache = emptyCache();
     this.trackNotifier.reset();
     this.lastSourceId = null;
+    this.wireNoted.clear();
     // The demo device passes remember:false — its ephemeral loopback port
-    // must never become the reconnect target of the next launch.
-    if (opts?.remember !== false) updateSettings({ lastHost: host });
+    // must never become the reconnect target of the next launch. Remembered once it CONNECTS
+    // (onConnected below), never on the attempt: a mistyped address would otherwise be what the
+    // next launch tries, in place of the streamer that worked.
+    this.remembering = opts?.remember !== false ? host : null;
     // A new target is a fresh benefit of the doubt.
     this.disconnectedSince = null;
 
@@ -297,6 +294,9 @@ export class DeviceManager {
       onConnected: () => {
         if (isCurrent(socket)) {
           this.disconnectedSince = null;
+          if (this.remembering === host) {
+            this.push({ kind: "settings", settings: updateSettings({ lastHost: host }) });
+          }
           this.setConnection({ phase: "connected", host });
           // Capability probes — refreshed every (re)connect. The /spec
           // endpoints aren't proven over the WS, so they ride HTTP like presets.
@@ -314,7 +314,9 @@ export class DeviceManager {
         }
       },
       onLog: (level, text) => {
-        if (isCurrent(socket)) this.log(level, "socket", text);
+        // the socket's error repeats on every retry through an outage: counted (logRepeats)
+        if (isCurrent(socket))
+          this.log(level, "socket", text, { counted: text.startsWith("websocket error") });
       },
     });
     this.socket = socket;
@@ -322,8 +324,12 @@ export class DeviceManager {
   }
 
   disconnect(): void {
+    this.remembering = null;
     this.recallWatch.cancel();
+    this.presetLevel.cancel();
     if (this.sleeper.current) this.setSleep(null);
+    // nor a fade left writing to a streamer let go (as connect() cancels one on a switch)
+    this.fader.cancelFade(false);
     this.socket?.close();
     this.socket = null;
     this.cache = emptyCache();
@@ -337,7 +343,7 @@ export class DeviceManager {
 
   /**
    * Put a media server's container or track on the streamer's queue (0.15.0: one home for the
-   * wake every caller had to remember, which an agent's resume_playback forgot). A play is a wake
+   * wake every caller had to remember, which the agents' album resume once forgot). A play is a wake
    * intent: queue writes to a standby streamer land on deaf ears (probed 2026-07-23).
    */
   async queueAdd(
@@ -347,19 +353,12 @@ export class DeviceManager {
     playFromId?: string,
     opts?: { confirmLarge?: boolean },
   ): Promise<void> {
+    // something else asked to play: a recall's level no longer belongs (device/streamerCache)
+    if (action !== "APPEND" && action !== "PLAY_NEXT") this.presetLevel.cancel();
     await this.ensureAwake();
     const conn = this.snapshot().connection;
     if (conn.phase !== "connected") throw new Error("not connected to a streamer");
     await queueAdd(conn.host, serverUdn, objectId, action, playFromId, opts);
-  }
-
-  /** Whether `socket` is still this manager's and open, waiting up to `ms` for a reconnect. */
-  private async socketBack(socket: SmoipSocket, ms = 5000): Promise<boolean> {
-    const until = Date.now() + ms;
-    while (this.socket === socket && !socket.isOpen() && Date.now() < until) {
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    return this.socket === socket && socket.isOpen();
   }
 
   /** Rate-limited liveness probe, run on window focus and system resume. */
@@ -371,6 +370,8 @@ export class DeviceManager {
   }
 
   shutdown(): void {
+    // the counts still running are written before the app goes
+    this.repeats.flush(Date.now());
     this.sleeper.stop();
     this.socket?.close();
     this.socket = null;
@@ -385,6 +386,29 @@ export class DeviceManager {
     connected: () => this.connection.phase === "connected",
     log: (text) => this.log("info", "sleep", text),
   });
+
+  // this connection to the shared command rules (device/commandPath): its socket, its wake with
+  // the asked thing named, its wait for the same socket after it, and its words for a refusal
+  private readonly path: CommandConnection = {
+    cache: () => this.cache,
+    socket: () => this.socket,
+    fader: this.fader,
+    presetLevel: this.presetLevel,
+    ensureAwake: (cmd) => this.ensureAwake(this.askedBy(cmd)),
+    socketBack: (socket) => openAgain(socket, () => this.socket === socket),
+    refuse: (cmd, why) => {
+      if (why === "no connection") {
+        this.log("warn", "command", `ignored ${cmd.type} — not connected`);
+        return null;
+      }
+      if (why === "not open") {
+        this.log("warn", "command", `dropped ${cmd.type} — socket not open`);
+        return new Error(`streamer socket not open (${cmd.type})`);
+      }
+      this.log("warn", "command", `dropped ${cmd.type} — socket not open after the wake`);
+      return new Error(`streamer socket not open after the wake (${cmd.type})`);
+    },
+  };
 
   /** Current pre-amp level, or null when the device is in control-bus mode (no fades there). */
   preAmpVolume(): number | null {
@@ -419,15 +443,6 @@ export class DeviceManager {
 
   // ------------------------------------------------------------------- commands
 
-  /** Play-shaped commands that should wake a standby streamer first. */
-  private static readonly WAKE_COMMANDS = new Set<StreamerCommand["type"]>([
-    "play",
-    "togglePlayback",
-    "playQueueId",
-    "recallPreset",
-    "streamRadio",
-    "setSource",
-  ]);
   private wakePromise: Promise<void> | null = null;
   /** The live copy of what the streamer is doing (see HeldState and noteHeld). */
   private live: HeldState | null = null;
@@ -503,7 +518,7 @@ export class DeviceManager {
   }
 
   /**
-   * RESUME PUTS THE STREAMER BACK AS IT WAS (0.10.0, user ask 2026-10-06; see HeldState). Wake
+   * RESUME PUTS THE STREAMER BACK AS IT WAS (0.10.0; see HeldState). Wake
    * it, come back on the held source if it woke on another (a TV on HDMI pulls it onto ARC),
    * and for a queue track play the same entry and seek to where it was: the Evo keeps the
    * entry through standby but not the position (live-probed 2026-10-06), so the position is
@@ -567,75 +582,16 @@ export class DeviceManager {
   }
 
   /** A rejection main never caught, kept in the log where the diagnostics show it. */
-  logUnhandled(reason: unknown): void {
-    this.log("error", "main", `unhandled rejection: ${errorMessage(reason)}`);
+  logUnhandled(reason: unknown, what = "unhandled rejection"): void {
+    this.log("error", "main", `${what}: ${errorMessage(reason)}`);
   }
 
   async command(cmd: StreamerCommand): Promise<void> {
-    // A user touching volume, power or transport takes over from a running
-    // fade — cancel it without restoring (their level wins). The fade engine's
-    // own writes are flagged and pass through.
-    if (
-      this.fader.interruptible &&
-      (cmd.type === "setVolumePercent" ||
-        cmd.type === "setVolumeStep" ||
-        cmd.type === "volumeStepChange" ||
-        cmd.type === "power" ||
-        cmd.type === "pause" ||
-        cmd.type === "play" ||
-        cmd.type === "togglePlayback")
-    ) {
-      this.fader.cancelFade(false);
-    }
-    const socket = this.socket;
-    const host = socket?.host;
-    if (!socket || !host) {
-      this.log("warn", "command", `ignored ${cmd.type} — not connected`);
-      return;
-    }
-    // A half-dead socket (closed or mid-reconnect) used to swallow commands
-    // silently — the user clicks a preset, the card marks, nothing plays.
-    // Fail loudly instead so the renderer's central catch can toast it.
-    if (!socket.isOpen()) {
-      this.log("warn", "command", `dropped ${cmd.type} — socket not open`);
-      throw new Error(`streamer socket not open (${cmd.type})`);
-    }
-    if (
-      DeviceManager.WAKE_COMMANDS.has(cmd.type) &&
-      this.cache.systemPower != null &&
-      this.cache.systemPower.power !== "ON"
-    ) {
-      await this.ensureAwake(this.askedBy(cmd));
-      // The wake takes seconds, and the connection can drop and reconnect across it (or another
-      // streamer be chosen meanwhile): the command waits a moment for this manager's socket to be
-      // open again, else it fails loudly like any other, never into a closed socket (0.12.0-rc.2,
-      // the 0.11 re-score; S127)
-      if (!(await this.socketBack(socket))) {
-        this.log("warn", "command", `dropped ${cmd.type} — socket not open after the wake`);
-        throw new Error(`streamer socket not open after the wake (${cmd.type})`);
-      }
-    }
-
-    // PASSIVE-ONLY firmware policy (explicit user decision): there is NO command
-    // that sends /system/update with an `action` param. TastyTunes only ever
-    // SUBSCRIBES to /system/update (read-only, see smoipSocket SUBSCRIBED_PATHS)
-    // to SHOW whether an update is available; it never sends action=CHECK
-    // (refresh availability) or action=UPDATE (install). Updating the streamer's
-    // firmware stays the user's job via the Cambridge Audio app or the
-    // streamer's own web admin. Do not add a firmware check/install command here.
-    const frames = commandFrames(cmd, {
-      nowPlaying: this.cache.nowPlaying,
-      playState: this.cache.playState,
-      zoneState: this.cache.zoneState,
-      systemPower: this.cache.systemPower,
-      audioSpec: this.cache.audioSpec,
-      powerSpec: this.cache.powerSpec,
-      volumeLimitPercent: getSettings().volumeLimitPercent,
-    });
-    if (frames) {
-      for (const f of frames) socket.send(f.path, f.params);
-      return;
-    }
+    // the shared rules (device/commandPath): the fade take-over, the open socket, the wake first
+    // and the wait after it, the plain writes; what comes back is this connection's own verb
+    const socket = await sendCommand(this.path, cmd);
+    if (!socket) return;
+    const host = socket.host;
     // what is not a plain socket write (commandFrames answers null for these)
     switch (cmd.type) {
       case "resumeHeld":
@@ -647,28 +603,18 @@ export class DeviceManager {
           cmd.alreadyPlaying === true ||
           (this.lastRecalledPresetId === cmd.presetId && this.cache.playState?.state === "play");
         this.setRecalledPreset(cmd.presetId);
-        listeningRecord.openContext({
-          kind: "preset",
-          id: cmd.presetId,
-          name: this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name ?? null,
-          streamer: this.cache.systemInfo?.udn ?? null,
-        });
+        const udn = this.cache.systemInfo?.udn ?? null;
+        const name = this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name ?? null;
+        listeningRecord.openContext({ kind: "preset", id: cmd.presetId, name, streamer: udn });
         socket.send("/zone/recall_preset", { preset: cmd.presetId });
         this.recallWatch.recalled(cmd.presetId, already);
-        // Feature 10: the preset's local volume override rides along on every
-        // recall through the app — after a beat for the source switch — unless
-        // the caller (a schedule with its own volume) opts out.
-        if (!cmd.skipVolume) {
-          const level =
-            getSettings().presetVolumes[presetVolumeKey(this.cache.systemInfo?.udn, cmd.presetId)];
-          if (level != null) {
-            // the streamer may have changed in the second since, and a timer armed
-            // for one device never acts on another
-            setTimeout(() => {
-              if (this.socket === socket) this.fire({ type: "setVolumePercent", percent: level });
-            }, 1200);
-          }
-        }
+        // Feature 10: the preset's local volume override rides along on every recall through the
+        // app, once the recall lands, unless the caller (a schedule with its own volume) opts out.
+        // A new connection lets it go, so a level never reaches another streamer.
+        this.presetLevel.recalled(
+          cmd.skipVolume ? null : presetVolumeFor(udn, cmd.presetId, name),
+          already,
+        );
         // The device updates is_playing internally but doesn't reliably push
         // /presets/list (vibin's observation, esp. for UPnP presets). Refetch
         // once quickly (radio) and once late (album recalls switch source and
@@ -686,22 +632,42 @@ export class DeviceManager {
       case "queueMove":
         return smoipHttp.queueMove(host, cmd.id, cmd.from, cmd.to);
       case "presetDelete":
-        await smoipHttp.presetDelete(host, cmd.presetId);
-        return this.refreshPresets(socket);
+        return this.presetWrite(
+          socket,
+          () => smoipHttp.presetDelete(host, cmd.presetId),
+          () => {
+            this.saveSlotFacts(
+              dropSlotFacts(this.cache.systemInfo?.udn, cmd.presetId, getSettings()),
+            );
+          },
+        );
       case "presetRename":
-        await smoipHttp.presetRename(host, cmd.slot, cmd.name);
-        return this.refreshPresets(socket);
+        return this.presetWrite(
+          socket,
+          () => smoipHttp.presetRename(host, cmd.slot, cmd.name),
+          () => {
+            // a level set for this preset keeps holding, under the name the streamer kept
+            const renamed = renamedSlotFacts(this.cache.systemInfo?.udn, cmd.slot, getSettings());
+            if (renamed) this.saveSlotFacts(renamed);
+          },
+        );
       case "queueSavePreset":
-        await smoipHttp.queueSavePreset(host, cmd.slot, cmd.name);
-        return this.refreshPresets(socket);
+        return this.presetWrite(socket, () => smoipHttp.queueSavePreset(host, cmd.slot, cmd.name));
       case "streamRadio":
         return smoipHttp.streamRadio(host, cmd.url, cmd.name);
       case "zoneSavePreset":
-        await smoipHttp.zoneSavePreset(host, cmd.slot);
-        return this.refreshPresets(socket);
-      case "presetMove":
-        await smoipHttp.presetMove(host, cmd.from, cmd.to);
-        return this.refreshPresets(socket);
+        return this.presetWrite(socket, () => smoipHttp.zoneSavePreset(host, cmd.slot));
+      case "presetMove": {
+        const moved = slotsAfterMove(this.cache.presets?.presets ?? [], cmd.from, cmd.to);
+        return this.presetWrite(
+          socket,
+          () => smoipHttp.presetMove(host, cmd.from, cmd.to),
+          () => {
+            if (moved.size > 0)
+              this.saveSlotFacts(moveSlotFacts(this.cache.systemInfo?.udn, moved, getSettings()));
+          },
+        );
+      }
     }
   }
 
@@ -723,7 +689,10 @@ export class DeviceManager {
    * "this streamer has no tone controls" and the UI section stays hidden.
    */
   private async probeAudioSpec(socket: SmoipSocket): Promise<void> {
-    const spec = (await smoipHttp.getAudioSpec(socket.host)) as ZoneAudioSpec | null;
+    const spec = checkDocument<ZoneAudioSpec>(
+      "/zone/audio/spec",
+      await smoipHttp.getAudioSpec(socket.host),
+    );
     if (this.socket !== socket) return;
     this.cache.audioSpec = spec;
     this.push({ kind: "audioSpec", data: spec });
@@ -737,8 +706,12 @@ export class DeviceManager {
    */
   private async probeSystemSpecs(socket: SmoipSocket): Promise<void> {
     const [display, power] = await Promise.all([
-      smoipHttp.getDisplaySpec(socket.host) as Promise<SystemDisplaySpec | null>,
-      smoipHttp.getPowerSpec(socket.host) as Promise<SystemPowerSpec | null>,
+      smoipHttp
+        .getDisplaySpec(socket.host)
+        .then((d) => checkDocument<SystemDisplaySpec>("/system/display/spec", d)),
+      smoipHttp
+        .getPowerSpec(socket.host)
+        .then((d) => checkDocument<SystemPowerSpec>("/system/power/spec", d)),
     ]);
     if (this.socket !== socket) return;
     this.cache.displaySpec = display;
@@ -751,61 +724,80 @@ export class DeviceManager {
 
   private handleFrame(frame: SmoipFrame): void {
     this.recordFrame("in", frame);
-    const data = frame.params?.data;
-    if (data === undefined) return;
+    const raw = frame.params?.data;
+    if (raw === undefined) return;
+    // the wire's shape is the streamer's: checked for its path before anything reads it
+    const checked = checkFrame(frame.path, raw);
+    if (!checked.ok)
+      return this.wireNote(frame.path, `${checked.reason}, so the frame was dropped`);
+    for (const note of checked.setAside) this.wireNote(frame.path, `${note}, set aside`);
+    const data = checked.data;
+    // the power before this frame, which a wake and a standby compare against
+    const prev = this.cache.systemPower?.power;
+    // the one rule for which frame fills which part of the cache (streamerCache, shared with an
+    // agent's connection to another streamer); what the app does with each frame follows
+    applyFrame(this.cache, frame.path, data);
 
     switch (frame.path) {
-      case "/zone/play_state":
-        this.cache.playState = data as ZonePlayState;
-        this.trackNotifier.note(this.cache.playState);
-        this.collections.recordRecentlyPlayed(this.cache.playState, {
+      case "/zone/play_state": {
+        const playState = data as ZonePlayState;
+        this.trackNotifier.note(playState);
+        this.collections.recordRecentlyPlayed(playState, {
           nowPlaying: this.cache.nowPlaying ?? null,
           streamer: this.cache.systemInfo?.udn ?? null,
         });
-        this.sleeper.boundaryCheck(this.cache.playState);
+        this.sleeper.boundaryCheck(playState);
         this.recallWatch.onPlayback();
-        scrobbler.onPlayState(this.cache.playState);
+        this.presetLevel.onPlayback();
+        scrobbler.onPlayState(playState);
         listeningRecord.onPlayState(
-          this.cache.playState,
-          this.cache.nowPlaying?.source?.name ?? this.cache.playState.metadata?.source ?? null,
+          playState,
+          this.cache.nowPlaying?.source?.name ?? playState.metadata?.source ?? null,
           this.cache.systemInfo?.udn ?? null,
           this.connection.phase === "connected" ? this.connection.host : null,
         );
         this.noteHeld();
-        return this.push({ kind: "playState", data: this.cache.playState });
-      case "/zone/play_state/position":
-        this.cache.position = data as ZonePosition;
+        return this.push({ kind: "playState", data: playState });
+      }
+      case "/zone/play_state/position": {
+        const position = data as ZonePosition;
         this.noteHeld();
-        return this.push({ kind: "position", data: this.cache.position });
-      case "/zone/now_playing":
-        this.cache.nowPlaying = data as ZoneNowPlaying;
+        return this.push({ kind: "position", data: position });
+      }
+      case "/zone/now_playing": {
+        const nowPlaying = data as ZoneNowPlaying;
         this.sourceChanged((data as ZoneNowPlaying).source?.id);
         this.noteHeld();
-        return this.push({ kind: "nowPlaying", data: this.cache.nowPlaying });
-      case "/zone/state":
-        this.cache.zoneState = data as ZoneState;
+        return this.push({ kind: "nowPlaying", data: nowPlaying });
+      }
+      case "/zone/state": {
+        const zoneState = data as ZoneState;
         this.sourceChanged((data as ZoneState).source);
         this.noteHeld();
-        return this.push({ kind: "zoneState", data: this.cache.zoneState });
-      case "/queue/list":
-        this.cache.queue = data as QueueList;
+        return this.push({ kind: "zoneState", data: zoneState });
+      }
+      case "/queue/list": {
+        const queue = data as QueueList;
         listeningRecord.onQueue(
-          (this.cache.queue.items ?? []).map((i) => i.id).filter((id): id is number => id != null),
+          (queue.items ?? []).map((i) => i.id).filter((id): id is number => id != null),
         );
         // the queue list is not what the recall watch compares (the app re-reads it on a wake)
         // Mid-batch (playlist activation) the cache stays current but the
         // renderer hears nothing — one authoritative push lands at the end.
         if (this.queueOps.batching) return;
-        return this.push({ kind: "queue", data: this.cache.queue });
-      case "/presets/list":
-        this.cache.presets = data as Presets;
-        return this.push({ kind: "presets", data: this.cache.presets });
+        return this.push({ kind: "queue", data: queue });
+      }
+      case "/presets/list": {
+        const presets = data as Presets;
+        this.presetsArrived(presets);
+        return this.push({ kind: "presets", data: presets });
+      }
       case "/system/info": {
-        this.cache.systemInfo = data as SystemInfo;
+        const systemInfo = data as SystemInfo;
         // The device book learns a streamer HERE — a successful connection
         // that told us its identity — never from a mere sweep sighting of a
         // stranger (refreshKnownFromSweep only updates devices already known).
-        const info = this.cache.systemInfo;
+        const info = systemInfo;
         // Never the demo: its loopback port is as ephemeral as its lastHost.
         if (info.udn && this.socket && !this.demo) {
           this.rememberDevice({
@@ -817,10 +809,12 @@ export class DeviceManager {
         }
         // the streamer is known: what it held when it last slept (the standby face's offer)
         this.push({ kind: "held", held: heldFor(info.udn ?? null) });
-        return this.push({ kind: "systemInfo", data: this.cache.systemInfo });
+        // and the presets list that arrived ahead of it heals now (presetsArrived)
+        if (this.cache.presets) this.presetsArrived(this.cache.presets);
+        return this.push({ kind: "systemInfo", data: systemInfo });
       }
       case "/system/power": {
-        const prev = this.cache.systemPower?.power;
+        // assigned again (applyFrame filled it) for the narrowing the comparisons below read
         this.cache.systemPower = data as SystemPower;
         // Waking from standby: re-request the queue — it may have CHANGED
         // shape across the cycle (live-probed 2026-07-23: server queues
@@ -840,25 +834,25 @@ export class DeviceManager {
         // Read-only firmware self-check the streamer pushes to subscribers.
         // Camelcase the wire shape into the clean FirmwareStatus the UI reads.
         // We NEVER act on this — see the PASSIVE-ONLY guard in command().
-        const u = data as SystemUpdate;
-        this.cache.firmwareUpdate = {
-          updateAvailable: u.update_available === true,
-          updating: u.updating === true,
-          earlyUpdate: u.early_update === true,
-        };
-        return this.push({ kind: "firmwareUpdate", data: this.cache.firmwareUpdate });
+        // (applyFrame camelcased it above)
+        if (this.cache.firmwareUpdate)
+          return this.push({ kind: "firmwareUpdate", data: this.cache.firmwareUpdate });
+        return;
       }
-      case "/system/sources":
-        this.cache.sources = data as SystemSources;
-        return this.push({ kind: "sources", data: this.cache.sources });
-      case "/zone/audio":
+      case "/system/sources": {
+        const sources = data as SystemSources;
+        return this.push({ kind: "sources", data: sources });
+      }
+      case "/zone/audio": {
         // Pushed on every tone/EQ change, ours or another controller's
         // (confirmed live 2026-07-19) — the UI mirrors external tweaks free.
-        this.cache.zoneAudio = data as ZoneAudio;
-        return this.push({ kind: "zoneAudio", data: this.cache.zoneAudio });
-      case "/system/display":
-        this.cache.systemDisplay = data as SystemDisplay;
-        return this.push({ kind: "systemDisplay", data: this.cache.systemDisplay });
+        const zoneAudio = data as ZoneAudio;
+        return this.push({ kind: "zoneAudio", data: zoneAudio });
+      }
+      case "/system/display": {
+        const systemDisplay = data as SystemDisplay;
+        return this.push({ kind: "systemDisplay", data: systemDisplay });
+      }
       case "/queue/info": {
         // The socket already refetches /queue/list. A queue change is also the
         // only observable signal of an album->album preset recall (same source,
@@ -882,12 +876,51 @@ export class DeviceManager {
    * doesn't push /presets/list for local-media (UPnP) recalls, and a bare WS
    * request for it isn't proven against real hardware; HTTP GET is.
    */
+  /** A presets list arrived: each preset's level follows its preset (device/presetSlots). Not
+   *  while one of the app's own preset writes is out (presetWrite), nor before the streamer has
+   *  said who it is (the socket subscribes to the list first): the refresh after the write, or
+   *  the streamer's identity, heals from the list then. */
+  private presetsArrived(presets: Presets): void {
+    const udn = this.cache.systemInfo?.udn;
+    if (this.presetWrites > 0 || !udn) return;
+    const healed = healPresetVolumes(udn, presets.presets ?? [], getSettings());
+    if (healed) this.saveSlotFacts(healed);
+  }
+
+  /**
+   * ONE OF THE APP'S OWN PRESET WRITES (a save, a rename, a move, a delete), its slot facts
+   * updated once the streamer answers, then the presets read again. The streamer pushes its new
+   * list before it answers, and a heal from that list would read a rename as a preset gone (its
+   * level dropped) and a move as made twice; so no list heals while a write is out, and the
+   * re-read heals from what the list and the facts then agree on.
+   */
+  private async presetWrite(
+    socket: SmoipSocket | null,
+    write: () => Promise<unknown>,
+    then?: () => void,
+  ): Promise<void> {
+    this.presetWrites++;
+    try {
+      await write();
+      then?.();
+    } finally {
+      this.presetWrites--;
+    }
+    return this.refreshPresets(socket);
+  }
+
+  /** The slot-keyed settings, written and pushed to the windows. */
+  private saveSlotFacts(patch: Partial<SlotMaps>): void {
+    this.push({ kind: "settings", settings: updateSettings(patch) });
+  }
+
   private async refreshPresets(socket: SmoipSocket | null): Promise<void> {
     if (!socket || this.socket !== socket) return;
     try {
-      const data = await smoipHttp.getPresets(socket.host);
+      const data = checkDocument<Presets>("/presets/list", await smoipHttp.getPresets(socket.host));
       if (data == null || this.socket !== socket) return;
-      this.cache.presets = data as Presets;
+      this.cache.presets = data;
+      this.presetsArrived(this.cache.presets);
       this.push({ kind: "presets", data: this.cache.presets });
     } catch (err) {
       this.log("warn", "presets", `refresh failed: ${(err as Error).message}`);
@@ -911,7 +944,9 @@ export class DeviceManager {
   }
 
   /** The OS notification for a track change while the app is unfocused; see trackNotifier.ts. */
-  private readonly trackNotifier = new TrackNotifier();
+  private readonly trackNotifier = new TrackNotifier(() =>
+    this.connection.phase === "connected" ? this.connection.host : null,
+  );
 
   // ------------------------------------------------------------------ MCP status
 
@@ -944,7 +979,10 @@ export class DeviceManager {
 
   /** The recently played log, favorites and playlists: each write pushes its list to every
    *  window (see collections.ts). */
-  readonly collections = new Collections((msg) => this.push(msg));
+  readonly collections = new Collections(
+    (msg) => this.push(msg),
+    () => (this.connection.phase === "connected" ? this.connection.host : null),
+  );
 
   /**
    * The queue-writing engine (playlist activation, queue undo, content
@@ -963,6 +1001,18 @@ export class DeviceManager {
     ensureAwake: () => this.ensureAwake(),
   });
 
+  /** The connection as it stands, read without building a snapshot (which decorates the recents,
+   *  reading the art cache, and gathers every saved list): for a caller that wants only this. */
+  get connectionNow(): ConnectionState {
+    return this.connection;
+  }
+
+  /** What the connected streamer has said so far (its power, play state and the rest), read
+   *  without a snapshot. */
+  get streamerNow(): Readonly<StreamerCache> {
+    return this.cache;
+  }
+
   /** Live activation state, for the boot snapshot. */
   get playlistActivation(): PlaylistActivation | null {
     return this.queueOps.activation;
@@ -975,6 +1025,14 @@ export class DeviceManager {
   /** See QueueOps.playlistActivate — one run at a time, batched, self-healing. */
   async playlistActivate(id: string): Promise<PlaylistActivation> {
     return this.queueOps.playlistActivate(id);
+  }
+
+  /** See QueueOps.queueTracks — a list of tracks in one batched write, in the order given. */
+  async queueTracks(
+    items: readonly PlaylistItem[],
+    mode: "play_now" | "play_next" | "append" | "replace",
+  ): Promise<{ added: number; missed: string[]; total: number; replaced: number | null }> {
+    return this.queueOps.queueTracks(items, mode);
   }
 
   /** See QueueOps.queueRestore — the undo behind the queue's ×. */
@@ -1059,12 +1117,28 @@ export class DeviceManager {
 
   /** A line in the diagnostics log (the ring the Device screen shows, and the console); public
    *  since the URL scheme, whose verbs report there too (app/urlActions). */
-  log(level: LogEntry["level"], scope: string, text: string): void {
-    const entry: LogEntry = { at: Date.now(), level, scope, text };
+  /** A frame the wire's check dropped or trimmed: logged once per connection for each distinct note
+   *  (a streamer that always sends a field this way would otherwise fill the log every second). */
+  private wireNote(path: string, note: string): void {
+    const line = `${path}: ${note}`;
+    if (this.wireNoted.has(line)) return;
+    this.wireNoted.add(line);
+    this.log("warn", "wire", line);
+  }
+
+  /** The log's repeats: a polling line marked counted is counted within its window (logRepeats). */
+  private readonly repeats = new LogRepeats((entry) => this.write(entry), REPEAT_WINDOW_MS);
+
+  log(level: LogEntry["level"], scope: string, text: string, opts?: { counted?: boolean }): void {
+    this.repeats.log({ at: Date.now(), level, scope, text }, opts?.counted === true);
+  }
+
+  private write(entry: LogEntry): void {
     this.logs.push(entry);
     if (this.logs.length > LOG_RING_SIZE) this.logs.shift();
     this.push({ kind: "log", entry });
-    console.log(`[${scope}] ${text}`);
+    appLog().write(entry);
+    console.log(`[${entry.scope}] ${entry.text}`);
   }
 
   // ------------------------------------------------------------------- snapshot

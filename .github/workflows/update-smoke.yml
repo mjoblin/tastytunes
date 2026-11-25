@@ -1,0 +1,103 @@
+name: Update smoke
+
+# An update run end to end against the real feed, on each platform that can't be checked by hand
+# here: the previous published build installed, then Check, Download and Restart through the app's
+# own calls, and the version that comes back up asserted. This proves what the harness can't (its
+# feed override has no publisher, so the signature check is skipped): Windows' publisher check
+# against a real signed installer, the dual-arch installer run as an update on arm64, the NSIS
+# relaunch, and the AppImage's replace-and-relaunch. Runs when a release is published, or by hand (the
+# feed must hold a version newer than `from`); it changes nothing but the runner.
+
+on:
+  # each release once it is published (a pre-release published from its draft included): the
+  # workflow at the tag runs, so it needs no copy on main (0.16.0-rc.8)
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      from:
+        description: The published release to start from (its tag); empty for the one before the newest
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            os: windows
+            arch: x64
+          - runner: windows-11-arm
+            os: windows
+            arch: arm64
+          - runner: ubuntu-latest
+            os: linux
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    name: update (${{ matrix.os }} ${{ matrix.arch }})
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6.5.0
+        with:
+          node-version: 22
+
+      # the releases, read with the run's own read-only token: the tag to start from and the newest
+      - name: Choose the releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FROM: ${{ inputs.from }}
+        run: |
+          tags=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 2 --json tagName --jq '.[].tagName')
+          newest=$(echo "$tags" | sed -n 1p)
+          from="${FROM:-$(echo "$tags" | sed -n 2p)}"
+          echo "from $from, expecting $newest"
+          echo "TT_FROM=$from" >> "$GITHUB_ENV"
+          echo "TT_EXPECT=${newest#v}" >> "$GITHUB_ENV"
+
+      - name: Install the previous build (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download $env:TT_FROM --repo $env:GITHUB_REPOSITORY --pattern 'TastyTunes-Setup.exe' --dir prev
+          Start-Process -FilePath prev\TastyTunes-Setup.exe -ArgumentList '/S' -Wait
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\TastyTunes\TastyTunes.exe'
+          for ($i = 0; $i -lt 30 -and -not (Test-Path $exe); $i++) { Start-Sleep 2 }
+          if (-not (Test-Path $exe)) { throw "installed exe not found at $exe" }
+          "TT_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Fetch the previous build (Linux)
+        if: matrix.os == 'linux'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q libfuse2t64 xvfb
+          gh release download "$TT_FROM" --repo "$GITHUB_REPOSITORY" --pattern 'TastyTunes-x86_64.AppImage' --dir "$HOME/apps"
+          chmod +x "$HOME/apps/TastyTunes-x86_64.AppImage"
+          echo "TT_EXE=$HOME/apps/TastyTunes-x86_64.AppImage" >> "$GITHUB_ENV"
+
+      - name: Update through the app (Windows)
+        if: matrix.os == 'windows'
+        shell: pwsh
+        run: |
+          npm i --no-save playwright-core
+          node .github/update-smoke.mjs
+
+      - name: Update through the app (Linux)
+        if: matrix.os == 'linux'
+        shell: bash
+        run: |
+          npm i --no-save playwright-core
+          xvfb-run -a node .github/update-smoke.mjs

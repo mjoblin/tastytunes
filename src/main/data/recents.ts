@@ -1,15 +1,17 @@
-import { readFileSync } from "node:fs";
-import { isRecord } from "@shared/guards";
+import { isRecord, kindOf } from "@shared/guards";
 import { join } from "node:path";
 import { app } from "electron";
 import { type RecentTrack, MAX_RECENTS } from "@shared/model";
 import { atomicWriteFileSync } from "./jsonStore";
+import { keepAsFound, readSaved } from "./savedFiles";
 
 // A bounded ring of recently-played tracks, persisted beside settings.json.
 // Kept out of settings.json on purpose: it's a churning log, cleared on its own,
 // and shouldn't bloat the settings file the user might inspect or sync.
 
 let cached: RecentTrack[] | null = null;
+// a file that couldn't be read is never written over this session (data/savedFiles)
+let unreadable = false;
 
 function recentsPath(): string {
   return join(app.getPath("userData"), "recents.json");
@@ -34,6 +36,11 @@ export function recentKey(e: RecentTrack): string {
  *  is dead within the track and an entry that kept it never showed a cover. */
 function mergeEntries(base: RecentTrack, other: RecentTrack): RecentTrack {
   return {
+    // every field either row carries, the ones named below merged by their rule: a field this
+    // version doesn't name (the streamer, or a later version's) is kept, never dropped
+    ...other,
+    ...base,
+    streamer: base.streamer ?? other.streamer,
     at: base.at,
     title: base.title ?? other.title,
     artist: base.artist ?? other.artist,
@@ -53,6 +60,8 @@ function mergeEntries(base: RecentTrack, other: RecentTrack): RecentTrack {
 function normalize(e: RecentTrack): RecentTrack {
   const isRadio = !!e.isRadio;
   return {
+    // the row as it came, the named fields backfilled: a field this version doesn't name is kept
+    ...e,
     at: e.at,
     title: e.title ?? null,
     artist: e.artist ?? null,
@@ -100,14 +109,25 @@ const isRecentTrack = (x: unknown): x is RecentTrack => isRecord(x) && typeof x.
 
 export function getRecents(): RecentTrack[] {
   if (cached) return cached;
-  let raw: RecentTrack[] = [];
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(recentsPath(), "utf-8"));
-    // our own file: keep the rows that have the one field everything sorts on
-    if (Array.isArray(parsed)) raw = parsed.filter(isRecentTrack);
-  } catch {
-    raw = [];
+  const raw: RecentTrack[] = [];
+  // read as every saved file is (data/savedFiles): a file that isn't JSON is moved aside, one
+  // that can't be read is never written over, and what a row lacks is said, with the file as it
+  // was kept aside first
+  const read = readSaved(recentsPath());
+  unreadable = read.state === "unreadable";
+  const setAside: string[] = [];
+  if (read.state === "read") {
+    if (Array.isArray(read.parsed)) {
+      // our own file: keep the rows that have the one field everything sorts on
+      read.parsed.forEach((row: unknown, i) => {
+        if (isRecentTrack(row)) raw.push(row);
+        else setAside.push(`[${i}] had no time, left out`);
+      });
+    } else {
+      setAside.push(`the file was ${kindOf(read.parsed)}, not a list, so it started empty`);
+    }
   }
+  keepAsFound(recentsPath(), setAside);
   // Upgrade older rows to the current shape, then collapse duplicates from the
   // era before dedup was title-based.
   const upgraded = raw.some(
@@ -122,6 +142,7 @@ export function getRecents(): RecentTrack[] {
 
 function save(list: RecentTrack[]): void {
   cached = list;
+  if (unreadable) return;
   try {
     // atomic (temp + rename): a crash mid-write must not truncate the log.
     // The load side stays local — its upgrade/collapse pass is domain logic,

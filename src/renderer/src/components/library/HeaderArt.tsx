@@ -17,9 +17,9 @@ import type { useHeaderArtSize } from "@/hooks/useHeaderArtSize";
  * one showing. The larger layer is asked for at the SETTLED size, not on every step of a drag.
  * WHILE THE CALLER IS STILL DECIDING WHICH PICTURE (`pending`, the artist page waiting for its
  * photo lookup): the empty well with the slow picture's line along its bottom edge after the
- * same 300 ms, never a stand-in it would replace a moment later (his ask, 2026-10-12: "i see
- * album art first then it gets replaced ... the sudden image swap feels unexpected"); the
- * picture eases in once the well has waited for it.
+ * same 300 ms, never a stand-in it would replace a moment later (album art showing first, then
+ * swapped for another picture, felt unexpected); the picture eases in once the well has waited
+ * for it.
  */
 export function HeaderArt({
   art,

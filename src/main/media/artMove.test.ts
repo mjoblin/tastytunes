@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { learnArtMove, moveArt, type ArtMove } from "./artMove";
 
 const evo = (hex: string, n: number, k: number): string =>
-  `http://192.168.50.45:80/album-art-${hex}?id=${n}:${k}`;
+  `http://192.168.1.45:80/album-art-${hex}?id=${n}:${k}`;
 
 describe("learnArtMove", () => {
   it("learns the Evo's re-minted front from one check and explains the rest", () => {
-    // the user's stick, 2026-10-11: the same cover before and after a wake
+    // a USB stick, 2026-10-11: the same cover before and after a wake
     const move = learnArtMove([
       [evo("e548", 70, 3), evo("2e42", 12, 3)],
       [evo("e548", 70, 4), evo("2e42", 12, 4)],

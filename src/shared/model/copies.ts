@@ -1,7 +1,7 @@
-// WHICH COPY (0.13.0, round 1; his calls 2026-10-24 on the decision page).
+// WHICH COPY (0.13.0, round 1).
 //
 // Favorites and the listening record know a track by its title, artist and album (playKey,
-// favoriteKey), so two takes on one album (a user's two "Close Your Eyes", discs 2 and 5 of a
+// favoriteKey), so two takes on one album (two "Close Your Eyes", discs 2 and 5 of a
 // box set) and two copies of one album (a CD rip and a hi-res download, the streamer's drive and
 // a media server) were one track to them: one heart, one play count. This module is the one rule
 // that tells them apart. A play, a heart or a library row carries a few facts about the copy it

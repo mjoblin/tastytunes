@@ -13,29 +13,28 @@ import { cx } from "@/lib/format";
  */
 
 /**
- * TOOLBAR SPACING, TWO TIERS (user call 2026-09-01: every control row sat at
- * one 6px gap, which read cramped AND said nothing about grouping). Controls
- * that do one kind of job sit GAP_WITHIN apart (the facet pickers; sort +
- * layout; the queue's three save verbs); kinds sit GAP_BETWEEN apart (the
- * text filter | a partition | the facets | a verb | the sort chip). A text
- * filter is always its own group — typing is a different kind of act from
- * clicking. The between tier carries a smaller row gap so a wrapping rail
- * (the Search categories) stacks close. Every toolbar row reads these two
- * names; a raw gap class on a control row is drift (S55). Sized 6px / 12px
- * (user, 2026-09-02: one level down from the first cut's 8 / 16 — the
- * distinction, not the air, was the point).
+ * TOOLBAR SPACING, TWO TIERS (every control row once sat at one 6px gap, which
+ * read cramped AND said nothing about grouping). Controls that do one kind of
+ * job sit GAP_WITHIN apart (the facet pickers; sort + layout; the queue's three
+ * save verbs); kinds sit GAP_BETWEEN apart (the text filter | a partition | the
+ * facets | a verb | the sort chip). A text filter is always its own group —
+ * typing is a different kind of act from clicking. The between tier carries a
+ * smaller row gap so a wrapping rail (the Search categories) stacks close.
+ * Every toolbar row reads these two names; a raw gap class on a control row is
+ * drift (S55). Sized 6px / 12px (one level down from the first cut's 8 / 16,
+ * since the distinction, not the air, was the point).
  */
 export const GAP_WITHIN = "gap-1.5";
 export const GAP_BETWEEN = "gap-x-3 gap-y-1.5";
 
 /**
- * A CHIP ON A CARD'S PICTURE (0.13.0-rc.3, his pick of three on the decision page: circles
- * everywhere): the ⋯, the heart, the playing and tuning status, a preset's volume and repair.
- * Round, as the big pictures' chips are (Now Playing's art, the artist page's picture), and one
- * size, 32px, the controls' height; solid where theirs are frosted, since a blur behind every
- * card's chips costs too much on a computer without graphics acceleration. Unlike the recipes
- * below it carries its size, which is the grammar; the corner and the glyph's color stay at the
- * call site. `alert` rings it in the alert color (a preset that didn't load).
+ * A CHIP ON A CARD'S PICTURE (0.13.0-rc.3, circles everywhere): the ⋯, the heart, the playing and
+ * tuning status, a preset's volume and repair. Round, as the big pictures' chips are (Now
+ * Playing's art, the artist page's picture), and one size, 32px, the controls' height; solid where
+ * theirs are frosted, since a blur behind every card's chips costs too much on a computer without
+ * graphics acceleration. Unlike the recipes below it carries its size, which is the grammar; the
+ * corner and the glyph's color stay at the call site. `alert` rings it in the alert color (a
+ * preset that didn't load).
  */
 export const cardChip = (alert = false): string =>
   cx(
@@ -48,7 +47,7 @@ export const cardChip = (alert = false): string =>
  * side panels — 22 hand-written copies before this.
  *
  * `active` is the follow-toggle skin (auto-follow queue, follow-current preset,
- * an engaged sort): gold ring, gold fill, gold text. A chip that can't be
+ * an engaged sort): accent ring, accent fill, accent text. A chip that can't be
  * toggled never gets it.
  */
 export function HeaderChip({
@@ -73,7 +72,7 @@ export function HeaderChip({
         shape === "full" ? "rounded-full" : "rounded-lg",
         "ring-1 transition-all",
         active
-          ? "ring-gold/50 bg-golddim text-gold"
+          ? "ring-accent/50 bg-accentdim text-accent"
           : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
         className,
       )}
@@ -82,6 +81,19 @@ export function HeaderChip({
       {children}
     </button>
   );
+}
+
+/**
+ * A PAGE SCROLLER'S EDGES (0.16.0): what every screen's page scroller wears, so a row scrolled
+ * past the header or the playback bar dissolves instead of being cut through its letters
+ * (.fade-edges). It reaches 12px up into the padding of whatever sits above it (a header's
+ * pb-4, a rail's pb-3: nothing clickable there) and pads its top past the 20px ramp, so content
+ * at rest sits 4px lower than it did; the bottom pads past the 28px ramp, or clears the floating
+ * selection bar while one shows; a row brought into view stops clear of both. The Library page
+ * sets its own (its trail reaches into the strip); a lens scrolls its own columns, unmasked.
+ */
+export function pageEdges(selecting = false): string {
+  return cx("-mt-3 pt-5 scroll-pt-5 scroll-pb-8 fade-edges", selecting ? "pb-28" : "pb-12");
 }
 
 /**
@@ -101,7 +113,7 @@ export function ScreenTitle({ children }: { children: React.ReactNode }): React.
  * The pill chip: search categories, the library lenses' genre/decade rails,
  * radio categories.
  *
- * Four states, each with real sites — `idle` (unselected), `active` (the gold
+ * Four states, each with real sites — `idle` (unselected), `active` (the accent
  * pick), `open` (a picker pill whose popover is showing) and `disabled` (the
  * search chips' third state: a category that matched nothing still renders,
  * because "we looked here and found nothing" is the answer it exists to give,
@@ -109,7 +121,7 @@ export function ScreenTitle({ children }: { children: React.ReactNode }): React.
  *
  * COUNTS STAY AT THE CALL SITE. The two counted rails render them differently
  * on purpose — search shows pending/unknown glyphs in a tabular span, the
- * lenses show a mono tally that goes gold with the chip — and one `count` prop
+ * lenses show a mono tally that takes the accent with the chip — and one `count` prop
  * could only serve those by growing a discriminator that buys nothing.
  */
 export function Chip({
@@ -130,12 +142,12 @@ export function Chip({
       className={cx(
         // h-8: the toolbar height every control shares (FilterInput, HeaderChip's
         // p-2 + 16px glyph, PrimaryButton, Segmented) — a 26px pill beside a 32px
-        // filter box read as a different row (user, 2026-09-01)
+        // filter box read as a different row
         "inline-flex items-center rounded-full h-8 px-3 text-[12px] ring-1 transition-all",
         state === "disabled"
           ? "ring-edge/60 bg-panel/40 text-faint/50 cursor-default"
           : state === "active"
-            ? "ring-gold/50 bg-golddim text-gold"
+            ? "ring-accent/50 bg-accentdim text-accent"
             : state === "open"
               ? "ring-edge2 bg-raised text-ink"
               : "ring-edge bg-panel/70 text-dim hover:text-ink hover:ring-edge2 hover:bg-raised/70",
@@ -149,7 +161,7 @@ export function Chip({
 }
 
 /**
- * The gold call-to-action pill — the one loud button on a screen (search this
+ * The accent call-to-action pill — the one loud button on a screen (search this
  * library, play this playlist, install this update).
  *
  * Owns colour, glow, radius and the press/disabled behaviour; the call site
@@ -173,13 +185,13 @@ export function PrimaryButton({
   return (
     <button
       className={cx(
-        "rounded-lg bg-gold text-bg font-medium shadow-[0_0_14px_rgb(var(--gold-rgb)_/_0.3)]",
+        "rounded-lg bg-accent text-bg font-medium shadow-[0_0_14px_rgb(var(--accent-rgb)_/_0.3)]",
         "hover:brightness-110 disabled:opacity-40 disabled:shadow-none",
         // a disabled primary is INERT, not merely dim: no hover lift, no press
         // squash (Chromium keeps matching :active on a disabled button, so the
-        // Tracks lens's waiting Play these still animated under a click —
-        // user, 2026-09-01), and the arrow cursor of a native disabled control
-        // rather than the web's scolding not-allowed sign
+        // Tracks lens's waiting Play these still animated under a click), and
+        // the arrow cursor of a native disabled control rather than the web's
+        // scolding not-allowed sign
         "disabled:hover:brightness-100 motion-safe:disabled:active:scale-100 disabled:cursor-default",
         "motion-safe:active:scale-95 transition-all",
         className,

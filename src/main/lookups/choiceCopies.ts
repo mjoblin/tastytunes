@@ -15,11 +15,10 @@ import { fetchOriginInTurn } from "./artThumbs";
 import { nameKey } from "@shared/keys";
 
 /**
- * A CHOSEN PICTURE'S COPY (0.14.0; his question 2026-10-30, "what happens if that source no
- * longer has that image?", and his word, "yes, build it, covers too"). A picture chosen from
+ * A CHOSEN PICTURE'S COPY (0.14.0). A picture chosen from
  * Wikipedia, Commons or fanart.tv, or an album's cover, kept only its address: once the
  * thumbnail cache and Chromium's had let it go, an address that no longer answered left the
- * artist page on the next picture down, a change nobody asked for (decisions/0013). Now the
+ * artist page on the next picture down, a change nobody asked for. Now the
  * picture is copied into the app's data when it is chosen (data/artistChoices keepPicture, as a
  * chosen file is), at the page's largest size, and drawn from the copy. A choice made before
  * this has its copy made the next time a window reads the choices (ipc/lookups artistChoices),

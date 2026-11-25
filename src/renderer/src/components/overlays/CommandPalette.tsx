@@ -257,13 +257,13 @@ export function CommandPalette(): React.JSX.Element {
                     onClick={() => run(cmd)}
                     className={cx(
                       "w-full flex items-center gap-3 px-4 py-2 text-left transition-colors",
-                      active ? "bg-amberdim text-amber" : "text-ink hover:bg-veil",
+                      active ? "bg-accentdim text-accent" : "text-ink hover:bg-veil",
                     )}
                   >
                     <Icon
                       size={16}
                       strokeWidth={1.8}
-                      className={cx("shrink-0", active ? "text-amber" : "text-dim")}
+                      className={cx("shrink-0", active ? "text-accent" : "text-dim")}
                     />
                     <span className="flex-1 min-w-0 truncate text-[13.5px]">{cmd.label}</span>
                     {cmd.hidden && (

@@ -343,7 +343,7 @@ export function HistoryScreen(): React.JSX.Element {
               data-history-view={id}
               className={cx(
                 "w-full flex items-center gap-3 rounded-lg h-9 px-3 text-[13.5px] transition-colors",
-                view === id ? "bg-amberdim text-amber" : "text-dim hover:text-ink hover:bg-veil",
+                view === id ? "bg-accentdim text-accent" : "text-dim hover:text-ink hover:bg-veil",
               )}
             >
               <Icon size={15} strokeWidth={1.8} className="shrink-0" />
@@ -387,7 +387,7 @@ export function HistoryScreen(): React.JSX.Element {
               ref={scrollRef}
               className="flex-1 overflow-y-auto px-1" /* px-1: ring room at the scrollport's edges */
             >
-              {/* FROM THE KEYBOARD (0.14.0, his K1 to K6): the list one Tab stop, up and down
+              {/* FROM THE KEYBOARD (0.14.0): the list one Tab stop, up and down
                   through its sessions and tracks across the days, Enter opens or closes a
                   session as its click does, "." a track's More menu */}
               <KeyedList

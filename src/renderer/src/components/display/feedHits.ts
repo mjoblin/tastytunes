@@ -1,8 +1,8 @@
-// THE FEED'S OWN HITS (0.15.0, his A on the decision page "Hygiene Pass Decisions"). With no onset
-// list (radio, AirPlay, an analysis from before onsets), a kick, a snare and a hat are read off the
-// live signal's transients, the bass band's, the mids' and the highs', each over its threshold and
-// past its gap. Every scene draws from typed hits the one way, where seven used to improvise each
-// with its own threshold and four drew nothing at all.
+// THE FEED'S OWN HITS (0.15.0). With no onset list (radio, AirPlay, an analysis from before
+// onsets), a kick, a snare and a hat are read off the live signal's transients, the bass band's,
+// the mids' and the highs', each over its threshold and past its gap. Every scene draws from
+// typed hits the one way, where seven used to improvise each with its own threshold and four
+// drew nothing at all.
 import type { SceneHit } from "./scenes/types";
 
 type Drum = SceneHit["type"];
@@ -19,8 +19,7 @@ export class FeedHits {
   private quietUntil = -Infinity;
 
   /** Make no hits for `ms` from `now`: after a seek, a new track or a resume the slow average
-   *  behind every transient lags the music, and every band would read as a hit (0.15.0, his
-   *  "mute the hits after a seek"). */
+   *  behind every transient lags the music, and every band would read as a hit (0.15.0). */
   hold(now: number, ms: number): void {
     this.quietUntil = now + ms;
   }

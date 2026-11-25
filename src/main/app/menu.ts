@@ -43,6 +43,14 @@ export function installAppMenu(deps: MenuDeps): void {
     click: () => deps.sendToMain({ id: "screen", screen: "settings" }),
   };
 
+  // where each platform's people look for it: the app menu on macOS, Help elsewhere; Settings ›
+  // Updates opens and asks the feed at once
+  const checkUpdatesItem: MenuItemConstructorOptions = {
+    id: "menu-check-updates",
+    label: "Check for Updates…",
+    click: () => deps.sendToMain({ id: "updates", check: true }),
+  };
+
   const appMenu: MenuItemConstructorOptions = {
     label: app.name,
     submenu: [
@@ -51,6 +59,7 @@ export function installAppMenu(deps: MenuDeps): void {
         label: "About TastyTunes",
         click: () => deps.sendToMain({ id: "about" }),
       },
+      checkUpdatesItem,
       { type: "separator" },
       settingsItem,
       { type: "separator" },
@@ -143,7 +152,7 @@ export function installAppMenu(deps: MenuDeps): void {
       // "Full-Screen Now Playing", not the in-app "display mode" name: this
       // sits two rows above the native "Toggle Full Screen" role, and two
       // items that both say full screen/fullscreen-ish need labels that say
-      // WHICH full screen (user, 2026-08-06). The app keeps calling the
+      // WHICH full screen. The app keeps calling the
       // feature display mode; menus describe.
       label: "Full-Screen Now Playing",
       // NO ACCELERATOR, ON ANY PLATFORM. The renderer owns F. This item once
@@ -152,8 +161,8 @@ export function installAppMenu(deps: MenuDeps): void {
       // only (Electron docs; on macOS the Cocoa menu controller sets the key
       // equivalent unconditionally), so a bare F fired this command AND the
       // renderer's handler: display mode toggled on and straight back off,
-      // and the window flashed into full screen and out (user report,
-      // 2026-08-15). A menu key equivalent on macOS is always live — there is
+      // and the window flashed into full screen and out. A menu key
+      // equivalent on macOS is always live — there is
       // no display-only mode — so the hint is not shown here.
       click: () => deps.sendToMain({ id: "displayMode" }),
     },
@@ -227,6 +236,7 @@ export function installAppMenu(deps: MenuDeps): void {
         label: "AI Agents Setup Guide",
         click: () => void shell.openExternal(AGENTS_GUIDE_URL),
       },
+      ...(isMac ? [] : [{ type: "separator" } as MenuItemConstructorOptions, checkUpdatesItem]),
       { type: "separator" },
       {
         id: "menu-github",

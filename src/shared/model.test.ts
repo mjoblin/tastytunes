@@ -7,11 +7,15 @@
  * pick up again, and how a title meets the library. The names in the
  * fixtures are placeholders chosen to show a shape.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  UNHURRIED_BYTES_PER_SECOND,
+  unhurried,
+  creditNames,
   albumFormat,
   albumTracksOf,
   albumVolume,
+  sharedYear,
   compareTrackOrder,
   discCountIn,
   discGroups,
@@ -57,10 +61,14 @@ import {
   TEMPO_CONFIDENCE_FLOOR,
   currentFeatures,
   FEATURES_VERSION,
+  keyFromStored,
   keyMatches,
   keyName,
+  keyOfChroma,
+  KEY_VERSION,
   parseKeyName,
   tempoBpm,
+  withoutAppended,
 } from "./model";
 
 // ------------------------------------------------------------------ fixtures
@@ -117,6 +125,21 @@ function play(
 
 // ---------------------------------------------------------- who is on a track
 
+describe("creditNames: the names a credit packs", () => {
+  it("splits the ways a credit joins names, in order, whatever their case", () => {
+    expect(creditNames("Dusk Parade feat. June Vale")).toEqual(["Dusk Parade", "June Vale"]);
+    expect(creditNames("A ft B")).toEqual(["A", "B"]);
+    expect(creditNames("A FEAT. B")).toEqual(["A", "B"]);
+    expect(creditNames("A & B, C; D")).toEqual(["A", "B", "C", "D"]);
+    expect(creditNames("A with B and C")).toEqual(["A", "B", "C"]);
+    expect(creditNames("Keane")).toEqual(["Keane"]);
+  });
+
+  it("splits a duo's name too, which is why a lookup tries the whole credit first", () => {
+    expect(creditNames("Simon & Garfunkel")).toEqual(["Simon", "Garfunkel"]);
+  });
+});
+
 describe("trackArtists: the only way to ask who is on a track", () => {
   it("is the split performers when the server packed several", () => {
     expect(trackArtists({ artist: "Lead; Guest", artists: ["Lead", "Guest"] })).toEqual([
@@ -153,7 +176,7 @@ describe("trackInAlbumOf: does a track belong to an album credited to someone", 
   });
 });
 
-describe("performerLine: a row's performers inside an album under its artist", () => {
+describe("performerLine: a row's performers, one rule everywhere", () => {
   const featured = { artist: "Lead; Guest", artists: ["Lead", "Guest"], albumArtist: "Lead" };
 
   it("names the album artist, then the guests as feat.", () => {
@@ -162,10 +185,17 @@ describe("performerLine: a row's performers inside an album under its artist", (
     expect(performerLine(two, "lead")).toBe("Lead feat. G1, G2");
   });
 
-  it("returns the packed string unchanged anywhere else", () => {
-    expect(performerLine(featured, null)).toBe("Lead; Guest");
-    expect(performerLine(featured, "Someone Else")).toBe("Lead; Guest");
+  it("names performers without the album's artist as a credit reads, never the packed string", () => {
+    expect(performerLine(featured, null)).toBe("Lead & Guest");
+    expect(performerLine(featured, "Someone Else")).toBe("Lead & Guest");
+    const three = { artist: "A; B; C", artists: ["A", "B", "C"] };
+    expect(performerLine(three, "Various Artists")).toBe("A, B & C");
+  });
+
+  it("shows one performer as it stands", () => {
     expect(performerLine({ artist: "Solo" }, "Solo")).toBe("Solo");
+    expect(performerLine({ artist: "Solo" }, null)).toBe("Solo");
+    expect(performerLine({ artist: null }, "Solo")).toBeNull();
   });
 });
 
@@ -256,6 +286,23 @@ describe("orderTracks: sort only when (disc, position) is unique", () => {
     expect(orderTracks(listing).map((t) => t.id)).toEqual([1, 2, 0, 3]);
   });
 
+  it("keeps a box set's listing: each disc starts again from the lowest number", () => {
+    const listing = [1, 2, 11, 1, 2, 11].map((n, i) => ({ ...at(n), id: i }));
+    expect(orderTracks(listing)).toEqual(listing);
+  });
+
+  it("sorts a title order whose drops land anywhere, however few", () => {
+    // two 17-track albums under one title, every track on disc 1, listed by title: 16 drops in
+    // 34 tracks, under half, read as discs and kept the alphabetical order
+    const byTitle = [
+      1, 2, 5, 1, 8, 9, 7, 4, 14, 15, 12, 14, 10, 4, 5, 12, 6, 7, 3, 11, 17, 13, 3, 8, 15, 10, 13,
+      11, 16, 2, 17, 16, 9, 6,
+    ];
+    const listing = byTitle.map((n, i) => ({ ...at(n, 1), id: i }));
+    const ordered = orderTracks(listing).map((t) => t.trackNumber);
+    expect(ordered).toEqual(Array.from({ length: 34 }, (_, i) => Math.floor(i / 2) + 1));
+  });
+
   it("never reorders the caller's array", () => {
     const listing = [at(2), at(1)];
     orderTracks(listing);
@@ -297,6 +344,15 @@ describe("discGroups: the quiet Disc N dividers", () => {
       { disc: 1, tracks: [at(1), at(2, 1)] },
       { disc: 2, tracks: [at(1, 2), at(2, 2)] },
     ]);
+  });
+});
+
+describe("sharedYear: a set's year", () => {
+  it("is the year every volume shares, and none when they differ or one has none", () => {
+    expect(sharedYear([{ year: "2017" }, { year: "2017" }])).toBe("2017");
+    expect(sharedYear([{ year: "2017" }, { year: "2019" }])).toBeNull();
+    expect(sharedYear([{ year: "2017" }, { year: null }])).toBeNull();
+    expect(sharedYear([{ year: null }, { year: null }])).toBeNull();
   });
 });
 
@@ -902,5 +958,87 @@ describe("measured facts: tempo and key, said once (0.12.0)", () => {
     expect(currentFeatures({ ...now, version: FEATURES_VERSION - 1 })).toBeNull();
     expect(currentFeatures(null)).toBeNull();
     expect(currentFeatures(undefined)).toBeNull();
+  });
+
+  // a dense mix: every pitch class high (each frame is normalized to its loudest), the scale's
+  // notes a little higher and the triad's higher still, as a full band's chroma averages out
+  const mix = (scale: number[], triad: number[], frames = 8): Uint8Array => {
+    const frame = Array.from(
+      { length: 12 },
+      (_, p) => 0.6 + (scale.includes(p) ? 0.15 : 0) + (triad.includes(p) ? 0.1 : 0),
+    );
+    return Uint8Array.from({ length: frames * 12 }, (_, i) => Math.round(frame[i % 12] * 255));
+  };
+  const cMajor = mix([0, 2, 4, 5, 7, 9, 11], [0, 4, 7]);
+  const aMinor = mix([9, 11, 0, 2, 4, 5, 7], [9, 0, 4]);
+  const b64 = (u8: Uint8Array): string => btoa(String.fromCharCode(...u8));
+
+  it("names a dense mix's key by correlation, major as readily as minor", () => {
+    // the raw dot product this replaced read the C major mix as E minor at 0.023
+    expect(keyName(keyOfChroma(cMajor))).toBe("C major");
+    expect(keyName(keyOfChroma(aMinor))).toBe("A minor");
+    expect(keyName(keyOfChroma(mix([7, 9, 11, 0, 2, 4, 6], [7, 11, 2])))).toBe("G major");
+  });
+
+  it("withholds a key when nothing stands out or there is too little to read", () => {
+    expect(keyOfChroma(new Uint8Array(8 * 12).fill(200))).toBeNull();
+    expect(keyOfChroma(cMajor.subarray(0, 36))).toBeNull();
+    // the C and G triads both loud over C major's scale: two keys a fifth apart fit almost
+    // equally, and the lead is under the floor
+    expect(keyName(keyOfChroma(mix([0, 2, 4, 5, 7, 9, 11], [0, 4, 7, 11, 2])))).toBeNull();
+  });
+
+  it("reads a stored key of an older estimator again from the stored chroma", () => {
+    const chroma = { fps: 2, data: b64(cMajor) };
+    const older = { key: { tonic: 4, mode: "minor" as const, confidence: 0.023 }, chroma };
+    expect(keyName(keyFromStored(older))).toBe("C major");
+    const made = {
+      key: { tonic: 7, mode: "major" as const, confidence: 0.8, v: KEY_VERSION },
+      chroma,
+    };
+    expect(keyName(keyFromStored(made))).toBe("G major");
+    expect(keyFromStored({ key: older.key, chroma: null })).toBeNull();
+    expect(keyFromStored(null)).toBeNull();
+  });
+});
+
+describe("withoutAppended: an undo of an add takes out only what it added", () => {
+  const t = (title: string) => ({
+    title,
+    artist: "Glass Orchard",
+    album: "Paper Moons",
+    artUrl: null,
+    serverUdn: null,
+    serverName: null,
+    objectId: null,
+    durationSecs: null,
+  });
+  it("keeps a reorder and a later add made since", () => {
+    // [A, B] then the add of [C, D], then D moved to the front and E added
+    const now = [t("D"), t("A"), t("B"), t("C"), t("E")];
+    expect(withoutAppended(now, [t("C"), t("D")]).map((i) => i.title)).toEqual(["A", "B", "E"]);
+  });
+  it("takes the last copy of a track the playlist already had, once per copy added", () => {
+    const now = [t("A"), t("B"), t("A")];
+    expect(withoutAppended(now, [t("A")]).map((i) => i.title)).toEqual(["A", "B"]);
+    // a track removed since is simply not there to take
+    expect(withoutAppended([t("B")], [t("A")]).map((i) => i.title)).toEqual(["B"]);
+  });
+});
+
+describe("the unhurried pace, one rule for both of the analysis's reads", () => {
+  it("waits so the bytes read stay at the pace or under, and never waits once behind it", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      const due = unhurried();
+      expect(due(UNHURRIED_BYTES_PER_SECOND)).toBe(1000);
+      vi.setSystemTime(1000);
+      expect(due(UNHURRIED_BYTES_PER_SECOND / 2)).toBe(500);
+      vi.setSystemTime(5000);
+      expect(due(UNHURRIED_BYTES_PER_SECOND)).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

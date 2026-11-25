@@ -15,11 +15,14 @@ import { isRecord } from "@shared/guards";
 import { isDeviceArt } from "@shared/artUrl";
 import {
   LISTEN_FLOOR_SECS,
+  LISTENING_KINDS,
+  LISTENING_VERSION,
   type ListeningEvent,
   type ListeningRecordStats,
   type ListeningVia,
   artAddress,
   artHostOf,
+  boundedPlayedSeconds,
 } from "@shared/model";
 import { isRadioMetadata, radioTrackTitle, trackTitle, type ZonePlayState } from "@shared/smoip";
 import { getSettings } from "./persist";
@@ -63,6 +66,9 @@ interface OpenPlay {
   playedMs: number;
   playingSince: number | null;
   payload: Record<string, unknown>;
+  /** A station or another source playing when the computer went to sleep: when it slept, until
+   *  a play push after the wake says whether it played through (see noteSleep). */
+  sleptAt?: number;
 }
 
 let current: OpenPlay | null = null;
@@ -136,14 +142,14 @@ function bound(c: ViaContext): void {
 }
 
 /**
- * A RECALL THAT LOADED NOTHING CLAIMS NOTHING (0.13.0-rc.6, his preset 24). The streamer accepts
+ * A RECALL THAT LOADED NOTHING CLAIMS NOTHING (0.13.0-rc.6). The streamer accepts
  * a preset whose album its server no longer has and then does nothing, and the recall's context,
- * never bound, claimed the next play anyway: a track of the queue already playing (preset 30's
- * album, credited to preset 24 in his Resume and his history). A preset recall's context still
- * unbound when a play starts from the queue that was there before it came to nothing: the context
- * it replaced stands again (unit-tested). Past that, main's recall watch decides it (0.15.0: one
- * clock, 8 s after the streamer is awake; main/device/recallWatch) and says so through
- * recallCameToNothing, where this file kept its own 15 s clock.
+ * never bound, claimed the next play anyway: a track of the queue already playing (another
+ * preset's album, credited to the recalled one in Resume and the history). A preset recall's
+ * context still unbound when a play starts from the queue that was there before it came to
+ * nothing: the context it replaced stands again (unit-tested). Past that, main's recall watch
+ * decides it (0.15.0: one clock, 8 s after the streamer is awake; main/device/recallWatch) and
+ * says so through recallCameToNothing, where this file kept its own 15 s clock.
  */
 function cameToNothing(c: ViaContext, kind: OpenPlay["kind"], queueId: number | null): boolean {
   if (c.via.kind !== "preset" || c.queueIds != null || c.station != null) return false;
@@ -216,23 +222,43 @@ interface YearLines {
   mtimeMs: number;
   events: ListeningEvent[];
   unreadable: number;
+  /** A later version's lines (a kind or a version this one doesn't read), counted apart. */
+  later: number;
   /** The year's first line of any kind (the record's "since"). */
   since: number | null;
 }
 const years = new Map<number, YearLines>();
 
-/** One year's lines as parsed: torn or unparseable lines are counted, never thrown over;
- *  unknown kinds pass through untyped (readers skip what they don't know — the
- *  additive-evolution contract). */
-function parseLines(raw: string): { events: ListeningEvent[]; unreadable: number } {
+/** One year's lines as parsed: torn or unparseable lines are counted, never thrown over; a line
+ *  this version doesn't read (an unknown kind, a "v" past LISTENING_VERSION) is counted apart and
+ *  left in the file. The one gate: 0.16.0 let an unknown kind with playedSeconds add to the day,
+ *  the hour grid and Radio time, and wrote "v" without reading it. */
+function parseLines(raw: string): { events: ListeningEvent[]; unreadable: number; later: number } {
   const events: ListeningEvent[] = [];
   let unreadable = 0;
+  let later = 0;
   for (const line of raw.split("\n")) {
     if (line.trim() === "") continue;
     try {
       const parsed: unknown = JSON.parse(line);
       if (isRecord(parsed) && typeof parsed.at === "number" && typeof parsed.kind === "string") {
-        events.push(parsed as unknown as ListeningEvent);
+        if (
+          !(LISTENING_KINDS as readonly string[]).includes(parsed.kind) ||
+          (typeof parsed.v === "number" && parsed.v > LISTENING_VERSION)
+        ) {
+          later++;
+          continue;
+        }
+        const played = parsed.playedSeconds;
+        const bounded =
+          typeof played === "number"
+            ? boundedPlayedSeconds(parsed.kind, played, parsed.duration)
+            : played;
+        events.push(
+          (bounded === played
+            ? parsed
+            : { ...parsed, playedSeconds: bounded }) as unknown as ListeningEvent,
+        );
       } else {
         unreadable++;
       }
@@ -240,7 +266,7 @@ function parseLines(raw: string): { events: ListeningEvent[]; unreadable: number
       unreadable++;
     }
   }
-  return { events, unreadable };
+  return { events, unreadable, later };
 }
 
 /** The year's lines, from memory while the file is unchanged; null when there is no file. */
@@ -263,10 +289,10 @@ function yearLines(year: number): YearLines | null {
     years.delete(year);
     return null;
   }
-  const { events, unreadable } = parseLines(raw);
+  const { events, unreadable, later } = parseLines(raw);
   let since: number | null = null;
   for (const e of events) if (since == null || e.at < since) since = e.at;
-  const lines = { size, mtimeMs, events, unreadable, since };
+  const lines = { size, mtimeMs, events, unreadable, later, since };
   years.set(year, lines);
   return lines;
 }
@@ -351,10 +377,11 @@ function closeCurrent(): void {
   const p = current;
   current = null;
   if (p.playingSince != null) {
-    p.playedMs += Date.now() - p.playingSince;
+    // a session the computer slept through, never seen playing after the wake, ends at the sleep
+    p.playedMs += (p.sleptAt ?? Date.now()) - p.playingSince;
     p.playingSince = null;
   }
-  const played = Math.round(p.playedMs / 1000);
+  const played = boundedPlayedSeconds(p.kind, Math.round(p.playedMs / 1000), p.payload.duration);
   if (played < LISTEN_FLOOR_SECS) {
     // Nothing written, but the pending play is gone — the row must hear.
     notify?.();
@@ -483,6 +510,12 @@ export const listeningRecord = {
       };
     }
 
+    // the first word after a sleep: the session played through it, or ended where it began
+    if (current?.sleptAt != null) {
+      if (current.key === key && ps.state === "play") delete current.sleptAt;
+      else closeCurrent();
+    }
+
     if (kind == null) {
       closeCurrent();
       lastRadioTrackKey = null;
@@ -596,9 +629,26 @@ export const listeningRecord = {
     if (set && !ids.some((id) => set.has(id))) clearContext();
   },
 
+  /**
+   * THE COMPUTER IS GOING TO SLEEP. The streamer plays on, unheard: the app sees no push until the
+   * wake. A library play needs nothing here: it closes bounded at its track's length (it most likely
+   * played to its end). A station or another source has no length to bound it by, so the wake
+   * decides: the first play push after it, the same thing still playing, counts the sleep (it played
+   * through); anything else ends the session where the sleep began. A connection lost on the wake
+   * holds the session for that push rather than closing it (flush).
+   */
+  noteSleep(): void {
+    // the first sleep stands: a session still waiting on its wake keeps the time it began (a lid
+    // closed again, or a short wake in the night, before the play push came)
+    if (current && current.kind !== "play" && current.playingSince != null)
+      current.sleptAt ??= Date.now();
+  },
+
   /** Connection lost, device switched, or the app is quitting: close out the
-   *  open play so its time is not lost (quit is why this is synchronous). */
-  flush(): void {
+   *  open play so its time is not lost (quit is why this is synchronous). A session the computer
+   *  slept through waits for the first play push after the wake (noteSleep), unless quitting. */
+  flush(opts?: { quitting?: boolean }): void {
+    if (current?.sleptAt != null && opts?.quitting !== true) return;
     closeCurrent();
     lastRadioTrackKey = null;
   },
@@ -606,16 +656,16 @@ export const listeningRecord = {
   /** Read one year's events. Torn or unparseable lines are counted, never
    *  thrown over; unknown kinds pass through untyped (readers skip what
    *  they don't know — the additive-evolution contract). */
-  readYear(year: number): { events: ListeningEvent[]; unreadable: number } {
+  readYear(year: number): { events: ListeningEvent[]; unreadable: number; later: number } {
     const lines = yearLines(year);
     // a copy: the year in memory is never handed out to be sorted or spliced
     return lines
-      ? { events: lines.events.slice(), unreadable: lines.unreadable }
-      : { events: [], unreadable: 0 };
+      ? { events: lines.events.slice(), unreadable: lines.unreadable, later: lines.later }
+      : { events: [], unreadable: 0, later: 0 };
   },
 
   /**
-   * WHAT A PRESET LAST PLAYED (0.13.0-rc.6, his preset 24: left with no picture, the repair had
+   * WHAT A PRESET LAST PLAYED (0.13.0-rc.6: a preset left with no picture, the repair had
    * nothing to find its album by). The newest play credited to the slot on this streamer whose
    * album is the slot's name as it was then; a play credited wrongly (a recall that loaded
    * nothing, before cameToNothing) names another album and is passed over. Its album, artist and
@@ -639,15 +689,18 @@ export const listeningRecord = {
 
   /** Every event across all years, with the unreadable-line total — the MCP
    *  read tools' feedstock. Order follows the files (per year, append order). */
-  async readAll(): Promise<{ events: ListeningEvent[]; unreadable: number }> {
+  async readAll(): Promise<{ events: ListeningEvent[]; unreadable: number; later: number }> {
     const events: ListeningEvent[] = [];
     let unreadable = 0;
+    let later = 0;
     for (const year of await listYears()) {
       const r = this.readYear(year);
-      events.push(...r.events);
+      // a loop, never a spread: a year past ~105,000 lines would throw (shared/model eventsOfYears)
+      for (const e of r.events) events.push(e);
       unreadable += r.unreadable;
+      later += r.later;
     }
-    return { events, unreadable };
+    return { events, unreadable, later };
   },
 
   /** The Settings truth row, from the years in memory (each re-read when its file changed). */
@@ -656,12 +709,14 @@ export const listeningRecord = {
     let bytes = 0;
     let since: number | null = null;
     let unreadableLines = 0;
+    let laterLines = 0;
     for (const year of await listYears()) {
       const lines = yearLines(year);
       if (!lines) continue;
       bytes += lines.size;
       events += lines.events.length;
       unreadableLines += lines.unreadable;
+      laterLines += lines.later;
       if (lines.since != null && (since == null || lines.since < since)) since = lines.since;
     }
     const pending = current
@@ -671,7 +726,9 @@ export const listeningRecord = {
       : null;
     const pendingSecs = current
       ? (current.playedMs +
-          (current.playingSince != null ? Date.now() - current.playingSince : 0)) /
+          (current.playingSince != null
+            ? (current.sleptAt ?? Date.now()) - current.playingSince
+            : 0)) /
         1000
       : 0;
     return {
@@ -679,6 +736,7 @@ export const listeningRecord = {
       bytes,
       since,
       unreadableLines,
+      laterLines,
       writeError,
       pending,
       pendingEligible: pendingSecs >= LISTEN_FLOOR_SECS,

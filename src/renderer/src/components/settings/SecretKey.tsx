@@ -7,14 +7,14 @@ import { HeaderChip } from "@/components/chrome/Chrome";
 import { cx } from "@/lib/format";
 
 /**
- * A KEY OR TOKEN THE APP KEEPS (0.13.0 rounds 10 and 11, the secrets store; his look at the first
- * cut, 2026-10-25: "entering a token feels awkward and not elegant ... the user needs to know more
- * clearly what the flow is after entering a token (success, failure, etc) vs. that "Get" button
- * which is confusing"). The Settings row says only whether one is saved and how it ends, with Add,
- * Change and Remove (asked first); adding opens a small dialog that walks it: where one is got,
- * where it is pasted, then Check and save, the service asked before it is kept and its answer said
- * in the dialog (works, refused with the field still there to fix, or unreachable and saved). One
- * flow for the fanart.tv key and the ListenBrainz token. The value is never shown or filled back.
+ * A KEY OR TOKEN THE APP KEEPS (0.13.0 rounds 10 and 11, the secrets store; entering a token in
+ * the first cut felt awkward, with no clear flow after it was entered, no success or failure said,
+ * and a confusing Get button). The Settings row says only whether one is saved and how it ends,
+ * with Add, Change and Remove (asked first); adding opens a small dialog that walks it: where one
+ * is got, where it is pasted, then Check and save, the service asked before it is kept and its
+ * answer said in the dialog (works, refused with the field still there to fix, or unreachable and
+ * saved). One flow for the fanart.tv key and the ListenBrainz token. The value is never shown or
+ * filled back.
  */
 export interface SecretKeySpec {
   /** The secret's name, on the row for the suite (data-secret). */
@@ -62,7 +62,7 @@ export function SecretKeyRow({
       {saved ? (
         <>
           <span className="flex items-center gap-1.5 text-[12.5px] text-dim whitespace-nowrap">
-            <Check size={13} className="text-gold" />
+            <Check size={13} className="text-accent" />
             Saved, ending in <span className="font-mono text-ink">{ends}</span>
           </span>
           <HeaderChip onClick={() => setAdding(true)} className={chip}>
@@ -166,7 +166,7 @@ function SecretKeyDialog({
               <span
                 className={cx(
                   "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full",
-                  stage.verdict === "works" ? "bg-golddim text-gold" : "bg-veil text-dim",
+                  stage.verdict === "works" ? "bg-accentdim text-accent" : "bg-veil text-dim",
                 )}
               >
                 <Check size={15} />
@@ -178,7 +178,7 @@ function SecretKeyDialog({
                 type="button"
                 autoFocus
                 onClick={close}
-                className="px-3 py-1 rounded-lg text-[12.5px] bg-gold text-bg font-medium hover:brightness-110"
+                className="px-3 py-1 rounded-lg text-[12.5px] bg-accent text-bg font-medium hover:brightness-110"
               >
                 Done
               </button>
@@ -244,7 +244,7 @@ function SecretKeyDialog({
             </div>
             <ConfirmActions
               modal
-              tone="gold"
+              tone="accent"
               verb="Check and save"
               busy={!value.trim() || stage.kind === "checking"}
               onCancel={close}

@@ -27,7 +27,7 @@ export function EmptyState({
    * Panel scale. The screen sizes are tuned for a 1200px canvas, and in a
    * 380px window they read as a poster: a 56px glyph, a 24px headline, and
    * 16px of air between the headline and its own caption, which makes the two
-   * look unrelated (user, 2026-08-04). Same idiom, panel proportions.
+   * look unrelated. Same idiom, panel proportions.
    */
   compact?: boolean;
   className?: string;

@@ -10,9 +10,8 @@ const MAX_PX = 400;
 const ROW_SHARE = 0.3;
 
 /**
- * The picture's size in the Library's album and artist headers (0.11.0, his ask after the
- * artist page: "what if we allowed them to resize the art on the artist and album screen
- * too"). The Now Playing grip's gesture (useDragExtent: live while dragging, saved on release,
+ * The picture's size in the Library's album and artist headers (0.11.0). The Now Playing
+ * grip's gesture (useDragExtent: live while dragging, saved on release,
  * a detent at the default, one undo entry), one size for both headers (settings'
  * libraryHeaderArt), clamped to the row's cap at draw time. The row is measured when it is
  * attached, before the first paint, so a page never opens at the default and then jumps.

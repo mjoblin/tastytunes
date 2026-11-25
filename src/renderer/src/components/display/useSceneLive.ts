@@ -7,8 +7,8 @@ import { deriveNowPlaying } from "@/lib/format";
 import type { SceneNeeds } from "./scenes/types";
 
 /**
- * WHETHER THE SCENES HAVE SOMETHING REAL TO DRAW (2026-09-15, the user: the
- * docs say the scenes need local media, "but in the ui it's not obvious").
+ * WHETHER THE SCENES HAVE SOMETHING REAL TO DRAW (the docs say the scenes need
+ * local media, but the UI did not make it obvious).
  * The feed marks every frame `real` when an analysis drives it; this is that
  * truth as React state, with the reason when it is not, so the picker can
  * show its tiles still and say why, and a host can caption the wall or the
@@ -94,8 +94,8 @@ export function useAnalyzable(enabled: boolean): boolean {
   return live || idle === "analyzing";
 }
 
-/** The picker's notice, in the row between the Sleeve and Shuffle tiles (the user, 2026-09-15:
- *  a line in the footer was "too hidden"): what the scenes need, and what is playing instead.
+/** The picker's notice, in the row between the Sleeve and Shuffle tiles (a line in the
+ *  footer was too easy to miss): what the scenes need, and what is playing instead.
  *  Hi-Fi and Turntable draw for anything, so the notice names them. */
 export function sceneIdleNotice(idle: SceneIdle): { head: string; body: string } {
   switch (idle) {
@@ -127,7 +127,7 @@ export function sceneIdleNotice(idle: SceneIdle): { head: string; body: string }
 }
 
 /** The one line that says why a scene is not drawing, in the register: the scene by name,
- *  the reason in plain words (the user's wording for the common case, 2026-09-15) — the wall's
+ *  the reason in plain words — the wall's
  *  caption and the tile chip's tip. */
 export function sceneIdleLine(label: string, idle: SceneIdle): string {
   switch (idle) {

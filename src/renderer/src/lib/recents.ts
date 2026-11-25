@@ -17,9 +17,8 @@ import { useStore } from "@/store";
 /**
  * The Recent list's clear, as both its buttons ask it (the History screen's and Settings ›
  * History's): the whole list goes, so it confirms first (the destructive-edit rule: confirm for
- * whole collections, instant + undo for items; user, 2026-10-11: "the 'clear' button has no
- * affordance for 'Are you sure' which we have elsewhere in the app"), and the undo stays behind
- * the confirm.
+ * whole collections, instant + undo for items), and the undo stays behind the
+ * confirm.
  */
 export const CLEAR_RECENTS = {
   question: "Clear the Recent list? The listening record is kept.",

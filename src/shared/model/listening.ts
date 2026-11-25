@@ -3,7 +3,7 @@
 // the album that was playing).
 
 import type { MediaNode } from "./media";
-import { albumTracksOf, trackArtists } from "./media";
+import { albumTracksOf, creditNames, trackArtists } from "./media";
 import {
   type CopyFacts,
   type CopyRow,
@@ -29,6 +29,23 @@ export const LISTEN_CAP_SECS = 240;
 export function listenThresholdSecs(durationSecs: number | null): number {
   return durationSecs != null ? Math.min(durationSecs / 2, LISTEN_CAP_SECS) : LISTEN_CAP_SECS;
 }
+/**
+ * How far a library play may run past its track's length before the excess is the clock's, not the
+ * music's. A play's time is wall-clock time while the state is play, so a play left open across a
+ * gap the app can't see (the computer asleep while the streamer plays on, a socket that died
+ * quietly) would carry the whole gap. Past its length plus this slack, a library play counts as
+ * its length, as it most likely played to its end: bounded when the play closes, and on read for
+ * lines already written (the file itself is never rewritten).
+ */
+export const PLAY_OVERRUN_SECS = 30;
+export function boundedPlayedSeconds(kind: string, played: number, duration: unknown): number {
+  // an external play too (AirPlay, Connect): its title or length can lag a track change, and a
+  // real record held 23.8 hours of such overrun (0.16.0-rc.8, read-only, the file as written)
+  if ((kind !== "play" && kind !== "external") || typeof duration !== "number" || !(duration > 0))
+    return played;
+  return played > duration + PLAY_OVERRUN_SECS ? Math.round(duration) : played;
+}
+
 /** The house definition in words — the Listens only chip, the Plays tile,
  *  anywhere a "listen" needs explaining, so no two surfaces phrase it apart. */
 export const LISTEN_DEFINITION = `A listen is a play that ran for at least half its track, or ${LISTEN_CAP_SECS / 60} minutes, whichever is shorter.`;
@@ -186,15 +203,15 @@ export function copyStat(
 }
 
 /** "Not heard in a while": an album played, then left this long (the History
- *  screen's Rediscover shelf and the MCP's history_rediscover default). */
+ *  screen's Rediscover shelf and the MCP's history_shelves quiet shelf). */
 export const REDISCOVER_QUIET_DAYS = 90;
 
 /**
  * An album's tallies in the record: its tracks' plays summed, the latest of
  * them, and how many tracks it has, by content (playKey over albumTracksOf).
  * ONE home for "has this album been played, and when": the History screen's
- * Rediscover shelves and the MCP's history_unplayed and history_rediscover all
- * read it. Given `peersOf` (the library's tracks by play key), the tally is this
+ * Rediscover shelves, the MCP's history_shelves and list_albums' played filter
+ * all read it. Given `peersOf` (the library's tracks by play key), the tally is this
  * copy's own, as the Albums lens reads it (0.13.0); without, every copy's together,
  * as Rediscover's one row per album wants it.
  */
@@ -264,13 +281,7 @@ export function inLibraryIndex(
   const candidates = index.get(editionless(title));
   if (!candidates || candidates.length === 0) return false;
   if (!artist) return true;
-  const names = new Set(
-    artist
-      .toLowerCase()
-      .split(/\s*(?:,|;|&|\band\b|\bfeat\.?|\bft\.?|\bwith\b)\s*/)
-      .map((s) => s.trim())
-      .filter(Boolean),
-  );
+  const names = new Set(creditNames(artist).map(nameKey));
   names.add(nameKey(artist));
   return candidates.some((n) =>
     [...trackArtists(n), n.albumArtist].some((a) => a != null && names.has(nameKey(a))),
@@ -342,7 +353,7 @@ export function foldPlayEvent(stats: PlayStats, e: ListeningEvent): void {
 /** "Pick up where you left off": the most recent RUN of plays from one album
  *  (consecutive plays of the same album with at most `gapMs` between one
  *  play's end and the next's start), if it ended within `withinMs`. Shared
- *  by the resume card and the MCP history_resume / resume_playback tools. */
+ *  by the resume card and the MCP history_resume / resume_album tools. */
 export interface ResumeRun {
   album: string;
   artist: string | null;
@@ -421,8 +432,7 @@ export interface ListeningEventBase {
  *  another app built never carries it, so a reader must say "started from
  *  TastyTunes", never "played from a preset". */
 /**
- * WHAT THE STREAMER WAS DOING WHEN IT WENT TO SLEEP (0.10.0, user ask 2026-10-06: "the state i
- * was in when i put the streamer in standby is being resumed"). The streamer reports nothing
+ * WHAT THE STREAMER WAS DOING WHEN IT WENT TO SLEEP (0.10.0). The streamer reports nothing
  * while it sleeps, so the app keeps this itself, per streamer, saved across restarts: the
  * standby face offers it and Resume puts it back. Four kinds, from what the Evo keeps through
  * network standby (live-probed 2026-10-06): a queue track (the same entry comes back paused,
@@ -516,6 +526,16 @@ export type ListeningEvent =
   | ListeningRadioTrackEvent
   | ListeningExternalEvent;
 
+/** The kinds of line this version reads, and the highest version of a line it reads: a line past
+ *  either (a later version's) stays in the file and is counted apart, never as a play. */
+export const LISTENING_KINDS: readonly ListeningEvent["kind"][] = [
+  "play",
+  "radio-session",
+  "radio-track",
+  "external",
+];
+export const LISTENING_VERSION = 1;
+
 /** A LISTENING SESSION (0.8.0, History round two): consecutive record lines
  *  with at most SESSION_GAP_MS between one line's end and the next's start,
  *  over every kind — a library run, a radio stretch, an AirPlay evening, or
@@ -577,6 +597,9 @@ export interface ListeningRecordStats {
   /** Torn/unparseable lines encountered while reading — surfaced, never
    *  silently dropped. */
   unreadableLines: number;
+  /** Lines a later version wrote (a kind or version this one doesn't read): kept in the record,
+   *  counted apart, never as plays. */
+  laterLines: number;
   /** The last append failure (disk full, permissions), or null while writes
    *  are healthy. */
   writeError: string | null;
@@ -588,3 +611,24 @@ export interface ListeningRecordStats {
    *  write an event; false while a change would still discard it. */
   pendingEligible: boolean;
 }
+
+/**
+ * The years' events as one list, in the years' order given (each year in append order). A loop,
+ * never push(...year): a spread passes every line as an argument, and past about 105,000 lines in
+ * a year (a station left on adds one per announced title) the call throws, the whole record
+ * unreadable to the stats, the History screen and an agent while the file itself is whole.
+ */
+export function eventsOfYears<T>(
+  loaded: Readonly<Record<number, readonly T[] | undefined>>,
+  years: readonly number[],
+): T[] {
+  const out: T[] = [];
+  for (const y of years) for (const e of loaded[y] ?? []) out.push(e);
+  return out;
+}
+
+/** The years of a loaded record, oldest first. */
+export const yearsOldestFirst = (loaded: Readonly<Record<number, unknown>>): number[] =>
+  Object.keys(loaded)
+    .map(Number)
+    .sort((a, b) => a - b);

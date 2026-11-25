@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowUpRight, Pause, Play } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, FileText, Pause, Play } from "lucide-react";
 import { DEFAULT_SETTINGS } from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
@@ -46,8 +46,8 @@ export function DiagnosticsDrawer(): React.JSX.Element {
   };
   const [filter, setFilter] = useState<Filter>("all");
   const [paused, setPaused] = useState(false);
-  // drag-resizable from the top edge (user, 2026-09-12): the Now Playing
-  // drawers' grip and hook, turned on their side; bottom-anchored, so up grows
+  // drag-resizable from the top edge: the Now Playing drawers' grip and hook,
+  // turned on their side; bottom-anchored, so up grows
   const {
     size: height,
     dragging,
@@ -110,7 +110,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
             onClick={() => selectTab(id)}
             className={cx(
               "microlabel px-2 py-0.5 rounded transition-colors",
-              tab === id ? "bg-amberdim text-amber" : "text-faint hover:text-ink hover:bg-veil",
+              tab === id ? "bg-accentdim text-accent" : "text-faint hover:text-ink hover:bg-veil",
             )}
           >
             {label}
@@ -124,12 +124,24 @@ export function DiagnosticsDrawer(): React.JSX.Element {
               onClick={() => setFilter(f)}
               className={cx(
                 "font-mono text-[10px] uppercase px-2 py-0.5 rounded transition-colors",
-                filter === f ? "bg-amberdim text-amber" : "text-faint hover:text-ink hover:bg-veil",
+                filter === f
+                  ? "bg-accentdim text-accent"
+                  : "text-faint hover:text-ink hover:bg-veil",
               )}
             >
               {f}
             </button>
           ))}
+        {/* the log's lines are also kept in a file that outlives a quit (main/app/logFile) */}
+        <button
+          onClick={() => void tt.revealLogFile()}
+          aria-label="Show the log file"
+          data-tip="Show the log file"
+          data-log-file
+          className="tip-bottom tip-end p-1.5 rounded-full text-dim hover:text-ink hover:bg-veil2 motion-safe:active:scale-90"
+        >
+          <FileText size={13} />
+        </button>
         <button
           onClick={() => setPaused((p) => !p)}
           aria-label={paused ? "Resume auto-scroll" : "Pause auto-scroll"}
@@ -155,7 +167,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
             {netRequests.map((r) => (
               <div key={r.id} className="flex gap-2 py-[1px] items-baseline">
                 <span className="text-faint shrink-0">{time(r.at)}</span>
-                <span className="text-gold/80 shrink-0 w-24 truncate">{r.service}</span>
+                <span className="text-accent/80 shrink-0 w-24 truncate">{r.service}</span>
                 <span className="text-faint shrink-0">{r.method}</span>
                 <span className="text-dim truncate flex-1 min-w-0">
                   {r.url.replace(/^https?:\/\//, "")}
@@ -163,7 +175,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
                 {r.error ? (
                   <span className="text-alert shrink-0">FAIL</span>
                 ) : r.status == null ? (
-                  <span className="text-amber shrink-0 motion-safe:animate-pulse">…</span>
+                  <span className="text-accent shrink-0 motion-safe:animate-pulse">…</span>
                 ) : (
                   <span className={cx("shrink-0", r.status < 400 ? "text-led" : "text-alert")}>
                     {r.status}
@@ -193,7 +205,7 @@ export function DiagnosticsDrawer(): React.JSX.Element {
                     row.log.level === "error"
                       ? "text-alert"
                       : row.log.level === "warn"
-                        ? "text-amber"
+                        ? "text-accent"
                         : "text-faint",
                   )}
                 >
@@ -211,14 +223,14 @@ export function DiagnosticsDrawer(): React.JSX.Element {
                 <div className="flex gap-2">
                   <span className="text-faint shrink-0">{time(row.at)}</span>
                   {row.frame.dir === "out" ? (
-                    <ArrowUpRight size={12} className="text-amber shrink-0 mt-[1px]" />
+                    <ArrowUpRight size={12} className="text-accent shrink-0 mt-[1px]" />
                   ) : (
                     <ArrowDownLeft size={12} className="text-led shrink-0 mt-[1px]" />
                   )}
                   <span
                     className={cx(
                       "shrink-0",
-                      row.frame.dir === "out" ? "text-amber" : "text-ink/80",
+                      row.frame.dir === "out" ? "text-accent" : "text-ink/80",
                     )}
                   >
                     {row.frame.frame.path}

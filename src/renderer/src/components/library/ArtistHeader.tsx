@@ -22,24 +22,22 @@ import { menuAt } from "@/lib/menuAt";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 /**
- * THE ARTIST PAGE'S HEADER (0.11.0, a user's email: "Would it be possible for TastyTunes to
- * scrape artist image and display it instead of the grey square with disc image?"), shaped like
- * the album header (user, 2026-10-11: "let's make it more consistent with our existing album
- * page"): the picture, and beside it a column at least the default picture's height: the
- * name with the links out at the right of its line (ArtistLinks, so they never move when the
- * summary opens; his idea, 2026-10-13), the facts line (the Artists lens's counts, from the
- * indexes), and two lines of the artist's Wikipedia summary with read more / read less under
- * them (ArtistAbout, History › Elsewhere's block); read more grows the column as a composer
- * line grows the album's. No label: the crumbs, the picture and the name say
+ * THE ARTIST PAGE'S HEADER (0.11.0: the artist's picture in place of a grey square with a disc),
+ * shaped like the album header for consistency: the picture, and beside it a column at least
+ * the default picture's height: the name with the links out at the right of its line
+ * (ArtistLinks, so they never move when the summary opens), the facts line (the Artists lens's
+ * counts, from the indexes), and two lines of the artist's Wikipedia summary with read more /
+ * read less under them (ArtistAbout, History › Elsewhere's block); read more grows the column
+ * as a composer line grows the album's. No label: the crumbs, the picture and the name say
  * whose page it is, as an album's do. No verbs: the Library does not play a whole artist.
  * The picture is main's answer for the artist (a real server picture, else the photo, else a
  * cover from their albums: a server picture that is an album's cover counts as a cover), else
  * this lookup's photo, else the server's picture, else a picture from the page's own folders.
  * Its size is dragged from the corner, one size with the album header's (HeaderArt, 0.11.0);
  * a Wikipedia photo is asked for again at the size drawn (wikiThumbAt).
- * ONE PICTURE, NOT A STAND-IN AND THEN ANOTHER (his ask, 2026-10-12: "i see album art first then
- * it gets replaced"): until main has answered and the photo lookup has (or LOOKUP_WAIT_MS has
- * passed), the well waits with its line; then the best picture there is: a real server
+ * ONE PICTURE, NOT A STAND-IN AND THEN ANOTHER (album art showed first, then was replaced):
+ * until main has answered and the photo lookup has (or LOOKUP_WAIT_MS has passed), the well
+ * waits with its line; then the best picture there is: a real server
  * picture, the photo, the server's own, a cover. A picture that fails shows the next one,
  * the cover behind it while it is retried. Once a name's picture has settled, a later answer
  * (Refresh details, main asked again) changes it in place without waiting again.
@@ -166,8 +164,8 @@ export function ArtistHeader({
         overlay={
           <button
             // bottom right, as a card's ⋯ is and exactly as Now Playing's picture has it (round,
-            // in the top chips' glass, the grip compact beyond it: his consistency check,
-            // 2026-10-25); no tip, the well clips to its rounded corners
+            // in the top chips' glass, the grip compact beyond it, for consistency); no tip,
+            // the well clips to its rounded corners
             aria-label="More actions"
             data-artist-picture-menu
             onPointerDown={(e) => e.stopPropagation()}

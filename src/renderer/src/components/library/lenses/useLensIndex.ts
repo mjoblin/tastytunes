@@ -38,7 +38,7 @@ export interface LensIndex {
   albums: MediaNode[];
   tracks: MediaNode[];
   /** The same album (its title and artist) is in more than one library: only then does a card
-   *  say which library it is from (his ask, 2026-10-22: with two libraries every card said so). */
+   *  say which library it is from (with two libraries every card said so). */
   inTwoLibraries(a: Pick<MediaNode, "title" | "albumArtist" | "artist">): boolean;
   /** An album's server and its lowercased title: the albums that share one claim one title. */
   albumKey(a: Pick<MediaNode, "serverUdn" | "title">): string;
@@ -49,11 +49,17 @@ export interface LensIndex {
    *  column (0.13.0, so two copies and two artists' albums of one title keep their own). */
   tracksOf(a: MediaNode): MediaNode[];
   /** The chip an album's card wears to say WHICH copy it is, or undefined: its library when the
-   *  same album is in another one too (his ask, 2026-10-22), and which copy it is when another
+   *  same album is in another one too, and which copy it is when another
    *  copy of it is in the same library (whichCopy: what tells it from the others, else "Copy 2";
    *  0.13.0-rc.4). `formatShown` when the card's format line already says the format. One rule
    *  for the Albums lens, the Artists lens, the artist page and Favorites. */
-  copyBadge(a: MediaNode, shown?: { formatShown?: boolean }): string | undefined;
+  copyBadge(a: MediaNode, shown?: CopyShown): string | undefined;
+  /** The index's own copy of an album by its key (a listing's node, search results' or a server's
+   *  folders', can be another object for it), or undefined when the index doesn't hold it. */
+  ownAlbum(a: MediaNode): MediaNode | undefined;
+  /** A track's album's copyBadge, so a track in a flat list (the Tracks lens, search results)
+   *  says which copy it is from by the same rule; undefined when its album has no other copy. */
+  trackCopyBadge(t: MediaNode, shown?: CopyShown): string | undefined;
   /** Each album's codec and format tags, by nodeKey: the union over its own tracks. */
   albumCodecs: Map<string, Set<string>>;
   /** The albums that are compilations (by nodeKey). */
@@ -64,6 +70,13 @@ export interface LensIndex {
   albumDecades: Options;
   trackGenres: Options;
   trackDecades: Options;
+}
+
+/** What a list already says beside a copy's chip, so the chip leaves it out: the format (a card's
+ *  format line), the library (results under a library's heading). */
+export interface CopyShown {
+  formatShown?: boolean;
+  libraryShown?: boolean;
 }
 
 const albumKey = (a: Pick<MediaNode, "serverUdn" | "title">): string =>
@@ -162,15 +175,36 @@ function build(pools: MediaIndexPools[]): LensIndex {
     },
     copyBadge(a, shown) {
       const parts: string[] = [];
-      if (a.serverName && index.inTwoLibraries(a)) parts.push(a.serverName);
+      // the library's name, unless the list already says it (results under a library's heading)
+      if (a.serverName && !shown?.libraryShown && index.inTwoLibraries(a)) parts.push(a.serverName);
       const copies = (albumsByKey().get(albumKey(a)) ?? []).filter(
         (b) => nameKey(b.artist) === nameKey(a.artist),
       );
-      if (copies.some((b) => b !== a)) {
+      // the index's own copy by its key: a listing's node (search results, a server's folders)
+      // can be another object for the same album, and one the index can't place says no copy
+      const key = nodeKey(a);
+      const self = copies.find((b) => nodeKey(b) === key);
+      if (self && copies.length > 1) {
         const formatOf = (x: MediaNode): string | null => albumFormat(index.tracksOf(x)).label;
-        parts.push(whichCopy(a, copies, formatOf, shown));
+        parts.push(whichCopy(self, copies, formatOf, shown));
       }
       return parts.length > 0 ? parts.join(FACT_SEP) : undefined;
+    },
+    ownAlbum(a) {
+      const key = nodeKey(a);
+      return (albumsByKey().get(albumKey(a)) ?? []).find((b) => nodeKey(b) === key);
+    },
+    trackCopyBadge(t, shown) {
+      // each track of an album that wears a chip, to its album: the chip itself is asked per row,
+      // as what the list already says can differ
+      const albums = lazy("trackCopyAlbums", () => {
+        const m = new Map<string, MediaNode>();
+        for (const a of index.albums)
+          if (index.copyBadge(a)) for (const x of index.tracksOf(a)) m.set(nodeKey(x), a);
+        return m;
+      });
+      const a = albums.get(nodeKey(t));
+      return a ? index.copyBadge(a, shown) : undefined;
     },
     get albumCodecs() {
       return lazy("albumCodecs", () => {

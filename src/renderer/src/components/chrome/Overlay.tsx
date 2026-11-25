@@ -5,6 +5,7 @@ import { PopoverChrome, usePopoverChrome, useClampedPosition } from "@/hooks/use
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { useDialogFocus } from "@/hooks/useDialogFocus";
 import { holdKeyboard } from "@/lib/keyboardOwner";
+import { moveAmongItems, useMenuKeys } from "@/hooks/useMenuKeys";
 
 /**
  * The two overlay shells. Every transient surface in the app is one of these:
@@ -28,14 +29,20 @@ import { holdKeyboard } from "@/lib/keyboardOwner";
  * (2026-09-13, the glass pass): they once wore their own copy of it with a
  * heavier shadow, which was drift.
  */
-// GLASS, like the panels and the picker (the user, 2026-09-13: a popover floats over live
-// content, so it belongs with them): the raised surface at 85 over a blur, denser than the
-// picker's 80 since a menu is rows of text that must read over an album grid. Modals and
-// tooltips stay solid, a modal on its dimmed room and a tooltip too small and brief to be
-// anything but crisp. A blur the size of a menu costs nothing measurable; the one measured
-// problem was animating INSIDE a blurred surface on software compositing, which these
-// never do (they mount without a transition)
+// GLASS, like the panels and the picker (a popover floats over live content, so it belongs with
+// them): the raised surface at 85 over a blur, denser than the picker's 80 since a menu is rows
+// of text that must read over an album grid. Modals and tooltips stay solid, a modal on its
+// dimmed room and a tooltip too small and brief to be anything but crisp. A blur the size of a
+// menu costs nothing measurable; the one measured problem was animating INSIDE a blurred
+// surface on software compositing, which these never do (they mount without a transition)
 export const POPOVER_CARD = "rounded-xl ring-1 ring-edge2 bg-raised/85 backdrop-blur-md shadow-xl";
+
+// THE SIDE PANELS (Lyrics, the artist's panel): glass over the screen they open on, at 85 (0.16.0:
+// at 60 over a 12px blur, the Now Playing title's big white letters glowed through as a smear
+// behind the words; a wider blur would soften it too, but a full-height blur that size is the
+// cost software compositing can't carry). One home, so the two can't drift apart.
+export const SIDE_PANEL =
+  "no-drag absolute inset-y-0 right-0 z-10 max-w-[60%] flex flex-col bg-panel/85 backdrop-blur-md border-l border-edge";
 
 /**
  * A popover anchored at a click point: portaled to <body>, backed by a
@@ -75,10 +82,9 @@ export function PopoverCard({
   usePopoverChrome(onClose);
   const boxRef = useRef<HTMLDivElement | null>(null);
   const pos = useClampedPosition(boxRef, at.x, at.y);
-  useDialogFocus(true, boxRef);
-  // A MENU HOLDS THE KEYBOARD (0.14.0, his K4): while it is open, nothing behind it hears a key
+  // A MENU HOLDS THE KEYBOARD (0.14.0): while it is open, nothing behind it hears a key
   // (the arrows changed the volume under an open menu); the arrows move between its items
-  useEffect(() => holdKeyboard(), []);
+  useMenuKeys(true, boxRef);
   const { onKeyDown, ...attrs } = rest;
 
   return createPortal(
@@ -107,31 +113,6 @@ export function PopoverCard({
   );
 }
 
-/** Up and down (Home, End) through a menu's enabled buttons, round at the ends; a text box or
- *  a slider inside keeps its own arrows. */
-function moveAmongItems(e: React.KeyboardEvent<HTMLDivElement>): void {
-  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(e.key)) return;
-  if ((e.target as HTMLElement).matches('input, textarea, [contenteditable], [role="slider"]'))
-    return;
-  const items = [...e.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled])")].filter(
-    (b) => b.offsetParent !== null,
-  );
-  if (items.length === 0) return;
-  e.preventDefault();
-  const at = items.indexOf(document.activeElement as HTMLElement);
-  const next =
-    e.key === "Home"
-      ? 0
-      : e.key === "End"
-        ? items.length - 1
-        : e.key === "ArrowDown"
-          ? (at + 1) % items.length
-          : at <= 0
-            ? items.length - 1
-            : at - 1;
-  items[next].focus();
-}
-
 /**
  * A centred modal over the dimmed, blurred room: backdrop click closes, the
  * panel swallows its own clicks.
@@ -141,16 +122,16 @@ function moveAmongItems(e: React.KeyboardEvent<HTMLDivElement>): void {
  * info — are closed by the app's global Escape cascade instead, and mounting a
  * second handler here would just fight it.
  *
- * FADES IN AND OUT (2026-08-16, user call: the modals popped while the Now
- * Playing side panels faded). Presence is the shell's, not the caller's:
- * pass `open` and keep the shell MOUNTED across close, and the shell holds the
- * room for one `useFadePresence` beat (140ms — the frost-law budget, see the
- * hook) before rendering nothing. While it fades out it keeps showing the
- * LAST children it was given while open, so a caller whose content is
- * derived from a value that becomes null on close (the Info modal's target)
- * needs no ghost of its own; the exiting surface takes no clicks. A caller
- * that still mounts conditionally gets the fade IN and a pop out — every
- * shell caller passes `open` for that reason.
+ * FADES IN AND OUT (the modals popped while the Now Playing side panels
+ * faded). Presence is the shell's, not the caller's: pass `open` and keep the
+ * shell MOUNTED across close, and the shell holds the room for one
+ * `useFadePresence` beat (140ms — the frost-law budget, see the hook) before
+ * rendering nothing. While it fades out it keeps showing the LAST children it
+ * was given while open, so a caller whose content is derived from a value
+ * that becomes null on close (the Info modal's target) needs no ghost of its
+ * own; the exiting surface takes no clicks. A caller that still mounts
+ * conditionally gets the fade IN and a pop out — every shell caller passes
+ * `open` for that reason.
  */
 export function ModalShell({
   open = true,
@@ -186,7 +167,7 @@ export function ModalShell({
     // THE BLUR STAYS; HOVER TRANSITIONS INSIDE THE SHELL GO (2026-08-04,
     // measured round). The frosted backdrop is what dissolves the room's
     // text at the card edge — a dim alone (tried at /70 and /80) leaves
-    // sharp glyph fragments there, and the user called both ugly. The cost
+    // sharp glyph fragments there, and both read as ugly. The cost
     // was never the blur at rest: on the software path (GPU-less VMs, RDP)
     // every repaint over the blur re-runs it at ~50-120ms, so an ANIMATED
     // hover (transition-all, ~150ms of frames) crawled at 117ms/frame p95.
@@ -200,9 +181,8 @@ export function ModalShell({
     // PORTALED TO <body>, fixed: a modal dims the WHOLE room — nav rail and
     // playback bar included — wherever it happens to render. The save-queue
     // dialog mounts inside the Queue screen's content container, and its
-    // inset-0 dimmed only that area while the app-level Info/Shortcuts
-    // modals covered the window (user call, 2026-08-04): coverage must not
-    // depend on the mount point.
+    // inset-0 dimmed only that area while the app-level Info/Shortcuts modals
+    // covered the window: coverage must not depend on the mount point.
     createPortal(
       <div
         className={cx(

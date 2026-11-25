@@ -16,7 +16,8 @@ import { PresetSavePanel } from "@/components/library/LibraryMenus";
 import { PopoverCard } from "@/components/chrome/Overlay";
 import { useScrollMemory } from "@/hooks/useScrollMemory";
 import { cx } from "@/lib/format";
-import { Chip, ScreenTitle, GAP_WITHIN } from "@/components/chrome/Chrome";
+import { ScreenTitle, GAP_WITHIN, pageEdges } from "@/components/chrome/Chrome";
+import { PickerPill } from "@/components/controls/PickerPill";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { Lru } from "@/lib/lru";
 import { nameKey } from "@shared/keys";
@@ -41,11 +42,14 @@ const catCache = new Lru<string, RadioStation[]>(50);
 
 /**
  * The curated category layer — the airable-style rails the official app gets
- * from its licensed directory, rebuilt on radio-browser tag facets. Each chip
- * is any-of its tags, popularity-ranked; curation here keeps the community
- * directory's junk tags out of the UI.
+ * from its licensed directory, rebuilt on radio-browser tag facets. Each
+ * category is any-of its tags, popularity-ranked; curation here keeps the community
+ * directory's junk tags out of the UI. TWO PICKERS, ONE CHOICE (0.16.0-rc.8: fifteen
+ * chips wrapped onto a second line): the genres and the decades are each a PickerPill,
+ * the library lenses' facet grammar, and one category is chosen at a time, so a decade
+ * clears the genre and a genre the decade; Favorites stays a chip of its own.
  */
-const RADIO_CATEGORIES: Array<{ label: string; tags: string[] }> = [
+const RADIO_GENRES: Array<{ label: string; tags: string[] }> = [
   { label: "Pop", tags: ["pop"] },
   { label: "Rock", tags: ["rock"] },
   { label: "Jazz", tags: ["jazz"] },
@@ -56,13 +60,22 @@ const RADIO_CATEGORIES: Array<{ label: string; tags: string[] }> = [
   { label: "Oldies", tags: ["oldies"] },
   { label: "Country", tags: ["country"] },
   { label: "Hip-Hop", tags: ["hip hop", "rap"] },
+];
+const RADIO_DECADES: Array<{ label: string; tags: string[] }> = [
   { label: "60s", tags: ["60s"] },
   { label: "70s", tags: ["70s"] },
   { label: "80s", tags: ["80s"] },
   { label: "90s", tags: ["90s"] },
 ];
+const RADIO_CATEGORIES = [...RADIO_GENRES, ...RADIO_DECADES];
+const asOptions = (cats: Array<{ label: string }>): Array<{ value: string; label: string }> =>
+  cats.map((c) => ({ value: c.label, label: c.label }));
+const GENRE_OPTIONS = asOptions(RADIO_GENRES);
+const DECADE_OPTIONS = asOptions(RADIO_DECADES);
+const among = (cats: Array<{ label: string }>, cat: string | null): string | null =>
+  cats.some((c) => c.label === cat) ? cat : null;
 
-/** The gold favorites chip's sentinel "category" — local, never fetched. */
+/** The favorites chip's sentinel "category" — local, never fetched. */
 const FAV_CAT = "__favorites__";
 
 /** A favorited station rendered through the normal station-row machinery. */
@@ -125,7 +138,7 @@ export function RadioScreen(): React.JSX.Element {
   }, []);
 
   // Category selection — mutually exclusive with search; results cached per
-  // chip for the session so hopping between chips is instant.
+  // category for the session so hopping between categories is instant.
   const catSeq = useRef(0);
   const loadCat = (label: string): void => {
     const seq = catSeq.current;
@@ -133,15 +146,14 @@ export function RadioScreen(): React.JSX.Element {
     const def = RADIO_CATEGORIES.find((c) => c.label === label);
     void tt.radioByTags(def?.tags ?? []).then((stations) => {
       // an empty answer is indistinguishable from a directory hiccup — don't
-      // cache it, so re-tapping the chip retries
+      // cache it, so choosing it again retries
       if (stations.length > 0) catCache.set(label, stations);
       if (seq !== catSeq.current) return; // selection moved on
       setCatStations(stations);
       setCatLoading(false);
     });
   };
-  const pickCat = (label: string): void => {
-    const next = cat === label ? null : label;
+  const chooseCat = (next: string | null): void => {
     catSeq.current++;
     setCat(next);
     lastCat = next;
@@ -156,7 +168,8 @@ export function RadioScreen(): React.JSX.Element {
     setCatStations(cached ?? null);
     if (!cached) loadCat(next);
   };
-  // Restore path: screen remounts with a chip selected but nothing cached
+  const pickCat = (label: string): void => chooseCat(cat === label ? null : label);
+  // Restore path: screen remounts with a category chosen but nothing cached
   // (e.g. its earlier load came back empty) — fetch again.
   const restoreCategory = useEffectEvent(() => {
     if (cat != null && cat !== FAV_CAT && catStations == null) {
@@ -225,7 +238,7 @@ export function RadioScreen(): React.JSX.Element {
 
   const shown =
     results ?? (cat === FAV_CAT ? favStations.map(favAsStation) : cat != null ? catStations : top);
-  // FROM THE KEYBOARD (0.14.0, his K1 to K6): the stations one Tab stop, Enter plays one as its
+  // FROM THE KEYBOARD (0.14.0): the stations one Tab stop, Enter plays one as its
   // click does, "." its More menu (its heart, and Save to preset on the playing one)
   const keys = useListKeys({
     count: shown?.length ?? 0,
@@ -254,7 +267,7 @@ export function RadioScreen(): React.JSX.Element {
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
-              if (e.target.value.trim()) dropCat(); // typing takes over from the chip
+              if (e.target.value.trim()) dropCat(); // typing takes over from the category
             }}
             onKeyDown={(e) => {
               if (e.key === "Escape" && query) {
@@ -291,24 +304,34 @@ export function RadioScreen(): React.JSX.Element {
             className={cx(
               "no-drag rounded-full h-8 px-3 text-[12px] ring-1 transition-all motion-safe:active:scale-95 flex items-center gap-1.5",
               cat === FAV_CAT
-                ? "ring-gold/50 bg-golddim text-gold"
-                : "ring-gold/30 bg-panel/70 text-gold/80 hover:text-gold hover:ring-gold/50 hover:bg-golddim/40",
+                ? "ring-accent/50 bg-accentdim text-accent"
+                : "ring-accent/30 bg-panel/70 text-accent/80 hover:text-accent hover:ring-accent/50 hover:bg-accentdim/40",
             )}
           >
             <Heart size={11} fill="currentColor" /> Favorites
           </button>
         )}
-        {RADIO_CATEGORIES.map((c) => (
-          <Chip
-            key={c.label}
-            state={cat === c.label ? "active" : "idle"}
-            onClick={() => pickCat(c.label)}
-            data-radio-cat={c.label}
-            className="no-drag motion-safe:active:scale-95"
-          >
-            {c.label}
-          </Chip>
-        ))}
+        {/* data-radio-cat on each picker's holder: the screen's categories, as the chips were */}
+        <span data-radio-cat="Genre" className="contents">
+          <PickerPill
+            id="radio-genre"
+            neutral="Genre"
+            clearLabel="Any genre"
+            options={GENRE_OPTIONS}
+            value={among(RADIO_GENRES, cat)}
+            onChange={chooseCat}
+          />
+        </span>
+        <span data-radio-cat="Decade" className="contents">
+          <PickerPill
+            id="radio-decade"
+            neutral="Decade"
+            clearLabel="Any decade"
+            options={DECADE_OPTIONS}
+            value={among(RADIO_DECADES, cat)}
+            onChange={chooseCat}
+          />
+        </span>
       </div>
 
       {/* Directory OFF: say so plainly rather than showing an empty screen that
@@ -347,7 +370,7 @@ export function RadioScreen(): React.JSX.Element {
           </div>
         )
       ) : (
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 pb-8 pt-1">
+        <div ref={scrollRef} className={`flex-1 overflow-y-auto px-8 ${pageEdges()}`}>
           <div className="max-w-2xl">
             <div className="microlabel mb-2 px-1 flex items-center gap-2">
               {heading}

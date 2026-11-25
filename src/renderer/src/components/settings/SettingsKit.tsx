@@ -6,6 +6,7 @@ import { Slider, useSliderDraft } from "@/components/controls/Slider";
 import { Switch } from "@/components/controls/Switch";
 import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { FACT_SEP } from "@/lib/mediaFacts";
+import type { AppSettings } from "@shared/model";
 
 // The Settings screen's rows and controls, shared by its sections (split out of
 // SettingsScreen.tsx 2026-09-13 with the sections): a setting row, the toggle, the
@@ -13,6 +14,19 @@ import { FACT_SEP } from "@/lib/mediaFacts";
 // and the byte formatter; the copy row and its feedback since the URL scheme (0.12.0), shared by
 // the agents room and the action links. The segmented switch is the app's one Segmented
 // (components/controls) since 2026-09-13; the kit had carried a near-copy.
+
+/** What every Settings tab's section is handed: the settings and their save (one name for the
+ *  shape each section spelled out, 0.16.0's tidy). */
+export interface SectionProps {
+  settings: AppSettings;
+  save(patch: Partial<AppSettings>): Promise<void>;
+}
+
+/** A settings card: its ring, its ground and its rows' spacing, the look's one home (0.16.0's tidy;
+ *  ten copies of the class list before). */
+export function SettingsCard({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <div className="rounded-xl ring-1 ring-edge bg-panel/70 p-4 space-y-5">{children}</div>;
+}
 
 export const fmtBytes = (b: number): string =>
   b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
@@ -30,8 +44,8 @@ export function CacheRow(): React.JSX.Element {
     void tt.lookupCacheStats().then(setStats);
   }, []);
   const empty = stats != null && stats.entries === 0;
-  // a cache clears with the record's confirm (user, 2026-09-14): the copies come back
-  // on their own, but filling them again can take a while, and the ask is a quick one
+  // a cache clears with the record's confirm: the copies come back on their own, but
+  // filling them again can take a while, and the ask is a quick one
   const confirmClear = useConfirmPopover();
   return (
     <SettingRow
@@ -118,26 +132,8 @@ export function NumberField({
   );
 }
 
-export function LegendRow({
-  swatch,
-  label,
-  desc,
-}: {
-  swatch: React.ReactNode;
-  label: string;
-  desc: string;
-}): React.JSX.Element {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="w-4 flex justify-center shrink-0">{swatch}</span>
-      <span className="text-[12.5px] w-32 shrink-0">{label}</span>
-      <span className="text-[11.5px] text-faint">{desc}</span>
-    </div>
-  );
-}
-
 /**
- * Sidebar card (Layout tab): a row per screen in registry order with an eye
+ * Sidebar card (the Appearance tab): a row per screen in registry order with an eye
  * toggle to hide/show it in the left nav — the way to un-hide, mirroring the
  * right-click "Hide from left nav" verb on the nav itself. now-playing is locked
  * (never hideable). Below a divider, the pinned bottom-cluster tools (Commands,
@@ -177,18 +173,19 @@ export function Toggle({
   disabled?: boolean;
   onChange(next: boolean): void;
 }): React.JSX.Element {
+  // greyed out, the switch itself is disabled too, so the keyboard can't reach or flip it
   return (
     <label
       className={cx(
         "flex items-center justify-between gap-6",
-        disabled ? "opacity-40 pointer-events-none" : "cursor-pointer",
+        disabled ? "pointer-events-none" : "cursor-pointer",
       )}
     >
-      <div>
+      <div className={cx(disabled && "opacity-40")}>
         <div className="text-[13.5px]">{label}</div>
         <div className="text-[11.5px] text-faint max-w-sm">{hint}</div>
       </div>
-      <Switch checked={checked} onChange={onChange} />
+      <Switch checked={checked} onChange={onChange} disabled={disabled} />
     </label>
   );
 }

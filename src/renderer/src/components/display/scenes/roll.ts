@@ -308,7 +308,7 @@ export class Roll implements Scene {
       // the words follow the head and settle against the right margin with a BRIEF slowdown:
       // half a second of head travel, the block's speed falling in a straight line to zero over
       // the quarter second before it would touch the margin and the quarter after, so it comes
-      // to rest exactly there (the user: "no more than half a second")
+      // to rest exactly there
       const limit = left + width - fit.width - 8;
       const raw = headX + 8;
       const zone = pxPerSec * 0.25;
