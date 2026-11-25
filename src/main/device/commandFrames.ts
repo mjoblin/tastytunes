@@ -53,11 +53,33 @@ const frame = (path: string, params: Record<string, unknown>): SocketFrame[] => 
 /** How far short of a track's end a seek there lands when no track follows it. */
 export const SEEK_END_MARGIN_SECS = 2;
 
-/** A track follows the playing one: the source offers next, and the queue has one after it (or
- *  repeats the whole), or doesn't say where it is. */
-function hasNextTrack(s: CommandState): boolean {
+/**
+ * WHERE A SEEK LANDS, the one home for a track's end (the device layer's seek frame and the agents'
+ * seek tool read it; nothing else clamps a seek). A seek to the track's full length is dropped by
+ * the firmware without a word (read live 2026-11-25, docs/streamer.md: three seeks to 142 of 142 s
+ * left it playing on; 130 landed). So a seek into the last second, done with this one (a finger
+ * dragged off a bar's end, a skip ahead past it), goes to the next track where one follows; with
+ * none, or the track repeating, it lands SEEK_END_MARGIN_SECS short and the track ends on its own.
+ * Anything else lands where asked, a whole second from the start.
+ */
+export function seekLanding(
+  positionSecs: number,
+  s: Pick<CommandState, "playState" | "nowPlaying">,
+): { next: true } | { at: number } {
+  const at = Math.max(0, Math.round(positionSecs));
+  const length = s.playState?.metadata?.duration ?? null;
+  if (length == null || length <= 0 || at < Math.floor(length) - 1) return { at };
+  if (hasNextTrack(s)) return { next: true };
+  return { at: Math.max(0, Math.floor(length) - SEEK_END_MARGIN_SECS) };
+}
+
+/** A track follows the playing one: the source offers next, the track isn't repeating, and the
+ *  queue has one after it (or repeats the whole), or doesn't say where it is. */
+function hasNextTrack(s: Pick<CommandState, "playState" | "nowPlaying">): boolean {
   if (!(s.nowPlaying?.controls ?? []).includes("track_next")) return false;
   const ps = s.playState;
+  // repeat one: the track's own end plays it again, and so does a seek to it
+  if (ps?.mode_repeat === "one") return false;
   if (ps?.mode_repeat === "all") return true;
   const at = ps?.queue_index;
   const of = ps?.queue_length;
@@ -103,21 +125,11 @@ export function commandFrames(cmd: StreamerCommand, s: CommandState): SocketFram
     case "previousTrack":
       return frame("/zone/play_control", { skip_track: -1 });
     case "seek": {
-      const at = Math.max(0, Math.round(cmd.positionSecs));
-      // A SEEK TO A TRACK'S END (read live 2026-11-25, docs/streamer.md): one to
-      // the track's full length is dropped without a word (three seeks to 142 of 142 s left it
-      // playing on; 130 landed). A seek into the last second means done with this one, a finger
-      // dragged off the bar's end: the next track, where there is one; with none it lands
-      // SEEK_END_MARGIN_SECS short and the track ends on its own. One home: the window's bars, a
-      // screen's and an agent's seek all pass here.
-      const length = s.playState?.metadata?.duration ?? null;
-      if (length != null && length > 0 && at >= Math.floor(length) - 1) {
-        if (hasNextTrack(s)) return frame("/zone/play_control", { skip_track: 1 });
-        return frame("/zone/play_control", {
-          position: Math.max(0, Math.floor(length) - SEEK_END_MARGIN_SECS),
-        });
-      }
-      return frame("/zone/play_control", { position: at });
+      // where it lands is seekLanding's to say: into a track's last second, the next track
+      const land = seekLanding(cmd.positionSecs, s);
+      return "next" in land
+        ? frame("/zone/play_control", { skip_track: 1 })
+        : frame("/zone/play_control", { position: land.at });
     }
     case "playQueueId":
       return frame("/zone/play_control", { queue_id: cmd.queueId });

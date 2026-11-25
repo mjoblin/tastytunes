@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { playingTrackKey } from "@shared/smoip";
+import { useStore } from "@/store";
 
 /**
  * Scrub-and-hold state for a seek slider, shared by the playback bar and the
@@ -14,7 +16,8 @@ import { useEffect, useState } from "react";
  * The hold clears when the playhead arrives within 2s of the target, or after
  * 3s regardless — a seek the device ignored must not pin the display forever —
  * or at once when the track changes (a seek into a track's last second goes to
- * the next one: main/device/commandFrames).
+ * the next one: main/device/commandFrames seekLanding), told by the track
+ * itself, never its length (two neighbors may share one).
  */
 export function useSeekScrub(
   position: number,
@@ -31,19 +34,20 @@ export function useSeekScrub(
   };
 } {
   const [scrub, setScrub] = useState<number | null>(null);
-  /** The seek's target, and the length of the track it was made in. */
-  const [seekHold, setSeekHold] = useState<{ at: number; of: number | null } | null>(null);
+  const track = useStore((s) => playingTrackKey(s.playState));
+  /** The seek's target, and the track it was made in. */
+  const [seekHold, setSeekHold] = useState<{ at: number; track: string } | null>(null);
 
   useEffect(() => {
     if (seekHold == null) return;
-    if (Math.abs(position - seekHold.at) < 2 || duration !== seekHold.of) {
+    if (Math.abs(position - seekHold.at) < 2 || track !== seekHold.track) {
       setSeekHold(null);
       return;
     }
     const t = setTimeout(() => setSeekHold(null), 3000);
     return () => clearTimeout(t);
-  }, [seekHold, position, duration]);
-  const held = seekHold != null && duration === seekHold.of ? seekHold.at : null;
+  }, [seekHold, position, track]);
+  const held = seekHold != null && track === seekHold.track ? seekHold.at : null;
 
   return {
     shownPosition: scrub != null && duration ? scrub * duration : (held ?? position),
@@ -53,7 +57,7 @@ export function useSeekScrub(
       onCommit: (v: number) => {
         setScrub(null);
         if (duration) {
-          setSeekHold({ at: v * duration, of: duration });
+          setSeekHold({ at: v * duration, track });
           seek(v * duration);
         }
       },
