@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { tt } from "@/api";
 import { cx, fmtTime } from "@/lib/format";
 import { useStore } from "@/store";
+import { playingTrackKey } from "@shared/smoip";
 import { AudioLines } from "lucide-react";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import {
@@ -73,12 +74,16 @@ function AbsentLine({
  * (seen live, 2026-08-30). The hold releases when the device lands near
  * the target, or after its window — the optimistic-hold family's shape.
  */
-let seekHold: { pct: number; until: number; of: number | null } | null = null;
+let seekHold: { pct: number; until: number; track: string } | null = null;
 const SEEK_HOLD_MS = 2500;
-/** Hold the shown progress at `pct` of a track `of` seconds long; a new track lets it go (a seek
- *  into a track's last second goes to the next one: main/device/commandFrames). */
-function holdSeek(pct: number, of: number | null): void {
-  seekHold = { pct, until: Date.now() + SEEK_HOLD_MS, of };
+/** Hold the shown progress at `pct` of the playing track; another track lets it go (a seek into a
+ *  track's last second goes to the next one: main/device/commandFrames seekLanding). */
+function holdSeek(pct: number): void {
+  seekHold = {
+    pct,
+    until: Date.now() + SEEK_HOLD_MS,
+    track: playingTrackKey(useStore.getState().playState),
+  };
 }
 
 /** Interpolated play progress 0..1, ticking gently; null without a duration. */
@@ -86,6 +91,7 @@ function useProgress(): number | null {
   const playhead = useStore((s) => s.playhead);
   const duration = useStore((s) => s.playState?.metadata?.duration ?? null);
   const playing = useStore((s) => s.playState?.state === "play");
+  const track = useStore((s) => playingTrackKey(s.playState));
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 500);
@@ -95,7 +101,7 @@ function useProgress(): number | null {
   const secs = playhead.secs + (playing ? (now - playhead.at) / 1000 : 0);
   const device = Math.max(0, Math.min(1, secs / duration));
   if (seekHold) {
-    if (now > seekHold.until || Math.abs(device - seekHold.pct) < 0.02 || duration !== seekHold.of)
+    if (now > seekHold.until || Math.abs(device - seekHold.pct) < 0.02 || track !== seekHold.track)
       seekHold = null;
     else return seekHold.pct;
   }
@@ -231,7 +237,7 @@ export function Waveform({
               if (duration == null || duration <= 0) return;
               const r = e.currentTarget.getBoundingClientRect();
               const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-              holdSeek(pct, duration);
+              holdSeek(pct);
               void tt.command({ type: "seek", positionSecs: Math.round(pct * duration) });
             }}
           />
@@ -316,7 +322,7 @@ export function DisplayWaveform({
                   const rect = canvasRef.current?.getBoundingClientRect();
                   if (!rect || rect.width <= 0) return;
                   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                  holdSeek(pct, duration ?? null);
+                  holdSeek(pct);
                   onSeek(pct);
                 }
               : undefined

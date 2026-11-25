@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { sleepTrackKey } from "@shared/model";
 import { getSettings } from "../../data/persist";
+import { seekLanding } from "../../device/commandFrames";
 import {
   type ToolContext,
   type ToolImpl,
@@ -223,14 +224,22 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
           return err("Give position_seconds or relative_seconds, one of them.");
         // from where it is now (0.16.0: a relative seek had needed the position first)
         const at = s.position?.position ?? s.playState?.position ?? 0;
-        const duration = s.playState?.metadata?.duration ?? null;
-        const wanted = a.position_seconds ?? at + (a.relative_seconds ?? 0);
-        const target = Math.max(0, duration != null ? Math.min(wanted, duration - 1) : wanted);
+        const wanted = Math.max(0, a.position_seconds ?? at + (a.relative_seconds ?? 0));
+        // where it lands is the device layer's to say (seekLanding): into the track's last second,
+        // or past it, the next track
+        const land = seekLanding(wanted, s);
+        if ("next" in land)
+          return acted(
+            t,
+            () => t.command({ type: "seek", positionSecs: wanted }),
+            "Went on to the next track.",
+            trackMoved,
+          );
         return acted(
           t,
-          () => t.command({ type: "seek", positionSecs: target }),
-          `Moved to ${Math.round(target)}s.`,
-          (_b, n) => Math.abs((n.position?.position ?? n.playState?.position ?? -99) - target) < 3,
+          () => t.command({ type: "seek", positionSecs: wanted }),
+          `Moved to ${land.at}s.`,
+          (_b, n) => Math.abs((n.position?.position ?? n.playState?.position ?? -99) - land.at) < 3,
         );
       },
     }),

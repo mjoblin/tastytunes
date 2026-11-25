@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { ZoneNowPlaying, ZonePlayState } from "@shared/smoip";
-import { clampVolume, commandFrames, type CommandState } from "./commandFrames";
+import { clampVolume, commandFrames, seekLanding, type CommandState } from "./commandFrames";
 
 const idle: CommandState = {
   nowPlaying: null,
@@ -234,5 +234,19 @@ describe("a seek to a track's end (live 2026-11-25: the firmware drops one to th
     expect(seek(142, at(11, 12, { mode_repeat: "all" }))).toEqual([
       { path: "/zone/play_control", params: { skip_track: 1 } },
     ]);
+  });
+
+  it("lands short on a track that repeats, so it plays again as its own end would", () => {
+    expect(seek(142, at(2, 12, { mode_repeat: "one" }))).toEqual([
+      { path: "/zone/play_control", params: { position: 140 } },
+    ]);
+  });
+
+  it("says where a seek lands for the agents' tool as the frames send it", () => {
+    expect(seekLanding(30, at(2, 12))).toEqual({ at: 30 });
+    expect(seekLanding(-5, at(2, 12))).toEqual({ at: 0 });
+    expect(seekLanding(171, at(2, 12))).toEqual({ next: true });
+    expect(seekLanding(171, at(11, 12))).toEqual({ at: 140 });
+    expect(seekLanding(171, { ...idle, playState: null })).toEqual({ at: 171 });
   });
 });

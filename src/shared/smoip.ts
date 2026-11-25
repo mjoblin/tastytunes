@@ -127,6 +127,12 @@ export interface ZonePlayState {
   metadata: ZonePlayStateMetadata | null;
 }
 
+/** The playing track, for telling one moment from the next: its queue entry, and its title for a
+ *  source with no queue (two neighbors of the same length are still two tracks). */
+export const playingTrackKey = (
+  ps: Pick<ZonePlayState, "queue_id" | "metadata"> | null | undefined,
+): string => `${ps?.queue_id ?? ""}|${ps?.metadata?.title ?? ""}`;
+
 /** The streamer's repeat has three states (live-probed 2026-09-18, Evo 150, ARC 2.03): off,
  *  all (the queue) and one (the current track). FIRMWARE: "one" cannot be set by name, a
  *  mode_repeat of "one" answers 200 and lands on "all", over HTTP and the socket alike; only

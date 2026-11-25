@@ -278,13 +278,12 @@ export function useShortcuts(opts?: { transportOnly?: boolean }): void {
         return;
       }
 
+      // where it lands near the end is the device layer's to say (main/device/commandFrames
+      // seekLanding: past the track's last second, the next track)
       const seekTo = (delta: number): void => {
         const playhead = s.playhead;
-        const duration = s.playState?.metadata?.duration;
         if (playhead == null) return;
-        let next = playhead.secs + delta;
-        if (duration != null) next = Math.min(next, duration - 1);
-        void tt.command({ type: "seek", positionSecs: Math.max(0, next) });
+        void tt.command({ type: "seek", positionSecs: Math.max(0, playhead.secs + delta) });
       };
 
       switch (e.key) {
