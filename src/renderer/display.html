@@ -5,6 +5,14 @@
     <title>TastyTunes</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#000000" />
+    <!-- on a tablet's Home Screen: an app of its own, no browser around it (the display server's
+         web app description, fetched with the page's cookie since it carries the address) -->
+    <link rel="manifest" href="/manifest.webmanifest" crossorigin="use-credentials" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="TastyTunes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   </head>
   <body style="background: #000">
     <div id="display-old-browser" hidden></div>

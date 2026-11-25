@@ -395,7 +395,7 @@ function ListPanel({
         ref={panel}
         data-page-queue
         data-page-list={showing}
-        className="absolute top-[4.25rem] left-1/2 z-50 flex w-[min(36rem,calc(100%_-_2rem))] -translate-x-1/2 flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
+        className="absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] left-1/2 z-50 flex w-[min(36rem,calc(100%_-_2rem))] -translate-x-1/2 flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
         style={{ bottom }}
       >
         {/* 8px from the panel's edge all round, the tabs' corners following the panel's */}

@@ -91,6 +91,10 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
                   <p>Point the tablet's camera at the QR code to open the address.</p>
                   <p>Turn off auto-lock on the tablet to keep its screen on.</p>
                   <p>
+                    To open it without the browser around it, add it to the Home Screen from the
+                    browser's Share menu.
+                  </p>
+                  <p>
                     If the address stops working after a restart, give this computer a fixed address
                     in your router.
                   </p>

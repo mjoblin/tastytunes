@@ -46,6 +46,11 @@ import { hostAllowed } from "./hostCheck";
  *   anything, so a track the app hasn't analyzed shows the Sleeve's face, as in the window.
  * - The page is the app's own Display tree (one home), built as a second entry of the renderer
  *   (display.html), with a web bridge in place of the window's API.
+ * - ON THE HOME SCREEN: a tablet can add the page to its Home Screen and open it as an app of its
+ *   own, with no browser around it. The web app description (/manifest.webmanifest) goes only to a
+ *   page let in, and its start address carries the token, since a home-screen app keeps its own
+ *   cookies, apart from the browser's; the icons go to anyone (they say only "TastyTunes"), since
+ *   a home screen may fetch them without the page's cookie. A new address ends it, as every screen.
  * - EACH SCREEN ITS OWN ID (controls on the other screens): every browser is given an id of its own
  *   at its first visit (the tt_screen cookie, beside the token's), and the app's approvals are
  *   kept by it (displayScreens). Each open screen hears where it stands over its own line of the
@@ -80,6 +85,8 @@ export interface DisplayDeps {
 }
 
 const COOKIE = "tt_display";
+/** The home screen's icons (src/renderer/public), served without the token. */
+const HOME_ICONS = new Set(["/apple-touch-icon.png", "/app-icon-192.png", "/app-icon-512.png"]);
 /** Each browser's own id, given at its first visit: the app's approvals are kept by it. */
 const SCREEN_COOKIE = "tt_screen";
 /** The one write route, and the header its requests carry (a form can't send one). */
@@ -411,6 +418,8 @@ export class DisplayServer {
       }
       const url = urlOf(req);
       if (!url || !hostAllowed(req.headers.host, "network")) return this.refuse(res, 400);
+      if (HOME_ICONS.has(url.pathname))
+        return this.file(res, url.pathname.slice(1), { "cache-control": "public, max-age=86400" });
       const token = await this.deps.token();
       const given = url.searchParams.get("t");
       // the first visit: the token from the address becomes a cookie, and the address loses it
@@ -435,6 +444,7 @@ export class DisplayServer {
           // a screen opened before screens had ids is given one now
           ...(screenOf(req) ? {} : { "set-cookie": cookieLine(SCREEN_COOKIE, newScreenId()) }),
         });
+      if (path === "/manifest.webmanifest") return this.manifest(res, token);
       if (path === "/api/snapshot")
         return this.json(res, displaySnapshot(this.deps.snapshot(), this.art));
       if (path === "/api/live") return this.live(req, res, token);
@@ -462,6 +472,27 @@ export class DisplayServer {
   private json(res: ServerResponse, body: unknown, status = 200): void {
     this.base(res, status, { "content-type": "application/json" });
     res.end(JSON.stringify(body));
+  }
+
+  /** The web app description a tablet's Home Screen reads: TastyTunes, standalone, black, its
+   *  start address carrying the token (the header comment's ON THE HOME SCREEN). */
+  private manifest(res: ServerResponse, token: string): void {
+    this.base(res, 200, { "content-type": "application/manifest+json" });
+    res.end(
+      JSON.stringify({
+        name: "TastyTunes",
+        short_name: "TastyTunes",
+        start_url: `/?t=${encodeURIComponent(token)}`,
+        scope: "/",
+        display: "standalone",
+        background_color: "#000000",
+        theme_color: "#000000",
+        icons: [
+          { src: "/app-icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/app-icon-512.png", sizes: "512x512", type: "image/png" },
+        ],
+      }),
+    );
   }
 
   /** THE ONE WRITE ROUTE: a screen's verb, past every check (the header comment's list). */

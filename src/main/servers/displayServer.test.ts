@@ -40,6 +40,7 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
   writeFileSync(join(page, "display.html"), "<html>page</html>");
   mkdirSync(join(page, "assets"));
   writeFileSync(join(page, "assets", "a.js"), "js");
+  writeFileSync(join(page, "apple-touch-icon.png"), "png");
   writeFileSync(join(tmpdir(), "outside.txt"), "outside");
   const fetched: string[] = [];
   const asked: string[] = [];
@@ -214,6 +215,24 @@ describe("Display on other screens' server", () => {
     expect(page.status).toBe(200);
     expect(page.body).toBe("<html>page</html>");
     expect(String(page.headers["content-security-policy"])).toContain("default-src 'self'");
+  });
+
+  it("hands the home screen its icons to anyone, and its description only to a page let in", async () => {
+    const { get } = await rig();
+    const icon = await get("/apple-touch-icon.png");
+    expect(icon.status).toBe(200);
+    expect(icon.body).toBe("png");
+    expect((await get("/manifest.webmanifest")).status).toBe(401);
+    const m = await get("/manifest.webmanifest", { cookie });
+    expect(m.status).toBe(200);
+    expect(String(m.headers["content-type"])).toContain("application/manifest+json");
+    const app = JSON.parse(m.body) as { start_url: string; display: string; scope: string };
+    // a home-screen app keeps its own cookies: its start address carries the token
+    expect(app.start_url).toBe(`/?t=${TOKEN}`);
+    expect(app.display).toBe("standalone");
+    expect(app.scope).toBe("/");
+    // nothing else outside the token's door
+    expect((await get("/assets/a.js")).status).toBe(401);
   });
 
   it("answers GET, and one POST route alone", async () => {

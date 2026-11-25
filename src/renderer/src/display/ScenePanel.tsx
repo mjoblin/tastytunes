@@ -32,7 +32,13 @@ function fullScreen(): Fs | null {
     };
   return null;
 }
-const FS = typeof document !== "undefined" ? fullScreen() : null;
+/** Opened from a tablet's Home Screen, the page is an app of its own, with no browser to leave:
+ *  full screen has nothing to add there. */
+const standalone = (): boolean =>
+  typeof window !== "undefined" &&
+  (window.matchMedia?.("(display-mode: standalone)").matches === true ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true);
+const FS = typeof document !== "undefined" && !standalone() ? fullScreen() : null;
 
 type Tab = "scene" | "settings";
 
@@ -105,7 +111,8 @@ export function ScenePanel({
   const row =
     "flex h-11 min-w-0 items-center gap-2.5 rounded-lg px-3 text-left text-[14px] transition-colors motion-safe:active:scale-[0.97]";
   const corner =
-    "absolute top-4 z-50 flex h-11 w-11 items-center justify-center rounded-full bg-panel/85 ring-1 ring-edge backdrop-blur transition-opacity duration-300 motion-safe:active:scale-90";
+    // below the status bar where the page draws under it (on the Home Screen, its bar translucent)
+    "absolute top-[calc(env(safe-area-inset-top,0px)+1rem)] z-50 flex h-11 w-11 items-center justify-center rounded-full bg-panel/85 ring-1 ring-edge backdrop-blur transition-opacity duration-300 motion-safe:active:scale-90";
   const showing = shown || open ? "opacity-100" : "pointer-events-none opacity-0";
   const tabClass = (on: boolean): string =>
     cx(
@@ -142,7 +149,7 @@ export function ScenePanel({
           <div
             ref={panel}
             data-page-scenes
-            className="absolute top-[4.25rem] right-4 z-50 flex max-h-[calc(100%_-_5.5rem)] w-[min(36rem,calc(100%_-_2rem))] flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
+            className="absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] right-4 z-50 flex max-h-[calc(100%_-_5.5rem)] w-[min(36rem,calc(100%_-_2rem))] flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
           >
             {scenes && (
               <div className="shrink-0 p-2 pb-0">
