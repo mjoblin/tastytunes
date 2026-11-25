@@ -356,6 +356,12 @@ describe("Display on other screens' server", () => {
     expect(steered).toHaveLength(CONTROL_RATE.count);
   });
 
+  it("names the build of the page it serves on every live connection", async () => {
+    const { live } = await rig();
+    const opened = await live(cookie);
+    expect(opened.first).toMatch(/event: build\ndata: "[0-9a-f]{16}"\n\n/);
+  });
+
   it("tells each open screen where it stands when it opens, and again when that changes", async () => {
     const { live, control, server } = await rig();
     control.now = {

@@ -10,7 +10,13 @@ import type { PushMessage, Snapshot } from "@shared/ipc";
  * refuses (a new address was made) asks once whether this page is still let in, and if not,
  * reloads into the app's "open the address" page. Beside the app's pushes, the screen's own line:
  * where it stands with the controls (`event: control`, display/control), sent to this screen alone.
+ * A NEW BUILD RELOADS THE PAGE: each connection says which build of the page the app serves
+ * (`event: build`); the first is this page's, and a later one that differs (the app was updated or
+ * rebuilt and restarted) reloads it, so a screen left on for days never runs yesterday's page.
  */
+
+/** The build this page was loaded as: the first the app named. */
+let loadedBuild: string | null = null;
 
 /** About two missed pings (PING_MS, 5 s). */
 const LOST_MS = 12_000;
@@ -67,6 +73,12 @@ export function followApp(follow: Follow): () => void {
       for (const l of listeners) l({ kind: "settings", settings: snap.settings });
     });
     live.addEventListener("ping", hear);
+    live.addEventListener("build", (e: MessageEvent<string>) => {
+      const build = JSON.parse(e.data) as string;
+      if (!build) return;
+      if (loadedBuild == null) loadedBuild = build;
+      else if (build !== loadedBuild) location.reload();
+    });
     live.addEventListener("control", (e: MessageEvent<string>) => {
       hear();
       follow.control?.(JSON.parse(e.data) as DisplayControl);

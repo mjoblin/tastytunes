@@ -1,5 +1,5 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { createReadStream, existsSync, readFileSync, statSync } from "node:fs";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { extname, join, normalize, sep } from "node:path";
 import {
@@ -38,7 +38,9 @@ import { hostAllowed } from "./hostCheck";
  *   settings; pictures by the id the feed handed out, never by address.
  * - THE LIVE CHANNEL IS WHOLE ON ITS OWN: every connection opens with the reduced snapshot, so a
  *   reconnect after a wake or a restart never shows the old track, and a ping every few seconds
- *   lets the page tell a quiet app from a lost one.
+ *   lets the page tell a quiet app from a lost one. It also says which build of the page it serves
+ *   (`event: build`), so a page left open across an update reloads into the new one rather than
+ *   running the old for days (display/live).
  * - Lyrics only for the track that is playing: the page can't make the app look anything up.
  * - THE SCENES' ANALYSIS, FINISHED (stage 2): the page asks which library file is playing (the
  *   window's own question, answered only for the playing track, with the file's ids left out)
@@ -550,6 +552,7 @@ export class DisplayServer {
     res.write("retry: 3000\n\n");
     const snap = displaySnapshot(this.deps.snapshot(), this.art);
     res.write(`event: snapshot\ndata: ${JSON.stringify(snap)}\n\n`);
+    res.write(`event: build\ndata: ${JSON.stringify(this.build())}\n\n`);
     const screen = screenOf(req);
     const control = this.controlLine(screen);
     res.write(`event: control\ndata: ${control}\n\n`);
@@ -673,6 +676,21 @@ export class DisplayServer {
       bytes -= this.kept.get(oldest)!.bytes.length;
       this.kept.delete(oldest);
     }
+  }
+
+  /** Which build of the page this server serves: its HTML's hash (the HTML names the hashed
+   *  assets, so any change to the page changes it), read once. */
+  private buildId: string | null = null;
+  private build(): string {
+    if (this.buildId == null) {
+      try {
+        const html = readFileSync(join(this.deps.pageDir, "display.html"));
+        this.buildId = createHash("sha256").update(html).digest("hex").slice(0, 16);
+      } catch {
+        this.buildId = "";
+      }
+    }
+    return this.buildId;
   }
 
   /** A file from the built page, never outside it. */

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, Maximize, Minimize, SlidersHorizontal, Sparkles } from "lucide-react";
 import type { DisplayScene } from "@shared/model";
 import { cx } from "@/lib/format";
@@ -6,7 +6,6 @@ import { SCENES_ORDERED, sceneDef } from "@/components/display/scenes";
 import { SyncRow } from "@/components/display/ScenePicker";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { ALL_SCENES_KEYS, ownSettings, type OwnKey } from "./pageSettings";
-import { useHoldSwipes } from "./touch";
 
 /** Full screen as this browser offers it to a page (Safari on an iPad, the desktop browsers), or
  *  null where it doesn't (a phone, a browser app that keeps the page in its frame). */
@@ -86,9 +85,6 @@ export function ScenePanel({
   extra?: React.ReactNode;
 }): React.JSX.Element {
   const [tab, setTab] = useState<Tab>("scene");
-  // a swipe in the panel stays the panel's, never Safari's way out of full screen
-  const panel = useRef<HTMLDivElement | null>(null);
-  useHoldSwipes(panel, open);
   const keptHere = ALL_SCENES_KEYS.some((k) => k in ownSettings());
   const [full, setFull] = useState(() => FS?.on() ?? false);
   useEffect(() => {
@@ -147,7 +143,6 @@ export function ScenePanel({
           {/* a touch outside closes it */}
           <div className="absolute inset-0 z-40" onClick={() => onOpen(false)} />
           <div
-            ref={panel}
             data-page-scenes
             className="absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] right-4 z-50 flex max-h-[calc(100%_-_5.5rem)] w-[min(36rem,calc(100%_-_2rem))] flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
           >

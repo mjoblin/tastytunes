@@ -27,7 +27,6 @@ import { scrollToTop } from "@/lib/scroll";
 import { MediaTile } from "@/components/media/MediaTile";
 import { SettingLine } from "@/components/display/ScenePicker";
 import { steer, useControl } from "./control";
-import { useHoldSwipes } from "./touch";
 import {
   controlsLocked,
   keepListView,
@@ -380,9 +379,6 @@ function ListPanel({
   };
   const square =
     "grid h-11 w-11 shrink-0 place-items-center rounded-lg text-dim motion-safe:active:scale-90 [-webkit-tap-highlight-color:transparent]";
-  // a swipe in the list stays the list's, never Safari's way out of full screen
-  const panel = useRef<HTMLDivElement | null>(null);
-  useHoldSwipes(panel);
   const tabClass = (on: boolean): string =>
     cx(
       "flex h-11 flex-1 items-center justify-center gap-2 rounded-md text-[14px] transition-colors motion-safe:active:scale-[0.97]",
@@ -392,7 +388,6 @@ function ListPanel({
     <>
       <div className="absolute inset-0 z-[45]" onClick={onClose} />
       <div
-        ref={panel}
         data-page-queue
         data-page-list={showing}
         className="absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] left-1/2 z-50 flex w-[min(36rem,calc(100%_-_2rem))] -translate-x-1/2 flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
