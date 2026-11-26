@@ -10,7 +10,6 @@
 // tool's input schema and handler.
 import { timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { networkInterfaces } from "node:os";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import {
@@ -58,24 +57,7 @@ import { exportTools } from "./mcp/exportTools";
 import { mediaType, nameKey } from "@shared/keys";
 import { acceptBothForSdk } from "./mcp/accept";
 import { hostAllowed } from "./hostCheck";
-
-/**
- * The address another computer on the local network reaches: a private IPv4 on a physical
- * interface first (0.16.0: the first external address found could be a VPN's, and the setup line
- * Settings showed then reached nothing).
- */
-export function lanAddress(): string | null {
-  const vpn = /^(utun|tun|tap|ppp|wg|ipsec|zt|tailscale|gpd)/i;
-  const privateRange = (ip: string): boolean =>
-    /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(ip);
-  const found: { name: string; address: string }[] = [];
-  for (const [name, addrs] of Object.entries(networkInterfaces()))
-    for (const a of addrs ?? [])
-      if (a.family === "IPv4" && !a.internal) found.push({ name, address: a.address });
-  const rank = (c: { name: string; address: string }): number =>
-    (vpn.test(c.name) ? 2 : 0) + (privateRange(c.address) ? 0 : 1);
-  return found.sort((x, y) => rank(x) - rank(y))[0]?.address ?? null;
-}
+import { lanAddress } from "./lanAddress";
 
 /**
  * WHAT A CLIENT SHOWS THE MODEL ONCE (0.16.0, the server's instructions): how to begin, how
@@ -224,7 +206,9 @@ export class McpBridge {
       );
     });
     server.listen(mcp.port, host, () => {
-      const shown = mcp.bind === "lan" ? (lanAddress() ?? "0.0.0.0") : "127.0.0.1";
+      const conn = this.dm.connectionNow;
+      const streamer = conn.phase === "connected" ? conn.host : null;
+      const shown = mcp.bind === "lan" ? (lanAddress(streamer) ?? "0.0.0.0") : "127.0.0.1";
       const url = `http://${shown}:${mcp.port}/mcp`;
       this.dm.setMcpStatus(
         { running: true, url, error: null },

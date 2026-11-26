@@ -23,7 +23,7 @@ import { lookupMediaInfo } from "../media/mediaInfo";
 import { displayToken, getSettings, newDisplayToken } from "../data/persist";
 import { DisplayServer } from "../servers/displayServer";
 import { isStoredScreen, ScreenBook } from "../servers/displayScreens";
-import { lanAddress } from "../servers/mcpServer";
+import { lanAddress } from "../servers/lanAddress";
 import { alsoHearSettings, broadcastDisplayScreens, broadcastDisplayStatus } from "./broadcast";
 import { connectedHost, deviceManager } from "./runtime";
 
@@ -378,7 +378,8 @@ let state: { port: number | null; error: string | null } = { port: null, error: 
 
 export async function displayStatus(): Promise<DisplayStatus> {
   if (state.port == null) return { running: false, url: null, error: state.error };
-  const ip = lanAddress();
+  // the address on the network that holds the streamer, where one does (servers/lanAddress)
+  const ip = lanAddress(connectedHost());
   const url = ip
     ? `http://${ip}:${state.port}/?t=${encodeURIComponent(await displayToken())}`
     : null;
