@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -51,5 +51,42 @@ describe("an export's folder", () => {
     });
     await expect(w.copy("audio.flac", body)).rejects.toThrow(ExportCapReached);
     expect(readFileSync(join(w.dir, "a.txt"), "utf8")).toBe("12345");
+  });
+
+  it("keeps a slice of the records' room for the README and the record written last", () => {
+    const root = mkdtempSync(join(tmpdir(), "tt-exp-"));
+    // a cap of 4000: media stops 1000 short of it, the other records 250 short
+    const w = new ExportWriter(root, "Sliced", 4000);
+    w.write("audio.flac", "x".repeat(3000), "media");
+    w.write("analysis.json", "x".repeat(750), "record");
+    expect(() => w.write("tracks/02/analysis.json", "x", "record")).toThrow(ExportCapReached);
+    w.write("album.json", "x".repeat(250), "final");
+    expect(w.bytes).toBe(4000);
+  });
+
+  it("writes a file under a .part name until it is whole", async () => {
+    const root = mkdtempSync(join(tmpdir(), "tt-exp-"));
+    const w = new ExportWriter(root, "Parts");
+    let finish: () => void = () => {};
+    const body = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(new Uint8Array(4));
+        finish = () => c.close();
+      },
+    });
+    const copying = w.copy("audio.flac", body, 4);
+    await new Promise((r) => setTimeout(r, 20));
+    // part-way, nothing has the file's own name
+    expect(readdirSync(w.dir)).toEqual(["audio.flac.part"]);
+    finish();
+    await copying;
+    expect(readdirSync(w.dir)).toEqual(["audio.flac"]);
+    w.write("track.json", "{}", "final");
+    expect(readdirSync(w.dir).sort()).toEqual(["audio.flac", "track.json"]);
+    // a write that can't be finished leaves neither name behind
+    mkdirSync(join(w.dir, "album.json", "inside"), { recursive: true });
+    expect(() => w.write("album.json", "{}", "final")).toThrow();
+    expect(readdirSync(w.dir).sort()).toEqual(["album.json", "audio.flac", "track.json"]);
+    expect(readdirSync(join(w.dir, "album.json"))).toEqual(["inside"]);
   });
 });

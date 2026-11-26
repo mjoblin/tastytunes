@@ -1,4 +1,4 @@
-import { createWriteStream, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { createWriteStream, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { join, normalize, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -8,7 +8,9 @@ import { pipeline } from "node:stream/promises";
  * writes a file but through here (lint export-writes), and nothing here writes outside the folder
  * the owner chose. A tool never names a path; names come from tags and are cleaned (no separators,
  * no leading dots, a length cap); each export is a new dated folder, nothing overwritten or
- * deleted; an export is held to a size cap, said when it is hit.
+ * deleted; an export is held to a size cap, said when it is hit. Every file is written under a
+ * ".part" name and renamed when whole, so a write cut short (a full disk, the app quitting) never
+ * leaves a file that looks finished.
  */
 
 /** The most one export may write (audio copies included): a hi-res album is gigabytes. */
@@ -16,6 +18,9 @@ export const EXPORT_CAP_BYTES = 2 * 1024 * 1024 * 1024;
 /** Of the cap, what the records and the README may always use: pictures and audio copies stop
  *  short of it, so an export that fills up still ends with its record. */
 export const RECORD_ROOM_BYTES = 32 * 1024 * 1024;
+/** Of that room, what only the README and the final record (track.json or album.json) may use:
+ *  analysis files that fill the records' room still leave the one file that says what is there. */
+export const FINAL_ROOM_BYTES = 1024 * 1024;
 /** A name's words at most (a tag, or an export's words before its date). */
 const NAME_MAX = 80;
 /** No byte of an audio copy for this long: the media server stopped sending (the analysis
@@ -53,6 +58,13 @@ const DIR_NAME_MAX = NAME_MAX + 18;
 
 export class ExportCapReached extends Error {}
 
+/** What a file is to the cap: a picture or an audio copy ("media"), a record such as
+ *  analysis.json ("record"), or the README and the record written last ("final"). */
+export type WriteKind = "media" | "record" | "final";
+
+/** The name a file is written under until it is whole. */
+const partName = (full: string): string => `${full}.part`;
+
 /** An audio copy that ended before its declared length, or went silent. */
 export class CopyFailed extends Error {}
 
@@ -85,10 +97,13 @@ export class ExportWriter {
     this.dir = dir;
   }
 
-  /** What a write of `kind` may still use: media stops RECORD_ROOM_BYTES short of the cap. */
-  private room(kind: "record" | "media"): number {
+  /** What a write of `kind` may still use: media stops RECORD_ROOM_BYTES short of the cap, the
+   *  other records FINAL_ROOM_BYTES short of it, and the final record may use it all. */
+  private room(kind: WriteKind): number {
     const reserve = Math.min(RECORD_ROOM_BYTES, Math.floor(this.cap / 4));
-    const limit = kind === "record" ? this.cap : this.cap - reserve;
+    const final = Math.min(FINAL_ROOM_BYTES, Math.floor(reserve / 4));
+    const limit =
+      kind === "final" ? this.cap : kind === "record" ? this.cap - final : this.cap - reserve;
     return limit - this.total;
   }
 
@@ -109,18 +124,28 @@ export class ExportWriter {
     return full;
   }
 
-  /** A file: a picture is "media", the records and the README "record". */
-  write(rel: string, data: string | Uint8Array, kind: "record" | "media" = "media"): void {
+  /** A file: a picture is "media", analysis.json and the lyrics "record", the README and the
+   *  record written last "final". */
+  write(rel: string, data: string | Uint8Array, kind: WriteKind = "media"): void {
     const size = typeof data === "string" ? Buffer.byteLength(data) : data.byteLength;
     if (size > this.room(kind)) throw new ExportCapReached(rel);
-    writeFileSync(this.inside(rel), data);
+    const full = this.inside(rel);
+    const part = partName(full);
+    try {
+      writeFileSync(part, data);
+      renameSync(part, full);
+    } catch (e) {
+      rmSync(part, { force: true });
+      throw e;
+    }
     this.total += size;
     this.made.push({ path: rel, bytes: size });
   }
 
   /** A stream (an audio copy) into the folder, stopped short of the records' room. A body that
    *  goes silent for COPY_STALL_MS, or ends before the length it declared, is a failed copy:
-   *  what was written goes, and nothing incomplete is ever kept. */
+   *  what was written goes, and nothing incomplete is ever kept (nor, until it is whole, under
+   *  its own name). */
   async copy(
     rel: string,
     body: ReadableStream<Uint8Array>,
@@ -133,6 +158,7 @@ export class ExportWriter {
       throw new ExportCapReached(rel);
     }
     const full = this.inside(rel);
+    const part = partName(full);
     let seen = 0;
     let stall: ReturnType<typeof setTimeout> | undefined;
     const counted = Readable.fromWeb(body as never);
@@ -150,12 +176,13 @@ export class ExportWriter {
     });
     quiet();
     try {
-      await pipeline(counted, createWriteStream(full));
+      await pipeline(counted, createWriteStream(part));
       if (expected != null && seen < expected)
         throw new CopyFailed(`the media server sent ${seen} of ${expected} bytes`);
+      renameSync(part, full);
     } catch (e) {
       // the part written is this export's own and incomplete: it goes, and the reply says so
-      rmSync(full, { force: true });
+      rmSync(part, { force: true });
       throw e;
     } finally {
       clearTimeout(stall);
