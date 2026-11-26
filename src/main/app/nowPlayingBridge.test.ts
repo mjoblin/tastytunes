@@ -281,6 +281,64 @@ describe("the Now Playing bridge", () => {
     );
   });
 
+  it("claims another app's play at once when the preset recalled over it is the one playing", async () => {
+    const r = rig({ view: { playState: other("TIDAL", "Mix Track") } });
+    await up(r);
+    r.bridge.update();
+    expect(claims(r)).toEqual([]);
+    // the caller saw the preset lit: the play there is the preset's own
+    r.bridge.recalled(true);
+    await vi.waitFor(() => expect(r.lines()[0]).toMatchObject({ t: "info", title: "Mix Track" }), {
+      timeout: 5_000,
+    });
+    expect(claims(r)).toEqual(["claimed Now Playing (external on TIDAL)"]);
+  });
+
+  it("claims a preset recalled from standby over a held station that the wake brings back after the recall went out", async () => {
+    const station = (state: string) =>
+      ({
+        state,
+        queue_id: null,
+        metadata: { class: "md.radio.airable", station: "FIP", radio_id: 42, source: "IR" },
+      }) as unknown as ZonePlayState;
+    const r = rig({
+      view: {
+        powerOn: false,
+        playState: { state: "not_ready" } as unknown as ZonePlayState,
+        nowPlaying: { controls: [] } as unknown as ZoneNowPlaying,
+      },
+    });
+    await up(r);
+    r.bridge.recalled();
+    // the wake: the held station, the radio class alone, then connecting, then playing on its own
+    r.view.powerOn = true;
+    r.view.playState = {
+      state: "ready",
+      metadata: { class: "md.radio" },
+    } as unknown as ZonePlayState;
+    r.bridge.update();
+    r.view.playState = station("connecting");
+    r.bridge.update();
+    r.view.playState = station("play");
+    r.view.nowPlaying = { controls: ["play_pause"] } as unknown as ZoneNowPlaying;
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().at(-1)).toMatchObject({ title: "FIP", live: true }), {
+      timeout: 5_000,
+    });
+    // the recall lands: connecting with no words, then the preset's play
+    r.view.playState = other("TIDAL", null, "connecting");
+    r.view.nowPlaying = { controls: [] } as unknown as ZoneNowPlaying;
+    r.bridge.update();
+    r.view.playState = other("TIDAL", "Mix Track");
+    r.view.nowPlaying = CONTROLS;
+    r.bridge.update();
+    await vi.waitFor(
+      () => expect(r.lines().at(-1)).toMatchObject({ title: "Mix Track", playing: true }),
+      { timeout: 5_000 },
+    );
+    expect(claims(r).at(-1)).toBe("claimed Now Playing (external on TIDAL)");
+  });
+
   it("shows radio as live, with no length and no skipping", async () => {
     const r = rig({
       view: {

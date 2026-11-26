@@ -167,7 +167,7 @@ if (!gotLock) {
         }
       };
       // and every preset recall the app sends, the same preset again included (app/nowPlaying)
-      deviceManager.onRecallSent = () => nowPlayingRecalled();
+      deviceManager.onRecallSent = (_presetId, lit) => nowPlayingRecalled(lit);
       // EACH LATE STEP IN ITS OWN TRY (app/bootFailure lateStep): with the window or the menu bar
       // icon up, a step that throws costs itself, never the steps after it
       lateStep("the agents' server", () => mcpBridge.sync(getSettings()));

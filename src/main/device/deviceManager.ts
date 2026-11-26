@@ -614,8 +614,9 @@ export class DeviceManager {
         listeningRecord.openContext({ kind: "preset", id: cmd.presetId, name, streamer: udn });
         socket.send("/zone/recall_preset", { preset: cmd.presetId });
         // every recall, while the cache still holds what played as it went (the streamer's answer
-        // comes on a later frame), as the watch below notes it
-        this.onRecallSent?.(cmd.presetId);
+        // comes on a later frame), as the watch below notes it; lit by the caller's own word, never
+        // the guess from the last recall, which another app's play since would pass
+        this.onRecallSent?.(cmd.presetId, cmd.alreadyPlaying === true);
         this.recallWatch.recalled(cmd.presetId, already);
         // Feature 10: the preset's local volume override rides along on every recall through the
         // app, once the recall lands, unless the caller (a schedule with its own volume) opts out.
@@ -1083,9 +1084,10 @@ export class DeviceManager {
   /**
    * Main's own tap on every preset recall the app sends, the same preset again included: the
    * recalledPreset push says only when the app's last recall changes. The system's Now Playing
-   * takes the play a recall starts as TastyTunes' own (app/nowPlaying).
+   * takes the play a recall starts as TastyTunes' own (app/nowPlaying), and the play already there
+   * when `lit` (the caller saw the preset playing).
    */
-  onRecallSent: ((presetId: number) => void) | null = null;
+  onRecallSent: ((presetId: number, lit: boolean) => void) | null = null;
 
   private push(msg: PushMessage): void {
     for (const wc of webContents.getAllWebContents()) {

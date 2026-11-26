@@ -1,6 +1,8 @@
 import {
   isCdPlayback,
+  isRadioMetadata,
   playKindOf,
+  trackTitle,
   type PlayKind,
   type ZoneNowPlaying,
   type ZonePlayState,
@@ -117,9 +119,20 @@ export function claimKind(ps: ZonePlayState | null, np: ZoneNowPlaying | null): 
  *   title), and its play is the first after it that differs. An album paused or a phone's AirPlay
  *   is never taken for it: the streamer moves to the preset's source after the recall, so a claim
  *   latched on the old play would drop there and leave the preset's play unclaimed.
+ * - A RECALL OF WHAT ALREADY PLAYS (the caller saw its preset lit) may start nothing that differs,
+ *   so the play there is taken as the preset's own as the recall goes out. Only the caller's lamp
+ *   says so (shared/litPresets, which checks what plays and is dark while the streamer sleeps or
+ *   wakes), never the app's last recall alone: an AirPlay that took over since would pass that.
  * - ONLY A PLAY WITH A NAME, AND NOT A PAUSE: a recall's first moment names nothing (and may still
  *   carry the old source), and its play starts playing; a pause is what the streamer held through
  *   standby, re-announced by the wake.
+ * - A STATION NEVER SPENDS A RECALL SENT OVER NOTHING: a recall from standby goes out while the
+ *   streamer names no play, and the wake brings a held station back by itself (`connecting` with
+ *   its name, then `play`), before or after the recall goes out: that order is not pinned. Such a
+ *   station can't be told from the recall's own, and radio is claimed for being radio anyway, so
+ *   the recall keeps waiting for its play rather than latch on the station and lose the latch when
+ *   the preset's play moves the source (a station's own preset so recalled is claimed as radio,
+ *   and its recall forgotten after PENDING_MS).
  * - Every recall notes again, the same preset's included, and a play latched by an earlier recall
  *   keeps its claim until the source moves. A recall after which nothing new plays is forgotten
  *   after PENDING_MS, so one that came to nothing claims nothing: it goes out after any wake, and
@@ -128,13 +141,21 @@ export function claimKind(ps: ZonePlayState | null, np: ZoneNowPlaying | null): 
 export const PENDING_MS = 20_000;
 
 export class StartedHere {
-  /** What played as the last recall went out, while the play it starts is awaited. */
-  private pending: { before: string; at: number } | null = null;
+  /** What played as the last recall went out, while the play it starts is awaited; `blind` when
+   *  the streamer named no play then (asleep or waking). */
+  private pending: { before: string; blind: boolean; at: number } | null = null;
   private source: string | null = null;
 
-  /** A recall went out while `ps` played. */
-  recalled(ps: ZonePlayState | null, now: number): void {
-    this.pending = { before: recallSignature(ps), at: now };
+  /** A recall went out while `ps` played; `lit` when the caller saw the preset playing. */
+  recalled(ps: ZonePlayState | null, now: number, lit = false): void {
+    const source = ps?.metadata?.source ?? null;
+    if (lit && source != null && playKindOf(ps) != null) {
+      // what already plays is the preset's: the recall may start it again, or leave it be
+      this.source = source;
+      this.pending = null;
+      return;
+    }
+    this.pending = { before: recallSignature(ps), blind: !namesPlay(ps), at: now };
   }
 
   /** The app connected to a streamer, or let one go: nothing started on the last one is this one's. */
@@ -146,6 +167,7 @@ export class StartedHere {
   /** Whether the play `ps` was started here, given whether the streamer is live. */
   observe(ps: ZonePlayState | null, live: boolean, now: number): boolean {
     const source = ps?.metadata?.source ?? null;
+    const kind = playKindOf(ps);
     const p = this.pending;
     if (p != null && now - p.at > PENDING_MS) this.pending = null;
     else if (
@@ -153,7 +175,8 @@ export class StartedHere {
       live &&
       source != null &&
       ps?.state !== "pause" &&
-      playKindOf(ps) != null &&
+      kind != null &&
+      !(p.blind && kind === "radio") &&
       recallSignature(ps) !== p.before
     ) {
       this.source = source;
@@ -162,4 +185,13 @@ export class StartedHere {
     if (this.source != null && source != null && source !== this.source) this.source = null;
     return this.source != null && source === this.source;
   }
+}
+
+/** Whether `ps` names what plays: a station by its id or name, a track by its title. A streamer
+ *  asleep or waking names nothing (`not_ready` alone, a station's `ready` with the radio class
+ *  alone, a track's wordless `stop`). */
+function namesPlay(ps: ZonePlayState | null): boolean {
+  const md = ps?.metadata ?? null;
+  if (md == null) return false;
+  return isRadioMetadata(md) ? (md.radio_id ?? md.station) != null : trackTitle(md) != null;
 }

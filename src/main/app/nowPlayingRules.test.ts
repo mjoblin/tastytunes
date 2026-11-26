@@ -162,6 +162,15 @@ describe("a play started here", () => {
   const album = (state = "play") => track("MEDIA_PLAYER", "Side One", state, 7);
   const tidal = (title = "Mix Track") => track("TIDAL", title);
   const airplay = (title = "Phone Song") => track("AIRPLAY", title);
+  const station = (state: string): ZonePlayState =>
+    ({
+      state,
+      queue_id: null,
+      metadata: { class: "md.radio.airable", source: "IR", station: "FIP", radio_id: 42 },
+    }) as unknown as ZonePlayState;
+  // the streamer asleep, and a held station's first frame on waking (the radio class alone)
+  const asleep = { state: "not_ready" } as unknown as ZonePlayState;
+  const waking = { state: "ready", metadata: { class: "md.radio" } } as unknown as ZonePlayState;
 
   it("is the play a recall starts, never the one playing as it went, until the source moves", () => {
     const s = new StartedHere();
@@ -238,5 +247,73 @@ describe("a play started here", () => {
     expect(s.observe(airplay(), true, PENDING_MS)).toBe(false);
     expect(s.observe(airplay("Another Phone Song"), true, PENDING_MS + 1)).toBe(false);
     expect(s.observe(tidal(), true, PENDING_MS + 2)).toBe(false);
+  });
+
+  it("is the play already there when the recall is of it, its preset lit, started again or not", () => {
+    const s = new StartedHere();
+    expect(s.observe(tidal(), true, 0)).toBe(false);
+    s.recalled(tidal(), 1_000, true);
+    expect(s.observe(tidal(), true, 1_050)).toBe(true);
+    // started again: a first moment with no words, then the same play
+    expect(s.observe(track("TIDAL", null, "connecting"), true, 1_100)).toBe(true);
+    expect(s.observe(tidal(), true, 2_000)).toBe(true);
+    expect(s.observe(airplay(), true, 30_000)).toBe(false);
+    // the same play, the preset not lit: nothing the recall started
+    const unlit = new StartedHere();
+    unlit.recalled(tidal(), 0);
+    expect(unlit.observe(tidal(), true, 50)).toBe(false);
+  });
+
+  it("is never a phone's AirPlay playing as a recall went whose preset wasn't lit", () => {
+    const s = new StartedHere();
+    s.recalled(airplay(), 0, false);
+    expect(s.observe(airplay(), true, 100)).toBe(false);
+    expect(s.observe(airplay("Another Phone Song"), true, PENDING_MS + 1)).toBe(false);
+  });
+
+  it("waits for the recall's play when a lit preset's play names nothing yet", () => {
+    const s = new StartedHere();
+    s.recalled(track("TIDAL", null, "connecting"), 0, true);
+    expect(s.observe(track("TIDAL", null, "connecting"), true, 50)).toBe(false);
+    expect(s.observe(tidal(), true, 1_000)).toBe(true);
+  });
+
+  it("is the recall's play from standby when the wake brings a held station back before the recall goes out", () => {
+    const s = new StartedHere();
+    expect(s.observe(waking, true, 50)).toBe(false);
+    expect(s.observe(station("connecting"), true, 110)).toBe(false);
+    s.recalled(station("connecting"), 2_500);
+    expect(s.observe(station("play"), true, 2_550)).toBe(false);
+    // the recall lands: connecting with no words, then the preset's play
+    expect(s.observe(track("TIDAL", null, "connecting"), true, 2_600)).toBe(false);
+    expect(s.observe(tidal(), true, 3_000)).toBe(true);
+    expect(s.observe(tidal("Next Track"), true, 60_000)).toBe(true);
+  });
+
+  it("is the recall's play from standby when the wake brings a held station back after the recall goes out", () => {
+    for (const before of [asleep, waking]) {
+      const s = new StartedHere();
+      s.recalled(before, 0);
+      expect(s.observe(waking, true, 50)).toBe(false);
+      expect(s.observe(station("connecting"), true, 110)).toBe(false);
+      expect(s.observe(station("play"), true, 1_600)).toBe(false);
+      expect(s.observe(track("TIDAL", null, "connecting"), true, 2_600)).toBe(false);
+      expect(s.observe(tidal(), true, 3_000)).toBe(true);
+      expect(s.observe(tidal("Next Track"), true, 60_000)).toBe(true);
+    }
+    // the station between the recall's first moment and its play
+    const t = new StartedHere();
+    t.recalled(asleep, 0);
+    expect(t.observe(track("TIDAL", null, "connecting"), true, 100)).toBe(false);
+    expect(t.observe(station("connecting"), true, 200)).toBe(false);
+    expect(t.observe(tidal(), true, 3_000)).toBe(true);
+  });
+
+  it("is spent on a station when the recall went out over a play with a name", () => {
+    const s = new StartedHere();
+    s.recalled(album(), 0);
+    expect(s.observe(station("play"), true, 1_000)).toBe(true);
+    // spent: a phone's AirPlay after it is not the recall's
+    expect(s.observe(airplay(), true, 5_000)).toBe(false);
   });
 });
