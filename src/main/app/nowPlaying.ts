@@ -135,19 +135,22 @@ export function nowPlayingRunning(): boolean {
   return bridge?.running === true;
 }
 
-/** What the streamer reports reaches the helper; a recall from the app marks its play as ours,
- *  and a new connection claims nothing until the streamer has spoken on it. */
+/** What the streamer reports reaches the helper, and a new connection claims nothing until the
+ *  streamer has spoken on it. */
 export function nowPlayingPush(msg: PushMessage): void {
   if (!bridge) return;
-  if (msg.kind === "recalledPreset") {
-    if (msg.id != null) bridge.recalled();
-    return;
-  }
   if (msg.kind === "connection" && msg.state.phase === "connected") bridge.connected();
   else if (msg.kind === "playState") bridge.heardFrom("playState");
   else if (msg.kind === "systemPower") bridge.heardFrom("power");
   else if (msg.kind === "connection" || msg.kind === "nowPlaying" || msg.kind === "position")
     bridge.update();
+}
+
+/** A preset recall went out from the app (DeviceManager.onRecallSent: every one, the same preset
+ *  again included, where the recalledPreset push says only when the last recall changes): the
+ *  play it starts is TastyTunes' own. */
+export function nowPlayingRecalled(): void {
+  bridge?.recalled();
 }
 
 /** A setting that changes what is claimed (mediaKeysExternal) takes effect at once. */

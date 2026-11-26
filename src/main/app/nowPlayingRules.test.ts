@@ -114,20 +114,83 @@ describe("what a play is, for the claim", () => {
 });
 
 describe("a play started here", () => {
-  it("is the next source to play after a recall, until the streamer moves to another", () => {
+  const track = (
+    source: string,
+    title: string | null,
+    state = "play",
+    queueId: number | null = null,
+  ): ZonePlayState =>
+    ({
+      state,
+      queue_id: queueId,
+      metadata: { class: "md.track", source, title },
+    }) as unknown as ZonePlayState;
+  const album = (state = "play") => track("MEDIA_PLAYER", "Side One", state, 7);
+  const tidal = (title = "Mix Track") => track("TIDAL", title);
+  const airplay = (title = "Phone Song") => track("AIRPLAY", title);
+
+  it("is the play a recall starts, never the one playing as it went, until the source moves", () => {
     const s = new StartedHere();
-    expect(s.observe("TIDAL", true, 0)).toBe(false);
-    s.recalled(1_000);
-    expect(s.observe("TIDAL", false, 1_100)).toBe(true);
-    expect(s.observe("TIDAL", true, 2_000)).toBe(true);
-    expect(s.observe("TIDAL", true, 60_000)).toBe(true);
-    expect(s.observe("AIRPLAY", true, 61_000)).toBe(false);
-    expect(s.observe("TIDAL", true, 62_000)).toBe(false);
+    expect(s.observe(album("pause"), true, 0)).toBe(false);
+    s.recalled(album("pause"), 1_000);
+    // the album still paused, then the recall's first moment, which names nothing
+    expect(s.observe(album("pause"), true, 1_050)).toBe(false);
+    expect(s.observe(album(), true, 1_080)).toBe(false);
+    expect(s.observe(track("MEDIA_PLAYER", null, "connecting"), true, 1_100)).toBe(false);
+    expect(s.observe(tidal(), true, 2_000)).toBe(true);
+    expect(s.observe(tidal("Next Track"), true, 60_000)).toBe(true);
+    expect(s.observe(airplay(), true, 61_000)).toBe(false);
+    expect(s.observe(tidal(), true, 62_000)).toBe(false);
   });
 
-  it("is forgotten when a recall starts nothing", () => {
+  it("is a new title on the same source, whatever source the preset's play reports", () => {
     const s = new StartedHere();
-    s.recalled(0);
-    expect(s.observe(null, false, PENDING_MS + 1)).toBe(false);
+    s.recalled(album("pause"), 0);
+    expect(s.observe(track("MEDIA_PLAYER", "Mix Track"), true, 1_000)).toBe(true);
+    const q = new StartedHere();
+    q.recalled(album(), 0);
+    expect(q.observe(track("MEDIA_PLAYER", "Mix Track", "play", 40), true, 1_000)).toBe(true);
+  });
+
+  it("is never a phone's AirPlay playing as the recall went, only the recall's own play", () => {
+    const s = new StartedHere();
+    s.recalled(airplay(), 0);
+    expect(s.observe(airplay(), true, 500)).toBe(false);
+    expect(s.observe(tidal(), true, 2_000)).toBe(true);
+  });
+
+  it("is never a pause, which is what a wake re-announces, but the recall's play after it", () => {
+    const s = new StartedHere();
+    s.recalled(track("MEDIA_PLAYER", null, "not_ready"), 0);
+    expect(s.observe(track("MEDIA_PLAYER", null, "stop", 7), false, 100)).toBe(false);
+    expect(s.observe(album("pause"), true, 160)).toBe(false);
+    expect(s.observe(tidal(), true, 3_000)).toBe(true);
+  });
+
+  it("is noted again on every recall, the same preset's included", () => {
+    const s = new StartedHere();
+    s.recalled(album(), 0);
+    expect(s.observe(tidal(), true, 1_000)).toBe(true);
+    expect(s.observe(airplay(), true, 30_000)).toBe(false);
+    s.recalled(airplay(), 40_000);
+    expect(s.observe(airplay(), true, 40_100)).toBe(false);
+    expect(s.observe(tidal(), true, 41_000)).toBe(true);
+  });
+
+  it("keeps a play an earlier recall started while a later one changes nothing", () => {
+    const s = new StartedHere();
+    s.recalled(album(), 0);
+    expect(s.observe(tidal(), true, 1_000)).toBe(true);
+    s.recalled(tidal(), 5_000);
+    expect(s.observe(tidal(), true, 5_100)).toBe(true);
+    expect(s.observe(tidal(), true, 5_000 + PENDING_MS + 1)).toBe(true);
+  });
+
+  it("is forgotten when a recall starts nothing, so a later play isn't taken for it", () => {
+    const s = new StartedHere();
+    s.recalled(airplay(), 0);
+    expect(s.observe(airplay(), true, PENDING_MS)).toBe(false);
+    expect(s.observe(airplay("Another Phone Song"), true, PENDING_MS + 1)).toBe(false);
+    expect(s.observe(tidal(), true, PENDING_MS + 2)).toBe(false);
   });
 });

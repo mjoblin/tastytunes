@@ -6,6 +6,7 @@ import {
   type ZonePlayState,
   type ZonePlayStateState,
 } from "@shared/smoip";
+import { recallSignature } from "../device/recallWatch";
 
 /**
  * WHEN TASTYTUNES IS THE SYSTEM'S PLAYING APP (0.17.0, the media keys through macOS's Now Playing):
@@ -91,32 +92,52 @@ export function claimKind(ps: ZonePlayState | null, np: ZoneNowPlaying | null): 
 }
 
 /**
- * STARTED HERE: a preset recalled from the app (the window, a link or an agent) makes the next
- * source to play TastyTunes' own, whatever its kind (a TIDAL or Qobuz preset reads as another
- * app's play), until the streamer moves to another source. A recall that never starts anything is
- * forgotten after PENDING_MS.
+ * STARTED HERE: a preset recalled from the app (the window, a link, an agent, a schedule) makes
+ * the play it starts TastyTunes' own, whatever its kind (a TIDAL or Qobuz preset reads as another
+ * app's play), until the streamer moves to another source.
+ *
+ * - THE PLAY IT STARTS, NEVER THE ONE THERE AS IT WENT OUT: each recall notes what plays as it is
+ *   sent (device/recallWatch's recallSignature: the source, the station, the queue entry and its
+ *   title), and its play is the first after it that differs. An album paused or a phone's AirPlay
+ *   is never taken for it: the streamer moves to the preset's source after the recall, so a claim
+ *   latched on the old play would drop there and leave the preset's play unclaimed.
+ * - ONLY A PLAY WITH A NAME, AND NOT A PAUSE: a recall's first moment names nothing (and may still
+ *   carry the old source), and its play starts playing; a pause is what the streamer held through
+ *   standby, re-announced by the wake.
+ * - Every recall notes again, the same preset's included, and a play latched by an earlier recall
+ *   keeps its claim until the source moves. A recall after which nothing new plays is forgotten
+ *   after PENDING_MS, so one that came to nothing claims nothing: it goes out after any wake, and
+ *   one that changes nothing in 8 s has come to nothing (device/recallWatch's DEAD_RECALL_MS).
  */
-export const PENDING_MS = 30_000;
+export const PENDING_MS = 20_000;
 
 export class StartedHere {
-  private pendingAt: number | null = null;
+  /** What played as the last recall went out, while the play it starts is awaited. */
+  private pending: { before: string; at: number } | null = null;
   private source: string | null = null;
 
-  recalled(now: number): void {
-    this.pendingAt = now;
-    this.source = null;
+  /** A recall went out while `ps` played. */
+  recalled(ps: ZonePlayState | null, now: number): void {
+    this.pending = { before: recallSignature(ps), at: now };
   }
 
-  /** Whether the play on `sourceId` was started here, given whether the streamer is live. */
-  observe(sourceId: string | null, live: boolean, now: number): boolean {
-    if (this.pendingAt != null) {
-      if (now - this.pendingAt > PENDING_MS) this.pendingAt = null;
-      else if (live && sourceId != null) {
-        this.source = sourceId;
-        this.pendingAt = null;
-      }
+  /** Whether the play `ps` was started here, given whether the streamer is live. */
+  observe(ps: ZonePlayState | null, live: boolean, now: number): boolean {
+    const source = ps?.metadata?.source ?? null;
+    const p = this.pending;
+    if (p != null && now - p.at > PENDING_MS) this.pending = null;
+    else if (
+      p != null &&
+      live &&
+      source != null &&
+      ps?.state !== "pause" &&
+      playKindOf(ps) != null &&
+      recallSignature(ps) !== p.before
+    ) {
+      this.source = source;
+      this.pending = null;
     }
-    if (this.source != null && sourceId != null && sourceId !== this.source) this.source = null;
-    return this.pendingAt != null || (this.source != null && sourceId === this.source);
+    if (this.source != null && source != null && source !== this.source) this.source = null;
+    return this.source != null && source === this.source;
   }
 }

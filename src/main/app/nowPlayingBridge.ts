@@ -173,9 +173,10 @@ export class NowPlayingBridge {
     }
   }
 
-  /** A preset was recalled from the app: the next source to play is TastyTunes' own. */
+  /** A preset recall went out from the app: the play it starts is TastyTunes' own, never the one
+   *  playing as it went, which is noted now (nowPlayingRules' StartedHere). */
   recalled(): void {
-    this.started.recalled(this.deps.now());
+    this.started.recalled(this.deps.view().playState, this.deps.now());
     this.update();
   }
 
@@ -210,7 +211,7 @@ export class NowPlayingBridge {
       !["stop", "not_ready", "no_signal"].includes(state);
     const now = this.deps.now();
     const source = ps?.metadata?.source ?? null;
-    const startedHere = this.started.observe(source, live, now);
+    const startedHere = this.started.observe(ps, live, now);
     const can = transportAbilities(v.nowPlaying?.controls, ps?.metadata?.duration ?? null);
     const verdict = nowPlayingVerdict({
       connected: v.connected,

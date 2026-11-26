@@ -8,7 +8,7 @@ import { denyPermissionsByDefault, keepNoCookies, logWindowPictures } from "./ap
 import { lateStep, startupFailed } from "./app/bootFailure";
 import { broadcastSettings, wireListeningPushes } from "./app/broadcast";
 import { syncMediaKeys, watchMediaKeys } from "./app/mediaKeys";
-import { nowPlayingPush } from "./app/nowPlaying";
+import { nowPlayingPush, nowPlayingRecalled } from "./app/nowPlaying";
 import { displayServer, syncDisplay } from "./app/display";
 import { installAppMenu } from "./app/menu";
 import { deviceManager, mcpBridge } from "./app/runtime";
@@ -163,6 +163,8 @@ if (!gotLock) {
             .catch(() => {});
         }
       };
+      // and every preset recall the app sends, the same preset again included (app/nowPlaying)
+      deviceManager.onRecallSent = () => nowPlayingRecalled();
       // EACH LATE STEP IN ITS OWN TRY (app/bootFailure lateStep): with the window or the menu bar
       // icon up, a step that throws costs itself, never the steps after it
       lateStep("the agents' server", () => mcpBridge.sync(getSettings()));

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StreamerCommand } from "@shared/ipc";
 import type { ZoneNowPlaying, ZonePlayState } from "@shared/smoip";
 import { HELLO_MS, NowPlayingBridge, type StreamerView } from "./nowPlayingBridge";
-import { HOLD_MS } from "./nowPlayingRules";
+import { HOLD_MS, PENDING_MS } from "./nowPlayingRules";
 
 const FAKE = join(__dirname, "__fixtures__", "fakeNowPlayingHelper.mjs");
 const CONTROLS: ZoneNowPlaying = {
@@ -26,6 +26,12 @@ const playing = (over: Record<string, unknown> = {}, state = "play"): ZonePlaySt
       ...over,
     },
   }) as unknown as ZonePlayState;
+
+/** Another app's play, or a streaming service's: no queue. */
+const other = (source: string, title: string | null, state = "play"): ZonePlayState => ({
+  ...playing({ source, title }, state),
+  queue_id: null,
+});
 
 let bridge: NowPlayingBridge | null = null;
 afterEach(() => {
@@ -95,6 +101,16 @@ async function claimed(r: ReturnType<typeof rig>) {
   await vi.waitFor(() => expect(r.lines().length).toBe(1), { timeout: 5_000 });
 }
 
+/** The helper is up, nothing claimed yet. */
+async function up(r: ReturnType<typeof rig>) {
+  r.bridge.start();
+  await vi.waitFor(() => expect(r.logs).toContain("the helper is up"), { timeout: 5_000 });
+}
+
+/** The claims made so far, as the log says them (written as each is made). */
+const claims = (r: ReturnType<typeof rig>) =>
+  r.logs.filter((l) => l.startsWith("claimed Now Playing"));
+
 describe("the Now Playing bridge", () => {
   it("claims a queue play once the helper says hello, with what a reader sees", async () => {
     const r = rig({});
@@ -145,19 +161,120 @@ describe("the Now Playing bridge", () => {
     await vi.waitFor(() => expect(r.lines().at(-1)).toEqual({ t: "release" }), { timeout: 5_000 });
   });
 
-  it("leaves another app's play alone, unless a preset recalled here started it", async () => {
-    const r = rig({
-      view: { playState: playing({ class: "stream.service.tidal", source: "TIDAL" }) },
-    });
-    (r.view.playState as unknown as { queue_id: null }).queue_id = null;
-    r.bridge.start();
-    await vi.waitFor(() => expect(r.logs).toContain("the helper is up"), { timeout: 5_000 });
+  it("leaves another app's play alone, even with a preset recalled over it, and claims the play the recall starts", async () => {
+    const r = rig({ view: { playState: other("TIDAL", "Song") } });
+    await up(r);
     r.bridge.update();
-    expect(r.lines()).toEqual([]);
+    expect(claims(r)).toEqual([]);
+    // what played as the recall went out is not the recall's play
     r.bridge.recalled();
-    await vi.waitFor(() => expect(r.lines()[0]).toMatchObject({ t: "info", title: "Song" }), {
+    r.view.position = 30;
+    r.bridge.update();
+    expect(claims(r)).toEqual([]);
+    r.view.playState = other("TIDAL", "Mix Track");
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines()[0]).toMatchObject({ t: "info", title: "Mix Track" }), {
       timeout: 5_000,
     });
+    expect(claims(r)).toEqual(["claimed Now Playing (external on TIDAL)"]);
+  });
+
+  it.each([
+    ["on its own source, over a paused album", "TIDAL", "pause"],
+    ["on the album's source, over a playing album", "MEDIA_PLAYER", "play"],
+  ])("claims the play a preset recalled here starts %s", async (_, source, albumState) => {
+    const r = rig({ view: { playState: playing({}, albumState) } });
+    // the album is the streamer's own queue, claimed as such
+    await claimed(r);
+    r.bridge.recalled();
+    // the recall's first moment names nothing; then the preset's play, another app's by kind
+    r.view.playState = other(source, null, "connecting");
+    r.bridge.update();
+    r.view.playState = other(source, "Mix Track");
+    r.bridge.update();
+    await vi.waitFor(
+      () => expect(r.lines().at(-1)).toMatchObject({ t: "info", title: "Mix Track" }),
+      { timeout: 5_000 },
+    );
+  });
+
+  it("leaves a phone's AirPlay alone through a recall, and claims the recall's own play when it comes", async () => {
+    const r = rig({ view: { playState: other("AIRPLAY", "Phone Song") } });
+    await up(r);
+    r.bridge.recalled();
+    r.view.position = 30;
+    r.bridge.update();
+    expect(claims(r)).toEqual([]);
+    r.view.playState = other("TIDAL", "Mix Track");
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines()[0]).toMatchObject({ t: "info", title: "Mix Track" }), {
+      timeout: 5_000,
+    });
+  });
+
+  it("claims the play of a preset recalled a second time, never another app's in between", async () => {
+    const r = rig({ view: { playState: playing({}, "pause") } });
+    await claimed(r);
+    r.bridge.recalled();
+    r.view.playState = other("TIDAL", "Mix Track");
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().at(-1)).toMatchObject({ title: "Mix Track" }), {
+      timeout: 5_000,
+    });
+    // a phone takes over: another app's play, let go
+    r.view.playState = other("AIRPLAY", "Phone Song");
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().at(-1)).toEqual({ t: "release" }), { timeout: 5_000 });
+    // the same preset again: not the phone's play, but the one it starts
+    const made = claims(r).length;
+    r.bridge.recalled();
+    r.bridge.update();
+    expect(claims(r).length).toBe(made);
+    r.view.playState = other("TIDAL", "Mix Track");
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().at(-1)).toMatchObject({ title: "Mix Track" }), {
+      timeout: 5_000,
+    });
+    expect(claims(r).at(-1)).toBe("claimed Now Playing (external on TIDAL)");
+  });
+
+  it("claims nothing for a recall that came to nothing, once its wait is over", async () => {
+    const r = rig({ view: { playState: other("AIRPLAY", "Phone Song") } });
+    await up(r);
+    r.bridge.recalled();
+    r.clock.offset = PENDING_MS + 1;
+    r.view.playState = other("AIRPLAY", "Another Phone Song");
+    r.bridge.update();
+    expect(claims(r)).toEqual([]);
+  });
+
+  it("claims a preset recalled from standby when its play comes, never on the pause a wake re-announces", async () => {
+    const r = rig({
+      view: {
+        powerOn: false,
+        playState: { state: "not_ready" } as unknown as ZonePlayState,
+        nowPlaying: { controls: [] } as unknown as ZoneNowPlaying,
+      },
+    });
+    await up(r);
+    // noted before the wake re-announces what the streamer held (frames that come late)
+    r.bridge.recalled();
+    r.view.powerOn = true;
+    r.view.playState = playing({ title: null }, "stop");
+    r.bridge.update();
+    r.view.playState = playing({}, "pause");
+    r.view.nowPlaying = CONTROLS;
+    r.bridge.update();
+    // the held album is the streamer's own queue, claimed as such
+    await vi.waitFor(() => expect(r.lines()[0]).toMatchObject({ title: "Song", playing: false }), {
+      timeout: 5_000,
+    });
+    r.view.playState = other("TIDAL", "Mix Track");
+    r.bridge.update();
+    await vi.waitFor(
+      () => expect(r.lines().at(-1)).toMatchObject({ title: "Mix Track", playing: true }),
+      { timeout: 5_000 },
+    );
   });
 
   it("shows radio as live, with no length and no skipping", async () => {
