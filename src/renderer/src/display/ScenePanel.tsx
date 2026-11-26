@@ -99,6 +99,8 @@ export function ScenePanel({
     };
   }, []);
   useEffect(() => onAwake(shown || open), [shown, open, onAwake]);
+  // gone with the awake screen, it is in use no longer
+  useEffect(() => () => onAwake(false), [onAwake]);
   const chosen = sceneDef(own ?? appScene);
   const pick = (id: DisplayScene | null): void => {
     onPick(id);

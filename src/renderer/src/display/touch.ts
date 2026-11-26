@@ -2,6 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 /** How long the page's buttons stay after a touch. */
 export const SHOWN_MS = 4_000;
+/** How long after the buttons show a tap on one is still taken as only showing them: their fade
+ *  in (duration-300 on each of them), when a quick second tap would press one not yet seen. */
+export const SETTLING_MS = 300;
+/** How long a panel or a list open holds the buttons up with no touch, before both close. */
+export const HOLD_IDLE_MS = 60_000;
+
+/** Whether a touch's click only shows the buttons: they were hidden when it landed, or it landed
+ *  on a control still fading in (`sinceShown`, ms since they showed). */
+export const swallows = (shown: boolean, sinceShown: number, control: boolean): boolean =>
+  !shown || (control && sinceShown < SETTLING_MS);
 
 /**
  * THE PAGE'S TOUCH SURFACE (0.17.0, Display on other screens): one home for when the page's own
@@ -9,11 +19,15 @@ export const SHOWN_MS = 4_000;
  * anywhere shows them for SHOWN_MS, the time starting again at every touch and held while a finger
  * is down or `hold` is true (a panel or a list open); on a computer the pointer moving shows them
  * too, never a still one. THE FIRST TOUCH ONLY SHOWS: a touch on a page whose buttons are hidden is swallowed before
- * its click reaches anything, so a tap where the play button will appear never presses it.
+ * its click reaches anything, so a tap where the play button will appear never presses it, and so
+ * is a tap on a control in the SETTLING_MS they take to fade in.
  * A TOUCH AWAY FROM THEM PUTS THEM AWAY: with the buttons up and nothing open, a deliberate tap on
  * the picture, away from every control, lets them go at once (the dim lifting at its own pace)
  * rather than holding them up another four seconds. With a panel or a list open, a tap outside
  * only closes that.
+ * THE HOLD HAS A LIMIT: a panel or a list left open lets go after HOLD_IDLE_MS with nobody at the
+ * screen (`onIdle` closes them), and the four seconds run as after any touch, so the buttons of
+ * a screen left with a list open still go, and it can rest (display/rest).
  */
 
 /** A control, or anything a touch on means to use (a panel's, a list's or the seek bar's own
@@ -22,14 +36,18 @@ const CONTROL =
   'button, a, input, select, textarea, label, [role="button"], [role="switch"], [role="tab"], [role="slider"], [data-page-scenes], [data-page-queue], [data-page-seek]';
 const onControl = (t: EventTarget | null): boolean =>
   t instanceof Element && t.closest(CONTROL) != null;
-export function useTouchShown(hold: boolean): boolean {
+export function useTouchShown(hold: boolean, onIdle?: () => void): boolean {
   const [shown, setShown] = useState(false);
   const shownRef = useRef(false);
+  /** When the buttons last came up. */
+  const shownAt = useRef(0);
   const holdRef = useRef(hold);
+  const idleRef = useRef(onIdle);
   const down = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // both touch only refs and state's setter, so they never change
   const show = useCallback((on: boolean): void => {
+    if (on && !shownRef.current) shownAt.current = Date.now();
     shownRef.current = on;
     setShown(on);
   }, []);
@@ -46,13 +64,47 @@ export function useTouchShown(hold: boolean): boolean {
     } else if (shownRef.current) later();
   }, [hold, later]);
   useEffect(() => {
+    idleRef.current = onIdle;
+  }, [onIdle]);
+  // the hold's limit: every touch, pointer move or scroll starts the minute again
+  useEffect(() => {
+    if (!hold) return;
+    let t: ReturnType<typeof setTimeout> | undefined;
+    function arm(): void {
+      clearTimeout(t);
+      t = setTimeout(() => {
+        // a finger down this long with no word from it is a lift that never came
+        down.current = false;
+        idleRef.current?.();
+      }, HOLD_IDLE_MS);
+    }
+    const moved = (e: PointerEvent): void => {
+      // a still pointer's move is the page changing under it, nobody at the screen
+      if (e.pointerType === "mouse" && e.movementX === 0 && e.movementY === 0) return;
+      arm();
+    };
+    const opts = { capture: true, passive: true };
+    arm();
+    window.addEventListener("pointerdown", arm, opts);
+    window.addEventListener("pointermove", moved, opts);
+    window.addEventListener("scroll", arm, opts);
+    window.addEventListener("wheel", arm, opts);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("pointerdown", arm, opts);
+      window.removeEventListener("pointermove", moved, opts);
+      window.removeEventListener("scroll", arm, opts);
+      window.removeEventListener("wheel", arm, opts);
+    };
+  }, [hold]);
+  useEffect(() => {
     // whether this touch's click is the one that showed the buttons
     let swallow = false;
     // whether this touch, away from every control, puts the buttons away when it lifts
     let away = false;
     const pressed = (e: PointerEvent): void => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      swallow = !shownRef.current;
+      swallow = swallows(shownRef.current, Date.now() - shownAt.current, onControl(e.target));
       away = shownRef.current && !holdRef.current && !onControl(e.target);
       down.current = true;
       if (!away) show(true);
