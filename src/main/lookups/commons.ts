@@ -3,6 +3,7 @@ import { DiskCache } from "./diskCache";
 import { fetchArtistInfo } from "./artistInfo";
 import { getJson, WD, WIKI } from "./mb";
 import { nameKey } from "@shared/keys";
+import { COMMONS_CHOSEN_PX } from "./commonsSizes";
 
 // MORE PHOTOS TO CHOOSE FROM (0.14.0, like Plex's picture editor): the photos in the artist's
 // Wikimedia Commons category, found the way the article is (MusicBrainz → Wikipedia), then its
@@ -14,9 +15,9 @@ export const COMMONS = process.env["TASTYTUNES_COMMONS_URL"] ?? "https://commons
 
 /** At most this many photos offered (a busy category holds hundreds). */
 const COMMONS_MAX = 60;
-/** The tile's thumbnail width and the chosen picture's: Wikimedia's standard sizes. */
+/** The tile's thumbnail width, one of Wikimedia's standard sizes (the chosen picture's is
+ *  COMMONS_CHOSEN_PX, which the export's README states). */
 const THUMB_PX = 330;
-const CHOSEN_PX = 1280;
 /** Smaller than this either way is no artist's picture (a logo, an icon, a scan's crop). */
 const MIN_PX = 300;
 const PHOTO = /^image\/(jpeg|png|webp)$/;
@@ -40,13 +41,14 @@ function atWidth(thumb: string, px: number): string {
   return thumb.replace(/\/\d+px-([^/]+)$/, `/${px}px-$1`);
 }
 
-/** One file's offer: the 1280-wide picture to choose (the original when it is no wider). */
+/** One file's offer: the picture to choose, COMMONS_CHOSEN_PX wide (the original when it is no
+ *  wider). */
 function offerOf(ii: ImageInfo): PictureOffer | null {
   const { url, width, height, mime, thumburl } = ii;
   if (!url || !thumburl || !width || !height || !PHOTO.test(mime ?? "")) return null;
   if (width < MIN_PX || height < MIN_PX) return null;
   return {
-    url: width > CHOSEN_PX ? atWidth(thumburl, CHOSEN_PX) : url,
+    url: width > COMMONS_CHOSEN_PX ? atWidth(thumburl, COMMONS_CHOSEN_PX) : url,
     thumb: thumburl,
     width,
     height,

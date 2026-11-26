@@ -1,6 +1,34 @@
 import { LISTEN_DEFINITION, LISTEN_FLOOR_SECS } from "@shared/model";
+import { COMMONS_CHOSEN_PX } from "../lookups/commonsSizes";
 import type { ExportOptions } from "./exporter";
+import { ARTIST_PICTURES_MAX } from "./pictureCaps";
 import { EXPORT_FORMAT } from "./trackRecord";
+
+/** A count as the README's prose writes it: a word up to twenty, digits past it. */
+const COUNT_WORDS = [
+  "zero",
+  "one",
+  "two",
+  "three",
+  "four",
+  "five",
+  "six",
+  "seven",
+  "eight",
+  "nine",
+  "ten",
+  "eleven",
+  "twelve",
+  "thirteen",
+  "fourteen",
+  "fifteen",
+  "sixteen",
+  "seventeen",
+  "eighteen",
+  "nineteen",
+  "twenty",
+];
+const inWords = (n: number): string => COUNT_WORDS[n] ?? String(n);
 
 /** The fields about the export itself, in the record that holds them (a track's own export's
  *  track.json, or album.json). */
@@ -178,14 +206,14 @@ network), and its \`file\` here when it was copied. \`what\` is one of these:
   one. \`release\` names the pressing on MusicBrainz, and \`release_country\`, \`release_date\`
   and \`release_formats\` are its country, date and formats (such as CD or Vinyl).
 - \`artist\`: a picture of the artist, with its \`page\` when it is from Commons. Its \`width\`
-  and \`height\` are the original's, in pixels. A Commons file is copied at most 1280 pixels
+  and \`height\` are the original's, in pixels. A Commons file is copied at most ${COMMONS_CHOSEN_PX} pixels
   wide, so it can be smaller than they say.
 - \`shelf\`: the sleeve of another of the artist's albums in the library, with that album's
   title (\`album\`) and \`year\`.
 
 A picture without a \`file\` wasn't copied in, because it wasn't fetched, its source didn't hand
 it over, or it couldn't be written, as when the export reached its size cap (\`left_out\` then
-names it). At most twelve of the artist's pictures are copied, and pictures from the internet
+names it). At most ${inWords(ARTIST_PICTURES_MAX)} of the artist's pictures are copied, and pictures from the internet
 are fetched only when the export was asked to look up what was missing. A picture is listed by
 its address when it has one, and a redacted export leaves out every \`local_address\`.
 

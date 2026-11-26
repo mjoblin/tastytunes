@@ -39,6 +39,7 @@ import {
 } from "./trackRecord";
 import { buildAlbumRecord } from "./albumRecord";
 import { exportReadme } from "./exportReadme";
+import { ARTIST_PICTURES_MAX } from "./pictureCaps";
 import type { ReleaseArt } from "../lookups/releaseArt";
 import { withoutMetadata } from "./pictureMeta";
 import { pictureType } from "@shared/pictureType";
@@ -178,8 +179,8 @@ export const PICTURE_BUDGET_MS = 30_000;
 /** The library's own pictures (the sleeve, the one in its audio file, the shelf) stop after this
  *  long, with fill or without: a media server asleep answers each only at its timeout. */
 export const LIBRARY_PICTURES_MS = 20_000;
-/** At most this many of the artist's pictures and other sleeves are fetched. */
-const ARTIST_PICTURES_MAX = 12;
+/** At most this many of the artist's other sleeves are fetched (the artist's own pictures:
+ *  ARTIST_PICTURES_MAX, which the README states). */
 const SHELF_MAX = 24;
 
 /** The keys a redacted export leaves out wherever they appear. */
