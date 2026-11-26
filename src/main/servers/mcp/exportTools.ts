@@ -38,7 +38,7 @@ import { loggedFetch } from "../../netlog";
 import { exportRoot } from "../../app/exportsFolder";
 import { analysisAsked, analysisRunning } from "../../app/analysisRuns";
 import { COPY_STALL_MS } from "../../export/exportFolder";
-import { AGAIN_FOR_THE_REST } from "../../export/trackRecord";
+import { AGAIN_FOR_THE_REST, cannotAsk } from "../../export/trackRecord";
 import {
   exportAlbum,
   exportTrack,
@@ -62,11 +62,7 @@ const PICTURE_MAX_BYTES = 16 * 1024 * 1024;
  *  takes only a res whose protocolInfo names audio, and the copy is held to the server's host). */
 export const AUDIO_TYPE =
   /^(audio\/[\w.+-]+|application\/(x-)?(ogg|flac)|(application|binary)\/octet-stream)$/;
-const NO_ARTIST: Looked<never> = {
-  kind: "cannot",
-  why: "The track has no artist tag, so it can't be looked up.",
-  remedy: "None from TastyTunes: the file's tags would need an artist.",
-};
+const NO_ARTIST: Looked<never> = cannotAsk("track", "artist");
 
 const OPTION_ARGS = {
   fill: z

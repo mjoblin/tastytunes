@@ -102,6 +102,16 @@ export const LOOKUPS = {
   },
 } satisfies Record<string, LookupNames>;
 
+/** A lookup that can't be made: the tags have nothing to ask it with (an untagged track, an
+ *  album with no artist). Said as such, never as the service's none. */
+export function cannotAsk(of: "track" | "album", tag: "artist" | "album"): Looked<never> {
+  return {
+    kind: "cannot",
+    why: `The ${of} has no ${tag} tag, so it can't be looked up.`,
+    remedy: `None from TastyTunes: ${of === "track" ? "the file's tags" : "its files' tags"} would need an ${tag}.`,
+  };
+}
+
 export interface Missing {
   what: string;
   why: string;
@@ -273,7 +283,8 @@ function analysisGap(i: TrackInputs): Missing | null {
 
 export interface TrackRecord {
   track: Record<string, unknown>;
-  /** analysis.json, or null when the track has no current analysis. */
+  /** analysis.json, or null when the track has no current analysis (one measured for its
+   *  waveform alone has one, the waveform in it). */
   analysis: Record<string, unknown> | null;
   timeline: { sections: TimelineSection[]; moments: Moment[] };
   missing: Missing[];
@@ -283,6 +294,9 @@ export function buildTrackRecord(i: TrackInputs): TrackRecord {
   const n = i.node;
   const an = i.analysis;
   const { features, strip, current } = decodedAnalysis(an);
+  // analysis.json for a current analysis, and for a file measured as far as it can be (its
+  // waveform alone), so the waveform missing says was measured is in the folder
+  const written = an != null && (current || measuredWaveformOnly(an));
   const lyrics = looked(i.lyrics);
   const { synced, lines } = lyricLines(lyrics);
   const timeline = buildTimeline(features, strip, lines, n.durationSecs);
@@ -342,7 +356,7 @@ export function buildTrackRecord(i: TrackInputs): TrackRecord {
                 return k ? r(k.confidence, 2) : null;
               })()
             : null,
-          details: current ? "analysis.json" : null,
+          details: written ? "analysis.json" : null,
         }
       : null,
     lyrics:
@@ -374,7 +388,7 @@ export function buildTrackRecord(i: TrackInputs): TrackRecord {
 
   return {
     track,
-    analysis: an && current ? analysisJson(n, an, features, strip) : null,
+    analysis: an && written ? analysisJson(n, an, features, strip) : null,
     timeline,
     missing,
   };

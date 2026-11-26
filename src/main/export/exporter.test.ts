@@ -10,7 +10,14 @@ import type {
   Playlist,
 } from "@shared/model";
 import { featuresToStored, onsetsToStored, stripToStored } from "@shared/analysisCodec";
-import { exportAlbum, exportTrack, type ExportEnv, type ExportOptions } from "./exporter";
+import {
+  exportAlbum,
+  exportTrack,
+  LIBRARY_PICTURES_MS,
+  PICTURE_BUDGET_MS,
+  type ExportEnv,
+  type ExportOptions,
+} from "./exporter";
 
 const UDN = "uuid:server-1";
 
@@ -387,6 +394,13 @@ describe("a track's export, when things go wrong", () => {
     expect(calls.started).toEqual([]);
     if (r.kind !== "exported") return;
     expect(r.missing.find((m) => m.what === "analysis")?.why).toMatch(/at its own sample rate/);
+    // the waveform it has is in the folder, the rest said as none
+    const analysis = readJson(r.folder, "analysis.json");
+    expect(analysis["waveform"]).toMatchObject({ points: 1200 });
+    expect(analysis["tempo"]).toBeNull();
+    expect((readJson(r.folder, "track.json")["measured"] as { details: string }).details).toBe(
+      "analysis.json",
+    );
   });
 
   it("answers 'analyzing' while the window measures, then exports and says what was tried", async () => {
@@ -486,6 +500,44 @@ describe("a track's export, when things go wrong", () => {
     expect(sleeve.toString("latin1")).not.toContain("Exif");
     const audio = readJson(r.folder, "track.json")["audio"] as { note?: string };
     expect(audio.note).toMatch(/carries its own tags/);
+  });
+
+  it("types a picture by its bytes, so a server's wrong type is named and stripped as what it is", async () => {
+    const exif = Uint8Array.from([
+      0xff,
+      0xd8,
+      0xff,
+      0xe1,
+      0,
+      12,
+      ...[..."Exif\0\0home"].map((c) => c.charCodeAt(0)),
+      0xff,
+      0xda,
+      0,
+      2,
+      1,
+      2,
+      0xff,
+      0xd9,
+    ]);
+    const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    const { env } = fakeEnv({
+      // the sleeve said as image/jpg, the shelf's PNG said as a JPEG
+      picture: (url) =>
+        Promise.resolve(
+          url.includes("/aa/1/")
+            ? { bytes: exif, type: "image/jpg" }
+            : { bytes: PNG, type: "image/jpeg" },
+        ),
+    });
+    const r = await exportTrack(env, root(), target(t1), opts({ redact: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    const files = r.files.map((f) => f.path);
+    expect(files).toContain("pictures/sleeve.jpg");
+    expect(files).toContain("pictures/shelf-01.png");
+    expect(readFileSync(join(r.folder, "pictures/sleeve.jpg")).toString("latin1")).not.toContain(
+      "Exif",
+    );
   });
 
   it("copies audio only as the media server's own answer", async () => {
@@ -829,6 +881,32 @@ describe("an album's export", () => {
     expect(existsSync(join(r.folder, "tracks/02 - Undertow/audio.flac"))).toBe(false);
     expect(existsSync(join(r.folder, "tracks/03 - Breakwater/audio.flac"))).toBe(true);
     expect(r.left_out.join(" ")).toMatch(/02 - Undertow\/audio\.flac: connection reset/);
+    // the records say it too: the album's every line, a track's its own
+    expect(readJson(r.folder, "album.json")["left_out"]).toEqual(r.left_out);
+    expect(readJson(r.folder, "tracks/02 - Undertow/track.json")["left_out"]).toEqual([
+      "tracks/02 - Undertow/audio.flac: connection reset.",
+    ]);
+    expect(readJson(r.folder, "tracks/03 - Breakwater/track.json")["left_out"]).toEqual([]);
+    expect(readdirSync(join(r.folder, "tracks/02 - Undertow"))).not.toContain("audio.flac.part");
+  });
+
+  it("names a track it couldn't export in album.json's left_out", async () => {
+    const { env } = fakeEnv({
+      analysis: (n) => {
+        if (n.id === "t-2") throw new Error("the stored analysis couldn't be read");
+        return analyzed();
+      },
+    });
+    const r = await exportAlbum(env, root(), target(album), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    const a = readJson(r.folder, "album.json");
+    expect((a["tracks"] as Array<{ title: string }>).map((t) => t.title)).toEqual([
+      "Lamplighter",
+      "Breakwater",
+    ]);
+    expect(a["left_out"]).toEqual([
+      "tracks/02 - Undertow: not exported, its record couldn't be made (the stored analysis couldn't be read)",
+    ]);
   });
 
   it("keeps room for its records when the cap is reached by the copies", async () => {
@@ -884,5 +962,158 @@ describe("an album's export", () => {
     const r = await exportTrack(env, root(), target(a1), opts());
     if (r.kind !== "exported") throw new Error(r.kind);
     expect(asked).toEqual(["Dusk Parade"]);
+  });
+
+  it("says a compilation has no one artist, never that MusicBrainz has no such artist", async () => {
+    const asked: string[] = [];
+    const comp = { ...album, id: "al-9", title: "Night Songs", artist: "Various Artists" };
+    const a1 = node({ id: "c-1", title: "One", album: "Night Songs", artist: "Dusk Parade" });
+    const a2 = node({ id: "c-2", title: "Two", album: "Night Songs", artist: "Low Harbour" });
+    const { env } = fakeEnv({
+      pools: () => [{ ...pools[0], albums: [comp], tracks: [a1, a2] }],
+      artistNotes: (artist) => {
+        asked.push(artist);
+        return Promise.resolve({ kind: "none" });
+      },
+    });
+    const r = await exportAlbum(env, root(), target(comp), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(asked).toEqual([]);
+    expect(r.missing.filter((m) => /artist/.test(m.what)).map((m) => m.why)).toEqual([
+      "A compilation has no one artist.",
+    ]);
+  });
+
+  it("says a lookup an untagged track can't make, never the service's none", async () => {
+    const bare = node({ id: "t-8", title: "Untitled 8", artist: null, album: null });
+    const { env } = fakeEnv({ pools: () => [{ ...pools[0], tracks: [bare] }] });
+    const r = await exportTrack(env, root(), target(bare), opts({ fill: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(r.missing.find((m) => m.what === "album notes")).toEqual({
+      what: "album notes",
+      why: "The track has no album tag, so it can't be looked up.",
+      remedy: "None from TastyTunes: the file's tags would need an album.",
+    });
+    expect(r.missing.find((m) => m.what === "artist notes")?.why).toBe(
+      "The track has no artist tag, so it can't be looked up.",
+    );
+  });
+});
+
+describe("the order of an export's asking", () => {
+  const RG = "b1392450-e666-3926-a536-22c65f834433";
+  const notes = {
+    kind: "found" as const,
+    value: {
+      title: "Harbour Lights",
+      year: "2019",
+      type: "Album",
+      label: null,
+      genres: [],
+      credits: [],
+      summary: null,
+      wikipediaUrl: null,
+      musicbrainzUrl: `https://musicbrainz.org/release-group/${RG}`,
+    },
+  };
+  const scans = {
+    release: "https://musicbrainz.org/release/r-1",
+    country: "GB",
+    date: "2019-03-01",
+    formats: ["CD"],
+    tracks: 3,
+    images: Array.from({ length: 24 }, (_, i) => ({
+      types: ["Booklet"],
+      comment: null,
+      url: `https://coverartarchive.org/release/r-1/${i + 1}-1200.jpg`,
+    })),
+  };
+
+  it("asks every track's lookups before the scans, the artist's pictures fetched before them", async () => {
+    // the archive answers slowly, ten seconds a scan; nothing else takes time
+    let t = 0;
+    const order: string[] = [];
+    const base = fakeEnv().env;
+    const { env } = fakeEnv({
+      analysis: () => analyzed(),
+      clock: () => t,
+      albumNotes: () => Promise.resolve(notes as never),
+      lyrics: (n, fill) => {
+        order.push(`lyrics ${n.id} ${fill}`);
+        return base.lyrics(n, fill);
+      },
+      releaseArt: (_g, _n, fill) => {
+        order.push(`scans listed ${fill}`);
+        return Promise.resolve({ kind: "found", value: scans });
+      },
+      picture: (url) => {
+        if (url.includes("coverartarchive")) t += 10_000;
+        order.push(
+          url.includes("coverartarchive") ? "scan" : url.includes("wikimedia") ? "artist" : "lib",
+        );
+        return Promise.resolve({ bytes: JPEG, type: "image/jpeg" });
+      },
+    });
+    const r = await exportAlbum(env, root(), target(album), opts({ fill: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(order.slice(0, 4)).toEqual([
+      "lyrics t-1 true",
+      "lyrics t-2 true",
+      "lyrics t-3 true",
+      "scans listed true",
+    ]);
+    expect(order.indexOf("artist")).toBeLessThan(order.indexOf("scan"));
+    // the scans stop at the pictures' own time, and the rest are listed by their address
+    const fetched = PICTURE_BUDGET_MS / 10_000;
+    expect(order.filter((o) => o === "scan")).toHaveLength(fetched);
+    expect(r.missing.find((m) => m.what.startsWith("pictures ("))).toEqual({
+      what: `pictures (${24 - fetched} listed by address only)`,
+      why: "Not fetched: this export's time for pictures ran out first.",
+      remedy: "Fetch each from its address in pictures/pictures.json.",
+    });
+    expect(r.missing.some((m) => m.what === "lookups for the later tracks")).toBe(false);
+    // the library's pictures have their own time: the slow archive left the shelf alone
+    expect(r.files.map((f) => f.path)).toContain("pictures/shelf-01.jpg");
+  });
+
+  it("holds the library's pictures to their own time without fill, for a server slow to answer", async () => {
+    // a media server asleep: each picture comes only at its timeout
+    let t = 0;
+    const shelf = Array.from({ length: 5 }, (_, i) => ({
+      ...other,
+      id: `al-s${i}`,
+      title: `Shelf ${i}`,
+      artUrl: `http://10.0.0.5:9790/aa/s${i}/cover.jpg`,
+    }));
+    const calls: Calls = { lyrics: [], pictures: [], started: [] };
+    const base = fakeEnv({}, calls).env;
+    const { env } = fakeEnv(
+      {
+        pools: () => [{ ...pools[0], albums: [album, ...shelf] }],
+        clock: () => t,
+        picture: (url) => {
+          t += 15_000;
+          return base.picture(url);
+        },
+      },
+      calls,
+    );
+    const r = await exportTrack(env, root(), target(t1), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    // the sleeve, then shelf pictures until the time is spent
+    const asked = Math.ceil(LIBRARY_PICTURES_MS / 15_000);
+    expect(calls.pictures).toHaveLength(asked);
+    expect(calls.pictures[0]).toBe(album.artUrl);
+    expect(r.missing.find((m) => m.what.startsWith("pictures from the library"))).toEqual({
+      what: `pictures from the library (${6 - asked} not fetched)`,
+      why: "Not fetched: the media server was slow to hand over pictures, and this export's time for them ran out.",
+      remedy: "Export again while the server is up.",
+    });
+    const listed = readJson(r.folder, "pictures/pictures.json")["pictures"] as Array<
+      Record<string, unknown>
+    >;
+    expect(listed.filter((p) => p["what"] === "shelf" && p["file"] === null)).toHaveLength(
+      6 - asked,
+    );
   });
 });
