@@ -3,7 +3,8 @@
  * sleeps, and while the app or the streamer is out of reach, and a touch says which, in one line
  * beside the TastyTunes mark (display/PageTransport's SleepControls). The app unheard covers the
  * computer asleep, the app quit, its switch for other screens off and an address that changed
- * (the page keeps asking the address it was opened at), so its line says what to check.
+ * (the page keeps asking the address it was opened at), so its line says what to check, and for
+ * the last to open the address again.
  */
 
 /** What the page heard: the app, its connection to the streamer, and this screen's own Wake
@@ -20,7 +21,7 @@ export function whyDark({ heard, connected, wake }: DarkFacts): { cause: DarkCau
   if (!heard)
     return {
       cause: "app",
-      line: "Can't reach TastyTunes. Check that it's running and the computer is awake.",
+      line: "Can't reach TastyTunes. Check that it's running, the computer is awake and Second screen is on, or open its address again.",
     };
   // where this screen has Wake, the line agrees with what its buttons can do
   if (wake === "unreachable")

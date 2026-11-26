@@ -7,7 +7,7 @@ describe("a dark page says why at a touch", () => {
       for (const wake of ["ready", "unreachable", null] as const)
         expect(whyDark({ heard: false, connected, wake })).toEqual({
           cause: "app",
-          line: "Can't reach TastyTunes. Check that it's running and the computer is awake.",
+          line: "Can't reach TastyTunes. Check that it's running, the computer is awake and Second screen is on, or open its address again.",
         });
   });
 
