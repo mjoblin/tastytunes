@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Snapshot } from "@shared/ipc";
-import { DEFAULT_SETTINGS } from "@shared/model";
+import { DEFAULT_SETTINGS, type MediaIndexStatus } from "@shared/model";
 import {
   artIdOf,
+  displayIndexes,
   displayPush,
   displaySettings,
   displaySnapshot,
@@ -110,6 +111,74 @@ describe("what a screen on the network may see", () => {
     const display = Object.keys(DEFAULT_SETTINGS).filter((k) => k.startsWith("display"));
     expect(display.filter((k) => !decided.has(k))).toEqual([]);
     for (const k of SHOWN_SETTINGS) expect(k in DEFAULT_SETTINGS).toBe(true);
+  });
+
+  it("tells a page which library indexes are ready, by an opaque id and nothing of their servers", () => {
+    const ready: MediaIndexStatus = {
+      udn: "uuid:nas-1",
+      serverName: "Shelf NAS",
+      state: "ready",
+      strategy: "search",
+      tracks: 900,
+      albums: 80,
+      artists: 40,
+      builtAt: 1_700_000_000_000,
+      updateId: 7,
+      recentList: { title: "Recently Added", chosen: false },
+      recentAt: 1_700_000_100_000,
+      failure: "a rebuild that didn't finish",
+    };
+    const building: MediaIndexStatus = {
+      ...ready,
+      udn: "uuid:usb-2",
+      serverName: "Lounge USB",
+      state: "building",
+      builtAt: null,
+    };
+    const out = displayIndexes([ready, building]);
+    expect(out).toEqual([
+      {
+        udn: artIdOf("uuid:nas-1"),
+        serverName: "",
+        state: "ready",
+        strategy: null,
+        tracks: 0,
+        albums: 0,
+        artists: 0,
+        builtAt: 1_700_000_000_000,
+        updateId: null,
+        recentAt: 1_700_000_100_000,
+      },
+    ]);
+    const text = JSON.stringify(
+      displayPush({ kind: "mediaIndex", statuses: [ready, building] }, art),
+    );
+    expect(text).not.toMatch(/uuid:|Shelf NAS|Lounge USB|Recently Added|rebuild/);
+    // the snapshot a page opens with says the same, so it starts from where the app is
+    const opened = displaySnapshot({ ...snap, mediaIndex: [ready, building] }, art);
+    expect(opened.mediaIndex).toEqual(out);
+    expect(displaySnapshot(snap, art).mediaIndex).toEqual([]);
+  });
+
+  it("changes what a page hears of the indexes when one finishes building, so it asks again", () => {
+    const at = (state: MediaIndexStatus["state"], builtAt: number | null): MediaIndexStatus => ({
+      udn: "uuid:nas-1",
+      serverName: "Shelf NAS",
+      state,
+      strategy: "search",
+      tracks: 900,
+      albums: 80,
+      artists: 40,
+      builtAt,
+      updateId: 7,
+    });
+    // building, then ready: the page's ready set gains it; rebuilt: its builtAt moves
+    expect(displayIndexes([at("building", null)])).toEqual([]);
+    const first = displayIndexes([at("ready", 1)]);
+    const again = displayIndexes([at("ready", 2)]);
+    expect(first).toHaveLength(1);
+    expect(again[0].builtAt).not.toBe(first[0].builtAt);
+    expect(again[0].udn).toBe(first[0].udn);
   });
 
   it("tells a page the waveforms work here, so its strip and seek bar draw them as the window's do", () => {

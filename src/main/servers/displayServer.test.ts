@@ -753,6 +753,47 @@ describe("the scenes' analysis on a page", () => {
     expect(JSON.parse(other.body)).toBeNull();
   });
 
+  it("tells every open page when a library index is ready, by an opaque id alone", async () => {
+    const { live, server } = await rig();
+    const opened = await live(cookie);
+    server.push({
+      kind: "mediaIndex",
+      statuses: [
+        {
+          udn: "uuid:nas-1",
+          serverName: "Shelf NAS",
+          state: "ready",
+          strategy: "search",
+          tracks: 900,
+          albums: 80,
+          artists: 40,
+          builtAt: 1_700_000_000_000,
+          updateId: 7,
+        },
+        {
+          udn: "uuid:usb-2",
+          serverName: "Lounge USB",
+          state: "building",
+          strategy: "browse",
+          tracks: 0,
+          albums: 0,
+          artists: 0,
+          builtAt: null,
+          updateId: null,
+        },
+      ],
+    });
+    await vi.waitFor(() => expect(opened.more()).toContain('"kind":"mediaIndex"'));
+    const line = opened.more().slice(opened.more().indexOf('data: {"kind":"mediaIndex"'));
+    const msg = JSON.parse(line.slice(6, line.indexOf("\n"))) as {
+      statuses: Array<{ udn: string; state: string; builtAt: number | null }>;
+    };
+    expect(msg.statuses).toHaveLength(1);
+    expect(msg.statuses[0]).toMatchObject({ state: "ready", builtAt: 1_700_000_000_000 });
+    expect(msg.statuses[0].udn).toMatch(/^[0-9a-f]{24}$/);
+    expect(line).not.toMatch(/uuid:|Shelf NAS|Lounge USB/);
+  });
+
   it("hands over a stored analysis only by a key it gave out with the playing file", async () => {
     const { get } = await rig();
     const key = encodeURIComponent("band|record|song|200");

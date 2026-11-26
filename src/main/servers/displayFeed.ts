@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { DisplayControl } from "@shared/displayControl";
 import type { PushMessage, Snapshot } from "@shared/ipc";
-import { DEFAULT_SETTINGS, type AppSettings } from "@shared/model";
+import { DEFAULT_SETTINGS, type AppSettings, type MediaIndexStatus } from "@shared/model";
 import type {
   SystemPower,
   ZoneNowPlaying,
@@ -17,7 +17,9 @@ import type {
  *
  * - The playing track, its state and position, the streamer's power, and the settings Display
  *   draws with (display*, theme, accent, ambient art, motion); everything else is the default or
- *   empty: no device book, no addresses, no logs, no history, no library, no favorites.
+ *   empty: no device book, no addresses, no logs, no history, no library, no favorites. Of the
+ *   library indexes only which are ready, so the page asks for the playing file again when one
+ *   is built (displayIndexes).
  * - Pictures by id, never by address: an art URL becomes /art/<id>, and the server serves only
  *   ids it handed out (a route that fetched an address would fetch anything for anyone).
  * - Nothing here carries a way back: the one write route and what a screen is told of it are the
@@ -166,6 +168,30 @@ const positionOf = (p: ZonePosition): ZonePosition => ({ position: p.position })
 /** The streamer's power, and nothing else of its power settings. */
 const powerOf = (p: SystemPower): SystemPower => ({ power: p.power });
 
+/**
+ * The library indexes as a page has them: only the ready ones, each by an opaque id with when it
+ * was built and when its Recently added list was read, nothing of its server, its size or why one
+ * failed. The page's playing file asks for itself again when these change while it hasn't been
+ * found (the window's own rule, usePlayingFileRef's ready-index signature), so a page opened
+ * while an index was building finds the file once the index is ready, not at the next track.
+ */
+export function displayIndexes(statuses: readonly MediaIndexStatus[]): MediaIndexStatus[] {
+  return statuses
+    .filter((s) => s.state === "ready")
+    .map((s) => ({
+      udn: artIdOf(s.udn),
+      serverName: "",
+      state: "ready",
+      strategy: null,
+      tracks: 0,
+      albums: 0,
+      artists: 0,
+      builtAt: s.builtAt,
+      updateId: null,
+      recentAt: s.recentAt ?? null,
+    }));
+}
+
 /** The page's whole first look: the snapshot, reduced. */
 export function displaySnapshot(snap: Snapshot, art: ArtRegistry): Snapshot {
   const c = snap.connection;
@@ -199,7 +225,7 @@ export function displaySnapshot(snap: Snapshot, art: ArtRegistry): Snapshot {
     held: null,
     mcpStatus: { running: false, url: null, error: null },
     missedSchedule: null,
-    mediaIndex: [],
+    mediaIndex: displayIndexes(snap.mediaIndex ?? []),
     frames: [],
     logs: [],
     netRequests: [],
@@ -240,6 +266,8 @@ export function displayPush(msg: PushMessage, art: ArtRegistry): PushMessage | n
       };
     case "settings":
       return { kind: "settings", settings: displaySettings(msg.settings) };
+    case "mediaIndex":
+      return { kind: "mediaIndex", statuses: displayIndexes(msg.statuses) };
     default:
       return null;
   }
