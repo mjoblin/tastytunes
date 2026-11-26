@@ -476,7 +476,7 @@ function ListPanel({
       <div
         data-page-queue
         data-page-list={showing}
-        className="absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] left-1/2 z-50 flex w-[min(36rem,calc(100%_-_2rem))] -translate-x-1/2 flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
+        className="absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] left-1/2 z-50 flex w-[min(max(36rem,60vw),60rem,calc(100%_-_2rem))] -translate-x-1/2 flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
         style={{ bottom }}
       >
         {/* 8px from the panel's edge all round */}
@@ -523,7 +523,9 @@ function ListPanel({
  *  bottom (flush, the first row's ring was cut off). */
 const listBody = "min-h-0 overflow-y-auto overscroll-contain p-2";
 const rowsBody = cx(listBody, "space-y-1");
-// four across in the panel, two on a phone, so more than one row shows on a short screen
+// the panel 60% of a wide screen (never under 36rem, at most 60rem): five cards across on an 11-inch
+// tablet in landscape, six on a 13-inch, four in portrait, two on a phone, so more than one row
+// shows on a short screen
 const cardsBody = cx(listBody, "grid grid-cols-[repeat(auto-fill,minmax(7rem,1fr))] gap-2.5");
 
 /**
