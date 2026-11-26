@@ -5,7 +5,8 @@ export const SHOWN_MS = 4_000;
 /** How long after the buttons show a tap on one is still taken as only showing them: their fade
  *  in (duration-300 on each of them), when a quick second tap would press one not yet seen. */
 export const SETTLING_MS = 300;
-/** How long a panel or a list open holds the buttons up with no touch, before both close. */
+/** How long a panel or a list open holds the buttons up with no touch, before both close; and a
+ *  finger the page never heard lift, before the buttons go as after its lift. */
 export const HOLD_IDLE_MS = 60_000;
 
 /** Whether a press's click only shows the buttons: they were hidden when it landed, or it was a
@@ -17,6 +18,17 @@ export const swallows = (
   control: boolean,
   touch: boolean,
 ): boolean => !shown || (touch && control && sinceShown < SETTLING_MS);
+
+/** Whether a swallowed press is kept whole from what it landed on: a control that acts on the
+ *  finger itself, going down and lifting, rather than on its click (the seek bar, which seeks at
+ *  the lift), where swallowing the click alone would still let it act. */
+export const keptWhole = (swallowed: boolean, onPress: boolean): boolean => swallowed && onPress;
+
+/** What a minute with nobody at the screen lets go of: a panel or a list open closes ("close", the
+ *  buttons going four seconds later as after any touch); with neither open, a finger whose lift
+ *  never came lets the buttons go as its lift would have ("hide"); otherwise nothing. */
+export const lapsed = (hold: boolean, down: boolean): "close" | "hide" | null =>
+  hold ? "close" : down ? "hide" : null;
 
 /**
  * THE PAGE'S TOUCH SURFACE (0.17.0, Display on other screens): one home for when the page's own
@@ -32,7 +44,9 @@ export const swallows = (
  * only closes that.
  * THE HOLD HAS A LIMIT: a panel or a list left open lets go after HOLD_IDLE_MS with nobody at the
  * screen (`onIdle` closes them), and the four seconds run as after any touch, so the buttons of
- * a screen left with a list open still go, and it can rest (display/rest).
+ * a screen left with a list open still go, and it can rest (display/rest). The same minute lets go
+ * of a finger the page never heard lift (low on an iPad a sideways drag is the system's,
+ * display/PageTransport), whether or not anything is open: it is armed at every press.
  */
 
 /** A control, or anything a touch on means to use (a panel's, a list's or the seek bar's own
@@ -41,6 +55,10 @@ const CONTROL =
   'button, a, input, select, textarea, label, [role="button"], [role="switch"], [role="tab"], [role="slider"], [data-page-scenes], [data-page-queue], [data-page-seek]';
 const onControl = (t: EventTarget | null): boolean =>
   t instanceof Element && t.closest(CONTROL) != null;
+/** A control that acts on the finger itself rather than on its click (keptWhole). */
+const ON_PRESS = "[data-page-seek]";
+const onPress = (t: EventTarget | null): boolean =>
+  t instanceof Element && t.closest(ON_PRESS) != null;
 export function useTouchShown(hold: boolean, onIdle?: () => void): boolean {
   const [shown, setShown] = useState(false);
   const shownRef = useRef(false);
@@ -71,16 +89,18 @@ export function useTouchShown(hold: boolean, onIdle?: () => void): boolean {
   useEffect(() => {
     idleRef.current = onIdle;
   }, [onIdle]);
-  // the hold's limit: every touch, pointer move or scroll starts the minute again
+  // the hold's limit, and a finger's: every touch, pointer move or scroll starts the minute again,
+  // with a panel or a list open or not
   useEffect(() => {
-    if (!hold) return;
     let t: ReturnType<typeof setTimeout> | undefined;
     function arm(): void {
       clearTimeout(t);
       t = setTimeout(() => {
         // a finger down this long with no word from it is a lift that never came
+        const lets = lapsed(holdRef.current, down.current);
         down.current = false;
-        idleRef.current?.();
+        if (lets === "close") idleRef.current?.();
+        else if (lets === "hide") later();
       }, HOLD_IDLE_MS);
     }
     const moved = (e: PointerEvent): void => {
@@ -101,7 +121,7 @@ export function useTouchShown(hold: boolean, onIdle?: () => void): boolean {
       window.removeEventListener("scroll", arm, opts);
       window.removeEventListener("wheel", arm, opts);
     };
-  }, [hold]);
+  }, [hold, later]);
   useEffect(() => {
     // whether this touch's click is the one that showed the buttons
     let swallow = false;
@@ -115,6 +135,9 @@ export function useTouchShown(hold: boolean, onIdle?: () => void): boolean {
         onControl(e.target),
         e.pointerType !== "mouse",
       );
+      // the click's swallowing never reaches a control that acts on the finger itself: a quick
+      // second tap low on the screen would start the seek bar's seek, so the press stops here
+      if (keptWhole(swallow, onPress(e.target))) e.stopPropagation();
       away = shownRef.current && !holdRef.current && !onControl(e.target);
       down.current = true;
       if (!away) show(true);
