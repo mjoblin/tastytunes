@@ -66,7 +66,8 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
     resume_album: defineTool({
       inputSchema: { device: DEVICE_ARG },
       handler: async (a) => {
-        const s = ctx.connected();
+        // the window's streamer, or another the device argument names: the album is browsed and
+        // queued through the one it resumes on
         const t = await ctx.target(a.device);
         // awake before the album is browsed, which can be on the streamer's own drive (the queue
         // write wakes it in any case: DeviceManager.queueAdd)
@@ -79,9 +80,9 @@ export function editTools(ctx: ToolContext): Record<string, ToolImpl> {
         const udn = offer.node.serverUdn;
         if (!udn) return err("The album's server is unknown.");
         // the album's id came from the index: a USB server's may have rotted since
-        const fresh = await freshObjectId(s.connection.host, udn, offer.node.id);
+        const fresh = await freshObjectId(t.host, udn, offer.node.id);
         if ("error" in fresh) return err(fresh.error);
-        const listed = await browseChildrenOf(s.connection.host, udn, fresh.id);
+        const listed = await browseChildrenOf(t.host, udn, fresh.id);
         const kids = typeof listed === "string" ? [] : listed;
         const tracks = kids
           .filter((k) => !k.isContainer)
