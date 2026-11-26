@@ -155,7 +155,7 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
                 )}
                 {lan && newTokenFailed && (
                   <div data-mcp-token-new-error className="text-[12px] text-dim">
-                    Couldn't make a new token. Try again, or restart TastyTunes.
+                    Couldn't make a new token. Try again.
                   </div>
                 )}
                 {lan && (

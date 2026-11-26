@@ -68,7 +68,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
         )}
         {on && newFailed && (
           <div data-display-new-address-error className="text-[12px] text-dim">
-            Couldn't make a new address. Try again, or restart TastyTunes.
+            Couldn't make a new address. Try again.
           </div>
         )}
         {on && status?.url && (
