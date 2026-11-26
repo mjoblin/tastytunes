@@ -21,11 +21,14 @@ import { claimKind, HOLD_MS, nowPlayingVerdict, SETTLE_MS, StartedHere } from ".
  *
  * - The helper must say "hello tastytunes-nowplaying 1" first. One that speaks another protocol,
  *   or ends before its hello (a Windows without the media features), is given up on at once, with
- *   its last stderr line in the log. GIVING UP IS SAID (gaveUp): app/mediaKeys then binds the keys
- *   the old way, so a helper that can't run never leaves the keys dead.
+ *   its last stderr line in the log.
  * - A helper that exits on its own, or is slow to say hello (HELLO_MS: a busy computer's first
  *   start), is started again after 1, 5 and 30 s, and given up on after five restarts in ten
  *   minutes.
+ * - WHERE THE KEYS GO IS SAID (routeChanged): at its hello, when it goes down after one, and when
+ *   it is given up on. app/mediaKeys binds the keys the old way until the hello and while it is
+ *   down, and lets them go at the hello, before anything is claimed: a helper that can't run, or
+ *   never says hello through the whole ladder (about two minutes), never leaves the keys dead.
  * - It is sent a message only when something a reader would see changed, never on a timer: the
  *   elapsed time and the rate let macOS run the clock, and a position that drifts or jumps (a seek)
  *   is sent again. A new track starts at play_state's own position: the position push is the last
@@ -84,8 +87,9 @@ export interface BridgeDeps {
   /** A line for the app's log; counted: one said again soon after is counted, not written. */
   log(text: string, counted?: boolean): void;
   now(): number;
-  /** The helper was given up on: the keys need their old route. */
-  gaveUp?(): void;
+  /** The helper said hello, went down after one, or was given up on: the keys' old route is
+   *  wanted while it isn't `running`, and for good once it `gaveUp`. */
+  routeChanged?(): void;
 }
 
 interface Info {
@@ -149,7 +153,8 @@ export class NowPlayingBridge {
   start(): void {
     if (this.givenUp) return;
     this.wanted = true;
-    if (!this.child) this.spawn();
+    // a restart already waiting keeps its wait (the ladder), whoever asks again meanwhile
+    if (!this.child && !this.restartTimer) this.spawn();
   }
 
   stop(): void {
@@ -413,7 +418,7 @@ export class NowPlayingBridge {
     this.deps.log(why);
     this.wanted = false;
     this.givenUp = true;
-    this.deps.gaveUp?.();
+    this.deps.routeChanged?.();
   }
 
   private send(o: object): void {
@@ -460,6 +465,8 @@ export class NowPlayingBridge {
         }
         this.ready = true;
         this.deps.log("the helper is up");
+        // the keys' old route lets go before anything is claimed: a press never reaches both
+        this.deps.routeChanged?.();
         this.update();
         return;
       }
@@ -483,6 +490,8 @@ export class NowPlayingBridge {
         );
       this.deps.log(`the helper exited (${code ?? "signal"})`);
       this.scheduleRestart();
+      // down until the next start says hello (given up on, it said so): the old route meanwhile
+      if (!this.givenUp) this.deps.routeChanged?.();
     });
   }
 

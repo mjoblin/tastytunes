@@ -2,7 +2,8 @@
 // hello (or what --hello names), writes every line it is sent to the --record file, and after
 // the first "info" (or the first message --on names) prints the --then line (a command, as the
 // real helper prints a key press, or a log line); with --die it ends before its hello instead,
-// and with --quiet it never says hello (a helper slow to start).
+// with --quiet it never says hello (a helper slow to start), and with --exit it ends that many
+// milliseconds after its hello (a helper that crashes).
 import { appendFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
@@ -22,6 +23,8 @@ let sent = false;
 const on = arg("--on") ?? "info";
 if (!process.argv.includes("--quiet"))
   process.stdout.write(`${arg("--hello") ?? "hello tastytunes-nowplaying 1"}\n`);
+const exit = arg("--exit");
+if (exit) setTimeout(() => process.exit(1), Number(exit));
 createInterface({ input: process.stdin }).on("line", (line) => {
   if (record) appendFileSync(record, `${line}\n`);
   if (!sent && then && line.includes(`"t":"${on}"`)) {

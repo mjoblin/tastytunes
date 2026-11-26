@@ -45,13 +45,15 @@ function rig(opts: {
   on?: string;
   quiet?: boolean;
   die?: string;
+  exit?: number;
   view?: Partial<StreamerView>;
   external?: boolean;
   claimDemo?: boolean;
   artFile?: (url: string) => Promise<string | null>;
 }) {
   const clock = { offset: 0 };
-  let gaveUp = 0;
+  /** Where the keys go, as app/mediaKeys reads it each time the bridge says it changed. */
+  const routes: string[] = [];
   const record = join(mkdtempSync(join(tmpdir(), "tt-np-")), "lines");
   const view: StreamerView = {
     connected: true,
@@ -71,7 +73,8 @@ function rig(opts: {
   if (opts.on) args.push("--on", opts.on);
   if (opts.quiet) args.push("--quiet");
   if (opts.die) args.push("--die", opts.die);
-  bridge = new NowPlayingBridge({
+  if (opts.exit != null) args.push("--exit", String(opts.exit));
+  const made: NowPlayingBridge = new NowPlayingBridge({
     command: { file: process.execPath, args },
     view: () => view,
     claimExternal: () => opts.external ?? false,
@@ -82,8 +85,9 @@ function rig(opts: {
     fallbackArt: "/icon.png",
     log: (t, c) => (c ? counted : logs).push(t),
     now: () => Date.now() + clock.offset,
-    gaveUp: () => gaveUp++,
+    routeChanged: () => routes.push(made.gaveUp ? "given up" : made.running ? "up" : "down"),
   });
+  bridge = made;
   const lines = (): Array<Record<string, unknown>> =>
     existsSync(record)
       ? readFileSync(record, "utf8")
@@ -92,7 +96,7 @@ function rig(opts: {
           .filter(Boolean)
           .map((l) => JSON.parse(l) as Record<string, unknown>)
       : [];
-  return { bridge, view, fired, logs, counted, lines, clock, args, gaveUps: () => gaveUp };
+  return { bridge: made, view, fired, logs, counted, lines, clock, args, routes };
 }
 
 /** A claim made: the first info is in. */
@@ -397,7 +401,7 @@ describe("the Now Playing bridge", () => {
   it("gives up on a helper that ends before its hello, says why, and hands the keys back", async () => {
     const r = rig({ die: "error: Windows' media controls aren't available here (0x80040154)" });
     r.bridge.start();
-    await vi.waitFor(() => expect(r.gaveUps()).toBe(1), { timeout: 5_000 });
+    await vi.waitFor(() => expect(r.routes).toEqual(["given up"]), { timeout: 5_000 });
     expect(r.bridge.gaveUp).toBe(true);
     expect(r.logs.join(" ")).toContain("ended before its hello (2: error: Windows' media controls");
     // not started again until the setting is turned off and on
@@ -560,8 +564,43 @@ describe("the Now Playing bridge", () => {
     }
     await vi.waitFor(() => expect(r.logs).toContain("the helper is up"), { timeout: 5_000 });
     expect(r.logs).toContain("the helper didn't say hello in time: starting it again");
-    expect(r.gaveUps()).toBe(0);
+    // the keys kept their old route through the slow start, and the hello takes them
+    expect(r.routes).toEqual(["up"]);
     expect(r.bridge.gaveUp).toBe(false);
+  });
+
+  it("says where the keys go: up at its hello, down when it exits, up again at the restart's hello", async () => {
+    const r = rig({ exit: 300 });
+    await up(r);
+    expect(r.routes).toEqual(["up"]);
+    // the next start stays up
+    r.args.splice(r.args.indexOf("--exit"), 2);
+    await vi.waitFor(() => expect(r.routes).toEqual(["up", "down"]), { timeout: 5_000 });
+    expect(r.logs).toContain("the helper exited (1)");
+    expect(r.bridge.running).toBe(false);
+    await vi.waitFor(() => expect(r.routes).toEqual(["up", "down", "up"]), { timeout: 5_000 });
+    expect(r.bridge.running).toBe(true);
+  });
+
+  it("keeps a restart's wait when started again while the helper is down", () => {
+    const r = rig({ quiet: true });
+    const late = () =>
+      r.logs.filter((l) => l === "the helper didn't say hello in time: starting it again").length;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      r.bridge.start();
+      vi.advanceTimersByTime(HELLO_MS);
+      expect(late()).toBe(1);
+      // asked again inside the ladder's first second: the restart keeps its time
+      r.bridge.start();
+      vi.advanceTimersByTime(HELLO_MS);
+      expect(late()).toBe(1);
+      vi.advanceTimersByTime(1_000);
+      expect(late()).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(r.routes).toEqual([]);
   });
 
   it("starts a new track at play_state's position, not the last track's, and follows the push again once it moves", async () => {

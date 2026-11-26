@@ -16,7 +16,7 @@ import { helperPath } from "./nowPlayingHelper";
  * playing app while the streamer plays one of its own
  * plays, so the media keys, Control Center's buttons and a headset's button control the streamer
  * with no Accessibility permission and no global shortcuts (app/mediaKeys uses this in their place
- * when it is available). The rules are app/nowPlayingRules, the process and feed
+ * while the helper is up). The rules are app/nowPlayingRules, the process and feed
  * app/nowPlayingBridge; this file wires them to the app.
  *
  * The helper runs only while the Media keys setting is on; which helper is app/nowPlayingHelper's
@@ -95,9 +95,10 @@ let bridge: NowPlayingBridge | null = null;
 
 /** Turns the system's Now Playing on or off with the Media keys setting; false where it isn't
  *  available (another system, a development run with no helper named, or a helper given up on),
- *  so the caller binds the keys the old way. `gaveUp` is called when the helper is given up on
- *  later, so the caller can do that then. */
-export function syncNowPlaying(on: boolean, gaveUp: () => void): boolean {
+ *  so the caller binds the keys the old way. True, the helper carries the keys only while it is
+ *  up (nowPlayingRunning), and `changed` is called at its hello, when it goes down after one, and
+ *  when it is given up on, so the caller binds the keys or lets them go then. */
+export function syncNowPlaying(on: boolean, changed: () => void): boolean {
   const file = helperFile();
   if (!file) return false;
   if (on && bridge?.gaveUp) return false;
@@ -123,7 +124,7 @@ export function syncNowPlaying(on: boolean, gaveUp: () => void): boolean {
     fallbackArt: iconFile(),
     log: (text, counted) => deviceManager.log("info", "nowplaying", text, { counted }),
     now: () => Date.now(),
-    gaveUp,
+    routeChanged: changed,
   });
   if (on) bridge.start();
   else bridge.stop();
