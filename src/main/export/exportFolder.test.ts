@@ -64,6 +64,19 @@ describe("an export's folder", () => {
     expect(w.bytes).toBe(4000);
   });
 
+  it("keeps a slice of the media room for the pictures, which an audio copy can't use", async () => {
+    const root = mkdtempSync(join(tmpdir(), "tt-exp-"));
+    // a cap of 8000: media stops 2000 short of it, an audio copy 1000 short of that
+    const w = new ExportWriter(root, "Pictures", 8000);
+    const bytes = (n: number) => new Blob([new Uint8Array(n)]).stream();
+    await expect(w.copy("01/audio.flac", bytes(5001))).rejects.toThrow(ExportCapReached);
+    await w.copy("01/audio.flac", bytes(5000), 5000);
+    await expect(w.copy("02/audio.flac", bytes(1))).rejects.toThrow(ExportCapReached);
+    // the copies have used all they may, and the sleeve still fits
+    w.write("pictures/sleeve.jpg", "x".repeat(1000));
+    expect(w.bytes).toBe(6000);
+  });
+
   it("writes a file under a .part name until it is whole", async () => {
     const root = mkdtempSync(join(tmpdir(), "tt-exp-"));
     const w = new ExportWriter(root, "Parts");

@@ -958,6 +958,29 @@ describe("an album's export", () => {
       expect(existsSync(join(r.folder, f)), f).toBe(true);
   });
 
+  it("keeps room for its sleeve when the copies would fill the cap", async () => {
+    // three copies of 950,000 bytes would leave about 130,000 of the 3,000,000 the pictures and
+    // the copies may use; the pictures' slice stops the third, and the 200,000-byte sleeve fits
+    const sleeve = new Uint8Array(200_000);
+    sleeve.set(JPEG);
+    const { env } = fakeEnv({
+      analysis: () => null,
+      capBytes: 4_000_000,
+      picture: () => Promise.resolve({ bytes: sleeve, type: "image/jpeg" }),
+      audioBody: () =>
+        Promise.resolve({ body: new Blob([new Uint8Array(950_000)]).stream(), bytes: 950_000 }),
+    });
+    const r = await exportAlbum(env, root(), target(album), opts({ audio: "copy" }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    const files = r.files.map((f) => f.path);
+    expect(files).toContain("tracks/02 - Undertow/audio.flac");
+    expect(files).not.toContain("tracks/03 - Breakwater/audio.flac");
+    expect(r.left_out).toEqual([
+      "tracks/03 - Breakwater/audio.flac: the export reached its size cap.",
+    ]);
+    expect(files).toContain("pictures/sleeve.jpg");
+  });
+
   it("redacted, leaves the owner's network out of every file of an album", async () => {
     const { env } = fakeEnv({ analysis: () => analyzed() });
     const r = await exportAlbum(

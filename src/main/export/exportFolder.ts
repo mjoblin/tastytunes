@@ -22,6 +22,9 @@ export const RECORD_ROOM_BYTES = 32 * 1024 * 1024;
 /** Of that room, what only the README and the final record (track.json or album.json) may use:
  *  analysis files that fill the records' room still leave the one file that says what is there. */
 export const FINAL_ROOM_BYTES = 1024 * 1024;
+/** Of the cap, what the pictures may always use: an album's audio copies, written before its
+ *  pictures, stop short of it, so an album they fill still has its sleeve. */
+export const PICTURE_ROOM_BYTES = 64 * 1024 * 1024;
 /** A name's words at most (a tag, or an export's words before its date). */
 const NAME_MAX = 80;
 /** No byte of an audio copy for this long: the media server stopped sending (the analysis
@@ -59,8 +62,8 @@ const DIR_NAME_MAX = NAME_MAX + 18;
 
 export class ExportCapReached extends Error {}
 
-/** What a file is to the cap: a picture or an audio copy ("media"), a record such as
- *  analysis.json ("record"), or the README and the record written last ("final"). */
+/** What a file is to the cap: a picture ("media"), a record such as analysis.json ("record"), or
+ *  the README and the record written last ("final"). An audio copy (copy) stops shortest. */
 export type WriteKind = "media" | "record" | "final";
 
 /** A path as an error message quotes it (an absolute one), with a rename's arrow before it. */
@@ -118,14 +121,16 @@ export class ExportWriter {
     this.dir = dir;
   }
 
-  /** What a write of `kind` may still use: media stops RECORD_ROOM_BYTES short of the cap, the
-   *  other records FINAL_ROOM_BYTES short of it, and the final record may use it all. */
-  private room(kind: WriteKind): number {
+  /** What a write of `kind` may still use: an audio copy stops PICTURE_ROOM_BYTES short of
+   *  where media stops, media RECORD_ROOM_BYTES short of the cap, the other records
+   *  FINAL_ROOM_BYTES short of it, and the final record may use it all (on a small cap, each
+   *  room a share of it instead). */
+  private room(kind: WriteKind | "audio"): number {
     const reserve = Math.min(RECORD_ROOM_BYTES, Math.floor(this.cap / 4));
     const final = Math.min(FINAL_ROOM_BYTES, Math.floor(reserve / 4));
-    const limit =
-      kind === "final" ? this.cap : kind === "record" ? this.cap - final : this.cap - reserve;
-    return limit - this.total;
+    const pictures = Math.min(PICTURE_ROOM_BYTES, Math.floor(this.cap / 8));
+    const short = { final: 0, record: final, media: reserve, audio: reserve + pictures }[kind];
+    return this.cap - short - this.total;
   }
 
   get bytes(): number {
@@ -163,17 +168,17 @@ export class ExportWriter {
     this.made.push({ path: rel, bytes: size });
   }
 
-  /** A stream (an audio copy) into the folder, stopped short of the records' room. A body that
-   *  goes silent for COPY_STALL_MS, or ends before the length it declared, is a failed copy:
-   *  what was written goes, and nothing incomplete is ever kept (nor, until it is whole, under
-   *  its own name). */
+  /** A stream (an audio copy) into the folder, stopped short of the pictures' and the records'
+   *  room. A body that goes silent for COPY_STALL_MS, or ends before the length it declared, is
+   *  a failed copy: what was written goes, and nothing incomplete is ever kept (nor, until it is
+   *  whole, under its own name). */
   async copy(
     rel: string,
     body: ReadableStream<Uint8Array>,
     expected?: number,
     stallMs = COPY_STALL_MS,
   ): Promise<void> {
-    const cap = this.room("media");
+    const cap = this.room("audio");
     if (expected != null && expected > cap) {
       void body.cancel();
       throw new ExportCapReached(rel);
