@@ -727,4 +727,19 @@ export const ONE_HOME = [
       code: "const x = <button className='tip-bottom absolute bottom-1.5 left-1.5' />;",
     },
   },
+  {
+    id: "new-secret-confirmed",
+    was: "S106's New token clause (respelled twice: the secrets store, then its error line), converted (0.17.0, with New address joining it)",
+    // a new agents' token or a new second-screen address ends every agent's setup or every
+    // screen's address at once, with no undo: it is made only from its confirm's onConfirm
+    selector:
+      "CallExpression[callee.object.name='tt'][callee.property.name=/^(mcpTokenNew|displayNewAddress)$/]:not(Property[key.name='onConfirm'] CallExpression)",
+    files: [`^${R}`],
+    message:
+      "A new agents' token or second-screen address is made only from its confirm (onConfirm): it ends every agent's setup or every screen's address, with no undo (decisions/0011)",
+    bad: {
+      file: `${R}components/settings/McpSection.tsx`,
+      code: "const x = () => void tt.mcpTokenNew();",
+    },
+  },
 ];

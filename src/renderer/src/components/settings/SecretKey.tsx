@@ -51,6 +51,8 @@ export function SecretKeyRow({
   onChanged(): void;
 }): React.JSX.Element {
   const [adding, setAdding] = useState(false);
+  // a removal the store refused (a secrets file that can't be read keeps every save out)
+  const [removeFailed, setRemoveFailed] = useState(false);
   const confirm = useConfirmPopover();
   const chip = "shrink-0 text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90";
   return (
@@ -73,7 +75,10 @@ export function SecretKeyRow({
               confirm.ask(e, {
                 question: spec.removeQuestion,
                 verb: "Remove",
-                onConfirm: () => void spec.remove().then(onChanged),
+                onConfirm: () => {
+                  setRemoveFailed(false);
+                  void spec.remove().then(onChanged, () => setRemoveFailed(true));
+                },
               })
             }
             className={chip}
@@ -81,6 +86,11 @@ export function SecretKeyRow({
             Remove
           </HeaderChip>
           {confirm.popover}
+          {removeFailed && (
+            <span data-secret-remove-error className="text-[12px] text-dim">
+              Couldn't remove the {spec.noun}.
+            </span>
+          )}
         </>
       ) : (
         <>
