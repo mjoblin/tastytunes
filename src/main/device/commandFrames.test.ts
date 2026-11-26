@@ -5,7 +5,13 @@
  */
 import { describe, expect, it } from "vitest";
 import type { ZoneNowPlaying, ZonePlayState } from "@shared/smoip";
-import { clampVolume, commandFrames, seekLanding, type CommandState } from "./commandFrames";
+import {
+  askedAfter,
+  clampVolume,
+  commandFrames,
+  seekLanding,
+  type CommandState,
+} from "./commandFrames";
 
 const idle: CommandState = {
   nowPlaying: null,
@@ -141,6 +147,69 @@ describe("volume", () => {
         { ...steps(10), volumeLimitPercent: null },
       ),
     ).toEqual([{ path: "/zone/state", params: { volume_step: 28 } }]);
+  });
+
+  it("a raise reads the level already asked for when it is above the reported one", () => {
+    const at = (asked: number | null, volume_percent = 38): CommandState => ({
+      ...idle,
+      volumeLimitPercent: 40,
+      zoneState: { volume_percent } as CommandState["zoneState"],
+      askedVolume: { percent: asked, step: null },
+    });
+    const up = { type: "volumeStepChange", delta: 1 } as const;
+    expect(commandFrames(up, at(null))).toEqual([
+      { path: "/zone/state", params: { volume_step_change: 1 } },
+    ]);
+    expect(commandFrames(up, at(39))).toEqual([
+      { path: "/zone/state", params: { volume_percent: 40 } },
+    ]);
+    expect(commandFrames(up, at(40))).toEqual([]);
+    // a lowering not yet reported: the higher, reported level still holds the ceiling
+    expect(commandFrames(up, at(37, 39))).toEqual([
+      { path: "/zone/state", params: { volume_percent: 40 } },
+    ]);
+    // on a model read in steps alone, the same
+    expect(
+      commandFrames(up, {
+        ...idle,
+        volumeLimitPercent: 50,
+        zoneState: {
+          volume_step: 13,
+          volume_percent: null,
+        } as unknown as CommandState["zoneState"],
+        askedVolume: { percent: null, step: 15 },
+      }),
+    ).toEqual([]);
+  });
+
+  it("the asked level follows each volume write, and nothing else", () => {
+    const s = {
+      zoneState: { volume_percent: 30, volume_step: 9 } as CommandState["zoneState"],
+      askedVolume: null,
+    };
+    const change = (d: number) => [{ path: "/zone/state", params: { volume_step_change: d } }];
+    expect(askedAfter(change(2), s)).toEqual({ percent: 32, step: 11 });
+    expect(askedAfter(change(1), { ...s, askedVolume: { percent: 32, step: 11 } })).toEqual({
+      percent: 33,
+      step: 12,
+    });
+    expect(askedAfter(change(-5), { ...s, askedVolume: { percent: 2, step: 1 } })).toEqual({
+      percent: 0,
+      step: 0,
+    });
+    expect(askedAfter([{ path: "/zone/state", params: { volume_percent: 40 } }], s)).toEqual({
+      percent: 40,
+      step: null,
+    });
+    expect(askedAfter([{ path: "/zone/state", params: { volume_step: 12 } }], s)).toEqual({
+      percent: null,
+      step: 12,
+    });
+    expect(askedAfter([], s)).toBeNull();
+    expect(askedAfter([{ path: "/zone/state", params: { mute: true } }], s)).toBeNull();
+    expect(
+      askedAfter([{ path: "/zone/play_control", params: { action: "toggle" } }], s),
+    ).toBeNull();
   });
 });
 

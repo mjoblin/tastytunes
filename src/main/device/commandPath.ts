@@ -1,6 +1,6 @@
 import type { StreamerCommand } from "@shared/ipc";
 import { getSettings } from "../data/persist";
-import { commandFrames } from "./commandFrames";
+import { askedAfter, type AskedVolume, commandFrames } from "./commandFrames";
 import type { SmoipSocket } from "./smoipSocket";
 import { type PresetVolumeAfterRecall, type StreamerCache, WAKE_COMMANDS } from "./streamerCache";
 import type { VolumeFader } from "./volumeFader";
@@ -26,6 +26,24 @@ export const FADE_TAKEOVER: ReadonlySet<StreamerCommand["type"]> = new Set([
   "play",
   "togglePlayback",
 ]);
+
+/**
+ * THE ASKED LEVEL, PER CONNECTION (commandFrames' AskedVolume): kept beside the connection's cache,
+ * so a new connection (a new cache) starts with none, and every caller of the one path (the window,
+ * the menu, a link, an agent, another screen) raises the same one. It stands until the streamer's
+ * next zone state replaces the one it was raised over: the streamer has reported its level again.
+ */
+const asked = new WeakMap<
+  StreamerCache,
+  { level: AskedVolume; over: StreamerCache["zoneState"] }
+>();
+
+function askedNow(cache: StreamerCache): AskedVolume | null {
+  const a = asked.get(cache);
+  if (a && a.over === cache.zoneState) return a.level;
+  asked.delete(cache);
+  return null;
+}
 
 /** Why a command didn't go out. */
 export type CommandRefusal = "no connection" | "not open" | "not open after the wake";
@@ -92,7 +110,7 @@ export async function sendCommand(
   // available; checking for or installing firmware stays the Cambridge Audio app's or the
   // streamer's own web admin's. No firmware check or install belongs here or in commandFrames.
   const cache = conn.cache();
-  const frames = commandFrames(cmd, {
+  const state = {
     nowPlaying: cache.nowPlaying,
     playState: cache.playState,
     zoneState: cache.zoneState,
@@ -100,8 +118,13 @@ export async function sendCommand(
     audioSpec: cache.audioSpec,
     powerSpec: cache.powerSpec,
     volumeLimitPercent: getSettings().volumeLimitPercent,
-  });
+    askedVolume: askedNow(cache),
+  };
+  const frames = commandFrames(cmd, state);
   if (frames) {
+    // a volume write raises the asked level as it goes, before the streamer answers
+    const level = askedAfter(frames, state);
+    if (level) asked.set(cache, { level, over: cache.zoneState });
     for (const f of frames) socket.send(f.path, f.params);
     return null;
   }

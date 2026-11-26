@@ -21,6 +21,54 @@ export interface CommandState {
   audioSpec: ZoneAudioSpec | null;
   powerSpec: SystemPowerSpec | null;
   volumeLimitPercent: number | null;
+  /** The level the volume writes sent since the streamer last reported one ask for (askedAfter). */
+  askedVolume?: AskedVolume | null;
+}
+
+/**
+ * THE ASKED LEVEL: what the volume writes sent on a connection since the streamer last reported a
+ * level ask for, in percent and in steps (null where it isn't known). A burst of steps goes out
+ * before the first answer, so a ceiling held against the reported level alone let each step of
+ * the burst pass it; the ceiling reads the higher of the two. The command path keeps it per
+ * connection and drops it when the next zone state arrives.
+ */
+export interface AskedVolume {
+  percent: number | null;
+  step: number | null;
+}
+
+const higher = (reported: number | null | undefined, asked: number | null | undefined) =>
+  reported == null ? null : Math.max(reported, asked ?? reported);
+
+/** The asked level once `frames` are sent, from the last asked level or the reported one; null
+ *  when they carry no volume write. */
+export function askedAfter(
+  frames: SocketFrame[],
+  s: Pick<CommandState, "zoneState" | "askedVolume">,
+): AskedVolume | null {
+  let percent = s.askedVolume?.percent ?? s.zoneState?.volume_percent ?? null;
+  let step = s.askedVolume?.step ?? s.zoneState?.volume_step ?? null;
+  let wrote = false;
+  for (const f of frames) {
+    if (f.path !== "/zone/state") continue;
+    const p = f.params;
+    // a level set in one unit leaves the other to what the streamer reports
+    if (typeof p.volume_percent === "number") {
+      percent = p.volume_percent;
+      step = null;
+      wrote = true;
+    } else if (typeof p.volume_step === "number") {
+      step = p.volume_step;
+      percent = null;
+      wrote = true;
+    } else if (typeof p.volume_step_change === "number") {
+      const d = p.volume_step_change;
+      percent = percent != null ? Math.max(0, Math.min(100, percent + d)) : null;
+      step = step != null ? Math.max(0, step + d) : null;
+      wrote = true;
+    }
+  }
+  return wrote ? { percent, step } : null;
 }
 
 /**
@@ -171,10 +219,11 @@ export function commandFrames(cmd: StreamerCommand, s: CommandState): SocketFram
       // as a step change that crosses it (a step is one percent on the models seen; the firmware
       // applies a step change whole). Below the limit a raise stays a step change, the firmware's
       // own step. Without a known level (Control Bus, a model not yet heard from) there is nothing
-      // to hold it to, so the step goes as sent.
+      // to hold it to, so the step goes as sent. The level is the higher of the reported and the
+      // asked (AskedVolume), so steps sent before the streamer answers the first stop there too.
       const limit = s.volumeLimitPercent;
-      const percent = s.zoneState?.volume_percent;
-      const step = s.zoneState?.volume_step;
+      const percent = higher(s.zoneState?.volume_percent, s.askedVolume?.percent);
+      const step = higher(s.zoneState?.volume_step, s.askedVolume?.step);
       if (cmd.delta > 0 && limit != null) {
         if (percent != null) {
           if (percent >= limit) return [];

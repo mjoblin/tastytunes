@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import type { StreamerCommand } from "@shared/ipc";
+
+const settings = vi.hoisted(() => ({ volumeLimitPercent: null as number | null }));
+vi.mock("../data/persist", () => ({ getSettings: () => settings }));
+
 import { type CommandConnection, FADE_TAKEOVER, openAgain, sendCommand } from "./commandPath";
 import type { SmoipSocket } from "./smoipSocket";
 import { emptyCache, type PresetVolumeAfterRecall, type StreamerCache } from "./streamerCache";
@@ -98,6 +102,47 @@ describe("one command path for every connection", () => {
     const awake = connection();
     await sendCommand(awake.conn, { type: "play" });
     expect(awake.conn.ensureAwake).not.toHaveBeenCalled();
+  });
+
+  it("four volume steps in one instant from two below the limit stop at the limit, from any caller", async () => {
+    settings.volumeLimitPercent = 40;
+    try {
+      const c = connection();
+      c.conn.cache().zoneState = { volume_percent: 38 } as StreamerCache["zoneState"];
+      const up: StreamerCommand = { type: "volumeStepChange", delta: 1 };
+      // sent before the streamer answers any of them
+      await Promise.all([1, 2, 3, 4].map(() => sendCommand(c.conn, up)));
+      expect(c.sent).toEqual([
+        { path: "/zone/state", params: { volume_step_change: 1 } },
+        { path: "/zone/state", params: { volume_percent: 40 } },
+      ]);
+    } finally {
+      settings.volumeLimitPercent = null;
+    }
+  });
+
+  it("the asked level gives way to the next level the streamer reports, and a new connection has none", async () => {
+    settings.volumeLimitPercent = 40;
+    try {
+      const c = connection();
+      const cache = c.conn.cache();
+      cache.zoneState = { volume_percent: 39 } as StreamerCache["zoneState"];
+      const up: StreamerCommand = { type: "volumeStepChange", delta: 1 };
+      await sendCommand(c.conn, up);
+      await sendCommand(c.conn, up);
+      expect(c.sent.map((f) => f.params)).toEqual([{ volume_percent: 40 }]);
+      // the knob turned down on the streamer: its report is the level now
+      cache.zoneState = { volume_percent: 30 } as StreamerCache["zoneState"];
+      await sendCommand(c.conn, up);
+      expect(c.sent.at(-1)?.params).toEqual({ volume_step_change: 1 });
+      // another connection (its own cache) reads only what its streamer reports
+      const other = connection();
+      other.conn.cache().zoneState = { volume_percent: 38 } as StreamerCache["zoneState"];
+      await sendCommand(other.conn, up);
+      expect(other.sent.map((f) => f.params)).toEqual([{ volume_step_change: 1 }]);
+    } finally {
+      settings.volumeLimitPercent = null;
+    }
   });
 
   it("openAgain waits for the socket, and gives up once another has taken its place", async () => {
