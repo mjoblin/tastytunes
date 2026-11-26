@@ -65,20 +65,24 @@ export interface ClaimInputs {
   claimedSource: string | null;
   /** How long the claim has been held through a moment with no title or controls (0 if not). */
   heldMs: number;
+  /** A stopped station that is the one last claimed, the claim lost to a reconnect, the helper
+   *  starting again or the setting turned off and on, on the same streamer. */
+  heldStation: boolean;
 }
 
 export function nowPlayingVerdict(i: ClaimInputs): NowPlayingVerdict {
   if (!i.connected || !i.powerOn || i.demo) return "release-now";
   // A STATION TOGGLED STOPS, where a queue or AirPlay pauses (the firmware's own, docs/streamer.md):
   // a claimed station keeps its claim through the stop while its source is the one claimed and it
-  // can still be started, shown paused, so the next key resumes it rather than going to another app
+  // can still be started, shown paused, so the next key resumes it rather than going to another app;
+  // and claimed again after a reconnect (the Mac asleep, the network's blip) while it is that same
+  // station, still stopped, where a paused queue track is claimed again by being live
   if (
     i.state === "stop" &&
-    i.claimed &&
     i.kind === "radio" &&
     i.steerable &&
     i.source != null &&
-    i.source === i.claimedSource
+    ((i.claimed && i.source === i.claimedSource) || i.heldStation)
   )
     return "claim";
   if (i.state == null || !LIVE.has(i.state)) return "release-soon";

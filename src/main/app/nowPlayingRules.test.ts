@@ -22,6 +22,7 @@ const base: ClaimInputs = {
   source: "MEDIA_PLAYER",
   claimedSource: null,
   heldMs: 0,
+  heldStation: false,
 };
 const held = { claimed: true, claimedSource: "MEDIA_PLAYER" };
 const v = (over: Partial<ClaimInputs>) => nowPlayingVerdict({ ...base, ...over });
@@ -90,6 +91,15 @@ describe("a station toggled to stop", () => {
     );
     expect(v({ ...station, state: "stop", steerable: false })).toBe("release-soon");
     expect(v({ ...station, state: "stop", source: "AIRPLAY" })).toBe("release-soon");
+  });
+
+  it("is claimed again after a reconnect when it is the station held, still stopped", () => {
+    const after = { kind: "radio" as const, source: "IR", claimed: false, claimedSource: null };
+    expect(v({ ...after, state: "stop", heldStation: true })).toBe("claim");
+    expect(v({ ...after, state: "stop", heldStation: false })).toBe("release-soon");
+    expect(v({ ...after, state: "stop", heldStation: true, steerable: false })).toBe(
+      "release-soon",
+    );
   });
 
   it("is a station's alone: a stopped queue or disc still lets go", () => {

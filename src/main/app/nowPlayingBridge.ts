@@ -120,6 +120,8 @@ export class NowPlayingBridge {
   /** The hold's check came: it is over, whatever the clock reads (a timer can fire a little early). */
   private holdOver = false;
   private claimedSource: string | null = null;
+  /** The station claimed last (its source and name), kept through a claim lost on this streamer. */
+  private heldStation: string | null = null;
   private givenUp = false;
   private readonly started = new StartedHere();
   /** Whether the tile last showed playing, and its buttons: kept through a track change. */
@@ -184,6 +186,7 @@ export class NowPlayingBridge {
    *  started on the last one, or a recall still awaiting its play, is not the next one's. */
   forgetRecall(): void {
     this.started.forget();
+    this.heldStation = null;
     this.update();
   }
 
@@ -220,6 +223,11 @@ export class NowPlayingBridge {
     const source = ps?.metadata?.source ?? null;
     const startedHere = this.started.observe(ps, live, now);
     const can = transportAbilities(v.nowPlaying?.controls, ps?.metadata?.duration ?? null);
+    // the station claimed last, remembered through a lost claim on this streamer; another play
+    // that is live replaces it
+    const station =
+      kind === "radio" && source != null ? `${source}|${ps?.metadata?.station ?? ""}` : null;
+    if (live && station !== this.heldStation) this.heldStation = null;
     const verdict = nowPlayingVerdict({
       connected: v.connected,
       powerOn: v.powerOn,
@@ -233,6 +241,7 @@ export class NowPlayingBridge {
       source,
       claimedSource: this.claimedSource,
       heldMs: this.holdingSince == null ? 0 : this.holdOver ? HOLD_MS : now - this.holdingSince,
+      heldStation: state === "stop" && station != null && station === this.heldStation,
     });
     if (verdict === "release-now") return this.release("now");
     if (verdict === "release-soon") {
@@ -265,6 +274,7 @@ export class NowPlayingBridge {
     // a new connection's first word: no claim made from what came before it
     if (!this.claimed && this.awaiting.size > 0) return;
     this.claimedSource = source;
+    this.heldStation = station;
     this.publish(v);
   }
 

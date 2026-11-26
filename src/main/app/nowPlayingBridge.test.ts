@@ -347,6 +347,53 @@ describe("the Now Playing bridge", () => {
     expect(r.lines()).not.toContainEqual({ t: "release" });
   });
 
+  it("claims a stopped station again after a reconnect, and forgets it on a switch of streamer", async () => {
+    const station = (state: string) =>
+      ({
+        state,
+        queue_id: null,
+        metadata: { class: "md.radio.airable", station: "FIP", title: "A Song", source: "IR" },
+      }) as unknown as ZonePlayState;
+    const stopped = { controls: ["play", "play_pause"] } as unknown as ZoneNowPlaying;
+    const r = rig({
+      view: {
+        playState: station("play"),
+        nowPlaying: { controls: ["play_pause"] } as unknown as ZoneNowPlaying,
+      },
+    });
+    r.bridge.start();
+    await vi.waitFor(() => expect(r.lines().length).toBe(1), { timeout: 5_000 });
+    r.view.playState = station("stop");
+    r.view.nowPlaying = stopped;
+    r.bridge.update();
+    // the Mac sleeps: the connection goes, the claim with it
+    r.view.connected = false;
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().at(-1)).toEqual({ t: "release" }), { timeout: 5_000 });
+    // the reconnect: the same station, still stopped, is claimed again once the streamer has said so
+    r.view.connected = true;
+    r.bridge.connected();
+    r.bridge.heardFrom("playState");
+    r.bridge.heardFrom("power");
+    await vi.waitFor(
+      () => expect(r.lines().at(-1)).toMatchObject({ title: "A Song", playing: false }),
+      {
+        timeout: 5_000,
+      },
+    );
+    // a switch of streamer forgets it
+    r.view.connected = false;
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().at(-1)).toEqual({ t: "release" }), { timeout: 5_000 });
+    r.bridge.forgetRecall();
+    r.view.connected = true;
+    r.bridge.connected();
+    r.bridge.heardFrom("playState");
+    r.bridge.heardFrom("power");
+    await new Promise((res) => setTimeout(res, 300));
+    expect(r.lines().at(-1)).toEqual({ t: "release" });
+  });
+
   it("gives up on a helper that ends before its hello, says why, and hands the keys back", async () => {
     const r = rig({ die: "error: Windows' media controls aren't available here (0x80040154)" });
     r.bridge.start();
