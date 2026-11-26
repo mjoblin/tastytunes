@@ -2,7 +2,8 @@
 // the local clock; each fires at most once per minute-instance. Honest scope:
 // alarms fire only while the app is running — the UI says so. A schedule that
 // matches while the streamer is disconnected retries on later ticks within
-// its minute (device may reconnect mid-minute) but is never fired late.
+// its minute (device may reconnect mid-minute) but is never fired late; the
+// log says so once its minute is out.
 //
 // CATCH-UP ON RESUME (2026-07-26). Node timers stall while the machine sleeps,
 // so a schedule whose minute passed during sleep used to be skipped in silence.
@@ -262,10 +263,23 @@ export function catchUpOnResume(dm: DeviceManager): void {
     // the window's streamer waits for the window's reconnect; another is reached on its own
     if (isWindows(dm, pick.schedule) && dm.connectionNow.phase !== "connected") {
       waited += RECONNECT_POLL_MS;
-      if (waited > RECONNECT_GRACE_MS) return;
+      if (waited > RECONNECT_GRACE_MS) {
+        dm.log(
+          "warn",
+          "schedule",
+          `${pick.schedule.streamer?.name ?? "the streamer"} didn't reconnect after the wake: the missed schedule at ${pick.schedule.time} wasn't offered`,
+        );
+        return;
+      }
       setTimeout(() => void attempt(), RECONNECT_POLL_MS);
       return;
     }
+    // Claim the instance even though we only OFFER: the Map means "don't act
+    // on this firing again", and a second resume must not re-ask. Claimed
+    // before the streamer is reached, as the tick claims before it fires:
+    // reaching another streamer takes seconds, and a tick in that gap fired
+    // the schedule and the offer still asked for it.
+    lastFired.set(pick.schedule.id, pick.instance);
     // the checks and the offer read the streamer the schedule names (0.16.0: they read the
     // window's, so a schedule for another room was offered by the window's state and preset)
     const target = await targetOf(dm, pick.schedule);
@@ -273,9 +287,6 @@ export function catchUpOnResume(dm: DeviceManager): void {
     // Already listening? Then the offer is noise, and recalling a preset over
     // it would be worse — the state-guard idiom wake-on-intent uses.
     if (target.playing()) return;
-    // Claim the instance even though we only OFFERED: the Map means "don't act
-    // on this firing again", and a second resume must not re-ask.
-    lastFired.set(pick.schedule.id, pick.instance);
     // TWO SURFACES, one state. The notification is the loud one; the Schedules
     // tab is the one that still shows up under Do Not Disturb, or when the
     // banner has been swiped away. Acting on either clears both.
@@ -341,18 +352,37 @@ function offerCatchUp(
   n.show();
 }
 
+/** Instances that matched while the window's streamer was disconnected, by schedule id: said in
+ *  the log once their minute is out without a firing. */
+const waiting = new Map<string, { instance: string; schedule: Schedule }>();
+
 export function startScheduler(dm: DeviceManager): void {
   const check = (): void => {
     const now = new Date();
     const time = hhmm(now);
     const day = now.getDay();
+    // a schedule that waited for the window's connection all through its minute didn't run (one
+    // claimed meanwhile was acted on: fired later in its minute, or offered after a wake)
+    for (const [id, w] of waiting) {
+      if (w.instance === instanceKey(now, time)) continue;
+      waiting.delete(id);
+      if (lastFired.get(id) === w.instance) continue;
+      dm.log(
+        "warn",
+        "schedule",
+        `${w.schedule.streamer?.name ?? "the streamer"} wasn't connected: the schedule at ${w.schedule.time} didn't run`,
+      );
+    }
     for (const s of getSettings().schedules) {
       if (!s.enabled || s.time !== time || !s.days.includes(day)) continue;
       const instance = instanceKey(now, time);
       if (lastFired.get(s.id) === instance) continue;
       // one that names no other streamer waits for the window's connection, as always; one that
       // does is reached on its own (targetOf)
-      if (isWindows(dm, s) && dm.connectionNow.phase !== "connected") continue;
+      if (isWindows(dm, s) && dm.connectionNow.phase !== "connected") {
+        waiting.set(s.id, { instance, schedule: s });
+        continue;
+      }
       lastFired.set(s.id, instance);
       // commands throw on a half-dead socket — a missed schedule is a log
       // line, never an unhandled rejection
