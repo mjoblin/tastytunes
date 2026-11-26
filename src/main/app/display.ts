@@ -441,10 +441,17 @@ export async function syncDisplay(s: AppSettings = getSettings()): Promise<Displ
   displayServer.stop();
   // the address read (or minted, the first time) before the server starts: one saved that couldn't
   // be read is kept as it is, and the server waits for New address rather than make one unasked
-  if ((await displayToken()) == null) {
+  const token = await displayToken();
+  // the read can wait on the keychain (a system prompt), and the switch or the port may have
+  // changed meanwhile: what is wanted now is what counts, never the settings this call began with,
+  // so a switch turned off during the read leaves nothing serving
+  const now = getSettings().displayServer;
+  if (!now.enabled || now.port !== want.port) return syncDisplay(getSettings());
+  if (token == null) {
     state = { port: null, error: ADDRESS_UNREADABLE, addressUnreadable: true };
     return pushStatus();
   }
+  if (displayServer.running && displayServer.port === want.port) return pushStatus();
   try {
     await displayServer.start(want.port);
     state = { port: want.port, error: null, addressUnreadable: false };
