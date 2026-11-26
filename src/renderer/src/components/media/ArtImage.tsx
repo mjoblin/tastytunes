@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/format";
 import { useArtFallback } from "@/lib/artFallback";
 import { keepArt, shownBefore } from "@/lib/artKeep";
+import { ART_RETRY_MS, artRetriable, artRetryUrl } from "@/lib/artRetry";
 
 /**
  * Artwork <img> that renders `fallback` when the URL is missing — or present
@@ -16,8 +17,9 @@ import { keepArt, shownBefore } from "@/lib/artKeep";
  * for by the capture, the accent and the picture at once — and one refused
  * connection used to hide the art for the whole song, since an AirPlay
  * track's URL never changes. Two retries, a beat apart, with a cache-busting
- * query so the browser does not hand back the failure; data URLs are never
- * retried. While a retry waits the FALLBACK shows, never the failed <img>:
+ * query so the browser does not hand back the failure (lib/artRetry: a
+ * server's picture or the display page's own, never a data URL). While a
+ * retry waits the FALLBACK shows, never the failed <img>:
  * Chromium paints a broken-image glyph on one.
  *
  * `fallbackArt` (an album's artist + title) tries the same album's cover in
@@ -26,7 +28,6 @@ import { keepArt, shownBefore } from "@/lib/artKeep";
  * art always wins. The archive is off with the same switch as the context
  * lookups (main answers null for it when the toggle is off).
  */
-const RETRY_DELAYS_MS = [1500, 4000];
 /** How long a pending picture waits before the well shimmers (a cached one never does). */
 const SLOW_MS = 300;
 
@@ -122,10 +123,6 @@ function watchNear(el: Element, onNear: () => void): () => void {
 export const PORTRAIT_POSITION = "50% 20%";
 /** Taller than wide by more than a rounding error. */
 export const isPortrait = (w: number, h: number): boolean => w > 0 && h > w * 1.02;
-
-const retriable = (url: string): boolean => /^https?:/i.test(url);
-const bust = (url: string, n: number): string =>
-  n > 0 && retriable(url) ? `${url}${url.includes("?") ? "&" : "?"}tt_retry=${n}` : url;
 
 export function ArtImage({
   src,
@@ -229,7 +226,7 @@ export function ArtImage({
     return watchNear(el, () => setNear(true));
   }, [lazy, near, drawn, base]);
   if (!drawn) return <>{fallback}</>;
-  const shown = base === src ? bust(base, attempt) : base;
+  const shown = base === src ? artRetryUrl(base, attempt) : base;
   return (
     <>
       <img
@@ -259,12 +256,12 @@ export function ArtImage({
           }
         }}
         onError={() => {
-          if (base === src && retriable(base) && attempt < RETRY_DELAYS_MS.length) {
+          if (base === src && artRetriable(base) && attempt < ART_RETRY_MS.length) {
             if (timer.current) clearTimeout(timer.current);
             setRetry({ src: base, n: attempt, waiting: true });
             timer.current = setTimeout(
               () => setRetry({ src: base, n: attempt + 1, waiting: false }),
-              RETRY_DELAYS_MS[attempt],
+              ART_RETRY_MS[attempt],
             );
             return;
           }
