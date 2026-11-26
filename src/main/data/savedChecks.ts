@@ -94,6 +94,16 @@ function checkRow(
   return out ?? row;
 }
 
+/** A list file's list: the list itself, or the one a later version wrapped in an object
+ *  ({..., items: [...]}), the object kept in `carried` to be written back around it (withCarried).
+ *  Anything else is returned as it came. */
+export function unwrapList(parsed: unknown, carried: Carried): unknown {
+  if (!isRecord(parsed) || !Array.isArray(parsed.items)) return parsed;
+  const { items, ...envelope } = parsed;
+  carried.envelope = envelope;
+  return items;
+}
+
 /** A list file's rows, each checked; anything but a list is no rows (and named). */
 function checkList<T>(
   parsed: unknown,
@@ -102,12 +112,7 @@ function checkList<T>(
   carried?: Carried,
 ): T[] {
   if (parsed === undefined) return [];
-  let rows = parsed;
-  if (carried && isRecord(parsed) && Array.isArray(parsed.items)) {
-    const { items, ...envelope } = parsed;
-    carried.envelope = envelope;
-    rows = items;
-  }
+  const rows = carried ? unwrapList(parsed, carried) : parsed;
   if (!Array.isArray(rows)) {
     notes.push(`it held ${kindOf(parsed)}, not a list`);
     return [];

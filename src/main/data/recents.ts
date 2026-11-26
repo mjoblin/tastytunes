@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { app } from "electron";
 import { type RecentTrack, MAX_RECENTS } from "@shared/model";
 import { atomicWriteFileSync } from "./jsonStore";
+import { carriedNone, unwrapList, withCarried } from "./savedChecks";
 import { keepAsFound, readSaved } from "./savedFiles";
 
 // A bounded ring of recently-played tracks, persisted beside settings.json.
@@ -12,6 +13,8 @@ import { keepAsFound, readSaved } from "./savedFiles";
 let cached: RecentTrack[] | null = null;
 // a file that couldn't be read is never written over this session (data/savedFiles)
 let unreadable = false;
+// the object a later version wrapped the list in, written back around it (data/savedChecks)
+let carried = carriedNone();
 
 function recentsPath(): string {
   return join(app.getPath("userData"), "recents.json");
@@ -116,10 +119,13 @@ export function getRecents(): RecentTrack[] {
   const read = readSaved(recentsPath());
   unreadable = read.state === "unreadable";
   const setAside: string[] = [];
+  carried = carriedNone();
   if (read.state === "read") {
-    if (Array.isArray(read.parsed)) {
+    // the list itself, or the one a later version wrapped in an object
+    const rows = unwrapList(read.parsed, carried);
+    if (Array.isArray(rows)) {
       // our own file: keep the rows that have the one field everything sorts on
-      read.parsed.forEach((row: unknown, i) => {
+      rows.forEach((row: unknown, i) => {
         if (isRecentTrack(row)) raw.push(row);
         else setAside.push(`[${i}] had no time, left out`);
       });
@@ -147,7 +153,7 @@ function save(list: RecentTrack[]): void {
     // atomic (temp + rename): a crash mid-write must not truncate the log.
     // The load side stays local — its upgrade/collapse pass is domain logic,
     // not persistence (see jsonStore for the stores that fit the factory).
-    atomicWriteFileSync(recentsPath(), JSON.stringify(list));
+    atomicWriteFileSync(recentsPath(), JSON.stringify(withCarried(list, carried)));
   } catch (err) {
     console.error("failed to persist recents", err);
   }

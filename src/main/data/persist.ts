@@ -12,7 +12,7 @@ import {
 } from "@shared/model";
 import { atomicWriteFileSync } from "./jsonStore";
 import { checkSettingsKinds } from "./savedChecks";
-import { keepAsFound, readSaved, saveFailed } from "./savedFiles";
+import { keepAsFound, noteSaved, readSaved, saveFailed } from "./savedFiles";
 import { readSecret, setSecret } from "./secrets";
 
 let cached: AppSettings | null = null;
@@ -21,6 +21,19 @@ let unreadable = false;
 
 /** The MCP server's bearer token (the secrets store's mcpToken): minted here and nowhere else. */
 const mintToken = (): string => randomBytes(24).toString("base64url");
+
+/** The settings that hold one of a set of ids, and the ids this version reads. An id it doesn't
+ *  read (a later version's accent, scene or face, or a face since retired) is shown as the default
+ *  and written back as the file had it, until that setting is changed: an update then a rollback
+ *  keeps the later version's choice for when it runs again. */
+const IDS = {
+  accent: ACCENT_IDS,
+  displayScene: DISPLAY_SCENE_IDS,
+  nowPlayingScene: DISPLAY_SCENE_IDS,
+  displayFont: DISPLAY_FONT_IDS,
+} as const satisfies Partial<Record<keyof AppSettings, readonly string[]>>;
+/** The ids this session shows as the default, by setting, as the file had them. */
+let carriedIds: Partial<Record<keyof AppSettings, unknown>> = {};
 
 /** Settings that once were and are no longer: dropped from a file read, so a write leaves them out. */
 const RETIRED = ["accentFollowsArt", "ambientCoverage", "vignette", "searchHidden"] as const;
@@ -69,11 +82,6 @@ export function getSettings(): AppSettings {
     // nor the Artists view and an artist's page before 0.16.0: an older file keeps what it showed
     if (!("lensArtistsLayout" in file)) loaded.lensArtistsLayout = loaded.libraryLayout;
     if (!("artistPageLayout" in file)) loaded.artistPageLayout = loaded.libraryLayout;
-    // Heal a display font that was retired (e.g. an older file naming a face no
-    // longer in the curated set) back to the default so the picker stays in sync.
-    if (!DISPLAY_FONT_IDS.includes(loaded.displayFont)) {
-      loaded.displayFont = DEFAULT_SETTINGS.displayFont;
-    }
     // Accent follows album art became one of the accent's choices (0.16.0): a file that had it on
     // keeps the album's color, one that had it off gets the default
     if (!("accent" in file)) {
@@ -83,15 +91,22 @@ export function getSettings(): AppSettings {
     // accent choice; the ambient art's coverage and vignette, now always the whole window with it;
     // the Search screen's hidden categories, now one scope at a time, Everything first)
     for (const key of RETIRED) delete (loaded as unknown as Record<string, unknown>)[key];
-    if (!ACCENT_IDS.includes(loaded.accent)) loaded.accent = DEFAULT_SETTINGS.accent;
-    if (!DISPLAY_SCENE_IDS.includes(loaded.displayScene)) {
-      loaded.displayScene = DEFAULT_SETTINGS.displayScene;
-    }
-    if (!DISPLAY_SCENE_IDS.includes(loaded.nowPlayingScene)) {
-      loaded.nowPlayingScene = DEFAULT_SETTINGS.nowPlayingScene;
+    // an id this version doesn't read is shown as the default, so the pickers stay in step, and
+    // kept to be written back as found (IDS)
+    carriedIds = {};
+    for (const [key, ids] of Object.entries(IDS) as [keyof typeof IDS, readonly string[]][]) {
+      const id = loaded[key];
+      if (ids.includes(id)) continue;
+      carriedIds[key] = id;
+      (loaded as unknown as Record<string, unknown>)[key] = DEFAULT_SETTINGS[key];
+      noteSaved(
+        "info",
+        `settings.json: ${key} ${JSON.stringify(id)} isn't one this version reads, shown as the default and kept as it was`,
+      );
     }
   } catch {
     loaded = { ...DEFAULT_SETTINGS };
+    carriedIds = {};
   }
   cached = loaded;
   return cached;
@@ -163,13 +178,16 @@ export function newDisplayToken(): Promise<void> {
 
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
   const merged = { ...getSettings(), ...patch };
+  // a setting changed holds the new choice from here on: an id carried for it is let go
+  for (const key of Object.keys(patch)) delete carriedIds[key as keyof AppSettings];
   const next = secretsMoved ? withoutSecrets(merged) : merged;
   cached = next;
   if (unreadable) return next;
   try {
     // atomic (temp + rename) — a crash mid-write must not truncate settings.
     // Pretty-printed: this is the one file the user might open or diff.
-    atomicWriteFileSync(settingsPath(), JSON.stringify(next, null, 2));
+    // The ids carried go back in their own places (every one is a key the settings already have).
+    atomicWriteFileSync(settingsPath(), JSON.stringify({ ...next, ...carriedIds }, null, 2));
   } catch (err) {
     console.error("failed to persist settings", err);
     // said once a session (data/savedFiles saveFailed)

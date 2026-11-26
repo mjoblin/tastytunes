@@ -11,8 +11,9 @@ export type Theme = "dark" | "light";
 export type ThemePreference = Theme | "system";
 
 /** The display face ("money font") — a curated, bundled set. The array is the
- *  single source of truth for valid ids (persist.ts coerces unknown values to
- *  the default; the renderer builds its labelled picker from the same ids). */
+ *  single source of truth for valid ids (persist.ts shows an unknown value as
+ *  the default, keeping it in the file; the renderer builds its labelled picker
+ *  from the same ids). */
 export const DISPLAY_FONT_IDS = [
   "fraunces",
   "unbounded",
@@ -26,8 +27,8 @@ export type DisplayFont = (typeof DISPLAY_FONT_IDS)[number];
 /** The accent, the color of what you click and choose (0.16.0; gold stays for the brand and what's
  *  playing): a curated three, sand by default, gold itself for one color throughout, or the playing
  *  album's own color. The array is the
- *  single source of truth for valid ids (persist.ts coerces unknown values to the default; the
- *  Appearance row is built from the same ids; styles.css draws each color). */
+ *  single source of truth for valid ids (persist.ts shows an unknown value as the default, keeping
+ *  it in the file; the Appearance row is built from the same ids; styles.css draws each color). */
 export const ACCENT_IDS = ["sand", "gold", "sage", "teal", "art"] as const;
 export type AccentChoice = (typeof ACCENT_IDS)[number];
 /** Display mode's SCENE: what fills the screen (0.8.0). Sleeve is the art

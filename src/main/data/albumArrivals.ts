@@ -40,7 +40,9 @@ const store = jsonFileStore<Record<string, ServerArrivals>>({
       }
       const keys: Record<string, number> = {};
       for (const [k, at] of Object.entries(v.keys)) if (typeof at === "number") keys[k] = at;
-      out[udn] = { since: v.since, keys };
+      // a field this version doesn't know (a later version's) is kept, and written back with the
+      // server's next change (noteArrivals spreads the server)
+      out[udn] = { ...v, since: v.since, keys };
     }
     return out;
   },

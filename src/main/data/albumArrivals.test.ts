@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import type { MediaNode } from "@shared/model";
 import { arrivalsOf, noteArrivals } from "./albumArrivals";
 
@@ -50,5 +52,33 @@ describe("when each album arrived", () => {
       3000,
     );
     expect(arrivalsOf("uuid:c")["batch 0|band"]).toBe(3000);
+  });
+});
+
+describe("a later version's fields on a server are kept", () => {
+  it("writes a field it doesn't know back as it was when the server's albums change", async () => {
+    // the module fresh, so the store reads the file written here
+    vi.resetModules();
+    const { app } = await import("electron");
+    const file = join(app.getPath("userData"), "album-arrivals.json");
+    const later = { source: "rescan", counts: [3, 4] };
+    writeFileSync(
+      file,
+      JSON.stringify({
+        "uuid:d": { since: 1000, keys: { "one|band": 0 }, later },
+        "uuid:e": { since: 2000, keys: { "two|band": 0 }, alsoLater: true },
+      }),
+    );
+    const arrivals = await import("./albumArrivals");
+    arrivals.noteArrivals("uuid:d", [album("One"), album("Three")], false, 5000);
+    expect(arrivals.arrivalsOf("uuid:d")).toEqual({ "one|band": 0, "three|band": 5000 });
+    const written = JSON.parse(readFileSync(file, "utf-8")) as Record<string, unknown>;
+    expect(written["uuid:d"]).toEqual({
+      since: 1000,
+      keys: { "one|band": 0, "three|band": 5000 },
+      later,
+    });
+    // and the server nothing changed for, as it was
+    expect(written["uuid:e"]).toEqual({ since: 2000, keys: { "two|band": 0 }, alsoLater: true });
   });
 });

@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app } from "electron";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { RecentTrack } from "@shared/model";
 import { getRecents, recordRecent } from "./recents";
 
@@ -42,5 +42,45 @@ describe("the recently played list keeps every field a row carries", () => {
     recordRecent(row(3000, "Tin Weather", { artUrl: "http://nas/a.jpg" }));
     const saved = JSON.parse(readFileSync(path(), "utf-8")) as RecentTrack[];
     expect(saved[0]).toMatchObject({ streamer: "evo-1", artUrl: "http://nas/a.jpg", at: 2000 });
+  });
+});
+
+/** The module fresh, so the list is read from the file written next, and that file's path. */
+async function fresh() {
+  vi.resetModules();
+  const electron = await import("electron");
+  const file = join(electron.app.getPath("userData"), "recents.json");
+  return { recents: await import("./recents"), file };
+}
+
+describe("a Recent list a later version wrapped is read, and written back wrapped", () => {
+  it("reads the rows inside the object and writes them back inside it, the object's fields kept", async () => {
+    const { recents, file } = await fresh();
+    writeFileSync(
+      file,
+      JSON.stringify({ format: 2, cleared: 500, items: [row(2000, "Tin Weather")] }),
+    );
+    expect(recents.getRecents().map((e) => e.title)).toEqual(["Tin Weather"]);
+    recents.recordRecent(row(3000, "Lantern Hours"));
+    const saved = JSON.parse(readFileSync(file, "utf-8")) as {
+      format: number;
+      cleared: number;
+      items: RecentTrack[];
+    };
+    expect(saved.format).toBe(2);
+    expect(saved.cleared).toBe(500);
+    expect(saved.items.map((e) => e.title)).toEqual(["Lantern Hours", "Tin Weather"]);
+    // and cleared, the object stays around an empty list
+    recents.clearRecents();
+    expect(JSON.parse(readFileSync(file, "utf-8"))).toEqual({ format: 2, cleared: 500, items: [] });
+  });
+
+  it("writes a bare list back bare", async () => {
+    const { recents, file } = await fresh();
+    writeFileSync(file, JSON.stringify([row(2000, "Tin Weather")]));
+    recents.recordRecent(row(3000, "Lantern Hours"));
+    const saved = JSON.parse(readFileSync(file, "utf-8")) as RecentTrack[];
+    expect(Array.isArray(saved)).toBe(true);
+    expect(saved.map((e) => e.title)).toEqual(["Lantern Hours", "Tin Weather"]);
   });
 });
