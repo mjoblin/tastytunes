@@ -169,7 +169,7 @@ function ControlRows({ settings, save }: SectionProps): React.JSX.Element {
         <div className="pl-4 ml-1 border-l-2 border-edge/50 space-y-2">
           <Toggle
             label="Volume buttons"
-            hint="Change the volume one step for each tap, up to the volume limit."
+            hint="Change the volume one step for each tap, up to the volume limit (when the streamer reports its volume)."
             checked={settings.displayControlVolume}
             onChange={(displayControlVolume) => void save({ displayControlVolume })}
           />
