@@ -4,6 +4,10 @@
 // publisher, so the signature check is skipped, and nothing there installs or relaunches.
 //
 //   TT_EXE=<installed exe or AppImage> TT_EXPECT=<newest version> node .github/update-smoke.mjs
+//
+// With TT_EXPECT_NONE=1 (the workflow sets it when a stable build meets a newer pre-release, as a
+// version's first rc does) the run asserts the other half: the stable build's check answers none,
+// since a stable build is never offered a pre-release, and nothing is downloaded or installed.
 import { _electron } from "playwright-core";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync } from "node:fs";
@@ -12,6 +16,7 @@ import { join } from "node:path";
 
 const exe = process.env.TT_EXE;
 const expect = process.env.TT_EXPECT;
+const expectNone = process.env.TT_EXPECT_NONE === "1";
 if (!exe || !existsSync(exe) || !expect) {
   console.error(`TT_EXE (${exe}) and TT_EXPECT (${expect}) are both needed`);
   process.exit(1);
@@ -64,6 +69,30 @@ function stopAll() {
 }
 
 let app = await launch();
+if (expectNone) {
+  try {
+    const page = await app.firstWindow({ timeout: 60000 });
+    const from = await versionOf(app);
+    ok(
+      `the stable build runs (${from}, the feed's newest the pre-release ${expect})`,
+      !from.includes("-"),
+    );
+    const found = await page.evaluate(() => window.tastytunes.updateCheckNow());
+    ok(
+      `a stable build is offered no pre-release: the check answers none (${JSON.stringify(found)})`,
+      found?.status === "none",
+    );
+  } catch (e) {
+    ok("the check ran", false, e instanceof Error ? e.message : String(e));
+  } finally {
+    await app.close().catch(() => {});
+    stopAll();
+  }
+  console.log(
+    failed === 0 ? "\nupdate smoke: all checks passed" : `\nupdate smoke: ${failed} failed`,
+  );
+  process.exit(failed === 0 ? 0 : 1);
+}
 try {
   const page = await app.firstWindow({ timeout: 60000 });
   const from = await versionOf(app);

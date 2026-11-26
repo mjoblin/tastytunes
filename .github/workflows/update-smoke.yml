@@ -60,9 +60,17 @@ jobs:
           tags=$(gh release list --repo "$GITHUB_REPOSITORY" --limit 2 --json tagName --jq '.[].tagName')
           newest=$(echo "$tags" | sed -n 1p)
           from="${FROM:-$(echo "$tags" | sed -n 2p)}"
-          echo "from $from, expecting $newest"
           echo "TT_FROM=$from" >> "$GITHUB_ENV"
           echo "TT_EXPECT=${newest#v}" >> "$GITHUB_ENV"
+          # a stable build is never offered a pre-release, so a version's first rc, published after
+          # the last final, can't be reached from it: the run then proves that half, the stable's
+          # check answering none (0.17.0)
+          if [[ "$newest" == *-* && "$from" != *-* ]]; then
+            echo "from $from, a stable build, expecting no update to the pre-release $newest"
+            echo "TT_EXPECT_NONE=1" >> "$GITHUB_ENV"
+          else
+            echo "from $from, expecting $newest"
+          fi
 
       - name: Install the previous build (Windows)
         if: matrix.os == 'windows'
