@@ -9,7 +9,7 @@ import "@fontsource/instrument-serif/400.css";
 import "@fontsource-variable/schibsted-grotesk";
 import "../styles.css";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { Component, useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { AppSettings, DisplayScene } from "@shared/model";
 import ReactDOM from "react-dom/client";
 import { tt } from "@/api";
@@ -35,6 +35,7 @@ import {
 } from "./pageSettings";
 import { ControlsSetting, PageTransport, SleepControls, useLocked } from "./PageTransport";
 import { ScenePanel } from "./ScenePanel";
+import { reloadSoon } from "./reload";
 import { musicGoing, REST_FADE_MS, REST_OPACITY, useRest } from "./rest";
 import { useTouchShown } from "./touch";
 
@@ -46,8 +47,10 @@ import { useTouchShown } from "./touch";
  * (display/ScenePanel: a scene, settings, full screen), which change this screen alone. With the
  * app's Playback controls on, the same touch shows previous, play or pause and next
  * (display/PageTransport), which steer the streamer once the app has allowed this screen. While
- * the streamer sleeps, or the app hasn't been heard for a few seconds, the page goes dark. A
- * touch wakes a resting page, so a screen can be set up in silence.
+ * the streamer sleeps, or the app hasn't been heard for a few seconds, the page goes dark, and a
+ * touch says why (display/dark). A touch wakes a resting page, so a screen can be set up in
+ * silence. A render error reloads the page after a wait (display/reload), since a screen left on
+ * has nobody to press reload.
  *
  * A SCREEN LEFT ON: with the music stopped for a while, the page dims and drifts, a light page
  * turning dark once dimmed (display/rest).
@@ -118,12 +121,24 @@ function Page(): React.JSX.Element {
   const settings = useStore((s) => s.settings);
   const powered = useStore((s) => s.systemPower?.power === "ON");
   const connected = useStore((s) => s.connection.phase === "connected");
+  const awake = heard && connected && powered;
   const going = useStore((s) => musicGoing(s.playState?.state));
   // the page's own buttons, at a touch (display/touch), held while the panel is open
   const [panelOpen, setPanelOpen] = useState(false);
   // the queue view (display/PageTransport), held open like the panel; one of the two at a time
   const [queueOpen, setQueueOpen] = useState(false);
-  const shown = useTouchShown(panelOpen || queueOpen);
+  const closeBoth = useCallback((): void => {
+    setPanelOpen(false);
+    setQueueOpen(false);
+  }, []);
+  // a minute with nobody at the screen closes both (display/touch), the buttons going as after
+  // any touch
+  const shown = useTouchShown(panelOpen || queueOpen, closeBoth);
+  // and so does the screen going dark: the sleeping screen has no panel to close, and a list
+  // carried into it would hold the buttons up all night
+  useEffect(() => {
+    if (!awake) closeBoth();
+  }, [awake, closeBoth]);
   const openPanel = (open: boolean): void => {
     setPanelOpen(open);
     if (open) setQueueOpen(false);
@@ -153,8 +168,9 @@ function Page(): React.JSX.Element {
   // and its scene holds its last picture rather than drawing every frame behind the dimming, once
   // a light page's turn to dark has been drawn (a held scene keeps the picture it last drew)
   useEffect(() => holdStages(still), [still]);
-  // a light page turns dark once its dimming is done (display/rest)
-  const theme = useTheme(dark ? "dark" : settings.theme);
+  // a light page turns dark once its dimming is done (display/rest), and the black screen is dark
+  // too, so its mark and its line read on black
+  const theme = useTheme(dark || !awake ? "dark" : settings.theme);
   useDisplayFont(settings.displayFont);
   const reduced = useMotionPreference(settings.motion);
   // the owner's accent, From album art included, as the window wears it (its progress line)
@@ -195,7 +211,7 @@ function Page(): React.JSX.Element {
             : `opacity ${REST_FADE_MS}ms ease`,
       }}
     >
-      {heard && connected && powered ? (
+      {awake ? (
         <>
           <DisplayMode />
           <PageTransport shown={transportShown} queueOpen={queueOpen} onQueue={setQueueOpen} />
@@ -214,7 +230,7 @@ function Page(): React.JSX.Element {
         </>
       ) : (
         <div data-display-asleep className="relative h-full w-full bg-black">
-          {heard && <SleepControls shown={shown} listOpen={queueOpen} onList={setQueueOpen} />}
+          <SleepControls heard={heard} shown={shown} listOpen={queueOpen} onList={setQueueOpen} />
         </div>
       )}
     </div>
@@ -230,4 +246,26 @@ tt.onPush((msg) => {
     .getState()
     .applyPush(msg.kind === "settings" ? { ...msg, settings: forThisPage(msg.settings) } : msg);
 });
-ReactDOM.createRoot(document.getElementById("root")!).render(<Page />);
+/** The page's last resort: a render error leaves the screen black for a few seconds and reloads it
+ *  (display/reload), where the window's surfaces each say so with Try again and Reload. */
+class ReloadBoundary extends Component<{ children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError(): { failed: boolean } {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: Error): void {
+    reloadSoon(error);
+  }
+
+  render(): React.ReactNode {
+    return this.state.failed ? null : this.props.children;
+  }
+}
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <ReloadBoundary>
+    <Page />
+  </ReloadBoundary>,
+);

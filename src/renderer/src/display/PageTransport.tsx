@@ -29,6 +29,7 @@ import { MediaTile } from "@/components/media/MediaTile";
 import { SettingLine } from "@/components/display/ScenePicker";
 import { PageSeekBar } from "@/components/media/Waveform";
 import { playPlaylist, seekTo, steer, useControl, type ButtonVerb } from "./control";
+import { whyDark } from "./dark";
 import { musicGoing } from "./rest";
 import { PageTabs } from "./PageTabs";
 import {
@@ -67,9 +68,10 @@ import {
  *   as tabs in the one list (Presets alone where there is no queue, a station playing or the
  *   streamer asleep); a tap plays that preset, shows it tuning, and the row says so when the
  *   recall came to nothing. While the streamer sleeps the page is black, and a touch brings up,
- *   low where the buttons always are, Wake, the presets, and "Pick up where you left off" when
- *   there is something to return to, with the TastyTunes mark faint in the middle (SleepControls).
- *   Wake only where a wake can work; in Eco standby, a line saying the streamer is out of reach.
+ *   low where the buttons always are, a line saying why, Wake, the presets, and "Pick up where
+ *   you left off" when there is something to return to, with the TastyTunes mark faint in the
+ *   middle (SleepControls). Wake only where a wake can work; in Eco standby, the line says the
+ *   streamer is out of reach.
  * - SEEK (step four), on an allowed screen where the source can seek: above the buttons, Display's
  *   strip raised from the bottom edge to a finger's height (components/media/Waveform's
  *   PageSeekBar), one seek for each lift of a finger. At rest the strip at the edge stays a
@@ -781,42 +783,39 @@ function PresetRows({
 }
 
 /**
- * THE SLEEPING SCREEN'S CONTROLS (step three): while the streamer sleeps the page is black, and a
- * touch brings these up, low where the playback buttons always are: "Pick up where you
- * left off" with what it would play, and below it the presets' list and Wake, apart by the gap
- * the volume keeps. The TastyTunes mark sits faint in the middle while they show, so a touched
- * black screen says what it is; it is never drawn at rest (no light at night). Wake only where a
- * wake can work; where the streamer is out of reach (Eco standby), a line saying so.
+ * THE DARK SCREEN (step three, and why it is dark): while the streamer sleeps, or the app or the
+ * streamer is out of reach, the page is black, and a touch brings up the TastyTunes mark faint in
+ * the middle, so a touched black screen says what it is, and low, where the playback buttons
+ * always are, one line saying why (display/dark). Neither is drawn at rest (no light at night). A
+ * screen allowed with Presets, playlists and wake on has its controls under the line: "Pick up
+ * where you left off" with what it would play, and below it the presets' list and Wake, apart by
+ * the gap the volume keeps. Wake only where a wake can work; where the streamer is out of reach
+ * (Eco standby), the line says to wake it with its remote.
  */
 export function SleepControls({
+  heard,
   shown,
   listOpen,
   onList,
 }: {
+  /** Whether the app is heard (display/live): unheard, no controls are drawn from its last word. */
+  heard: boolean;
   shown: boolean;
   listOpen: boolean;
   onList(open: boolean): void;
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const control = useControl();
   const [lockedHere] = useLocked();
+  const connected = useStore((s) => s.connection.phase === "connected");
   const group = useRef<HTMLDivElement | null>(null);
   const groupH = useHeightWhile(group, listOpen);
-  if (lockedHere || control.state !== "allowed" || control.wake == null) return null;
+  // this screen's own Wake, where it has one
+  const wake = heard && !lockedHere && control.state === "allowed" ? control.wake : null;
+  const { cause, line } = whyDark({ heard, connected, wake });
+  const ready = wake === "ready";
+  const presets = ready ? control.presets : null;
+  const resume = ready ? control.resume : null;
   const showing = shown ? "opacity-100" : "pointer-events-none opacity-0";
-  if (control.wake === "unreachable")
-    return (
-      <div
-        data-page-sleep="unreachable"
-        className={cx(
-          "absolute inset-0 grid place-items-center px-10 text-center text-[16px] text-dim transition-opacity duration-300",
-          showing,
-        )}
-      >
-        TastyTunes can't reach the streamer. Wake it with its remote.
-      </div>
-    );
-  const presets = control.presets;
-  const resume = control.resume;
   const bottom = "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)";
   return (
     <>
@@ -842,13 +841,20 @@ export function SleepControls({
       )}
       <div
         ref={group}
-        data-page-sleep="ready"
+        data-page-sleep={wake ?? undefined}
+        data-page-dark={cause}
         className={cx(
           "absolute inset-x-0 z-[46] flex flex-col items-center gap-2 px-4 transition-opacity duration-300 select-none",
           showing,
         )}
         style={{ bottom }}
       >
+        <p
+          data-page-dark-line
+          className="mb-1 max-w-[min(36rem,90vw)] text-center text-[15px] leading-snug text-dim"
+        >
+          {line}
+        </p>
         {resume && (
           <button
             type="button"
@@ -862,24 +868,24 @@ export function SleepControls({
             </span>
           </button>
         )}
-        <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-2">
-          {presets && (
-            <Disc
-              label={listOpen ? "Close the list" : "Presets"}
-              size="side"
-              active={listOpen}
-              onPress={() => onList(!listOpen)}
-              attrs={{ "data-page-presets-button": "" }}
-            >
-              <Radio size={22} />
-            </Disc>
-          )}
-          {control.wake === "ready" && (
+        {ready && (
+          <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-2">
+            {presets && (
+              <Disc
+                label={listOpen ? "Close the list" : "Presets"}
+                size="side"
+                active={listOpen}
+                onPress={() => onList(!listOpen)}
+                attrs={{ "data-page-presets-button": "" }}
+              >
+                <Radio size={22} />
+              </Disc>
+            )}
             <Disc verb="wake" label="Wake" size="main">
               <Power size={30} />
             </Disc>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </>
   );
