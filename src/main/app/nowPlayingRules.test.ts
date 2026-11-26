@@ -167,6 +167,18 @@ describe("a play started here", () => {
     expect(s.observe(tidal(), true, 3_000)).toBe(true);
   });
 
+  it("is forgotten when the app connects to a streamer or lets one go", () => {
+    const s = new StartedHere();
+    s.recalled(album(), 0);
+    expect(s.observe(tidal(), true, 1_000)).toBe(true);
+    s.forget();
+    expect(s.observe(tidal(), true, 2_000)).toBe(false);
+    const q = new StartedHere();
+    q.recalled(album(), 0);
+    q.forget();
+    expect(q.observe(tidal(), true, 1_000)).toBe(false);
+  });
+
   it("is noted again on every recall, the same preset's included", () => {
     const s = new StartedHere();
     s.recalled(album(), 0);

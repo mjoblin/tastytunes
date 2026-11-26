@@ -121,6 +121,12 @@ export class StartedHere {
     this.pending = { before: recallSignature(ps), at: now };
   }
 
+  /** The app connected to a streamer, or let one go: nothing started on the last one is this one's. */
+  forget(): void {
+    this.pending = null;
+    this.source = null;
+  }
+
   /** Whether the play `ps` was started here, given whether the streamer is live. */
   observe(ps: ZonePlayState | null, live: boolean, now: number): boolean {
     const source = ps?.metadata?.source ?? null;

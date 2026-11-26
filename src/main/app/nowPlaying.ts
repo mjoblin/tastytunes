@@ -142,6 +142,9 @@ export function nowPlayingPush(msg: PushMessage): void {
   if (msg.kind === "connection" && msg.state.phase === "connected") bridge.connected();
   else if (msg.kind === "playState") bridge.heardFrom("playState");
   else if (msg.kind === "systemPower") bridge.heardFrom("power");
+  // the device layer clears its last recall on connect() and disconnect() alone, never on the
+  // socket's own reconnect: a switch of streamer forgets what was started on the last one
+  else if (msg.kind === "recalledPreset" && msg.id == null) bridge.forgetRecall();
   else if (msg.kind === "connection" || msg.kind === "nowPlaying" || msg.kind === "position")
     bridge.update();
 }

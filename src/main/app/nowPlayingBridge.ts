@@ -180,6 +180,13 @@ export class NowPlayingBridge {
     this.update();
   }
 
+  /** The app connected to a streamer, or let one go (a socket's own reconnect is not this): a play
+   *  started on the last one, or a recall still awaiting its play, is not the next one's. */
+  forgetRecall(): void {
+    this.started.forget();
+    this.update();
+  }
+
   /** The socket (re)connected: what it said before is no guide until the streamer says again. */
   connected(): void {
     this.awaiting = new Set(["playState", "power"]);
