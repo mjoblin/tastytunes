@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app } from "electron";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   MAX_PLAYLISTS,
   MAX_PLAYLIST_ITEMS,
@@ -67,5 +67,38 @@ describe("a playlist write past a bound is refused, never trimmed", () => {
     expect(playlistFullSentence(refusal)).toBe(PLAYLISTS_FULL);
     expect(getPlaylists().map((p) => p.id)).toEqual(before);
     expect(onDisk()).toHaveLength(MAX_PLAYLISTS);
+  });
+});
+
+describe("a later version's playlists, saved through the app", () => {
+  it("writes back the fields it doesn't know, an item and a playlist it doesn't read, through a change", async () => {
+    // the module fresh, so the store reads the file written here
+    vi.resetModules();
+    const electron = await import("electron");
+    const file = join(electron.app.getPath("userData"), "playlists.json");
+    const known = { ...item(1), fromLater: { mood: "calm" } };
+    const laterItem = { station: "Radio Later", streamUrl: "http://radio.example/later" };
+    const mix = {
+      id: "p-mix",
+      name: "Mix",
+      createdAt: 1000,
+      updatedAt: 2000,
+      lastPlayedAt: null,
+      items: [known, laterItem, item(2)],
+      folder: "Evenings",
+    };
+    const laterList = { kind: "smart", rule: "decade:1980" };
+    writeFileSync(file, JSON.stringify([mix, laterList]));
+    const playlists = await import("./playlists");
+    expect(playlists.getPlaylists()).toEqual([{ ...mix, items: [known, item(2)] }]);
+
+    playlists.renamePlaylist("p-mix", "Evening mix");
+    const [saved, carried] = JSON.parse(readFileSync(file, "utf-8")) as [
+      Record<string, unknown>,
+      unknown,
+    ];
+    expect(saved).toMatchObject({ name: "Evening mix", folder: "Evenings" });
+    expect(saved.items).toEqual([known, laterItem, item(2)]);
+    expect(carried).toEqual(laterList);
   });
 });

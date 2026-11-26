@@ -281,6 +281,8 @@ describe("a later version's lines are counted apart, never as plays", () => {
     );
     const year = listeningRecord.readYear(2044);
     expect(year.events.map((e) => e.kind)).toEqual(["play", "play"]);
+    // the unknown kind and the later version, each counted once, apart from the unreadable
+    expect(year.later).toBe(2);
     expect(year.unreadable).toBe(0);
   });
 });
