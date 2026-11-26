@@ -1256,6 +1256,43 @@ function buildDemo(host: string): {
             push("/zone/play_state");
             push("/zone/now_playing");
           }, 120);
+        } else if (
+          frame.path === "/zone/play_control" &&
+          params.action === "toggle" &&
+          /radio/i.test(
+            String((DATA["/zone/play_state"].metadata as Dict | undefined)?.class ?? ""),
+          )
+        ) {
+          // a station's toggle stops it (the firmware's own, docs/streamer.md), its source and
+          // station kept, play and play_pause offered; the toggle back connects, then plays
+          const np = DATA["/zone/now_playing"];
+          const both = (): void => {
+            push("/zone/play_state");
+            push("/zone/now_playing");
+          };
+          if (DATA["/zone/play_state"].state === "play") {
+            DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], state: "stop" };
+            DATA["/zone/now_playing"] = {
+              ...np,
+              state: "STOPPED",
+              controls: ["play", "play_pause"],
+            };
+            setTimeout(both, 120);
+          } else {
+            DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], state: "connecting" };
+            DATA["/zone/now_playing"] = { ...np, state: "PLAYING", controls: [] };
+            setTimeout(both, 120);
+            setTimeout(() => {
+              if (DATA["/zone/play_state"].state !== "connecting") return;
+              DATA["/zone/play_state"] = { ...DATA["/zone/play_state"], state: "play" };
+              DATA["/zone/now_playing"] = {
+                ...DATA["/zone/now_playing"],
+                state: "PLAYING",
+                controls: ["play_pause"],
+              };
+              both();
+            }, 1200);
+          }
         } else if (frame.path === "/zone/play_control" && typeof params.action === "string") {
           // echo transport state: play / pause / stop / toggle
           const state = DATA["/zone/play_state"].state;

@@ -299,6 +299,54 @@ describe("the Now Playing bridge", () => {
     expect(r.lines()[0]).not.toHaveProperty("duration");
   });
 
+  it("keeps a station it claimed through the stop a toggle makes, shown paused, and resumes it", async () => {
+    const station = (state: string) =>
+      ({
+        state,
+        queue_id: null,
+        metadata: { class: "md.radio.airable", station: "FIP", title: "A Song", source: "IR" },
+      }) as unknown as ZonePlayState;
+    const r = rig({
+      view: {
+        playState: station("play"),
+        nowPlaying: { controls: ["play_pause"] } as unknown as ZoneNowPlaying,
+      },
+    });
+    r.bridge.start();
+    await vi.waitFor(() => expect(r.lines().length).toBe(1), { timeout: 5_000 });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      // the toggle: the station stops, its source kept, play and play_pause still offered
+      r.view.playState = station("stop");
+      r.view.nowPlaying = { controls: ["play", "play_pause"] } as unknown as ZoneNowPlaying;
+      r.bridge.update();
+      vi.advanceTimersByTime(HOLD_MS + 1_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(
+      () => expect(r.lines().at(-1)).toMatchObject({ title: "A Song", playing: false }),
+      {
+        timeout: 5_000,
+      },
+    );
+    expect(r.lines()).not.toContainEqual({ t: "release" });
+    // the toggle back: connecting with no controls, then playing again
+    r.view.playState = station("connecting");
+    r.view.nowPlaying = { controls: [] } as unknown as ZoneNowPlaying;
+    r.bridge.update();
+    r.view.playState = station("play");
+    r.view.nowPlaying = { controls: ["play_pause"] } as unknown as ZoneNowPlaying;
+    r.bridge.update();
+    await vi.waitFor(
+      () => expect(r.lines().at(-1)).toMatchObject({ title: "A Song", playing: true }),
+      {
+        timeout: 5_000,
+      },
+    );
+    expect(r.lines()).not.toContainEqual({ t: "release" });
+  });
+
   it("gives up on a helper that ends before its hello, says why, and hands the keys back", async () => {
     const r = rig({ die: "error: Windows' media controls aren't available here (0x80040154)" });
     r.bridge.start();

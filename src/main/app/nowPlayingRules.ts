@@ -69,6 +69,18 @@ export interface ClaimInputs {
 
 export function nowPlayingVerdict(i: ClaimInputs): NowPlayingVerdict {
   if (!i.connected || !i.powerOn || i.demo) return "release-now";
+  // A STATION TOGGLED STOPS, where a queue or AirPlay pauses (the firmware's own, docs/streamer.md):
+  // a claimed station keeps its claim through the stop while its source is the one claimed and it
+  // can still be started, shown paused, so the next key resumes it rather than going to another app
+  if (
+    i.state === "stop" &&
+    i.claimed &&
+    i.kind === "radio" &&
+    i.steerable &&
+    i.source != null &&
+    i.source === i.claimedSource
+  )
+    return "claim";
   if (i.state == null || !LIVE.has(i.state)) return "release-soon";
   const holdable =
     i.claimed && i.source != null && i.source === i.claimedSource && i.heldMs < HOLD_MS;

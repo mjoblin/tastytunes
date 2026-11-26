@@ -78,6 +78,30 @@ describe("when TastyTunes claims the system's Now Playing", () => {
   });
 });
 
+describe("a station toggled to stop", () => {
+  const station = { kind: "radio" as const, source: "IR", claimed: true, claimedSource: "IR" };
+  it("keeps its claim while it is the station claimed and can be started again", () => {
+    expect(v({ ...station, state: "stop" })).toBe("claim");
+  });
+
+  it("lets go when it wasn't claimed, can't be started, or another source took over", () => {
+    expect(v({ ...station, state: "stop", claimed: false, claimedSource: null })).toBe(
+      "release-soon",
+    );
+    expect(v({ ...station, state: "stop", steerable: false })).toBe("release-soon");
+    expect(v({ ...station, state: "stop", source: "AIRPLAY" })).toBe("release-soon");
+  });
+
+  it("is a station's alone: a stopped queue or disc still lets go", () => {
+    expect(v({ ...held, state: "stop" })).toBe("release-soon");
+  });
+
+  it("lets go at standby and on a disconnect", () => {
+    expect(v({ ...station, state: "stop", powerOn: false })).toBe("release-now");
+    expect(v({ ...station, state: "stop", connected: false })).toBe("release-now");
+  });
+});
+
 describe("what a play is, for the claim", () => {
   const disc = (title: string, display: string | null = null) => ({
     ps: {
