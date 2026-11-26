@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { app, safeStorage } from "electron";
-import { isRecord } from "@shared/guards";
+import { errorMessage, isRecord, kindOf } from "@shared/guards";
 import { atomicWriteFileSync } from "./jsonStore";
+import { noteSaved } from "./savedFiles";
 import { devOverride } from "../app/devOverride";
 
 // THE SECRETS STORE (0.13.0 round 10). The
@@ -20,8 +21,8 @@ export type SecretName = "lbToken" | "mcpToken" | "fanartKey" | "displayToken";
 
 /** A secret as the store holds it: its value; absent, none saved; or unreadable, one saved that
  *  this system can't decrypt (another computer's keychain, a reset or locked one, an ask that was
- *  turned down), kept on disk as it is. A token is minted only when absent, never over an
- *  unreadable one (data/persist). */
+ *  turned down), kept on disk as it is, or any secret while the file can't be read. A token is
+ *  minted only when absent, never over an unreadable one (data/persist). */
 export type SecretRead = { state: "saved"; value: string } | { state: "absent" | "unreadable" };
 
 interface Stored {
@@ -43,6 +44,14 @@ const filePath = (): string => join(app.getPath("userData"), "secrets.json");
 
 /** The file's entries as stored, read once. */
 let stored: Map<string, Stored> | null = null;
+/** THE FILE THAT CAN'T BE READ IS NOT AN EMPTY ONE (0.17.0): only a missing file has nothing
+ *  saved. One there that can't be read (no permission, a disk error, not the store's JSON) reads
+ *  every secret as unreadable, so nothing is minted over them, and no save writes over it this
+ *  session; the next launch reads it again. A save refuses rather than move the file aside and
+ *  start a new one: the next launch would find no display address and no agents' token in the new
+ *  file and mint new ones, ending every screen's address and every agent's setup without a word,
+ *  even when the cause had passed. */
+let fileUnreadable = false;
 /** The values decrypted so far, in the main process's memory only. */
 const values = new Map<string, string>();
 /** A decryption under way, so two asks for one entry reach the keychain once. */
@@ -69,17 +78,39 @@ export async function canEncrypt(): Promise<boolean> {
   }
 }
 
+/** The file is there and couldn't be read: said in the log, and nothing writes over it. */
+function cantRead(why: string): void {
+  fileUnreadable = true;
+  noteSaved(
+    "error",
+    `secrets.json couldn't be read (${why}), so no key or token is saved to it this session`,
+  );
+}
+
 function load(): Map<string, Stored> {
   if (stored) return stored;
   stored = new Map();
-  let parsed: unknown;
+  let text: string;
   try {
-    parsed = JSON.parse(readFileSync(filePath(), "utf8"));
-  } catch {
+    text = readFileSync(filePath(), "utf8");
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== "ENOENT") cantRead(errorMessage(e));
     return stored;
   }
-  const entries = isRecord(parsed) && isRecord(parsed.entries) ? parsed.entries : {};
-  for (const [name, e] of Object.entries(entries))
+  let parsed: unknown;
+  try {
+    // a byte-order mark first (an editor's save) is no reason to call the file unreadable
+    parsed = JSON.parse(text.replace(/^\uFEFF/, ""));
+  } catch (e) {
+    cantRead(errorMessage(e));
+    return stored;
+  }
+  // the store has always written { v, entries }: anything else isn't one to read as empty
+  if (!isRecord(parsed) || !isRecord(parsed.entries)) {
+    cantRead(isRecord(parsed) ? "it held no entries" : `it held ${kindOf(parsed)}`);
+    return stored;
+  }
+  for (const [name, e] of Object.entries(parsed.entries))
     if (isRecord(e) && typeof e.value === "string" && e.value)
       stored.set(name, { enc: e.enc === true, value: e.value });
   return stored;
@@ -90,7 +121,7 @@ function valueOf(name: string): Promise<SecretRead> {
   const known = values.get(name);
   if (known != null) return Promise.resolve(saved(known));
   const e = load().get(name);
-  if (!e) return Promise.resolve(ABSENT);
+  if (!e) return Promise.resolve(fileUnreadable ? UNREADABLE : ABSENT);
   if (unreadable.has(name)) return Promise.resolve(UNREADABLE);
   if (!e.enc) {
     values.set(name, e.value);
@@ -139,7 +170,14 @@ async function decrypt(name: string, e: Stored): Promise<SecretRead> {
 const encrypt = async (v: string): Promise<string> =>
   (await safeStorage.encryptStringAsync(v)).toString("base64");
 
+/** Refuses while the file is there and couldn't be read (fileUnreadable): nothing writes over it. */
+function writable(): void {
+  load();
+  if (fileUnreadable) throw new Error("secrets.json couldn't be read, so nothing is saved over it");
+}
+
 function save(): void {
+  writable();
   const entries: Record<string, Stored> = {};
   for (const [name, e] of load()) entries[name] = e;
   // readable to its owner only from the first byte, the temporary file included; a filesystem
@@ -164,8 +202,10 @@ export function hasSecret(name: SecretName): boolean {
   return load().has(name) && !unreadable.has(name);
 }
 
-/** Save a secret, or forget it (null or blank). */
+/** Save a secret, or forget it (null or blank); a rejection while the file couldn't be read. */
 export async function setSecret(name: SecretName, value: string | null): Promise<void> {
+  // refused before anything changes, so what is held stays what the file says
+  writable();
   const v = value?.trim() ?? "";
   if (v) {
     const enc = await canEncrypt();
@@ -184,7 +224,7 @@ export async function setSecret(name: SecretName, value: string | null): Promise
 export async function secretHint(
   name: SecretName,
 ): Promise<{ saved: boolean; ends: string | null; unreadable: boolean }> {
-  if (!load().has(name)) return { saved: false, ends: null, unreadable: false };
+  if (!load().has(name)) return { saved: false, ends: null, unreadable: fileUnreadable };
   const read = await valueOf(name);
   return read.state === "saved"
     ? { saved: true, ends: read.value.slice(-4), unreadable: false }

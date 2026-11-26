@@ -110,8 +110,14 @@ export async function moveSecrets(): Promise<void> {
   const s = getSettings() as Legacy;
   const lb = typeof s.lbToken === "string" ? s.lbToken.trim() : "";
   const mcp = typeof s.mcp.token === "string" ? s.mcp.token.trim() : "";
-  if (lb) await setSecret("lbToken", lb);
-  if (mcp && s.mcp.enabled) await setSecret("mcpToken", mcp);
+  try {
+    if (lb) await setSecret("lbToken", lb);
+    if (mcp && s.mcp.enabled) await setSecret("mcpToken", mcp);
+  } catch {
+    // the secrets file couldn't be read, or a token couldn't be encrypted: the tokens stay in
+    // settings.json for a later launch to move, rather than be lost, and the launch goes on
+    return;
+  }
   secretsMoved = true;
   if ("lbToken" in s || "token" in s.mcp) updateSettings({});
 }

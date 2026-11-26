@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -316,5 +316,102 @@ describe("a token that can't be read", () => {
     });
     await persist.newMcpToken();
     expect(await secrets.secretHint("mcpToken")).toMatchObject({ saved: true, unreadable: false });
+  });
+});
+
+describe("a secrets file that can't be read", () => {
+  const path = (): string => join(userData, "secrets.json");
+  const b64 = (s: string): string => Buffer.from(s).toString("base64");
+
+  /** Every secret unreadable, nothing minted, and no save over the file, whose bytes stay as found. */
+  const holdsAsFound = async (asFound: () => string): Promise<void> => {
+    const before = asFound();
+    const { secrets, persist } = await fresh();
+    for (const name of ["lbToken", "mcpToken", "fanartKey", "displayToken"] as const) {
+      expect(await secrets.readSecret(name)).toEqual({ state: "unreadable" });
+      expect(secrets.hasSecret(name)).toBe(false);
+      expect(await secrets.secretHint(name)).toEqual({
+        saved: false,
+        ends: null,
+        unreadable: true,
+      });
+    }
+    expect(await persist.displayToken()).toBeNull();
+    await persist.ensureMcpToken();
+    await expect(persist.newDisplayToken()).rejects.toThrow();
+    await expect(persist.newMcpToken()).rejects.toThrow();
+    await expect(secrets.setSecret("lbToken", "lb-token-1234")).rejects.toThrow();
+    await expect(secrets.setSecret("fanartKey", null)).rejects.toThrow();
+    expect(await secrets.readSecret("lbToken")).toEqual({ state: "unreadable" });
+    expect(asFound()).toBe(before);
+  };
+
+  it("counts only a missing file as one with nothing saved", async () => {
+    const { secrets, persist } = await fresh();
+    expect(await secrets.readSecret("displayToken")).toEqual({ state: "absent" });
+    expect(await secrets.secretHint("lbToken")).toEqual({
+      saved: false,
+      ends: null,
+      unreadable: false,
+    });
+    expect(await persist.displayToken()).toMatch(/^[\w-]{20,}$/);
+  });
+
+  it("keeps a file that isn't JSON as it is, and mints nothing over it", async () => {
+    writeFileSync(path(), `{"v":1,"entries":{"displayToken":{"enc":true,"value":"${b64("enc:x")}"`);
+    await holdsAsFound(() => file("secrets.json"));
+  });
+
+  it("keeps a file that isn't the store's as it is", async () => {
+    for (const text of ["null", "[]", '"secrets"', '{"v":1}', '{"v":1,"entries":[]}']) {
+      writeFileSync(path(), text);
+      await holdsAsFound(() => file("secrets.json"));
+    }
+  });
+
+  it("keeps a file that can't be opened, a folder in its place among them", async () => {
+    mkdirSync(path());
+    await holdsAsFound(() => (statSync(path()).isDirectory() ? "a folder" : "replaced"));
+  });
+
+  it("keeps a file its owner can't read as it is", async () => {
+    // a filesystem without modes (Windows), or a test run as root, reads it anyway
+    if (process.platform === "win32" || process.getuid?.() === 0) return;
+    writeFileSync(
+      path(),
+      JSON.stringify({ v: 1, entries: { lbToken: { enc: false, value: "x" } } }),
+    );
+    chmodSync(path(), 0o000);
+    try {
+      await holdsAsFound(() => String(statSync(path()).mtimeMs));
+    } finally {
+      chmodSync(path(), 0o600);
+    }
+    expect(file("secrets.json")).toContain('"lbToken"');
+  });
+
+  it("reads a file an editor saved with a byte-order mark", async () => {
+    writeFileSync(
+      path(),
+      `\uFEFF${JSON.stringify({ v: 1, entries: { lbToken: { enc: false, value: "lb-bom-1234" } } })}`,
+    );
+    expect(await (await fresh()).secrets.getSecret("lbToken")).toBe("lb-bom-1234");
+  });
+
+  it("leaves the old tokens in settings.json, and the launch goes on, when they can't be moved", async () => {
+    writeFileSync(path(), "not json");
+    writeFileSync(
+      join(userData, "settings.json"),
+      JSON.stringify({
+        lbToken: "lb-secret-9876",
+        mcp: { enabled: true, token: "mcp-secret-5432" },
+      }),
+    );
+    const { persist } = await fresh();
+    await expect(persist.moveSecrets()).resolves.toBeUndefined();
+    persist.updateSettings({});
+    expect(file("settings.json")).toContain("lb-secret-9876");
+    expect(file("settings.json")).toContain("mcp-secret-5432");
+    expect(file("secrets.json")).toBe("not json");
   });
 });
