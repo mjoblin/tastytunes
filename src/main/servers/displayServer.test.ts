@@ -14,7 +14,14 @@ import {
   type DisplayControl,
   type DisplayVerb,
 } from "@shared/displayControl";
-import { asksForPlaying, CONTROL_RATE, DisplayServer, PING_MS, VOLUME_RATE } from "./displayServer";
+import {
+  asksForPlaying,
+  CONTROL_RATE,
+  DisplayServer,
+  MAX_RATE_KEYS,
+  PING_MS,
+  VOLUME_RATE,
+} from "./displayServer";
 
 const TOKEN = "tok-123";
 let token = TOKEN;
@@ -43,7 +50,9 @@ afterEach(() => {
   token = TOKEN;
 });
 
-async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
+async function rig(
+  opts: { picture?: (url: string) => Promise<never>; token?: () => Promise<string> } = {},
+) {
   const page = mkdtempSync(join(tmpdir(), "tt-display-"));
   writeFileSync(join(page, "display.html"), "<html>page</html>");
   mkdirSync(join(page, "assets"));
@@ -111,7 +120,7 @@ async function rig(opts: { picture?: (url: string) => Promise<never> } = {}) {
           : null,
       ),
     analysis: (key) => (key === "band|record|song|200" ? ({ dr: 9 } as never) : null),
-    token: () => Promise.resolve(token),
+    token: opts.token ?? (() => Promise.resolve(token)),
     pageDir: page,
     log: (text) => logged.push(text),
     controlFor: () => control.now,
@@ -238,8 +247,10 @@ describe("Display on other screens' server", () => {
     const first = await get(`/?t=${TOKEN}`);
     expect(first.status).toBe(303);
     expect(first.headers.location).toBe("/");
-    expect(String(first.headers["set-cookie"])).toContain("HttpOnly");
-    expect(String(first.headers["set-cookie"])).toContain("SameSite=Strict");
+    // both cookies Lax: sent on a visit from a link on another site, never on its POST or fetch
+    const cookies = first.headers["set-cookie"] as string[];
+    expect(cookies).toHaveLength(2);
+    for (const c of cookies) expect(c).toMatch(/; HttpOnly; SameSite=Lax; /);
     const page = await get("/", { cookie });
     expect(page.status).toBe(200);
     expect(page.body).toBe("<html>page</html>");
@@ -277,9 +288,7 @@ describe("Display on other screens' server", () => {
     const { get } = await rig();
     const first = await get(`/?t=${TOKEN}`);
     const cookies = first.headers["set-cookie"] as string[];
-    const id = /tt_screen=([0-9a-f]{32}); Path=\/; HttpOnly; SameSite=Strict/.exec(
-      cookies.join("\n"),
-    );
+    const id = /tt_screen=([0-9a-f]{32}); Path=\/; HttpOnly; SameSite=Lax/.exec(cookies.join("\n"));
     expect(id).not.toBeNull();
     const again = await get(`/?t=${TOKEN}`, { cookie: `tt_screen=${id![1]}` });
     expect(String(again.headers["set-cookie"])).not.toContain("tt_screen");
@@ -483,10 +492,61 @@ describe("Display on other screens' server", () => {
     expect(steered).toHaveLength(CONTROL_RATE.count);
   });
 
-  it("names the build of the page it serves on every live connection", async () => {
+  it("remembers a bounded number of screens for the cap, however many made-up ids arrive", async () => {
+    const { steer, server } = await rig();
+    // a volume step is two entries a screen: the bound holds against a stream of them
+    for (let i = 0; i < MAX_RATE_KEYS; i++) {
+      const id = i.toString(16).padStart(32, "0");
+      expect((await steer("volumeUp", { cookie: `${cookie}; tt_screen=${id}` })).status).toBe(200);
+      expect(server.rateKeys).toBeLessThanOrEqual(MAX_RATE_KEYS);
+    }
+    expect(server.rateKeys).toBe(MAX_RATE_KEYS);
+    // the screen heard last keeps its count: its next steps are still capped
+    const last = (MAX_RATE_KEYS - 1).toString(16).padStart(32, "0");
+    for (let i = 1; i < VOLUME_RATE.count; i++)
+      expect((await steer("volumeUp", { cookie: `${cookie}; tt_screen=${last}` })).status).toBe(
+        200,
+      );
+    expect((await steer("volumeUp", { cookie: `${cookie}; tt_screen=${last}` })).status).toBe(429);
+  });
+
+  it("names the build of the page it serves on every live connection, before the snapshot", async () => {
     const { live } = await rig();
     const opened = await live(cookie);
     expect(opened.first).toMatch(/event: build\ndata: "[0-9a-f]{16}"\n\n/);
+    // a page from an older build reloads before it is handed anything to draw
+    expect(opened.first.indexOf("event: build")).toBeLessThan(
+      opened.first.indexOf("event: snapshot"),
+    );
+  });
+
+  it("keeps no place for a live connection that closed while its token was read", async () => {
+    let reading!: () => void;
+    const read = new Promise<void>((r) => (reading = r));
+    let release!: () => void;
+    const held = new Promise<void>((r) => (release = r));
+    const { server } = await rig({
+      token: async () => {
+        reading();
+        await held;
+        return TOKEN;
+      },
+    });
+    const req = request({
+      host: "127.0.0.1",
+      port: server.port!,
+      path: "/api/live",
+      agent: false,
+      headers: { cookie },
+    });
+    req.on("error", () => {});
+    req.end();
+    await read;
+    req.destroy();
+    await new Promise((r) => setTimeout(r, 50));
+    release();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(server.screens).toBe(0);
   });
 
   it("tells each open screen where it stands when it opens, and again when that changes", async () => {

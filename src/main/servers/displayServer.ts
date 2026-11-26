@@ -41,9 +41,10 @@ import { hostAllowed } from "./hostCheck";
  *   settings; pictures by the id the feed handed out, never by address.
  * - THE LIVE CHANNEL IS WHOLE ON ITS OWN: every connection opens with the reduced snapshot, so a
  *   reconnect after a wake or a restart never shows the old track, and a ping every few seconds
- *   lets the page tell a quiet app from a lost one. It also says which build of the page it serves
- *   (`event: build`), so a page left open across an update reloads into the new one rather than
- *   running the old for days (display/live).
+ *   lets the page tell a quiet app from a lost one. Before the snapshot it says which build of the
+ *   page it serves (`event: build`), so a page left open across an update reloads into the new one
+ *   rather than running the old for days, and before drawing anything the new one sent
+ *   (display/live).
  * - Lyrics only for the track that is playing: the page can't make the app look anything up.
  * - THE SCENES' ANALYSIS, FINISHED (stage 2): the page asks which library file is playing (the
  *   window's own question, answered only for the playing track, with the file's ids left out)
@@ -117,6 +118,9 @@ const MAX_TRACK_KEYS = 20;
 export const PING_MS = 5_000;
 /** Screens at once; more is someone else's loop, not a household. */
 const MAX_SCREENS = 16;
+/** The rate cap's memory, at most: two entries a screen (its commands, its volume steps), room
+ *  for twice the screens at once, the least recently heard let go first. */
+export const MAX_RATE_KEYS = 4 * MAX_SCREENS;
 /** A screen whose unread pushes pass this has stopped reading: it is let go. */
 const MAX_UNREAD_BYTES = 1 << 20;
 /** The last few pictures, kept so a page's reload or a second screen doesn't fetch them again. */
@@ -194,9 +198,16 @@ function cookieOf(req: IncomingMessage, name: string): string | null {
   return null;
 }
 
-/** A cookie that lasts a year, sent only to this server's own pages. */
+/**
+ * A cookie that lasts a year, for this server's own pages. SameSite=Lax, not Strict: a browser
+ * sends a Lax cookie on a top-level visit from another site, so the address opened from a link in
+ * a mail or a web chat lets the screen in and keeps its id (a Strict one is held back there, and
+ * the screen met "Open the address" with a new id in place of an allowed one). It never sends one
+ * on a cross-site POST, frame or fetch, and the write route keeps its Origin, header and JSON
+ * checks besides; no GET changes anything.
+ */
 const cookieLine = (name: string, value: string): string =>
-  `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`;
+  `${name}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000`;
 
 /** The screen's own id, or null without a well-formed one. */
 function screenOf(req: IncomingMessage): string | null {
@@ -287,6 +298,11 @@ export class DisplayServer {
 
   get screens(): number {
     return this.clients.size;
+  }
+
+  /** What the rate cap remembers (for the tests). */
+  get rateKeys(): number {
+    return this.sent.size;
   }
 
   /** Starts on `port` (0 for any) at `host`; resolves once listening, rejects on a port in use. */
@@ -444,7 +460,7 @@ export class DisplayServer {
         this.base(res, 303, {
           location: "/",
           "set-cookie": [
-            `${COOKIE}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=31536000`,
+            cookieLine(COOKIE, token),
             ...(screenOf(req) ? [] : [cookieLine(SCREEN_COOKIE, newScreenId())]),
           ],
         });
@@ -565,21 +581,31 @@ export class DisplayServer {
       (this.sent.get(k) ?? []).filter((at) => now - at < caps[i].ms),
     );
     if (recent.some((r, i) => r.length >= caps[i].count)) return false;
-    kinds.forEach((k, i) => this.sent.set(k, [...recent[i], now]));
-    if (this.sent.size > 4 * MAX_SCREENS) this.sent.delete(this.sent.keys().next().value!);
+    // moved to the end as it is heard, so the oldest is the least recently heard
+    kinds.forEach((k, i) => {
+      this.sent.delete(k);
+      this.sent.set(k, [...recent[i], now]);
+    });
+    // a volume step adds two: down to the bound however many a stream of made-up ids brings
+    while (this.sent.size > MAX_RATE_KEYS) this.sent.delete(this.sent.keys().next().value!);
     return true;
   }
 
   private live(req: IncomingMessage, res: ServerResponse, token: string): void {
+    // the screen went while its token was read (handle's await): its close has already been
+    // heard, so it would never give its place back
+    if (req.destroyed || res.destroyed) return;
     if (this.clients.size >= MAX_SCREENS) {
       this.base(res, 503, { "retry-after": "30" });
       return void res.end();
     }
     this.base(res, 200, { "content-type": "text/event-stream", connection: "keep-alive" });
     res.write("retry: 3000\n\n");
+    // the build first: a page from an older one reloads before it is handed a snapshot it may
+    // not know how to draw (a scene added since, say)
+    res.write(`event: build\ndata: ${JSON.stringify(this.build())}\n\n`);
     const snap = displaySnapshot(this.deps.snapshot(), this.art);
     res.write(`event: snapshot\ndata: ${JSON.stringify(snap)}\n\n`);
-    res.write(`event: build\ndata: ${JSON.stringify(this.build())}\n\n`);
     const screen = screenOf(req);
     const control = this.controlLine(screen);
     res.write(`event: control\ndata: ${control}\n\n`);
