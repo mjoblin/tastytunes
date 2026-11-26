@@ -163,8 +163,9 @@ int wmain() {
         tl.MaxSeekTime(tl.EndTime());
         if (number(m, L"elapsed", elapsed))
           tl.Position(std::chrono::duration_cast<TimeSpan>(std::chrono::duration<double>(elapsed)));
-        smtc.UpdateTimelineProperties(tl);
       }
+      // a live play, or one with no length, gets an empty timeline: the last track's never stays
+      smtc.UpdateTimelineProperties(tl);
       smtc.PlaybackStatus(flag(m, L"playing") ? MediaPlaybackStatus::Playing
                                               : MediaPlaybackStatus::Paused);
     } catch (hresult_error const& e) {

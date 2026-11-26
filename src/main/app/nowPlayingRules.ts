@@ -1,4 +1,11 @@
-import type { PlayKind, ZonePlayStateState } from "@shared/smoip";
+import {
+  isCdPlayback,
+  playKindOf,
+  type PlayKind,
+  type ZoneNowPlaying,
+  type ZonePlayState,
+  type ZonePlayStateState,
+} from "@shared/smoip";
 
 /**
  * WHEN TASTYTUNES IS THE SYSTEM'S PLAYING APP (0.17.0, the media keys through macOS's Now Playing):
@@ -10,10 +17,12 @@ import type { PlayKind, ZonePlayStateState } from "@shared/smoip";
  * - Stop, not_ready and no_signal let go after a short settle; buffering, connecting and ready
  *   count as live, so a track change passing through them never lets go and claims again (a
  *   fresh claim would take the keys back from whatever the owner had turned to).
- * - WHAT IS CLAIMED is a positive list: a play from the streamer's queue, radio, or something
- *   started here (a preset recalled from the app, a link or an agent). Another app's play
+ * - WHAT IS CLAIMED is a positive list: a play from the streamer's queue, a disc, radio, or
+ *   something started here (a preset recalled from the app, a link or an agent). Another app's play
  *   (AirPlay, cast, Spotify Connect, a TIDAL app) is claimed only when the setting says so, and an
  *   unknown play (no title yet, an input with no metadata) never is.
+ * - NEVER THE BUILT-IN DEMO: it plays nothing, so claiming it would take the keys from the app the
+ *   person is listening to for a silent simulation (the Windows smoke's override aside).
  * - NEVER A PLAY THE KEYS CAN'T STEER: a play that offers no play, pause, next or previous (an
  *   input such as AirPlay waiting, the TV, analog) is never claimed, even started here: claiming
  *   it would take the keys from another app and give nothing back.
@@ -41,6 +50,8 @@ const LIVE: ReadonlySet<ZonePlayStateState> = new Set([
 export interface ClaimInputs {
   connected: boolean;
   powerOn: boolean;
+  /** Connected to the built-in demo streamer, which is never claimed. */
+  demo: boolean;
   state: ZonePlayStateState | null;
   kind: PlayKind | null;
   startedHere: boolean;
@@ -56,7 +67,7 @@ export interface ClaimInputs {
 }
 
 export function nowPlayingVerdict(i: ClaimInputs): NowPlayingVerdict {
-  if (!i.connected || !i.powerOn) return "release-now";
+  if (!i.connected || !i.powerOn || i.demo) return "release-now";
   if (i.state == null || !LIVE.has(i.state)) return "release-soon";
   const holdable =
     i.claimed && i.source != null && i.source === i.claimedSource && i.heldMs < HOLD_MS;
@@ -67,6 +78,16 @@ export function nowPlayingVerdict(i: ClaimInputs): NowPlayingVerdict {
     i.startedHere ||
     (i.kind === "external" && i.claimExternal);
   return ours ? "claim" : "release-now";
+}
+
+/**
+ * What a play is, for the claim: playKindOf's, except that a disc is the streamer's own play,
+ * claimed like its queue's. A disc has no queue_id, so playKindOf files it as another app's, or as
+ * nothing while play_state's title is the disc's table of contents; the listening record keeps
+ * playKindOf's filing.
+ */
+export function claimKind(ps: ZonePlayState | null, np: ZoneNowPlaying | null): PlayKind | null {
+  return isCdPlayback(ps?.metadata, np?.display) ? "queue" : playKindOf(ps);
 }
 
 /**

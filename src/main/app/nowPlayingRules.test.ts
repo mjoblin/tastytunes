@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { playKindOf, type ZoneNowPlaying, type ZonePlayState } from "@shared/smoip";
 import {
+  claimKind,
   HOLD_MS,
   nowPlayingVerdict,
   PENDING_MS,
@@ -10,6 +12,7 @@ import {
 const base: ClaimInputs = {
   connected: true,
   powerOn: true,
+  demo: false,
   state: "play",
   kind: "queue",
   startedHere: false,
@@ -66,6 +69,47 @@ describe("when TastyTunes claims the system's Now Playing", () => {
     // a claimed play whose controls drop for a moment keeps the claim, as a lagging title does
     expect(v({ steerable: false, ...held })).toBe("hold");
     expect(v({ steerable: false, ...held, heldMs: HOLD_MS })).toBe("release-now");
+  });
+
+  it("never claims the built-in demo, and lets go of it at once", () => {
+    expect(v({ demo: true })).toBe("release-now");
+    expect(v({ demo: true, kind: "external", startedHere: true })).toBe("release-now");
+    expect(v({ demo: true, ...held })).toBe("release-now");
+  });
+});
+
+describe("what a play is, for the claim", () => {
+  const disc = (title: string, display: string | null = null) => ({
+    ps: {
+      state: "play",
+      queue_id: null,
+      metadata: { class: "md.track.cd", source: "CD", title },
+    } as unknown as ZonePlayState,
+    np: { display: { class: display } } as unknown as ZoneNowPlaying,
+  });
+
+  it("is the streamer's own for a disc, whatever its title, while the listening record's filing stays", () => {
+    const toc = disc("Tracks: 10 Length: 37:39");
+    expect(claimKind(toc.ps, toc.np)).toBe("queue");
+    expect(playKindOf(toc.ps)).toBeNull();
+    const track = disc("Side One");
+    expect(claimKind(track.ps, track.np)).toBe("queue");
+    expect(playKindOf(track.ps)).toBe("external");
+    // a disc known only by now_playing's display class
+    const shown = {
+      ps: { state: "play", queue_id: null, metadata: { source: "CD", title: "Side One" } },
+      np: { display: { class: "digital.cd" } },
+    } as unknown as { ps: ZonePlayState; np: ZoneNowPlaying };
+    expect(claimKind(shown.ps, shown.np)).toBe("queue");
+  });
+
+  it("is playKindOf's for anything else", () => {
+    const airplay = {
+      state: "play",
+      queue_id: null,
+      metadata: { class: "md.track", source: "AIRPLAY", title: "Song" },
+    } as unknown as ZonePlayState;
+    expect(claimKind(airplay, null)).toBe("external");
   });
 });
 

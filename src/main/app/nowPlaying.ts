@@ -21,7 +21,14 @@ import { helperPath } from "./nowPlayingHelper";
  *
  * The helper runs only while the Media keys setting is on; which helper is app/nowPlayingHelper's
  * rule (a packaged app only its own, a development run only one TASTYTUNES_NP_HELPER names).
+ *
+ * The built-in demo is never claimed (nowPlayingRules). TASTYTUNES_NOWPLAYING_DEMO=1 claims it
+ * too, for the Windows install smoke (.github/windows-smoke.mjs), which proves the claim on a
+ * runner with no streamer but the demo. An installed build reads it as well, since the smoke
+ * drives one; it only lets the demo's silent track have the keys.
  */
+
+const CLAIM_DEMO = process.env["TASTYTUNES_NOWPLAYING_DEMO"] === "1";
 
 function helperFile(): string | null {
   return helperPath({
@@ -98,20 +105,23 @@ export function syncNowPlaying(on: boolean, gaveUp: () => void): boolean {
     command: { file },
     view: () => {
       const s = deviceManager.streamerNow;
+      const c = deviceManager.connectionNow;
       return {
-        connected: deviceManager.connectionNow.phase === "connected",
+        connected: c.phase === "connected",
         powerOn: s.systemPower?.power === "ON",
+        demo: c.phase !== "idle" && c.demo === true,
         playState: s.playState,
         nowPlaying: s.nowPlaying,
-        position: s.position?.position ?? s.playState?.position ?? null,
+        position: s.position?.position ?? null,
       };
     },
     claimExternal: () => getSettings().mediaKeysExternal,
+    claimDemo: CLAIM_DEMO,
     fire: (cmd) => deviceManager.fire(cmd),
     activate: () => showMainWindow(),
     artFile: sleeveFile,
     fallbackArt: iconFile(),
-    log: (text) => deviceManager.log("info", "nowplaying", text),
+    log: (text, counted) => deviceManager.log("info", "nowplaying", text, { counted }),
     now: () => Date.now(),
     gaveUp,
   });
@@ -125,20 +135,18 @@ export function nowPlayingRunning(): boolean {
   return bridge?.running === true;
 }
 
-/** What the streamer reports reaches the helper; a recall from the app marks its play as ours. */
+/** What the streamer reports reaches the helper; a recall from the app marks its play as ours,
+ *  and a new connection claims nothing until the streamer has spoken on it. */
 export function nowPlayingPush(msg: PushMessage): void {
   if (!bridge) return;
   if (msg.kind === "recalledPreset") {
     if (msg.id != null) bridge.recalled();
     return;
   }
-  if (
-    msg.kind === "connection" ||
-    msg.kind === "systemPower" ||
-    msg.kind === "playState" ||
-    msg.kind === "nowPlaying" ||
-    msg.kind === "position"
-  )
+  if (msg.kind === "connection" && msg.state.phase === "connected") bridge.connected();
+  else if (msg.kind === "playState") bridge.heardFrom("playState");
+  else if (msg.kind === "systemPower") bridge.heardFrom("power");
+  else if (msg.kind === "connection" || msg.kind === "nowPlaying" || msg.kind === "position")
     bridge.update();
 }
 

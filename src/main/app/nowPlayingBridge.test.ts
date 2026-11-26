@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { StreamerCommand } from "@shared/ipc";
 import type { ZoneNowPlaying, ZonePlayState } from "@shared/smoip";
-import { NowPlayingBridge, type StreamerView } from "./nowPlayingBridge";
+import { HELLO_MS, NowPlayingBridge, type StreamerView } from "./nowPlayingBridge";
 import { HOLD_MS } from "./nowPlayingRules";
 
 const FAKE = join(__dirname, "__fixtures__", "fakeNowPlayingHelper.mjs");
@@ -36,9 +36,12 @@ afterEach(() => {
 function rig(opts: {
   hello?: string;
   then?: string;
+  on?: string;
+  quiet?: boolean;
   die?: string;
   view?: Partial<StreamerView>;
   external?: boolean;
+  claimDemo?: boolean;
   artFile?: (url: string) => Promise<string | null>;
 }) {
   const clock = { offset: 0 };
@@ -47,6 +50,7 @@ function rig(opts: {
   const view: StreamerView = {
     connected: true,
     powerOn: true,
+    demo: false,
     playState: playing(),
     nowPlaying: CONTROLS,
     position: 10,
@@ -54,19 +58,23 @@ function rig(opts: {
   };
   const fired: StreamerCommand[] = [];
   const logs: string[] = [];
+  const counted: string[] = [];
   const args = [FAKE, "--record", record];
   if (opts.hello) args.push("--hello", opts.hello);
   if (opts.then) args.push("--then", opts.then);
+  if (opts.on) args.push("--on", opts.on);
+  if (opts.quiet) args.push("--quiet");
   if (opts.die) args.push("--die", opts.die);
   bridge = new NowPlayingBridge({
     command: { file: process.execPath, args },
     view: () => view,
     claimExternal: () => opts.external ?? false,
+    claimDemo: opts.claimDemo,
     fire: (c) => fired.push(c),
     activate: () => logs.push("activated"),
     artFile: opts.artFile ?? (() => Promise.resolve(null)),
     fallbackArt: "/icon.png",
-    log: (t) => logs.push(t),
+    log: (t, c) => (c ? counted : logs).push(t),
     now: () => Date.now() + clock.offset,
     gaveUp: () => gaveUp++,
   });
@@ -78,7 +86,13 @@ function rig(opts: {
           .filter(Boolean)
           .map((l) => JSON.parse(l) as Record<string, unknown>)
       : [];
-  return { bridge, view, fired, logs, lines, clock, gaveUps: () => gaveUp };
+  return { bridge, view, fired, logs, counted, lines, clock, args, gaveUps: () => gaveUp };
+}
+
+/** A claim made: the first info is in. */
+async function claimed(r: ReturnType<typeof rig>) {
+  r.bridge.start();
+  await vi.waitFor(() => expect(r.lines().length).toBe(1), { timeout: 5_000 });
 }
 
 describe("the Now Playing bridge", () => {
@@ -253,5 +267,138 @@ describe("the Now Playing bridge", () => {
     r.bridge.start();
     await vi.waitFor(() => expect(r.lines().length).toBe(1), { timeout: 5_000 });
     expect(r.lines()[0]).toMatchObject({ art: "/icon.png" });
+  });
+
+  it("claims a disc as the streamer's own play, its track named by now_playing", async () => {
+    const r = rig({
+      view: {
+        playState: {
+          state: "play",
+          queue_id: null,
+          metadata: {
+            class: "md.track.cd",
+            source: "CD",
+            title: "Tracks: 10 Length: 37:39",
+            artist: "Band",
+            album: "LP",
+            duration: 200,
+          },
+        } as unknown as ZonePlayState,
+        nowPlaying: {
+          controls: ["play_pause", "track_next", "track_previous", "seek"],
+          display: { class: "digital.cd", line1: "Side One", line2: "Band", line3: "LP" },
+        } as unknown as ZoneNowPlaying,
+      },
+    });
+    await claimed(r);
+    expect(r.lines()[0]).toMatchObject({ title: "Side One", artist: "Band", album: "LP" });
+    expect(r.logs.join(" ")).toContain("claimed Now Playing (queue on CD)");
+  });
+
+  it("keeps the tile playing, with its buttons, through a skip's buffering", async () => {
+    const r = rig({});
+    await claimed(r);
+    r.view.playState = playing({ title: "Next" }, "buffering");
+    r.view.nowPlaying = { controls: ["play_pause"] } as unknown as ZoneNowPlaying;
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().length).toBe(2), { timeout: 5_000 });
+    expect(r.lines()[1]).toMatchObject({
+      title: "Next",
+      playing: true,
+      can: { toggle: true, next: true, previous: true, seek: true },
+    });
+    // a pause is shown as one
+    r.view.playState = playing({ title: "Next" }, "pause");
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().at(-1)).toMatchObject({ playing: false }), {
+      timeout: 5_000,
+    });
+    expect(r.lines().at(-1)).toMatchObject({ can: { next: false, seek: false } });
+  });
+
+  it("claims nothing on a new connection until the streamer has said what plays and whether it is on", async () => {
+    const r = rig({});
+    await claimed(r);
+    r.view.connected = false;
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().at(-1)).toEqual({ t: "release" }), { timeout: 5_000 });
+    // the socket's own reconnect: the cache still holds what played before the drop
+    r.view.connected = true;
+    r.bridge.connected();
+    r.bridge.heardFrom("playState");
+    r.bridge.update();
+    expect(r.lines().length).toBe(2);
+    r.bridge.heardFrom("power");
+    await vi.waitFor(() => expect(r.lines().at(-1)).toMatchObject({ t: "info" }), {
+      timeout: 5_000,
+    });
+  });
+
+  it("starts a helper slow to say hello again, on the restart ladder, rather than giving up", async () => {
+    const r = rig({ quiet: true });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      r.bridge.start();
+      // the next start says hello
+      r.args.splice(r.args.indexOf("--quiet"), 1);
+      vi.advanceTimersByTime(HELLO_MS);
+      vi.advanceTimersByTime(1_000);
+    } finally {
+      vi.useRealTimers();
+    }
+    await vi.waitFor(() => expect(r.logs).toContain("the helper is up"), { timeout: 5_000 });
+    expect(r.logs).toContain("the helper didn't say hello in time: starting it again");
+    expect(r.gaveUps()).toBe(0);
+    expect(r.bridge.gaveUp).toBe(false);
+  });
+
+  it("starts a new track at play_state's position, not the last track's, and follows the push again once it moves", async () => {
+    const r = rig({});
+    await claimed(r);
+    r.view.position = 238;
+    r.view.playState = { ...playing({ title: "Next" }), position: 0 };
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().length).toBe(2), { timeout: 5_000 });
+    expect(r.lines()[1]).toMatchObject({ title: "Next", elapsed: 0 });
+    r.view.position = 30;
+    r.bridge.update();
+    await vi.waitFor(() => expect(r.lines().at(-1)).toMatchObject({ elapsed: 30 }), {
+      timeout: 5_000,
+    });
+  });
+
+  it("sends nothing for a key that comes after letting go", async () => {
+    const r = rig({ then: "cmd pause", on: "release" });
+    await claimed(r);
+    r.view.powerOn = false;
+    r.bridge.update();
+    await vi.waitFor(
+      () => expect(r.logs).toContain("pause from the system: not claimed, nothing sent"),
+      {
+        timeout: 5_000,
+      },
+    );
+    expect(r.fired).toEqual([]);
+  });
+
+  it("logs the helper's own lines, at most one a second", async () => {
+    const r = rig({ then: "log error The parameter is incorrect.\nlog error again" });
+    await claimed(r);
+    await vi.waitFor(
+      () => expect(r.counted).toEqual(["the helper says: error The parameter is incorrect."]),
+      { timeout: 5_000 },
+    );
+  });
+
+  it("leaves the built-in demo alone, unless told to claim it", async () => {
+    const r = rig({ view: { demo: true } });
+    r.bridge.start();
+    await vi.waitFor(() => expect(r.logs).toContain("the helper is up"), { timeout: 5_000 });
+    r.bridge.update();
+    expect(r.lines()).toEqual([]);
+    r.bridge.stop();
+    const told = rig({ view: { demo: true }, claimDemo: true });
+    await claimed(told);
+    expect(told.lines()[0]).toMatchObject({ t: "info", title: "Song" });
   });
 });

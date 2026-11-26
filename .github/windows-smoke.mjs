@@ -31,6 +31,9 @@ const ok = (name, cond, detail = '') => {
 // Sandboxed userData plus sunk external URLs: the smoke must neither touch a
 // real settings file nor reach any real service from CI. (The installed build
 // ignores the ListenBrainz override, and a fresh profile has no token to send.)
+// TASTYTUNES_NOWPLAYING_DEMO: the app never claims the system's Now Playing
+// for the built-in demo, but the demo is all a runner has, so the smoke asks
+// for the claim to prove the helper (app/nowPlaying).
 const ud = mkdtempSync(join(tmpdir(), 'tt-smoke-'))
 const sink = 'http://127.0.0.1:9/'
 // TT_ARGS: the arguments the README tells an owner to launch with (the Linux leg's --no-sandbox)
@@ -46,7 +49,8 @@ const app = await _electron.launch({
     TASTYTUNES_LYRICS_URL: sink,
     TASTYTUNES_RADIO_URL: sink,
     TASTYTUNES_ARTIST_URL: sink,
-    TASTYTUNES_MB_URL: sink
+    TASTYTUNES_MB_URL: sink,
+    TASTYTUNES_NOWPLAYING_DEMO: '1'
   }
 })
 
@@ -101,6 +105,14 @@ try {
       await sleep(500)
     }
     ok('the Now Playing helper is up and claims the demo track', np.includes('the helper is up') && np.some((t) => t.startsWith('claimed Now Playing')), np.join(' | '))
+    // the claim is logged as its message goes out, before Windows has taken it: the helper's own
+    // error lines, which the app logs as "the helper says: error ...", say whether it did, given a
+    // moment to come back
+    await sleep(3000)
+    np = await page.evaluate(async () =>
+      (await window.tastytunes.getSnapshot()).logs.filter((l) => l.scope === 'nowplaying').map((l) => l.text))
+    const errors = np.filter((t) => t.startsWith('the helper says: error'))
+    ok('the Now Playing helper reports no error', errors.length === 0, errors.join(' | '))
   }
 
   // The boot also proves the packaged resources: the tray is ON by default,
