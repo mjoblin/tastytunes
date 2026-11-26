@@ -1,6 +1,7 @@
 import { IPC } from "@shared/ipc";
 import { unhurried } from "@shared/model";
 import { broadcastAlbumDrs, broadcastAnalysisStats, broadcastSettings } from "../app/broadcast";
+import { displayServer } from "../app/display";
 import { streamerHost } from "../app/runtime";
 import { getSettings, updateSettings } from "../data/persist";
 import {
@@ -173,6 +174,8 @@ export function registerAudioIpc(): void {
     if (typeof key !== "string") return;
     audioAnalysisPut(key, analysis);
     noteWaveformSeen();
+    // a page on another screen showing this track draws it now, not from the next track
+    displayServer.analysisStored(key);
     // the album this track completes, if it does, gets its DR (as the sweep would give it),
     // and every window hears it
     broadcastAlbumDrs(recordAlbumDrsFromTracks(pools(), key));

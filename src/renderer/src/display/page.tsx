@@ -22,7 +22,7 @@ import { useArtAccent } from "@/hooks/useArtAccent";
 import { deriveNowPlaying } from "@/lib/format";
 import { DisplayMode } from "@/components/playback/DisplayMode";
 import { holdStages } from "@/components/display/SceneCanvas";
-import { askAgainForStored } from "@/components/media/waveformAnalysis";
+import { askAgainForStored, storedNow } from "@/components/media/waveformAnalysis";
 import { hearControl, useControl } from "./control";
 import { followApp } from "./live";
 import {
@@ -83,8 +83,10 @@ function canDrawScenes(): boolean {
 const SCENES_HERE = canDrawScenes();
 drawsScenes(SCENES_HERE);
 
-/** A track's first play: the window measures it a few seconds in, so a page that found nothing
- *  stored asks again at these times from its first none (components/media/waveformAnalysis). */
+/** A track's first play: the window measures it as it plays, and the app says when it has stored
+ *  it (display/live's measured); besides, a page that found nothing stored asks again at these
+ *  times from its first none, for a word missed while its line was down
+ *  (components/media/waveformAnalysis). */
 const ASK_AGAIN_MS = [20_000, 60_000, 180_000] as const;
 askAgainForStored(ASK_AGAIN_MS);
 
@@ -115,6 +117,7 @@ function Page(): React.JSX.Element {
         },
         reachable: setHeard,
         control: hearControl,
+        measured: storedNow,
       }),
     [],
   );

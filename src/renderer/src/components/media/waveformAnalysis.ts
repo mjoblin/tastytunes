@@ -25,6 +25,7 @@ import {
   unhurried,
 } from "@shared/model";
 import { Lru } from "@/lib/lru";
+import { waitForStored, waitingOn } from "@/lib/analysisWaits";
 
 /**
  * EXPERIMENT (0.7 exploration): waveforms from the
@@ -392,14 +393,23 @@ export function analyzeTrack(
 
 /**
  * ASKED AGAIN FOR THE STORED ONE (0.17.0, Display on other screens): a page on another screen
- * never measures, and the window measures a track a few seconds into its first play, so a page
- * that found nothing stored asks again a few times while the same file shows none (from its
- * first none), and draws it once it is stored. Off in the window, which measures for itself.
+ * never measures, and the window measures a track as it plays, so a page that found nothing
+ * stored asks again when the app says it has stored that file's analysis (storedNow), and a few
+ * times besides while the same file shows none (from its first none), for a word missed while
+ * the page's line to the app was down; it draws the analysis once it is stored. Off in the
+ * window, which measures for itself.
  */
 let askAgainMs: readonly number[] = [];
 export function askAgainForStored(ms: readonly number[]): void {
   askAgainMs = ms;
 }
+
+/** The app stored the analysis under `contentKey` (a page's line to the app says so, display/live):
+ *  each file showing none under that key asks for it again now, with every surface drawing it. */
+export function storedNow(contentKey: string): void {
+  for (const { serverUdn, objectId } of waitingOn(contentKey)) retryAnalysis(serverUdn, objectId);
+}
+
 // one ask a moment for a file, however many surfaces are waiting on it
 const askedAt = new Lru<string, number>(50);
 
@@ -430,6 +440,7 @@ export function usePeaks(
   useEffect(() => {
     if (state !== null || !serverUdn || !objectId || !contentKey || askAgainMs.length === 0) return;
     let gone = false;
+    const unwait = waitForStored({ contentKey, serverUdn, objectId });
     const timers = askAgainMs.map((ms) =>
       setTimeout(() => {
         const key = `${serverUdn}|${objectId}`;
@@ -445,6 +456,7 @@ export function usePeaks(
     );
     return () => {
       gone = true;
+      unwait();
       for (const t of timers) clearTimeout(t);
     };
   }, [state, serverUdn, objectId, contentKey]);

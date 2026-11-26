@@ -794,6 +794,21 @@ describe("the scenes' analysis on a page", () => {
     expect(line).not.toMatch(/uuid:|Shelf NAS|Lounge USB/);
   });
 
+  it("tells every open page when the playing file's analysis is stored, and of no other track", async () => {
+    const { get, live, server } = await rig();
+    const opened = await live(cookie);
+    // a track no page asked about is never named
+    server.analysisStored("band|record|song|200");
+    await get("/api/track?title=Song&artist=Band&album=Record&duration=200", { cookie });
+    server.analysisStored("someone|else|other|99");
+    server.analysisStored("band|record|song|200");
+    await vi.waitFor(() => expect(opened.more()).toContain("event: measured"));
+    const said = [...opened.more().matchAll(/event: measured\ndata: (.*)\n\n/g)].map(
+      (m) => JSON.parse(m[1]) as string,
+    );
+    expect(said).toEqual(["band|record|song|200"]);
+  });
+
   it("hands over a stored analysis only by a key it gave out with the playing file", async () => {
     const { get } = await rig();
     const key = encodeURIComponent("band|record|song|200");

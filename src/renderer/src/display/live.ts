@@ -9,7 +9,9 @@ import type { PushMessage, Snapshot } from "@shared/ipc";
  * knows it has lost the app (it goes dark) and opens the channel again. A channel the app
  * refuses (a new address was made) asks once whether this page is still let in, and if not,
  * reloads into the app's "open the address" page. Beside the app's pushes, the screen's own line:
- * where it stands with the controls (`event: control`, display/control), sent to this screen alone.
+ * where it stands with the controls (`event: control`, display/control), sent to this screen alone;
+ * and the word that the app has stored the analysis of a track this page asked about
+ * (`event: measured`, its key), so a track measured as it plays reaches the page as it lands.
  * A NEW BUILD RELOADS THE PAGE: each connection says which build of the page the app serves
  * (`event: build`); the first is this page's, and a later one that differs (the app was updated or
  * rebuilt and restarted) reloads it, so a screen left on for days never runs yesterday's page.
@@ -34,6 +36,8 @@ export interface Follow {
   snapshot(snap: Snapshot): void;
   /** Where this screen stands with the controls, at every connection and when it changes. */
   control?(control: DisplayControl): void;
+  /** The app stored the analysis under this key (a track the page asked about). */
+  measured?(contentKey: string): void;
   /** Whether the app is heard: false after LOST_MS of silence, true at the next word. */
   reachable(heard: boolean): void;
 }
@@ -82,6 +86,10 @@ export function followApp(follow: Follow): () => void {
     live.addEventListener("control", (e: MessageEvent<string>) => {
       hear();
       follow.control?.(JSON.parse(e.data) as DisplayControl);
+    });
+    live.addEventListener("measured", (e: MessageEvent<string>) => {
+      hear();
+      follow.measured?.(JSON.parse(e.data) as string);
     });
     live.onmessage = (e: MessageEvent<string>) => {
       hear();

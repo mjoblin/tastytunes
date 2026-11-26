@@ -52,7 +52,9 @@ import { hostAllowed } from "./hostCheck";
  * - THE SCENES' ANALYSIS, FINISHED (stage 2): the page asks which library file is playing (the
  *   window's own question, answered only for the playing track, with the file's ids left out)
  *   and then that file's stored analysis, by a key this server handed out; it never measures
- *   anything, so a track the app hasn't analyzed shows the Sleeve's face, as in the window.
+ *   anything, so a track the app hasn't analyzed shows the Sleeve's face, as in the window. When
+ *   the window stores the analysis of a track a page asked about (it measures a track as it
+ *   plays), every open page hears it (`event: measured`, with the key) and asks again.
  * - The page is the app's own Display tree (one home), built as a second entry of the renderer
  *   (display.html), with a web bridge in place of the window's API.
  * - ON THE HOME SCREEN: a tablet can add the page to its Home Screen and open it as an app of its
@@ -683,6 +685,14 @@ export class DisplayServer {
       serverUdn: "display",
     };
     this.json(res, { node });
+  }
+
+  /** The window stored a track's analysis: a page showing that track asks for it now, rather
+   *  than at the next track. Only a key handed out with the playing file is named, so a page hears
+   *  of no other track. */
+  analysisStored(key: string): void {
+    if (this.clients.size === 0 || !this.trackKeys.has(key)) return;
+    this.send(`event: measured\ndata: ${JSON.stringify(key)}\n\n`);
   }
 
   /** A stored analysis, only by a key handed out with the playing file. */
