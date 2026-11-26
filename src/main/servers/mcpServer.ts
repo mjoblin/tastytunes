@@ -128,6 +128,8 @@ function annotationsOf(
 export class McpBridge {
   private http: Server | null = null;
   private active: { bind: McpSettings["bind"]; port: number } | null = null;
+  /** The endpoint Settings was last told, while the server listens. */
+  private shownUrl: string | null = null;
   /** The token's mint, which a request from the network waits for before it is checked. */
   private tokenReady: Promise<void> = Promise.resolve();
   /** Fired when an MCP tool mutates settings (schedules) — the renderer
@@ -180,6 +182,7 @@ export class McpBridge {
     this.http.close();
     this.http = null;
     this.active = null;
+    this.shownUrl = null;
     if (!restarting) {
       // the server off, no agent is left to use a background connection
       this.remotes.closeAll();
@@ -206,17 +209,34 @@ export class McpBridge {
       );
     });
     server.listen(mcp.port, host, () => {
-      const conn = this.dm.connectionNow;
-      const streamer = conn.phase === "connected" ? conn.host : null;
-      const shown = mcp.bind === "lan" ? (lanAddress(streamer) ?? "0.0.0.0") : "127.0.0.1";
-      const url = `http://${shown}:${mcp.port}/mcp`;
-      this.dm.setMcpStatus(
-        { running: true, url, error: null },
-        `listening on ${url} (${mcp.bind})`,
-      );
+      this.say(this.endpoint(mcp.bind, mcp.port), mcp.bind);
     });
     this.http = server;
     this.active = { bind: mcp.bind, port: mcp.port };
+  }
+
+  /** The endpoint the setup lines show: on the local network, this computer's address on the
+   *  connected streamer's network where it has one (servers/lanAddress). */
+  private endpoint(bind: McpSettings["bind"], port: number): string {
+    const conn = this.dm.connectionNow;
+    const streamer = conn.phase === "connected" ? conn.host : null;
+    const shown = bind === "lan" ? (lanAddress(streamer) ?? "0.0.0.0") : "127.0.0.1";
+    return `http://${shown}:${port}/mcp`;
+  }
+
+  private say(url: string, bind: McpSettings["bind"]): void {
+    this.shownUrl = url;
+    this.dm.setMcpStatus({ running: true, url, error: null }, `listening on ${url} (${bind})`);
+  }
+
+  /** A streamer connected: the address is worked out again. The server switched on at launch
+   *  starts before the app connects, so its first address can't prefer the streamer's network;
+   *  this one can, and Settings hears it when it differs. */
+  streamerConnected(): void {
+    // nothing said yet: the server is still starting, and says its address once it listens
+    if (!this.http || this.active?.bind !== "lan" || this.shownUrl == null) return;
+    const url = this.endpoint(this.active.bind, this.active.port);
+    if (url !== this.shownUrl) this.say(url, this.active.bind);
   }
 
   private async route(

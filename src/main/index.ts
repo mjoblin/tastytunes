@@ -145,6 +145,9 @@ if (!gotLock) {
         nowPlayingPush(msg);
         // and every screen showing Display on other screens (app/display)
         displayServer.push(msg);
+        // the agents' address, on the streamer's network once one connects (servers/mcpServer)
+        if (msg.kind === "connection" && msg.state.phase === "connected")
+          mcpBridge.streamerConnected();
         // INDEX AT CONNECT: the media indexes used to
         // build only when the Library screen first listed servers, so on a
         // fresh install the Queue's album links and Open in Library could "not
