@@ -44,9 +44,13 @@ export function useControl(): DisplayControl {
 /** Whether this browser has a touch screen: an iPad's Safari says it is a Mac otherwise. */
 const touch = (): boolean => typeof navigator !== "undefined" && navigator.maxTouchPoints > 1;
 
+/** How long a post waits for the app's answer: a tap made while the app is out of reach is given
+ *  up, never left pending to land later on whatever is playing then. */
+export const POST_MS = 4_000;
+
 /** One verb to the app (`id`: the queue row playQueue plays, the preset playPreset plays). The
  *  answer says whether it was done, or why not (the screen asked the app, the app said not now,
- *  the source can't do it); null when the app couldn't be reached. */
+ *  the source can't do it); null when the app couldn't be reached or didn't answer in POST_MS. */
 /** The verbs a button or a key sends: all but a seek, which carries its point (seekTo), and a
  *  playlist, which carries its own id (playPlaylist). */
 export type ButtonVerb = Exclude<DisplayVerb, "seek" | "playPlaylist">;
@@ -74,6 +78,7 @@ async function post(what: {
       credentials: "same-origin",
       headers: { "content-type": "application/json", "x-tastytunes": "control" },
       body: JSON.stringify({ ...what, touch: touch() }),
+      signal: AbortSignal.timeout(POST_MS),
     });
     const body = (await res.json().catch(() => null)) as DisplayControlAnswer | null;
     // the screen asked: it hears "asking" on its line too, but the tap's own answer is sooner

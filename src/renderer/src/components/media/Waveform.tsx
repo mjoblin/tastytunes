@@ -369,6 +369,8 @@ export function DisplayWaveform({
  * - Only while `live` (the buttons up): a touch that lands while they are away does nothing.
  * - A lift that never came (a touch the system took) holds nothing up: the next touch is taken
  *   afresh, and a capture lost without a lift lets go, sending nothing.
+ * - A seek is for the track the finger went down in: one that changed before the lift (the track
+ *   ended under the finger, or was skipped elsewhere) sends nothing, never a point in the next.
  */
 export function PageSeekBar({
   live,
@@ -398,6 +400,8 @@ export function PageSeekBar({
   /** Where the finger is, as a share of the track, while one is down. */
   const [at, setAt] = useState<number | null>(null);
   const finger = useRef<number | null>(null);
+  /** The track playing when the finger went down (playingTrackKey). */
+  const fingerOn = useRef("");
   const track = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const ready = analysis != null && analysis !== "loading";
@@ -446,6 +450,7 @@ export function PageSeekBar({
           if (e.pointerType === "mouse" && e.button !== 0) return;
           e.currentTarget.setPointerCapture(e.pointerId);
           finger.current = e.pointerId;
+          fingerOn.current = playingTrackKey(useStore.getState().playState);
           setAt(shareAt(e.clientX));
         }}
         onPointerMove={(e) => {
@@ -456,6 +461,7 @@ export function PageSeekBar({
           const pct = shareAt(e.clientX) ?? at;
           letGo();
           if (pct == null || !live) return;
+          if (playingTrackKey(useStore.getState().playState) !== fingerOn.current) return;
           holdSeek(pct);
           void onSeek(pct * duration).then((done) => {
             if (!done) seekHold = null;
