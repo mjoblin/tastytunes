@@ -50,12 +50,38 @@ export function runningCleanly(): void {
   clean = setTimeout(() => forgetReloads(session()), CLEAN_RUN_MS);
 }
 
-/** Reload the page after its wait (once, however many failures led here). */
+/**
+ * After each wait, ask the app first and reload only once it answers (any answer, a refused one
+ * included: the page's own server is up): a reload while the app is still down (it restarted
+ * between the page's files) lands on the browser's own error page, with no script left to try
+ * again. Not up: the next, longer wait, counted as a reload.
+ */
+export async function reloadWhenUp(deps: {
+  store: Store | null;
+  sleep: (ms: number) => Promise<void>;
+  answers: () => Promise<boolean>;
+  reload: () => void;
+}): Promise<void> {
+  for (;;) {
+    await deps.sleep(reloadWait(deps.store));
+    if (await deps.answers()) return deps.reload();
+  }
+}
+
+/** Reload the page once the app answers, after its wait (once, however many failures led here). */
 export function reloadSoon(why: unknown): void {
   if (reloading) return;
   reloading = true;
   clearTimeout(clean);
-  const wait = reloadWait(session());
-  console.error(`[display] the page failed, reloading in ${wait / 1000} s`, why);
-  setTimeout(() => location.reload(), wait);
+  console.error("[display] the page failed, reloading once TastyTunes answers", why);
+  void reloadWhenUp({
+    store: session(),
+    sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
+    answers: () =>
+      fetch("/api/snapshot", { credentials: "same-origin", cache: "no-store" }).then(
+        () => true,
+        () => false,
+      ),
+    reload: () => location.reload(),
+  });
 }

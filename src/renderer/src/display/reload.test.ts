@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { forgetReloads, reloadWait } from "./reload";
+import { forgetReloads, reloadWait, reloadWhenUp } from "./reload";
 
 /** A tab's sessionStorage. */
 const tab = (): Pick<Storage, "getItem" | "setItem" | "removeItem"> => {
@@ -39,5 +39,23 @@ describe("a page that fails loads again", () => {
       removeItem: () => {},
     };
     expect(reloadWait(refusing)).toBe(3_000);
+  });
+
+  it("reloads only once the app answers, waiting longer each time it doesn't", async () => {
+    const s = tab();
+    const slept: number[] = [];
+    let asks = 0;
+    let reloaded = 0;
+    await reloadWhenUp({
+      store: s,
+      sleep: (ms) => {
+        slept.push(ms);
+        return Promise.resolve();
+      },
+      answers: () => Promise.resolve(++asks >= 3),
+      reload: () => void reloaded++,
+    });
+    expect(slept).toEqual([3_000, 10_000, 30_000]);
+    expect(reloaded).toBe(1);
   });
 });
