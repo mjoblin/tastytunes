@@ -29,6 +29,26 @@ describe("the address another computer on the network reaches", () => {
     expect(pickLanAddress(listed, "172.20.0.30")).toBe("172.20.0.4");
   });
 
+  it("prefers the physical interface when a VPN's or a virtual adapter's wide mask holds the streamer too", () => {
+    // both hold 10.1.2.20, the VPN listed first: the system's order no longer decides
+    expect(
+      pickLanAddress({ utun3: [v4("10.8.0.2", "255.0.0.0")], en0: [v4("10.1.2.7")] }, "10.1.2.20"),
+    ).toBe("10.1.2.7");
+    expect(
+      pickLanAddress(
+        { "vEthernet (WSL)": [v4("172.16.0.1", "255.240.0.0")], "Wi-Fi": [v4("172.20.0.4")] },
+        "172.20.0.30",
+      ),
+    ).toBe("172.20.0.4");
+    // and a VPN that alone holds the streamer still beats a physical interface that doesn't
+    expect(
+      pickLanAddress(
+        { en0: [v4("192.168.1.7")], utun3: [v4("10.8.0.2", "255.0.0.0")] },
+        "10.1.2.20",
+      ),
+    ).toBe("10.8.0.2");
+  });
+
   it("ranks virtual machines' and containers' adapters below a physical one", () => {
     for (const name of [
       "vEthernet (WSL)",

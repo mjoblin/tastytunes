@@ -6,7 +6,7 @@ import { networkInterfaces, type NetworkInterfaceInfo } from "node:os";
  * this computer's network, never the loopback.
  *
  * - The interface whose network holds the connected streamer wins: the screens and agents that
- *   want this computer sit on that network.
+ *   want this computer sit on that network. Among several that hold it, the order below decides.
  * - Without one (no streamer connected, or one reached by name or across a router), a private
  *   address on a physical interface first. A VPN's address (0.16.0: the first external address
  *   found could be a VPN's, and the setup line then reached nothing) and a virtual machine's or a
@@ -50,10 +50,12 @@ export function pickLanAddress(
     for (const a of addrs ?? [])
       if (a.family === "IPv4" && !a.internal)
         found.push({ name, address: a.address, netmask: a.netmask });
+  // the streamer's network first, and within it and without it the same order: a VPN whose wide
+  // mask holds the streamer's address matches too, and still goes after the physical interface
   const rank = (c: { name: string; address: string; netmask: string }): number =>
-    streamer != null && onNetwork(streamer, c.address, c.netmask)
-      ? -1
-      : (VPN.test(c.name) || VIRTUAL.test(c.name) ? 2 : 0) + (PRIVATE.test(c.address) ? 0 : 1);
+    (streamer != null && onNetwork(streamer, c.address, c.netmask) ? 0 : 4) +
+    (VPN.test(c.name) || VIRTUAL.test(c.name) ? 2 : 0) +
+    (PRIVATE.test(c.address) ? 0 : 1);
   return found.sort((x, y) => rank(x) - rank(y))[0]?.address ?? null;
 }
 
