@@ -801,7 +801,7 @@ describe("an album's export", () => {
     expect(r.files.filter((f) => f.path.endsWith("sleeve.jpg"))).toHaveLength(1);
     const readme = readFileSync(join(r.folder, "README.md"), "utf-8");
     expect(readme).toContain("## album.json");
-    expect(readme).toContain("It is format `tastytunes.export/1`.");
+    expect(readme).toContain("It is format `tastytunes.export/1`,");
     expect(readme).toMatch(/Wikipedia's text, under\s+the CC BY-SA license/);
     // a gap two tracks share is said once with its count
     expect(r.missing.find((m) => m.what.startsWith("analysis"))?.what).toBe(
@@ -1114,6 +1114,72 @@ describe("the order of an export's asking", () => {
     >;
     expect(listed.filter((p) => p["what"] === "shelf" && p["file"] === null)).toHaveLength(
       6 - asked,
+    );
+  });
+});
+
+describe("the README", () => {
+  /** The keys not named in the README as code. */
+  const unnamed = (readme: string, keys: string[]): string[] =>
+    [...new Set(keys)].filter((k) => !readme.includes(`\`${k}\``));
+  const keysOf = (v: unknown): string[] => (v && typeof v === "object" ? Object.keys(v) : []);
+
+  it("names every field a track's export writes, and says its record comes last", async () => {
+    const { env } = fakeEnv();
+    const copied = await exportTrack(
+      env,
+      root(),
+      target(t1),
+      opts({ fill: true, plays: true, audio: "copy" }),
+    );
+    const linked = await exportTrack(env, root(), target(t1), opts({ fill: true, plays: true }));
+    if (copied.kind !== "exported" || linked.kind !== "exported") throw new Error("not exported");
+    const readme = readFileSync(join(copied.folder, "README.md"), "utf-8");
+    const track = readJson(copied.folder, "track.json");
+    const moments = (track["timeline"] as { moments: Array<{ what: string }> }).moments.map(
+      (m) => m.what,
+    );
+    const plays = (track["listening"] as { every_play: unknown[] }).every_play;
+    expect(new Set(moments).size).toBe(8);
+    expect(
+      unnamed(readme, [
+        ...keysOf(track),
+        ...["measured", "lyrics", "listening", "audio"].flatMap((k) => keysOf(track[k])),
+        ...keysOf(readJson(linked.folder, "track.json")["audio"]),
+        ...keysOf(plays[0]),
+        ...moments,
+        ...keysOf(readJson(copied.folder, "analysis.json")),
+      ]),
+    ).toEqual([]);
+    expect(readme).toContain(
+      "`track.json` is written last, so a folder without it did not finish.",
+    );
+    expect(readme).toMatch(
+      /A listen is a play that ran for at least half its track, or 4 minutes, whichever is shorter\.\s+A play of a track under 30 seconds never counts\./,
+    );
+  });
+
+  it("names every field an album's export writes, its tracks' records included", async () => {
+    const { env } = fakeEnv();
+    const r = await exportAlbum(env, root(), target(album), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    const readme = readFileSync(join(r.folder, "README.md"), "utf-8");
+    const track = readJson(r.folder, "tracks/01 - Lamplighter/track.json");
+    expect(
+      unnamed(readme, [...keysOf(readJson(r.folder, "album.json")), ...keysOf(track)]),
+    ).toEqual([]);
+    // what the album shares is in album.json once, never said to be in each track's
+    expect(track["album_notes"]).toBeUndefined();
+    expect(readme).not.toMatch(/as a single-track export has them/);
+    expect(readme).not.toContain("`presets_holding_album` names the streamer's presets");
+  });
+
+  it("promises the redaction only for the pictures it strips", async () => {
+    const { env } = fakeEnv();
+    const r = await exportTrack(env, root(), target(t1), opts({ redact: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(readFileSync(join(r.folder, "README.md"), "utf-8")).toMatch(
+      /its JPEG, PNG and WebP pictures carry none of the details a camera or an editor wrote into them \(a GIF or an SVG is copied as it came\)/,
     );
   });
 });
