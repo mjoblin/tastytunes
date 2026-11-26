@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { screenCode } from "@shared/displayControl";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { ModalShell } from "@/components/chrome/Overlay";
@@ -7,10 +8,11 @@ import { ConfirmActions } from "@/components/chrome/Confirm";
 /**
  * THE ASK FROM ANOTHER SCREEN (0.17.0, controls on the other screens): a screen showing Display on
  * other screens that hasn't been allowed asks at its first tap, and the app asks here, one screen
- * at a time, naming it by its device and browser. "Not now" keeps that screen from asking again
- * for a while (main/servers/displayScreens); Settings › Integrations can still allow it. A centred
- * dialog: the ask comes from another room, with no control here to anchor to. Mounted once, in
- * the main window.
+ * at a time, naming it by its device and browser and by the short code the screen shows while it
+ * asks (two iPads in Safari are told apart by it). "Not now" keeps that screen from asking again
+ * for a while (main/servers/displayScreens); Settings › Integrations can still allow it. An ask
+ * nobody answers lapses, and the dialog goes with it. A centred dialog: the ask comes from another
+ * room, with no control here to anchor to. Mounted once, in the main window.
  */
 export function DisplayAskPrompt(): React.JSX.Element | null {
   const asking = useStore((s) => s.displayScreens?.asking ?? null);
@@ -37,7 +39,7 @@ export function DisplayAskPrompt(): React.JSX.Element | null {
             Allow this screen to control playback?
           </div>
           <div className="mt-1 text-[12px] text-dim leading-snug">
-            {asking.name}, showing Display on other screens.
+            {asking.name} (code {screenCode(asking.id)}), showing Display on other screens.
           </div>
           <ConfirmActions
             modal

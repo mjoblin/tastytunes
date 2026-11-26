@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import type { DisplayScreen, DisplayScreens } from "@shared/displayControl";
+import { screenCode, type DisplayScreen, type DisplayScreens } from "@shared/displayControl";
 import type { DisplayStatus } from "@shared/ipc";
 import { tt } from "@/api";
 import { useStore } from "@/store";
 import { HeaderChip } from "@/components/chrome/Chrome";
+import { useConfirmPopover } from "@/components/chrome/Confirm";
 import { QrCode } from "@/components/settings/QrCode";
 import { maskedAddress } from "@/lib/displayAddress";
 import { fmtRelative } from "@/lib/format";
@@ -76,12 +77,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
                 >
                   {qrShown ? "Hide QR code" : "Show QR code"}
                 </HeaderChip>
-                <HeaderChip
-                  onClick={() => void tt.displayNewAddress().then(setDisplayStatus)}
-                  className="text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
-                >
-                  New address
-                </HeaderChip>
+                <NewAddress controls={settings.displayControl} />
               </div>
             </div>
             {qrShown && (
@@ -119,6 +115,32 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
         )}
       </div>
     </SettingsCard>
+  );
+}
+
+/** New address, confirmed first: it can't be undone, and every screen on the old address is let
+ *  go, every approval with it, and a Home Screen app made from it (decisions/0011). */
+function NewAddress({ controls }: { controls: boolean }): React.JSX.Element {
+  const confirm = useConfirmPopover();
+  return (
+    <>
+      <HeaderChip
+        data-display-new-address
+        onClick={(e) =>
+          confirm.ask(e, {
+            question: controls
+              ? "Make a new address? Screens using the current one stop working until they open the new one and are allowed again."
+              : "Make a new address? Screens using the current one stop working until they open the new one.",
+            verb: "New address",
+            onConfirm: () => void tt.displayNewAddress().then(setDisplayStatus),
+          })
+        }
+        className="text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
+      >
+        New address
+      </HeaderChip>
+      {confirm.popover}
+    </>
   );
 }
 
@@ -180,8 +202,10 @@ function ScreenRow({ screen }: { screen: DisplayScreen }): React.JSX.Element {
     >
       <div className="min-w-0 flex-1">
         <div className="truncate text-[12.5px] text-ink">{screen.name}</div>
+        {/* the code its page showed while it asked, as the app's prompt showed it */}
         <div className="text-[11.5px] text-faint">
-          {screen.allowed ? "Allowed" : "Not allowed"} · First asked {fmtRelative(screen.firstSeen)}
+          {screen.allowed ? "Allowed" : "Not allowed"} · Code {screenCode(screen.id)} · First asked{" "}
+          {fmtRelative(screen.firstSeen)}
         </div>
       </div>
       {!screen.allowed && (

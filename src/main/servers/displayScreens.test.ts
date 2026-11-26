@@ -2,31 +2,42 @@ import { describe, expect, it } from "vitest";
 import type { DisplayScreen } from "@shared/displayControl";
 import {
   ASK_GAP_MS,
+  ASK_LAPSE_MS,
   isStoredScreen,
   MAX_ASKS_WAITING,
   MAX_SCREENS_KEPT,
+  NEW_SCREEN_HOLD_MS,
   NOT_NOW_MS,
   ScreenBook,
 } from "./displayScreens";
 
 const A = "a".repeat(32);
 const B = "b".repeat(32);
+const C = "c".repeat(32);
 
+/** A book over a stored list, a clock and timers the test moves on (`later` runs what is due). */
 function book() {
   let stored: DisplayScreen[] = [];
   let now = 1_000;
   let changes = 0;
+  let timers: Array<{ at: number; fn: () => void }> = [];
   const b = new ScreenBook({
     load: () => stored,
     save: (s) => (stored = s),
     now: () => now,
     changed: () => changes++,
+    later: (fn, ms) => timers.push({ at: now + ms, fn }),
   });
   return {
     b,
     stored: () => stored,
     changes: () => changes,
-    later: (ms: number) => (now += ms),
+    later: (ms: number) => {
+      now += ms;
+      const due = timers.filter((t) => t.at <= now);
+      timers = timers.filter((t) => t.at > now);
+      for (const t of due) t.fn();
+    },
   };
 }
 
@@ -73,7 +84,7 @@ describe("the screens that may control", () => {
     expect(answers.slice(MAX_ASKS_WAITING).every((a) => a === "busy")).toBe(true);
     expect(changes()).toBe(MAX_ASKS_WAITING);
     // a refused one is still free to ask once the app has answered the others
-    for (const id of made.slice(0, MAX_ASKS_WAITING)) b.answer(id, false);
+    for (const id of made.slice(0, MAX_ASKS_WAITING)) b.answer(id, true);
     later(ASK_GAP_MS);
     expect(b.ask(made[MAX_ASKS_WAITING], "Screen", true)).toBe("asking");
   });
@@ -92,7 +103,7 @@ describe("the screens that may control", () => {
     const { b, later } = book();
     b.ask(A, "TV", true);
     b.answer(A, false);
-    later(ASK_GAP_MS);
+    later(NEW_SCREEN_HOLD_MS);
     b.ask(B, "Phone", true);
     b.answer(B, false);
     expect(b.heldOff).toBe(2);
@@ -148,10 +159,72 @@ describe("the screens that may control", () => {
       const id = i.toString(16).padStart(32, "0");
       b.ask(id, `screen ${i}`, true);
       b.answer(id, i % 2 === 0);
-      later(ASK_GAP_MS);
+      later(NEW_SCREEN_HOLD_MS);
     }
     expect(stored()).toHaveLength(MAX_SCREENS_KEPT);
     expect(stored().filter((s) => s.allowed)).toHaveLength(Math.ceil((MAX_SCREENS_KEPT + 3) / 2));
+  });
+
+  it("takes down an ask nobody answers, and the screen's next tap asks again", () => {
+    const { b, later, changes, stored } = book();
+    b.ask(A, "iPad · Safari", true);
+    later(ASK_GAP_MS);
+    b.ask(B, "iPad · Safari", true);
+    expect(changes()).toBe(2);
+    later(ASK_LAPSE_MS - ASK_GAP_MS);
+    // the prompt moves on to the next, and the windows hear it without anything else happening
+    expect(changes()).toBe(3);
+    expect(b.list().asking?.id).toBe(B);
+    expect(b.stateOf(A, true)).toBe("ask");
+    expect(b.ask(A, "iPad · Safari", true)).toBe("asking");
+    later(ASK_GAP_MS);
+    expect(b.list().asking?.id).toBe(A);
+    // nothing was recorded for it
+    expect(stored()).toEqual([]);
+  });
+
+  it("lets a stale ask lapse, so the owner's tap isn't kept waiting behind it", () => {
+    const { b, later } = book();
+    const made = Array.from({ length: MAX_ASKS_WAITING }, (_, i) =>
+      i.toString(16).padStart(32, "0"),
+    );
+    for (const id of made) {
+      b.ask(id, "Screen", true);
+      later(ASK_GAP_MS);
+    }
+    expect(b.ask(A, "iPad · Safari", true)).toBe("busy");
+    later(ASK_LAPSE_MS);
+    expect(b.ask(A, "iPad · Safari", true)).toBe("asking");
+    expect(b.list().asking?.id).toBe(A);
+  });
+
+  it("holds every screen it has never seen for a while after a Not now, and no other", () => {
+    const { b, later } = book();
+    b.ask(B, "TV", true);
+    b.answer(B, false);
+    later(NOT_NOW_MS);
+    b.ask(A, "Screen", true);
+    b.answer(A, false);
+    later(ASK_GAP_MS);
+    // a made-up screen can't raise the next prompt the moment one is turned down
+    expect(b.ask(C, "iPad · Safari", true)).toBe("busy");
+    expect(b.list().asking).toBeNull();
+    // a screen the app knows, its own hold passed, still asks
+    expect(b.ask(B, "TV", true)).toBe("asking");
+    b.answer(B, true);
+    later(NEW_SCREEN_HOLD_MS - ASK_GAP_MS - 1);
+    expect(b.ask(C, "iPad · Safari", true)).toBe("busy");
+    later(1);
+    expect(b.ask(C, "iPad · Safari", true)).toBe("asking");
+  });
+
+  it("lifts the hold on new screens with a new address", () => {
+    const { b, later } = book();
+    b.ask(A, "Screen", true);
+    b.answer(A, false);
+    b.clear();
+    later(ASK_GAP_MS);
+    expect(b.ask(C, "iPad · Safari", true)).toBe("asking");
   });
 
   it("reads back only screens it could have kept", () => {

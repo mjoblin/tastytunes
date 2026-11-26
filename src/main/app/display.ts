@@ -3,6 +3,7 @@ import { app } from "electron";
 import {
   PLAYLISTS_SENT,
   queueWindow,
+  screenCode,
   type DisplayControl,
   type DisplayControlAnswer,
   type DisplayScreen,
@@ -69,6 +70,7 @@ export const screenBook = new ScreenBook({
     broadcastDisplayScreens(screenBook.list());
     displayServer.pushControl();
   },
+  later: (fn, ms) => void setTimeout(fn, ms),
 });
 
 /** The streamer has a volume a screen could step: Pre-Amp mode's level, or Control Bus's steps
@@ -194,6 +196,8 @@ function resumeHere(): DisplayControl["resume"] {
 function controlFor(screen: string | null): DisplayControl {
   const s = getSettings();
   const state = screenBook.stateOf(screen, s.displayControl);
+  // the short code the page shows while it asks, as the prompt and Settings show it
+  const code = screen ? screenCode(screen) : null;
   if (state !== "allowed")
     return {
       state,
@@ -204,10 +208,12 @@ function controlFor(screen: string | null): DisplayControl {
       playlists: null,
       wake: null,
       resume: null,
+      code,
     };
   const starts = s.displayControlPresets;
   return {
     state,
+    code,
     volume: s.displayControlVolume ? volumeHere() : null,
     next: nextInQueue(),
     queue: queueHere(),
@@ -367,10 +373,10 @@ export const displayServer = new DisplayServer({
 // a settings change reaches every open page as it reaches the windows (the theme, the accent,
 // the display font, the Lyrics switch)
 alsoHearSettings((settings) => displayServer.push({ kind: "settings", settings }));
-// the controls' switch turned off: nothing is asked about any more (each screen hears "off" with
-// the settings, and the route refuses from now)
+// the controls' switch or the display's own turned off: nothing is asked about any more (each
+// screen hears "off" with the settings, or is let go, and the route refuses from now)
 alsoHearSettings((settings) => {
-  if (!settings.displayControl) screenBook.dropAsks();
+  if (!settings.displayControl || !settings.displayServer.enabled) screenBook.dropAsks();
 });
 
 /** The server's own state; the address is added when asked. */

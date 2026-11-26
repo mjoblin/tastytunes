@@ -239,7 +239,7 @@ export function PageTransport({
             data-page-transport-asking
             className="rounded-full bg-panel/90 px-4 py-2.5 text-[14px] text-ink ring-1 ring-edge backdrop-blur"
           >
-            Waiting for TastyTunes to allow this screen.
+            Waiting for TastyTunes to allow this screen{control.code && ` (code ${control.code})`}.
           </div>
         ) : (
           <>

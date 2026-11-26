@@ -83,6 +83,9 @@ export interface DisplayControl {
   wake: "ready" | "unreachable" | null;
   /** What TastyTunes holds to pick up where it left off (with Presets, playlists and wake on), or null. */
   resume: { title: string; detail: string | null } | null;
+  /** This screen's short code (screenCode), which the page shows while it asks; absent before the
+   *  page has heard its first line, and for a screen without an id. */
+  code?: string | null;
 }
 
 /** One preset as a screen sees it: view and select, nothing edited. */
@@ -187,6 +190,16 @@ export interface DisplayScreens {
   screens: DisplayScreen[];
   /** The screen the app is asking about now, oldest first; null when none asks. */
   asking: DisplayScreen | null;
+}
+
+/**
+ * A screen's short code: three digits from its id, the same each time. The page shows it while the
+ * screen asks, and the app's prompt and Settings' list show it beside the name, so two screens of
+ * one kind (two iPads in Safari) can be told apart. A check by eye, not a secret, and not unique.
+ */
+export function screenCode(id: string): string {
+  const n = Number.parseInt(id.slice(0, 8), 16);
+  return String(Number.isFinite(n) ? n % 1000 : 0).padStart(3, "0");
 }
 
 /** A device's kind by its browser's own words, the first that matches. */
