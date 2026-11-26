@@ -40,6 +40,8 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
   const { copied, copy } = useCopied();
   // the QR code is the address as a picture, so it is shown only when asked for
   const [qrShown, setQrShown] = useState(false);
+  // New address refused (the saved secrets couldn't be read or written): said in the card
+  const [newFailed, setNewFailed] = useState(false);
   const on = settings.displayServer.enabled;
   const port = settings.displayServer.port;
   useEffect(() => {
@@ -59,7 +61,14 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
         {on && status?.error && (
           <div data-display-error className="flex items-center justify-between gap-4">
             <div className="text-[12px] text-dim">{status.error}</div>
-            {status.addressUnreadable && <NewAddress controls={settings.displayControl} />}
+            {status.addressUnreadable && (
+              <NewAddress controls={settings.displayControl} onFailed={setNewFailed} />
+            )}
+          </div>
+        )}
+        {on && newFailed && (
+          <div data-display-new-address-error className="text-[12px] text-dim">
+            Couldn't make a new address. Try again, or restart TastyTunes.
           </div>
         )}
         {on && status?.url && (
@@ -83,7 +92,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
                 >
                   {qrShown ? "Hide QR code" : "Show QR code"}
                 </HeaderChip>
-                <NewAddress controls={settings.displayControl} />
+                <NewAddress controls={settings.displayControl} onFailed={setNewFailed} />
               </div>
             </div>
             {qrShown && (
@@ -125,8 +134,15 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
 }
 
 /** New address, confirmed first: it can't be undone, and every screen on the old address is let
- *  go, every approval with it, and a Home Screen app made from it (decisions/0011). */
-function NewAddress({ controls }: { controls: boolean }): React.JSX.Element {
+ *  go, every approval with it, and a Home Screen app made from it (decisions/0011). One that
+ *  couldn't be made says so (`onFailed`), and the next try clears it. */
+function NewAddress({
+  controls,
+  onFailed,
+}: {
+  controls: boolean;
+  onFailed: (failed: boolean) => void;
+}): React.JSX.Element {
   const confirm = useConfirmPopover();
   return (
     <>
@@ -138,7 +154,13 @@ function NewAddress({ controls }: { controls: boolean }): React.JSX.Element {
               ? "Make a new address? Screens using the current one stop working until they open the new one and are allowed again."
               : "Make a new address? Screens using the current one stop working until they open the new one.",
             verb: "New address",
-            onConfirm: () => void tt.displayNewAddress().then(setDisplayStatus),
+            onConfirm: () => {
+              onFailed(false);
+              void tt
+                .displayNewAddress()
+                .then(setDisplayStatus)
+                .catch(() => onFailed(true));
+            },
           })
         }
         className="text-[12.5px] px-3 py-1.5 motion-safe:active:scale-90"
