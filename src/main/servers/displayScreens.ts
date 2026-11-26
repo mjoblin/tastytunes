@@ -133,13 +133,20 @@ export class ScreenBook {
     const known = this.stored().find((s) => s.id === id);
     if (!known && now - this.lastNotNow < NEW_SCREEN_HOLD_MS) return "busy";
     this.lastAsk = now;
-    this.asks.set(id, {
+    const asked = {
       screen: { id, name, firstSeen: known?.firstSeen ?? now, allowed: false },
       at: now,
-    });
-    // taken down where it shows once it lapses (a read of the book may have dropped it first)
+    };
+    this.asks.set(id, asked);
+    // taken down where it shows once it lapses (a read of the book may have dropped it first): this
+    // ask itself whatever the clock reads, since a timer can fire a little short of ASK_LAPSE_MS and
+    // none comes after it, and never the same screen's later ask
     this.deps.later(() => {
       this.lapse();
+      if (this.asks.get(id) === asked) {
+        this.asks.delete(id);
+        this.lapsedUnsaid = true;
+      }
       if (!this.lapsedUnsaid) return;
       this.lapsedUnsaid = false;
       this.deps.changed();

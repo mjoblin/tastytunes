@@ -15,8 +15,9 @@ const A = "a".repeat(32);
 const B = "b".repeat(32);
 const C = "c".repeat(32);
 
-/** A book over a stored list, a clock and timers the test moves on (`later` runs what is due). */
-function book() {
+/** A book over a stored list, a clock and timers the test moves on (`later` runs what is due);
+ *  `early` fires every timer that many milliseconds short, as a real one can. */
+function book(early = 0) {
   let stored: DisplayScreen[] = [];
   let now = 1_000;
   let changes = 0;
@@ -26,7 +27,7 @@ function book() {
     save: (s) => (stored = s),
     now: () => now,
     changed: () => changes++,
-    later: (fn, ms) => timers.push({ at: now + ms, fn }),
+    later: (fn, ms) => timers.push({ at: now + ms - early, fn }),
   });
   return {
     b,
@@ -181,6 +182,34 @@ describe("the screens that may control", () => {
     expect(b.list().asking?.id).toBe(A);
     // nothing was recorded for it
     expect(stored()).toEqual([]);
+  });
+
+  it("takes down an ask whose timer fires a little early, and tells the windows", () => {
+    const { b, later, changes } = book(1);
+    b.ask(A, "iPad · Safari", true);
+    expect(changes()).toBe(1);
+    later(ASK_LAPSE_MS - 1);
+    // by the clock it has a millisecond to go, and no other timer would take it down
+    expect(changes()).toBe(2);
+    expect(b.list().asking).toBeNull();
+    expect(b.stateOf(A, true)).toBe("ask");
+    expect(b.ask(A, "iPad · Safari", true)).toBe("asking");
+  });
+
+  it("never lets an earlier ask's timer take down the same screen's later ask", () => {
+    const { b, later, changes } = book(1);
+    b.ask(A, "iPad · Safari", true);
+    b.remove(A);
+    later(ASK_GAP_MS);
+    expect(b.ask(A, "iPad · Safari", true)).toBe("asking");
+    const before = changes();
+    later(ASK_LAPSE_MS - ASK_GAP_MS);
+    // the first ask's timer has fired; the second ask stands until its own
+    expect(changes()).toBe(before);
+    expect(b.list().asking?.id).toBe(A);
+    later(ASK_GAP_MS);
+    expect(b.list().asking).toBeNull();
+    expect(changes()).toBe(before + 1);
   });
 
   it("lets a stale ask lapse, so the owner's tap isn't kept waiting behind it", () => {
