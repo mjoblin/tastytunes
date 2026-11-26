@@ -61,7 +61,11 @@ describe("the secrets store", () => {
       expect(statSync(join(userData, "secrets.json")).mode & 0o777).toBe(0o600);
     const again = (await fresh()).secrets;
     expect(await again.getSecret("lbToken")).toBe("abcd-1234-wxyz");
-    expect(await again.secretHint("lbToken")).toEqual({ saved: true, ends: "wxyz" });
+    expect(await again.secretHint("lbToken")).toEqual({
+      saved: true,
+      ends: "wxyz",
+      unreadable: false,
+    });
   });
 
   it("forgets a value set blank or null", async () => {
@@ -69,7 +73,7 @@ describe("the secrets store", () => {
     await secrets.setSecret("lbToken", "token-1");
     await secrets.setSecret("lbToken", null);
     expect(await secrets.getSecret("lbToken")).toBeNull();
-    expect(await secrets.secretHint("lbToken")).toEqual({ saved: false, ends: null });
+    expect(await secrets.secretHint("lbToken")).toMatchObject({ saved: false, ends: null });
   });
 
   it("keeps a value unencrypted where nothing can encrypt, and says so", async () => {
@@ -161,8 +165,8 @@ describe("the keychain only when a secret is used", () => {
     writeFileSync(join(userData, "settings.json"), JSON.stringify({ mcp: { enabled: false } }));
     const { secrets, persist } = await fresh();
     await persist.moveSecrets();
-    expect(await secrets.secretHint("lbToken")).toEqual({ saved: false, ends: null });
-    expect(await secrets.secretHint("mcpToken")).toEqual({ saved: false, ends: null });
+    expect(await secrets.secretHint("lbToken")).toMatchObject({ saved: false, ends: null });
+    expect(await secrets.secretHint("mcpToken")).toMatchObject({ saved: false, ends: null });
     expect(await secrets.getSecret("fanartKey")).toBeNull();
     // where the platform's keychain is always there it is never asked; Linux asks for a keyring
     expect(await secrets.encryptsHere()).toBe(true);
@@ -180,7 +184,7 @@ describe("the keychain only when a secret is used", () => {
     const { secrets } = await fresh();
     expect(secrets.hasSecret("lbToken")).toBe(true);
     expect(touched.decrypt).toBe(0);
-    expect(await secrets.secretHint("fanartKey")).toEqual({ saved: true, ends: "2222" });
+    expect(await secrets.secretHint("fanartKey")).toMatchObject({ saved: true, ends: "2222" });
     expect(touched.decrypt).toBe(1);
     await secrets.setSecret("mcpToken", "mcp-3333");
     expect(touched.decrypt).toBe(1);
@@ -230,10 +234,35 @@ describe("safeStorage's async calls", () => {
     expect(secrets.hasSecret("lbToken")).toBe(true);
     expect(await secrets.getSecret("lbToken")).toBeNull();
     expect(secrets.hasSecret("lbToken")).toBe(false);
-    expect(await secrets.secretHint("lbToken")).toEqual({ saved: false, ends: null });
+    expect(await secrets.secretHint("lbToken")).toEqual({
+      saved: false,
+      ends: null,
+      unreadable: true,
+    });
     expect(file("secrets.json")).toContain(b64("bad:anything"));
     await secrets.setSecret("lbToken", "a-new-one-7777");
     expect(secrets.hasSecret("lbToken")).toBe(true);
+  });
+
+  it("tells a secret none saved from one saved that can't be read, and asks the keychain once", async () => {
+    storeWith({ lbToken: { enc: true, value: b64("bad:anything") } });
+    const { secrets } = await fresh();
+    expect(await secrets.readSecret("fanartKey")).toEqual({ state: "absent" });
+    touched.decrypt = 0;
+    expect(await secrets.readSecret("lbToken")).toEqual({ state: "unreadable" });
+    expect(await secrets.readSecret("lbToken")).toEqual({ state: "unreadable" });
+    expect(await secrets.secretHint("lbToken")).toMatchObject({ unreadable: true });
+    // each ask of the keychain could be another prompt: known, it isn't asked again this session
+    expect(touched.decrypt).toBe(1);
+    await secrets.setSecret("lbToken", "lb-token-4444");
+    expect(await secrets.readSecret("lbToken")).toEqual({ state: "saved", value: "lb-token-4444" });
+  });
+
+  it("reads a blank decryption as unreadable, never as none saved", async () => {
+    storeWith({ lbToken: { enc: true, value: b64("enc:") } });
+    const { secrets } = await fresh();
+    expect(await secrets.readSecret("lbToken")).toEqual({ state: "unreadable" });
+    expect(secrets.hasSecret("lbToken")).toBe(false);
   });
 
   it("writes the file owner-only from the start, even over a temporary file a crash left", async () => {
@@ -243,5 +272,49 @@ describe("safeStorage's async calls", () => {
     await (await fresh()).secrets.setSecret("mcpToken", "mcp-8888");
     expect(statSync(join(userData, "secrets.json")).mode & 0o777).toBe(0o600);
     expect(() => statSync(tmp)).toThrow();
+  });
+});
+
+describe("a token that can't be read", () => {
+  const storeWith = (entries: Record<string, { enc: boolean; value: string }>): void =>
+    writeFileSync(join(userData, "secrets.json"), JSON.stringify({ v: 1, entries }));
+  const b64 = (s: string): string => Buffer.from(s).toString("base64");
+  const stored = (): Record<string, unknown> =>
+    (JSON.parse(file("secrets.json")) as { entries: Record<string, unknown> }).entries;
+
+  it("keeps the display's address as stored, and answers none, rather than mint a new one", async () => {
+    storeWith({ displayToken: { enc: true, value: b64("bad:old-address") } });
+    const before = stored();
+    const { persist } = await fresh();
+    expect(await persist.displayToken()).toBeNull();
+    expect(await persist.displayToken()).toBeNull();
+    expect(stored()).toEqual(before);
+    // New address replaces it, and the new one is read from then on
+    await persist.newDisplayToken();
+    const made = await persist.displayToken();
+    expect(made).toMatch(/^[\w-]{20,}$/);
+    expect(await persist.displayToken()).toBe(made);
+  });
+
+  it("mints the display's address the first time only when none is saved", async () => {
+    const { persist } = await fresh();
+    const first = await persist.displayToken();
+    expect(first).toMatch(/^[\w-]{20,}$/);
+    expect(await (await fresh()).persist.displayToken()).toBe(first);
+  });
+
+  it("keeps the agents' token as stored when it can't be read, and says so to Settings", async () => {
+    storeWith({ mcpToken: { enc: true, value: b64("bad:old-token") } });
+    const before = stored();
+    const { secrets, persist } = await fresh();
+    await persist.ensureMcpToken();
+    expect(stored()).toEqual(before);
+    expect(await secrets.secretHint("mcpToken")).toEqual({
+      saved: false,
+      ends: null,
+      unreadable: true,
+    });
+    await persist.newMcpToken();
+    expect(await secrets.secretHint("mcpToken")).toMatchObject({ saved: true, unreadable: false });
   });
 });

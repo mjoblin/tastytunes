@@ -356,7 +356,8 @@ export const displayServer = new DisplayServer({
   // the window's own question, a show: a page never rebuilds an index
   trackInfo: (query) => lookupMediaInfo(connectedHost(), query, "show"),
   analysis: (key) => audioAnalysisGet(key),
-  token: () => displayToken(),
+  // a saved address that couldn't be read matches nothing (the server isn't started under one)
+  token: async () => (await displayToken()) ?? "",
   pageDir: join(__dirname, "../renderer"),
   log,
   controlFor,
@@ -365,6 +366,7 @@ export const displayServer = new DisplayServer({
     state = {
       port: null,
       error: "Display on other screens stopped. Turn it off and back on to restart it.",
+      addressUnreadable: false,
     };
     void pushStatus();
   },
@@ -380,19 +382,32 @@ alsoHearSettings((settings) => {
 });
 
 /** The server's own state; the address is added when asked. */
-let state: { port: number | null; error: string | null } = { port: null, error: null };
+let state: { port: number | null; error: string | null; addressUnreadable: boolean } = {
+  port: null,
+  error: null,
+  addressUnreadable: false,
+};
+
+/** Said on the card when the saved address couldn't be read (data/secrets' unreadable). */
+const ADDRESS_UNREADABLE = "Couldn't read the saved address. Click New address to make a new one.";
 
 export async function displayStatus(): Promise<DisplayStatus> {
-  if (state.port == null) return { running: false, url: null, error: state.error };
+  if (state.port == null)
+    return {
+      running: false,
+      url: null,
+      error: state.error,
+      addressUnreadable: state.addressUnreadable,
+    };
   // the address on the network that holds the streamer, where one does (servers/lanAddress)
   const ip = lanAddress(connectedHost());
-  const url = ip
-    ? `http://${ip}:${state.port}/?t=${encodeURIComponent(await displayToken())}`
-    : null;
+  const token = await displayToken();
+  const url = ip && token ? `http://${ip}:${state.port}/?t=${encodeURIComponent(token)}` : null;
   return {
     running: true,
     url,
     error: url ? null : "This computer isn't connected to a network.",
+    addressUnreadable: false,
   };
 }
 
@@ -410,7 +425,7 @@ export async function syncDisplay(s: AppSettings = getSettings()): Promise<Displ
   const want = s.displayServer;
   if (!want.enabled) {
     displayServer.stop();
-    state = { port: null, error: null };
+    state = { port: null, error: null, addressUnreadable: false };
     return pushStatus();
   }
   if (!portOk(want.port)) {
@@ -418,14 +433,21 @@ export async function syncDisplay(s: AppSettings = getSettings()): Promise<Displ
     state = {
       port: null,
       error: `Choose a port from ${PORT_RANGE[0]} to ${PORT_RANGE[1]}.`,
+      addressUnreadable: false,
     };
     return pushStatus();
   }
   if (displayServer.running && displayServer.port === want.port) return pushStatus();
   displayServer.stop();
+  // the address read (or minted, the first time) before the server starts: one saved that couldn't
+  // be read is kept as it is, and the server waits for New address rather than make one unasked
+  if ((await displayToken()) == null) {
+    state = { port: null, error: ADDRESS_UNREADABLE, addressUnreadable: true };
+    return pushStatus();
+  }
   try {
     await displayServer.start(want.port);
-    state = { port: want.port, error: null };
+    state = { port: want.port, error: null, addressUnreadable: false };
   } catch (e) {
     const code = (e as NodeJS.ErrnoException).code;
     state = {
@@ -434,6 +456,7 @@ export async function syncDisplay(s: AppSettings = getSettings()): Promise<Displ
         code === "EADDRINUSE"
           ? `Port ${want.port} is in use by another app. Choose another port.`
           : `Couldn't start: ${(e as Error).message}`,
+      addressUnreadable: false,
     };
   }
   return pushStatus();

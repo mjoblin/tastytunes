@@ -18,6 +18,12 @@ import { devOverride } from "../app/devOverride";
 
 export type SecretName = "lbToken" | "mcpToken" | "fanartKey" | "displayToken";
 
+/** A secret as the store holds it: its value; absent, none saved; or unreadable, one saved that
+ *  this system can't decrypt (another computer's keychain, a reset or locked one, an ask that was
+ *  turned down), kept on disk as it is. A token is minted only when absent, never over an
+ *  unreadable one (data/persist). */
+export type SecretRead = { state: "saved"; value: string } | { state: "absent" | "unreadable" };
+
 interface Stored {
   /** Encrypted with safeStorage (base64), or as it is where nothing can encrypt. */
   enc: boolean;
@@ -40,9 +46,14 @@ let stored: Map<string, Stored> | null = null;
 /** The values decrypted so far, in the main process's memory only. */
 const values = new Map<string, string>();
 /** A decryption under way, so two asks for one entry reach the keychain once. */
-const decrypting = new Map<string, Promise<string | null>>();
-/** Entries this system could not decrypt: still on disk until replaced, but not saved for use. */
+const decrypting = new Map<string, Promise<SecretRead>>();
+/** Entries this system could not decrypt: still on disk until replaced, but not saved for use,
+ *  and not asked of the keychain again this session (each ask could be another prompt). */
 const unreadable = new Set<string>();
+
+const saved = (value: string): SecretRead => ({ state: "saved", value });
+const ABSENT: SecretRead = { state: "absent" };
+const UNREADABLE: SecretRead = { state: "unreadable" };
 
 /** Whether this system can encrypt a secret. */
 export async function canEncrypt(): Promise<boolean> {
@@ -75,14 +86,15 @@ function load(): Map<string, Stored> {
 }
 
 /** An entry's value, decrypted the first time it is asked for. */
-function valueOf(name: string): Promise<string | null> {
+function valueOf(name: string): Promise<SecretRead> {
   const known = values.get(name);
-  if (known != null) return Promise.resolve(known);
+  if (known != null) return Promise.resolve(saved(known));
   const e = load().get(name);
-  if (!e) return Promise.resolve(null);
+  if (!e) return Promise.resolve(ABSENT);
+  if (unreadable.has(name)) return Promise.resolve(UNREADABLE);
   if (!e.enc) {
     values.set(name, e.value);
-    return Promise.resolve(e.value);
+    return Promise.resolve(saved(e.value));
   }
   let asked = decrypting.get(name);
   if (!asked) {
@@ -92,26 +104,35 @@ function valueOf(name: string): Promise<string | null> {
   return asked;
 }
 
-async function decrypt(name: string, e: Stored): Promise<string | null> {
+async function decrypt(name: string, e: Stored): Promise<SecretRead> {
+  // saved again or forgotten while this was decrypting: the store's newer answer stands
+  const newer = (): SecretRead => {
+    const v = values.get(name);
+    return v != null ? saved(v) : load().has(name) ? UNREADABLE : ABSENT;
+  };
   try {
     const { result, shouldReEncrypt } = await safeStorage.decryptStringAsync(
       Buffer.from(e.value, "base64"),
     );
-    if (!result) return null;
-    // saved again or forgotten while this was decrypting: the store's newer answer stands
-    if (load().get(name) !== e) return values.get(name) ?? null;
+    if (load().get(name) !== e) return newer();
+    // nothing blank is ever saved, so a blank answer is a value that couldn't be read
+    if (!result) {
+      unreadable.add(name);
+      return UNREADABLE;
+    }
     values.set(name, result);
     // the keychain's key has moved on (rotated, or a stronger one is there): kept under the new one
     if (shouldReEncrypt) {
       load().set(name, { enc: true, value: await encrypt(result) });
       save();
     }
-    return result;
+    return saved(result);
   } catch {
-    // a value this system cannot decrypt (another machine's keychain, a reset keychain) is
-    // gone: asked for again, never guessed at
+    if (load().get(name) !== e) return newer();
+    // a value this system cannot decrypt (another machine's keychain, a reset keychain) is kept
+    // as it is, and told apart from none saved: asked for again, never guessed at or minted over
     unreadable.add(name);
-    return null;
+    return UNREADABLE;
   }
 }
 
@@ -126,8 +147,14 @@ function save(): void {
   atomicWriteFileSync(filePath(), JSON.stringify({ v: 1, entries }), 0o600);
 }
 
-/** A secret's value, for the main process's own use; null when none is saved. */
-export function getSecret(name: SecretName): Promise<string | null> {
+/** A secret's value, for the main process's own use; null when none is saved or it can't be read. */
+export async function getSecret(name: SecretName): Promise<string | null> {
+  const read = await valueOf(name);
+  return read.state === "saved" ? read.value : null;
+}
+
+/** A secret's value, or whether none is saved or the saved one can't be read (SecretRead). */
+export function readSecret(name: SecretName): Promise<SecretRead> {
   return valueOf(name);
 }
 
@@ -152,13 +179,16 @@ export async function setSecret(name: SecretName, value: string | null): Promise
   save();
 }
 
-/** What Settings may know of a secret: whether one is saved, and its last four characters. */
+/** What Settings may know of a secret: whether one is saved, its last four characters, and
+ *  whether one is saved that couldn't be read. */
 export async function secretHint(
   name: SecretName,
-): Promise<{ saved: boolean; ends: string | null }> {
-  if (!hasSecret(name)) return { saved: false, ends: null };
-  const v = await getSecret(name);
-  return { saved: v != null, ends: v ? v.slice(-4) : null };
+): Promise<{ saved: boolean; ends: string | null; unreadable: boolean }> {
+  if (!load().has(name)) return { saved: false, ends: null, unreadable: false };
+  const read = await valueOf(name);
+  return read.state === "saved"
+    ? { saved: true, ends: read.value.slice(-4), unreadable: false }
+    : { saved: false, ends: null, unreadable: read.state === "unreadable" };
 }
 
 /** Whether saved secrets are encrypted here, asked without touching the keychain where it can

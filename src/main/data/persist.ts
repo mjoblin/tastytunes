@@ -13,7 +13,7 @@ import {
 import { atomicWriteFileSync } from "./jsonStore";
 import { checkSettingsKinds } from "./savedChecks";
 import { keepAsFound, readSaved, saveFailed } from "./savedFiles";
-import { getSecret, setSecret } from "./secrets";
+import { readSecret, setSecret } from "./secrets";
 
 let cached: AppSettings | null = null;
 /** settings.json couldn't be read this session: nothing writes over it (data/savedFiles). */
@@ -117,9 +117,11 @@ export async function moveSecrets(): Promise<void> {
 }
 
 /** The MCP server's token, minted the first time the server runs (0.14.0; before, every install
- *  minted one at launch, and with it a keychain entry nobody asked for). */
+ *  minted one at launch, and with it a keychain entry nobody asked for). Only when none is saved:
+ *  one saved that couldn't be read is kept as it is, and Settings says so (its New token replaces
+ *  it), since a token made in its place would quietly stop every agent that has the old one. */
 export async function ensureMcpToken(): Promise<void> {
-  if (!(await getSecret("mcpToken"))) await setSecret("mcpToken", mintToken());
+  if ((await readSecret("mcpToken")).state === "absent") await setSecret("mcpToken", mintToken());
 }
 
 /** A new MCP token: every agent on the old one stops working until it has this one. */
@@ -127,12 +129,16 @@ export function newMcpToken(): Promise<void> {
   return setSecret("mcpToken", mintToken());
 }
 
-/** The token in Display on other screens' address, minted the first time it is turned on. */
-export function displayToken(): Promise<string> {
+/** The token in Display on other screens' address, minted the first time it is turned on; null
+ *  when one is saved and couldn't be read. That one is kept as it is and never minted over (a new
+ *  address would end every screen and approval without a word): the server waits for New address
+ *  (main/app/display). */
+export function displayToken(): Promise<string | null> {
   // the first mint held, so a request that arrives while it is written reads the same token
   minting ??= (async () => {
-    const have = await getSecret("displayToken");
-    if (have) return have;
+    const have = await readSecret("displayToken");
+    if (have.state === "saved") return have.value;
+    if (have.state === "unreadable") return null;
     const token = mintToken();
     await setSecret("displayToken", token);
     return token;
@@ -141,7 +147,7 @@ export function displayToken(): Promise<string> {
   });
   return minting;
 }
-let minting: Promise<string> | null = null;
+let minting: Promise<string | null> | null = null;
 
 /** A new display address: every screen on the old one shows the "open the address" page until
  *  it is opened again. */

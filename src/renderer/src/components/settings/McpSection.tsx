@@ -33,10 +33,15 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
   // THE TOKEN STAYS OFF THE SCREEN (0.13.0 round 10, the secrets store): shown masked to its last
   // four characters, out of a screenshot's reach; a Copy asks main for it at that moment
   const [tokenEnds, setTokenEnds] = useState<string | null>(null);
+  // one saved that couldn't be read is kept as it is, never replaced unasked: the card says so
+  const [tokenUnreadable, setTokenUnreadable] = useState(false);
   const readToken = (): void => {
     void tt
       .secretsStatus()
-      .then((s) => setTokenEnds(s.mcpToken.ends))
+      .then((s) => {
+        setTokenEnds(s.mcpToken.ends);
+        setTokenUnreadable(s.mcpToken.unreadable);
+      })
       .catch(() => {});
   };
   // read again once the server runs: its token is minted the first time it does (0.14.0)
@@ -141,6 +146,11 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
                 />
                 {/* on the local network an agent on another computer sends the token
                     (0.10.0); the snippets carry it so a copied setup works as pasted */}
+                {lan && tokenUnreadable && (
+                  <div data-mcp-token-unreadable className="text-[12px] text-dim">
+                    Couldn't read the saved token. Click New token to make a new one.
+                  </div>
+                )}
                 {lan && (
                   <div className="flex items-center gap-2" data-mcp-token>
                     <div className="min-w-0 flex-1">

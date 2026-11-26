@@ -20,9 +20,10 @@ import {
 
 /**
  * DISPLAY ON OTHER SCREENS (0.17.0, main/app/display): the switch, the address a tablet or another
- * computer's browser opens (with its token), a new address when one has been shared too widely,
- * and the port. The status is read fresh when the card shows (the computer's address can have
- * changed), then follows main's pushes as the server starts, stops or fails.
+ * computer's browser opens (with its token), a new address when one has been shared too widely or
+ * the saved one couldn't be read, and the port. The status is read fresh when the card shows (the
+ * computer's address can have changed), then follows main's pushes as the server starts, stops or
+ * fails.
  *
  * CONTROLS ON THE OTHER SCREENS: a switch of its own, off by default (turning on viewing never
  * grants control), under it the volume and the controls that start music (presets, Wake, picking
@@ -55,7 +56,12 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
             void save({ displayServer: { ...settings.displayServer, enabled } })
           }
         />
-        {on && status?.error && <div className="text-[12px] text-dim">{status.error}</div>}
+        {on && status?.error && (
+          <div data-display-error className="flex items-center justify-between gap-4">
+            <div className="text-[12px] text-dim">{status.error}</div>
+            {status.addressUnreadable && <NewAddress controls={settings.displayControl} />}
+          </div>
+        )}
         {on && status?.url && (
           <div className="space-y-2">
             <CopyRow

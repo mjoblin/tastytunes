@@ -359,6 +359,9 @@ export interface DisplayStatus {
   running: boolean;
   url: string | null;
   error: string | null;
+  /** The saved address couldn't be read (data/secrets' unreadable): it is kept, the server waits,
+   *  and Settings offers New address beside the error. */
+  addressUnreadable: boolean;
 }
 
 /** Where the agent tools' exports go (main/app/exportsFolder): the folder chosen, and whether it
@@ -430,7 +433,8 @@ export interface TastyTunesApi {
   secretsStatus(): Promise<{
     encrypted: boolean;
     lbToken: { saved: boolean; ends: string | null };
-    mcpToken: { saved: boolean; ends: string | null };
+    /** `unreadable`: one is saved that couldn't be read (kept as it is; New token replaces it). */
+    mcpToken: { saved: boolean; ends: string | null; unreadable: boolean };
     fanartKey: { saved: boolean; ends: string | null };
   }>;
   /** Save a personal fanart.tv key once fanart.tv takes it (refused: not saved; unreachable:
