@@ -39,7 +39,7 @@ export function DisplayAskPrompt(): React.JSX.Element | null {
             Allow this screen to control playback?
           </div>
           <div className="mt-1 text-[12px] text-dim leading-snug">
-            {asking.name} (code {screenCode(asking.id)}), showing Display on other screens.
+            {asking.name} (code {screenCode(asking.id)}), used as a second screen.
           </div>
           <ConfirmActions
             modal

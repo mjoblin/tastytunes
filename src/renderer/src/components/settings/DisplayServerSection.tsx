@@ -49,7 +49,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
     <SettingsCard>
       <div data-display-server className="space-y-3">
         <Toggle
-          label="Display on other screens"
+          label="Second screen"
           hint="Show full-screen display mode in a web browser on a tablet or another computer on your network. Each screen can have its own scene and settings. Lyrics are looked up for each track, as on this computer."
           checked={on}
           onChange={(enabled) =>
@@ -161,7 +161,7 @@ function ControlRows({ settings, save }: SectionProps): React.JSX.Element {
     <div data-display-control className="space-y-3 border-t border-edge/60 pt-3">
       <Toggle
         label="Playback controls"
-        hint="Show play, pause and skip buttons on other screens. You will be asked here in TastyTunes to confirm each screen's request to enable these buttons."
+        hint="Show play, pause and skip buttons on each second screen. You will be asked here in TastyTunes to confirm each screen's request to enable these buttons."
         checked={control}
         onChange={(displayControl) => void save({ displayControl })}
       />

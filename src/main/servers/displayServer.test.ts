@@ -688,7 +688,7 @@ describe("Display on other screens' server", () => {
     expect((await get("//[", { cookie })).status).toBe(400);
     expect((await get("/", { cookie, host: "evil.example.com" })).status).toBe(400);
     expect((await get("/", { cookie, host: "studio-mac.local:8556" })).status).toBe(200);
-    expect(logged.filter((l) => !l.startsWith("Display on other screens"))).toEqual([]);
+    expect(logged.filter((l) => !l.startsWith("Second screen"))).toEqual([]);
   });
 
   it("asks the guard again each visit, the built assets never", async () => {

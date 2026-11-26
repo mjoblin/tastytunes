@@ -153,7 +153,7 @@ const TYPES: Record<string, string> = {
   ".woff": "font/woff",
   ".ico": "image/x-icon",
 };
-const NO_ADDRESS = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TastyTunes</title><body style="font:16px system-ui;background:#111;color:#ddd;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><p>Open the address shown in TastyTunes, in Settings › Integrations › Display on other screens.</p></body>`;
+const NO_ADDRESS = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TastyTunes</title><body style="font:16px system-ui;background:#111;color:#ddd;display:grid;place-items:center;height:100vh;margin:0;text-align:center"><p>Open the address shown in TastyTunes, in Settings › Integrations › Second screen.</p></body>`;
 
 /** The pushes that can change what a screen may do: the switches (settings), the source and its
  *  controls, the volume, the queue, the connection, and for presets and the sleeping screen the
@@ -324,14 +324,14 @@ export class DisplayServer {
         // an error once listening stops the server, so its switch can still start it again
         server.on("error", (e) => {
           if (this.http !== server) return;
-          this.deps.log(`Display on other screens stopped: ${e.message}`);
+          this.deps.log(`Second screen stopped: ${e.message}`);
           this.stop();
           this.deps.failed?.(e.message);
         });
         const a = server.address();
         this.listening = { port: typeof a === "object" && a ? a.port : port, host };
         this.ping = setInterval(() => void this.pingScreens(), PING_MS);
-        this.deps.log(`Display on other screens is on, port ${this.listening.port}`);
+        this.deps.log(`Second screen is on, port ${this.listening.port}`);
         resolve();
       });
     });
@@ -343,7 +343,7 @@ export class DisplayServer {
     this.closeScreens();
     this.http?.close();
     this.http = null;
-    if (this.listening) this.deps.log("Display on other screens is off");
+    if (this.listening) this.deps.log("Second screen is off");
     this.listening = null;
     this.kept.clear();
     this.sent.clear();

@@ -365,7 +365,7 @@ export const displayServer = new DisplayServer({
   failed: () => {
     state = {
       port: null,
-      error: "Display on other screens stopped. Turn it off and back on to restart it.",
+      error: "Second screen stopped. Turn it off and back on to restart it.",
       addressUnreadable: false,
     };
     void pushStatus();

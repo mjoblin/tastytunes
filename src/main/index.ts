@@ -166,7 +166,7 @@ if (!gotLock) {
       // EACH LATE STEP IN ITS OWN TRY (app/bootFailure lateStep): with the window or the menu bar
       // icon up, a step that throws costs itself, never the steps after it
       lateStep("the agents' server", () => mcpBridge.sync(getSettings()));
-      lateStep("Display on other screens", () => void syncDisplay(getSettings()));
+      lateStep("Second screen", () => void syncDisplay(getSettings()));
       lateStep("connecting", () => deviceManager.startup());
       // tastytunes:// URLs, those that arrived before ready first (app/urlInbox)
       lateStep("links", () => serveUrlActions());
