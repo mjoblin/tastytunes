@@ -711,4 +711,20 @@ export const ONE_HOME = [
       code: "systemPreferences.isTrustedAccessibilityClient(true);",
     },
   },
+  {
+    id: "edge-tip-start",
+    was: "none (0.17.0: an album card's play button, pinned to the card's bottom-left, centered its tip under it, so on a card in the first column the tip ran past the scrollport's left edge and was cut off)",
+    // a class string with a tip above or below its control, the control pinned near a left edge,
+    // and no tip-start: the centered tip reaches left of the control by half its own width
+    selector: strings(
+      String.raw`/^(?=.*(?:^|\s)tip-(?:bottom|top)(?:\s|$))(?=.*(?:^|\s)left-(?:0|0\.5|1|1\.5|2|2\.5|3)(?:\s|$))(?!.*(?:^|\s)tip-start(?:\s|$))/`,
+    ),
+    files: [`^${R}`],
+    message:
+      "A control pinned near a left edge with its tip above or below takes tip-start, so the tip runs right from the control instead of past the edge (its scrollport would cut it off)",
+    bad: {
+      file: `${R}components/library/LibraryCards.tsx`,
+      code: "const x = <button className='tip-bottom absolute bottom-1.5 left-1.5' />;",
+    },
+  },
 ];

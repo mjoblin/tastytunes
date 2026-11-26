@@ -95,7 +95,7 @@ export function RepairChip({
         aria-label="Repair preset (didn't load)"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => void openFrom(e)}
-        className={cx("tip-bottom absolute top-2 left-2 z-10 text-alert", cardChip(true))}
+        className={cx("tip-bottom tip-start absolute top-2 left-2 z-10 text-alert", cardChip(true))}
       >
         <AlertTriangle size={14} />
       </button>
