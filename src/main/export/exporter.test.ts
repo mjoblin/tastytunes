@@ -716,6 +716,48 @@ describe("the release's scans (the Cover Art Archive step)", () => {
     await exportTrack(bare, root(), target(t1), opts({ fill: true }));
     expect(asked).toBe(0);
   });
+
+  it("are named in the README, with every other field and kind of picture", async () => {
+    const { env } = fakeEnv({
+      analysis: () => analyzed(),
+      albumNotes: () => Promise.resolve(notes as never),
+      releaseArt: () => Promise.resolve({ kind: "found", value: scans }),
+      artistPictures: () =>
+        Promise.resolve({
+          offers: [
+            {
+              source: "commons",
+              url: "https://upload.wikimedia.org/c.jpg",
+              page: "https://commons.wikimedia.org/wiki/File:c.jpg",
+              width: 3000,
+              height: 2000,
+              fetch: true,
+            },
+            {
+              source: "chosen",
+              url: "http://10.0.0.5:9790/aa/9/cover.jpg",
+              local: true,
+              fetch: true,
+            },
+          ],
+          gap: null,
+        }),
+    });
+    const r = await exportAlbum(env, root(), target(album), opts({ fill: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    const readme = readFileSync(join(r.folder, "README.md"), "utf-8");
+    const listed = readJson(r.folder, "pictures/pictures.json")["pictures"] as Array<
+      Record<string, unknown>
+    >;
+    expect(new Set(listed.map((p) => p["what"]))).toEqual(
+      new Set(["sleeve", "artist", "release", "shelf"]),
+    );
+    const named = [
+      ...listed.flatMap((p) => Object.keys(p)),
+      ...listed.flatMap((p) => [p["what"], p["source"]]),
+    ];
+    expect([...new Set(named)].filter((k) => !readme.includes(`\`${String(k)}\``))).toEqual([]);
+  });
 });
 
 describe("the sleeve", () => {

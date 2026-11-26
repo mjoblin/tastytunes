@@ -166,17 +166,28 @@ empty.
 
 ## pictures
 
-\`pictures.json\` lists each picture: what it is (\`sleeve\`; \`release\`, a scan of one pressing
-of the album from the Cover Art Archive, its \`types\` saying which, such as Back or Booklet, and
-\`release\` naming the pressing on MusicBrainz; \`artist\`; or \`shelf\` for the artist's other
-albums in the library), where it came from (\`source\`: \`library\` for the media server's
-picture, \`audio file\` for the one inside the track's file, \`Cover Art Archive\`, \`chosen\` for
-a photo picked in TastyTunes, \`wikipedia\`, \`commons\`, or \`fanart.tv\`), its address
-(\`address\` on the internet, \`local_address\` on the owner's network), a Commons picture's
-\`page\`, and its \`file\` here when it was copied. An artist picture's \`width\` and \`height\` are
-the original's, in pixels. A Commons file is copied at most 1280 pixels wide, so it can be
-smaller than they say. A picture with no file was not copied in. It is listed by its address,
-and \`missing\` says why.
+\`pictures.json\` lists each picture: what it is (\`what\`), where it came from (\`source\`:
+\`library\` for the media server's picture, \`audio file\` for the one inside the track's file,
+\`Cover Art Archive\`, \`chosen\` for a photo picked in TastyTunes, \`wikipedia\`, \`commons\`, or
+\`fanart.tv\`), its address (\`address\` on the internet, \`local_address\` on the owner's
+network), and its \`file\` here when it was copied. \`what\` is one of these:
+
+- \`sleeve\`: the album's cover.
+- \`release\`: a scan of one pressing of the album from the Cover Art Archive. \`types\` says
+  which, such as Back or Booklet, and \`comment\` is the archive's note on the scan, when it has
+  one. \`release\` names the pressing on MusicBrainz, and \`release_country\`, \`release_date\`
+  and \`release_formats\` are its country, date and formats (such as CD or Vinyl).
+- \`artist\`: a picture of the artist, with its \`page\` when it is from Commons. Its \`width\`
+  and \`height\` are the original's, in pixels. A Commons file is copied at most 1280 pixels
+  wide, so it can be smaller than they say.
+- \`shelf\`: the sleeve of another of the artist's albums in the library, with that album's
+  title (\`album\`) and \`year\`.
+
+A picture without a \`file\` wasn't copied in, because it wasn't fetched, its source didn't hand
+it over, or it couldn't be written, as when the export reached its size cap (\`left_out\` then
+names it). At most twelve of the artist's pictures are copied, and pictures from the internet
+are fetched only when the export was asked to look up what was missing. A picture is listed by
+its address when it has one, and a redacted export leaves out every \`local_address\`.
 
 ## Rights
 
