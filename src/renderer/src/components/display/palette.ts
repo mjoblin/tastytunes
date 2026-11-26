@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { tt } from "@/api";
 import type { Rgb, ScenePalette } from "./scenes/types";
-import { Lru } from "@/lib/lru";
+import { keptLookup, Lru } from "@/lib/lru";
 import { coverPixels } from "@/lib/coverPixels";
 import { hslToRgb, rgbToHsl, roundRgb } from "@/lib/color";
 
@@ -63,13 +63,18 @@ export function goldAccents(gold: Rgb, light: boolean): Rgb[] {
   ];
 }
 
-interface ArtColors {
+export interface ArtColors {
   accent: Rgb[];
   /** The picture's overall hue, set at a wall's depth (dark on the faceplate, pale on paper). */
-  tint: Rgb;
+  tint?: Rgb;
 }
 
-/** Three vivid hues from the picture, clamped into the theme's readable range, and its cast. */
+/** Plain art's colors: no vivid hue of its own, so the gold's neighbours stand in. An answer about
+ *  the cover, kept like any other, where a cover that didn't come is none (coverColors). */
+const PLAIN: ArtColors = { accent: [] };
+
+/** Three vivid hues from the picture, clamped into the theme's readable range, and its cast; null
+ *  when its pixels couldn't be read. */
 async function artAccents(dataUrl: string, light: boolean): Promise<ArtColors | null> {
   const data = await coverPixels(dataUrl, 40);
   if (!data) return null;
@@ -99,7 +104,7 @@ async function artAccents(dataUrl: string, light: boolean): Promise<ArtColors | 
     .filter((a) => a.w > 4)
     .sort((a, b) => b.w - a.w)
     .slice(0, 3);
-  if (ranked.length === 0) return null;
+  if (ranked.length === 0) return PLAIN;
   const [lMin, lMax] = light ? [0.32, 0.48] : [0.5, 0.7];
   const out = ranked.map((a) => {
     const [h, s, l] = rgbToHsl(a.r / a.w, a.g / a.w, a.b / a.w);
@@ -112,7 +117,17 @@ async function artAccents(dataUrl: string, light: boolean): Promise<ArtColors | 
   return { accent: out, tint };
 }
 
-const cache = new Lru<string, ArtColors | null>(60);
+const cache = new Lru<string, Promise<ArtColors | null>>(60);
+
+/** A cover's colors in a theme, worked out once and kept. Null when the cover didn't come (the app,
+ *  or the page's server, out of reach a moment) or couldn't be read, and that isn't kept: the next
+ *  ask tries again (lib/lru's keptLookup). */
+export function coverColors(artUrl: string, light: boolean): Promise<ArtColors | null> {
+  return keptLookup(cache, `${light}|${artUrl}`, async () => {
+    const art = await tt.fetchArt(artUrl);
+    return art ? artAccents(art.dataUrl, light) : null;
+  });
+}
 
 /** The full palette for the current art and theme, re-read when either changes. */
 export function useScenePalette(artUrl: string | null): ScenePalette {
@@ -140,23 +155,10 @@ export function useScenePalette(artUrl: string | null): ScenePalette {
       setAccent(null);
       return;
     }
-    const key = `${tokens.light}|${artUrl}`;
-    if (cache.has(key)) {
-      setAccent(cache.get(key) ?? null);
-      return;
-    }
     let cancelled = false;
-    void (async () => {
-      let out: ArtColors | null = null;
-      try {
-        const art = await tt.fetchArt(artUrl);
-        if (art) out = await artAccents(art.dataUrl, tokens.light);
-      } catch {
-        out = null;
-      }
-      cache.set(key, out);
+    void coverColors(artUrl, tokens.light).then((out) => {
       if (!cancelled) setAccent(out);
-    })();
+    });
     return () => {
       cancelled = true;
     };

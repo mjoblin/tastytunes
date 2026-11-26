@@ -22,7 +22,7 @@ import type {
 } from "./scenes/types";
 import { easeTowards, frameDelta } from "./clock";
 import { clamp, cubic, noise } from "./scenes/lib";
-import { Lru } from "@/lib/lru";
+import { keptLookup, Lru } from "@/lib/lru";
 import { FeedHits } from "./feedHits";
 
 /**
@@ -585,25 +585,21 @@ function firstAfter(at: Float32Array, secs: number): number {
 }
 
 /** The deck scenes' pictures, decoded once per URL and kept for a few tracks, so a
- *  scene switch or a return to a track draws at once. */
+ *  scene switch or a return to a track draws at once. One that didn't come (out of reach a
+ *  moment, or a picture that wouldn't decode) is not kept, and is asked for again next time. */
 const ART_IMAGES_MAX = 8;
 const artImages = new Lru<string, Promise<HTMLImageElement | null>>(ART_IMAGES_MAX);
 function artImage(url: string): Promise<HTMLImageElement | null> {
-  let p = artImages.get(url);
-  if (!p) {
-    p = (async () => {
-      // a data URL (never a tainted canvas): the scenes' canvases are read back by the
-      // cathode finish, which a cross-origin picture would forbid
-      const dataUrl = url.startsWith("data:") ? url : ((await tt.fetchArt(url))?.dataUrl ?? null);
-      if (!dataUrl) return null;
-      const img = new Image();
-      img.src = dataUrl;
-      await img.decode();
-      return img;
-    })().catch(() => null);
-    artImages.set(url, p);
-  }
-  return p;
+  return keptLookup(artImages, url, async () => {
+    // a data URL (never a tainted canvas): the scenes' canvases are read back by the
+    // cathode finish, which a cross-origin picture would forbid
+    const dataUrl = url.startsWith("data:") ? url : ((await tt.fetchArt(url))?.dataUrl ?? null);
+    if (!dataUrl) return null;
+    const img = new Image();
+    img.src = dataUrl;
+    await img.decode();
+    return img;
+  });
 }
 
 /** One feed per display mode, kept current from the hooks; `enabled` gates
