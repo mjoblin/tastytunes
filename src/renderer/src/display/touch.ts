@@ -8,10 +8,15 @@ export const SETTLING_MS = 300;
 /** How long a panel or a list open holds the buttons up with no touch, before both close. */
 export const HOLD_IDLE_MS = 60_000;
 
-/** Whether a touch's click only shows the buttons: they were hidden when it landed, or it landed
- *  on a control still fading in (`sinceShown`, ms since they showed). */
-export const swallows = (shown: boolean, sinceShown: number, control: boolean): boolean =>
-  !shown || (control && sinceShown < SETTLING_MS);
+/** Whether a press's click only shows the buttons: they were hidden when it landed, or it was a
+ *  finger (or a pen) on a control still fading in (`sinceShown`, ms since they showed). A mouse's
+ *  click on one is meant: the pointer moving showed the buttons, and it went to one it could see. */
+export const swallows = (
+  shown: boolean,
+  sinceShown: number,
+  control: boolean,
+  touch: boolean,
+): boolean => !shown || (touch && control && sinceShown < SETTLING_MS);
 
 /**
  * THE PAGE'S TOUCH SURFACE (0.17.0, Display on other screens): one home for when the page's own
@@ -104,7 +109,12 @@ export function useTouchShown(hold: boolean, onIdle?: () => void): boolean {
     let away = false;
     const pressed = (e: PointerEvent): void => {
       if (e.pointerType === "mouse" && e.button !== 0) return;
-      swallow = swallows(shownRef.current, Date.now() - shownAt.current, onControl(e.target));
+      swallow = swallows(
+        shownRef.current,
+        Date.now() - shownAt.current,
+        onControl(e.target),
+        e.pointerType !== "mouse",
+      );
       away = shownRef.current && !holdRef.current && !onControl(e.target);
       down.current = true;
       if (!away) show(true);
