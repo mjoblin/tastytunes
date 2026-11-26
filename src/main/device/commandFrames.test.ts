@@ -164,8 +164,15 @@ describe("volume", () => {
       { path: "/zone/state", params: { volume_percent: 40 } },
     ]);
     expect(commandFrames(up, at(40))).toEqual([]);
-    // a lowering not yet reported: the higher, reported level still holds the ceiling
+    // a lowering not yet reported: the raise steps from where the streamer is headed, never to
+    // the limit from the reported level (the slider set to 15, then a quick step up: 16, not 40)
     expect(commandFrames(up, at(37, 39))).toEqual([
+      { path: "/zone/state", params: { volume_percent: 38 } },
+    ]);
+    expect(commandFrames(up, at(15, 39))).toEqual([
+      { path: "/zone/state", params: { volume_percent: 16 } },
+    ]);
+    expect(commandFrames({ type: "volumeStepChange", delta: 5 }, at(38, 39))).toEqual([
       { path: "/zone/state", params: { volume_percent: 40 } },
     ]);
     // on a model read in steps alone, the same

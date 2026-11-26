@@ -222,6 +222,25 @@ export function commandFrames(cmd: StreamerCommand, s: CommandState): SocketFram
       // to hold it to, so the step goes as sent. The level is the higher of the reported and the
       // asked (AskedVolume), so steps sent before the streamer answers the first stop there too.
       const limit = s.volumeLimitPercent;
+      // A LOWERING NOT YET REPORTED (the slider, a fade, a preset's level, below the reported
+      // level): where the streamer is headed is the asked level, so a raise steps from it, sent as
+      // the level it reaches and held to the limit, never as the reported level's step or the limit
+      const askedLow = (reported: number | null | undefined, asked: number | null | undefined) =>
+        reported != null && asked != null && asked < reported ? asked : null;
+      const lowPercent = askedLow(s.zoneState?.volume_percent, s.askedVolume?.percent);
+      const lowStep = askedLow(s.zoneState?.volume_step, s.askedVolume?.step);
+      if (cmd.delta > 0 && lowPercent != null)
+        return frame("/zone/state", {
+          volume_percent: clampVolume(
+            limit == null ? lowPercent + cmd.delta : Math.min(lowPercent + cmd.delta, limit),
+            limit,
+          ),
+        });
+      if (cmd.delta > 0 && lowStep != null)
+        return frame("/zone/state", {
+          volume_step:
+            limit == null ? lowStep + cmd.delta : Math.min(lowStep + cmd.delta, stepLimit(limit)),
+        });
       const percent = higher(s.zoneState?.volume_percent, s.askedVolume?.percent);
       const step = higher(s.zoneState?.volume_step, s.askedVolume?.step);
       if (cmd.delta > 0 && limit != null) {
