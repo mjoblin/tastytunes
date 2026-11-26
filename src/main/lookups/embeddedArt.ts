@@ -1,4 +1,4 @@
-import { nativeImage } from "electron";
+import { nativeImage, type NativeImage } from "electron";
 import type { EmbeddedArt, EmbeddedArtQuery } from "@shared/model";
 import { DiskCache } from "./diskCache";
 import { loggedFetch } from "../netlog";
@@ -8,6 +8,7 @@ import { getSettings } from "../data/persist";
 import { pools as indexPools } from "../media/mediaIndex";
 import { albumTracksOf, type MediaNode } from "@shared/model";
 import { nameKey } from "@shared/keys";
+import { pictureType } from "@shared/pictureType";
 
 /**
  * Album art from the audio file itself (0.8.0). Some media servers shrink
@@ -166,11 +167,18 @@ function id3TagSize(head: Uint8Array): number | null {
   return 10 + syncsafe(head, 6) + ((head[5] & 0x10) !== 0 ? 10 : 0);
 }
 
-function toDisplay(data: Uint8Array): EmbeddedArt | null {
+/** The picture decoded, when it is one worth showing (an icon-sized one is not). */
+function decoded(data: Uint8Array): NativeImage | null {
   const img = nativeImage.createFromBuffer(Buffer.from(data));
   if (img.isEmpty()) return null;
   const { width, height } = img.getSize();
-  if (width < 64 || height < 64) return null;
+  return width < 64 || height < 64 ? null : img;
+}
+
+function toDisplay(data: Uint8Array): EmbeddedArt | null {
+  const img = decoded(data);
+  if (!img) return null;
+  const { width, height } = img.getSize();
   const shown = width > DISPLAY_MAX_WIDTH ? img.resize({ width: DISPLAY_MAX_WIDTH }) : img;
   return {
     dataUrl: `data:image/jpeg;base64,${shown.toJPEG(88).toString("base64")}`,
@@ -179,7 +187,8 @@ function toDisplay(data: Uint8Array): EmbeddedArt | null {
   };
 }
 
-async function readEmbedded(url: string): Promise<EmbeddedArt | null> {
+/** The picture's own bytes, as the file's tags hold them: nothing decoded or re-encoded. */
+async function pictureBytesAt(url: string): Promise<Uint8Array | null> {
   const head = await readRange(url, 0, WINDOW - 1);
   if (!head) return null;
   let pic: PictureAt | null = null;
@@ -189,15 +198,23 @@ async function readEmbedded(url: string): Promise<EmbeddedArt | null> {
     if (tagSize != null && tagSize > head.length && tagSize <= PICTURE_MAX) {
       const tag = await readRange(url, 0, tagSize - 1);
       pic = tag ? id3Picture(tag) : null;
-      if (pic && tag) return toDisplay(tag.subarray(pic.start, pic.start + pic.length));
+      if (pic && tag) return tag.subarray(pic.start, pic.start + pic.length);
     } else pic = id3Picture(head);
   }
   if (!pic || pic.length <= 0 || pic.length > PICTURE_MAX) return null;
-  const data =
-    pic.start + pic.length <= head.length
-      ? head.subarray(pic.start, pic.start + pic.length)
-      : await readRange(url, pic.start, pic.start + pic.length - 1);
+  return pic.start + pic.length <= head.length
+    ? head.subarray(pic.start, pic.start + pic.length)
+    : await readRange(url, pic.start, pic.start + pic.length - 1);
+}
+
+async function readEmbedded(url: string): Promise<EmbeddedArt | null> {
+  const data = await pictureBytesAt(url);
   return data ? toDisplay(data) : null;
+}
+
+/** The track itself first, then its album's other tracks in running order (a few at most). */
+function candidatesFor(objectId: string, siblings: readonly MediaNode[]): string[] {
+  return [objectId, ...siblings.map((t) => t.id).filter((id) => id !== objectId)].slice(0, 4);
 }
 
 /** The album's tracks in running order, from the index, for a track we know
@@ -237,13 +254,8 @@ export async function embeddedArtFor(
     ? `alb|${target.serverUdn}|${nameKey(first.albumArtist ?? first.artist)}|${nameKey(first.album)}`
     : `obj|${target.serverUdn}|${target.objectId}`;
   if (cache.has(key)) return cache.get(key) ?? null;
-  // the track itself first, then its siblings in running order (a few at most)
-  const candidates = [
-    target.objectId,
-    ...siblings.map((t) => t.id).filter((id) => id !== target.objectId),
-  ].slice(0, 4);
   try {
-    for (const objectId of candidates) {
+    for (const objectId of candidatesFor(target.objectId, siblings)) {
       const url = await audioResUrl(host, target.serverUdn, objectId);
       if (!url) continue;
       const art = await readEmbedded(url);
@@ -253,6 +265,33 @@ export async function embeddedArtFor(
       }
     }
     cache.set(key, null);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * THE PICTURE ITSELF, for an export (0.17.0): the bytes the file's tags hold, at their own size
+ * and in their own format, never the display copy above; the same switch, and the same tracks
+ * tried in the same order. Not cached: an export is rare and the bytes can be large. "off" while
+ * Settings › Appearance › Album art from audio files is off, so the export can name the remedy.
+ */
+export async function embeddedPictureFor(
+  host: string | null,
+  target: { serverUdn: string; objectId: string },
+): Promise<{ bytes: Uint8Array; type: string } | "off" | null> {
+  if (!getSettings().artFromFiles) return "off";
+  if (!host) return null;
+  const siblings = albumSiblings(target.serverUdn, target.objectId);
+  try {
+    for (const objectId of candidatesFor(target.objectId, siblings)) {
+      const url = await audioResUrl(host, target.serverUdn, objectId);
+      if (!url) continue;
+      const bytes = await pictureBytesAt(url);
+      const type = bytes ? pictureType(bytes) : null;
+      if (bytes && type && decoded(bytes)) return { bytes, type };
+    }
     return null;
   } catch {
     return null;

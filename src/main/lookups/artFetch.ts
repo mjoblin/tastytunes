@@ -2,6 +2,7 @@ import { knownServerHost } from "../media/upnpBrowser";
 import { loggedFetch } from "../netlog";
 import { allowed, localOnly } from "./fetchGuard";
 import { mediaType } from "@shared/keys";
+import { pictureType } from "@shared/pictureType";
 
 /**
  * A PICTURE, AND ONLY A PICTURE, FROM WHERE A PICTURE CAN COME (0.10.0). The renderer asks
@@ -31,19 +32,6 @@ export function artHostTrust(streamer: string | null): (hostname: string) => boo
 }
 
 const MAX_REDIRECTS = 3;
-
-/** A picture's type from its first bytes, for a server that calls every file octet-stream. */
-function sniff(b: Uint8Array): string | null {
-  if (b[0] === 0xff && b[1] === 0xd8) return "image/jpeg";
-  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
-  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46) return "image/gif";
-  if (b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) return "image/webp";
-  if (b[0] === 0 && b[1] === 0 && b[2] === 1 && b[3] === 0) return "image/x-icon";
-  const head = new TextDecoder().decode(b.subarray(0, 256)).trimStart();
-  if (head.startsWith("<svg") || (head.startsWith("<?xml") && head.includes("<svg")))
-    return "image/svg+xml";
-  return null;
-}
 
 export interface PictureLimits {
   maxBytes: number;
@@ -102,7 +90,7 @@ export async function fetchPicture(
     }
     const bytes = Buffer.concat(chunks);
     const declared = mediaType(res.headers.get("content-type"));
-    const type = declared.startsWith("image/") ? declared : sniff(bytes);
+    const type = declared.startsWith("image/") ? declared : pictureType(bytes);
     if (!type) return null;
     return { bytes, type };
   }

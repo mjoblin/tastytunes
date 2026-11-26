@@ -39,6 +39,7 @@ import { buildAlbumRecord } from "./albumRecord";
 import { exportReadme } from "./exportReadme";
 import type { ReleaseArt } from "../lookups/releaseArt";
 import { withoutMetadata } from "./pictureMeta";
+import { pictureType } from "@shared/pictureType";
 
 /**
  * THE EXPORTER (0.17.0, export for an agent): a track or an album written to a new dated folder
@@ -122,6 +123,9 @@ export interface ExportEnv {
   presets(): Array<{ id: number; name: string; artUrl: string | null }>;
   /** A picture through the app's one picture path. */
   picture(url: string): Promise<PictureGot | null>;
+  /** The picture inside the track's audio file, or its album's other tracks', as the tags hold
+   *  it (main/lookups/embeddedArt); "off" while Album art from audio files is off. */
+  embeddedPicture(serverUdn: string, objectId: string): Promise<PictureGot | "off" | null>;
   readFile(path: string): Uint8Array | null;
   /** The track's address as the media server gives it, and that server's own host. */
   audioUrl(
@@ -422,6 +426,8 @@ async function writePictures(
   put: Put,
   album: MediaNode | null,
   sleeveUrl: string | null,
+  /** The track whose audio file (or its album's) may hold the sleeve when the server has none. */
+  sleeveTrack: { serverUdn: string; objectId: string } | null,
   artist: string | null,
   ownTitle: string | null,
   opts: ExportOptions,
@@ -437,23 +443,41 @@ async function writePictures(
   const fetch = (url: string): Promise<PictureGot | null> =>
     budget.time(() => env.picture(url).catch(() => null));
 
-  if (sleeveUrl) {
-    const got = await fetch(sleeveUrl);
-    const file = got ? save("sleeve", got) : null;
-    listed.push({ what: "sleeve", source: "library", file, local_address: sleeveUrl });
-    if (!got)
-      missing.push({
-        what: "sleeve",
-        why: "The media server didn't hand over the picture.",
-        remedy: "Export again while the server is up.",
-      });
-  } else {
-    missing.push({
-      what: "sleeve",
-      why: "The library has no picture for this album.",
-      remedy: "None from TastyTunes.",
-    });
-  }
+  // THE SLEEVE: the media server's picture first, then the one inside the audio file, as
+  // get_album_art and the window's own art fall through (lib/bestArt)
+  const fromServer = sleeveUrl ? await fetch(sleeveUrl) : null;
+  const fromFile =
+    fromServer || !sleeveTrack
+      ? null
+      : await env.embeddedPicture(sleeveTrack.serverUdn, sleeveTrack.objectId).catch(() => null);
+  const inFile = fromFile && fromFile !== "off" ? fromFile : null;
+  if (fromServer || !inFile) {
+    if (sleeveUrl) {
+      const file = fromServer ? save("sleeve", fromServer) : null;
+      listed.push({ what: "sleeve", source: "library", file, local_address: sleeveUrl });
+    }
+  } else listed.push({ what: "sleeve", source: "audio file", file: save("sleeve", inFile) });
+  if (!fromServer && !inFile)
+    missing.push(
+      sleeveUrl
+        ? {
+            what: "sleeve",
+            why: "The media server didn't hand over the picture.",
+            remedy: "Export again while the server is up.",
+          }
+        : fromFile === "off"
+          ? {
+              what: "sleeve",
+              why: "The library has no picture for this album, and reading one from its audio files is off.",
+              remedy:
+                "Turn on Settings › Appearance › Album art from audio files, then export again.",
+            }
+          : {
+              what: "sleeve",
+              why: "The library has no picture for this album, and none was found in its audio files.",
+              remedy: "None from TastyTunes.",
+            },
+    );
 
   let lateOnes = 0;
   // THE RELEASE'S SCANS (the Cover Art Archive step): files under fill and the budget, listed by
@@ -517,7 +541,9 @@ async function writePictures(
       else entry["address"] = o.url;
       if (n < ARTIST_PICTURES_MAX) {
         const local = o.file ? env.readFile(o.file) : null;
-        let got: PictureGot | null = local ? { bytes: local, type: sniffType(local) } : null;
+        let got: PictureGot | null = local
+          ? { bytes: local, type: pictureType(local) ?? "image/jpeg" }
+          : null;
         if (!got && o.url && o.fetch) {
           if (o.local || budget.open) got = await fetch(o.url);
           else lateOnes += 1;
@@ -584,13 +610,6 @@ export function otherSleeves(
   return out.sort(
     (x, y) => (x.year ?? "9999").localeCompare(y.year ?? "9999") || x.title.localeCompare(y.title),
   );
-}
-
-function sniffType(b: Uint8Array): string {
-  if (b[0] === 0x89 && b[1] === 0x50) return "image/png";
-  if (b[8] === 0x57 && b[9] === 0x45) return "image/webp";
-  if (b[0] === 0x47 && b[1] === 0x49) return "image/gif";
-  return "image/jpeg";
 }
 
 /** The audio: its address, the file copied in, or nothing; said in the record either way. A copy
@@ -863,6 +882,7 @@ export function exportTrack(
           put,
           album,
           album?.artUrl ?? t.node.artUrl,
+          { serverUdn: t.serverUdn, objectId: t.node.id },
           artist,
           t.node.album,
           opts,
@@ -944,6 +964,7 @@ export function exportAlbum(
           put,
           a.node,
           a.node.artUrl,
+          tracks[0] ? { serverUdn: a.serverUdn, objectId: tracks[0].id } : null,
           artist,
           a.node.title,
           opts,

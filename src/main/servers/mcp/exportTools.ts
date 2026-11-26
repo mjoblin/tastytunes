@@ -32,6 +32,7 @@ import {
 } from "../../lookups/artistInfo";
 import { fetchCommonsPhotos } from "../../lookups/commons";
 import { cachedReleaseArt, fetchReleaseArt } from "../../lookups/releaseArt";
+import { embeddedPictureFor } from "../../lookups/embeddedArt";
 import { fetchFanartPhotos } from "../../lookups/fanart";
 import { loggedFetch } from "../../netlog";
 import { exportRoot } from "../../app/exportsFolder";
@@ -345,6 +346,7 @@ export function exportTools(ctx: ToolContext): Record<string, ToolImpl> {
       });
       return got ? { bytes: new Uint8Array(got.bytes), type: got.type } : null;
     },
+    embeddedPicture: (serverUdn, objectId) => embeddedPictureFor(host(), { serverUdn, objectId }),
     readFile: (path) => {
       try {
         return new Uint8Array(readFileSync(path));

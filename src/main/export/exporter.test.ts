@@ -201,6 +201,7 @@ function fakeEnv(
       calls.pictures.push(url);
       return Promise.resolve({ bytes: JPEG, type: "image/jpeg" });
     },
+    embeddedPicture: () => Promise.resolve(null),
     readFile: () => null,
     audioUrl: (_u, id) =>
       Promise.resolve({ url: `http://10.0.0.5:9790/audio/${id}.flac`, serverHost: "10.0.0.5" }),
@@ -632,6 +633,109 @@ describe("the release's scans (the Cover Art Archive step)", () => {
   });
 });
 
+describe("the sleeve", () => {
+  const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+  // the same library with no picture on the album or its tracks
+  const bare: MediaIndexPools[] = [
+    {
+      ...pools[0],
+      albums: [{ ...album, artUrl: null }, other],
+      tracks: [t1, t2, t3].map((t) => ({ ...t, artUrl: null })),
+    },
+  ];
+  const bareT1 = { ...t1, artUrl: null };
+  const listedSleeve = (folder: string): Record<string, unknown> | undefined =>
+    (readJson(folder, "pictures/pictures.json")["pictures"] as Array<Record<string, unknown>>).find(
+      (p) => p["what"] === "sleeve",
+    );
+
+  it("comes from the audio file, in its own format, when the media server has none", async () => {
+    const asked: string[] = [];
+    const { env } = fakeEnv({
+      pools: () => bare,
+      embeddedPicture: (_udn, id) => {
+        asked.push(id);
+        return Promise.resolve({ bytes: PNG, type: "image/png" });
+      },
+    });
+    const r = await exportTrack(env, root(), target(bareT1), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(asked).toEqual(["t-1"]);
+    expect(readFileSync(join(r.folder, "pictures/sleeve.png"))).toEqual(Buffer.from(PNG));
+    expect(listedSleeve(r.folder)).toEqual({
+      what: "sleeve",
+      source: "audio file",
+      file: "pictures/sleeve.png",
+    });
+    expect(r.missing.find((m) => m.what === "sleeve")).toBeUndefined();
+  });
+
+  it("is the media server's when it has one, and the file isn't read", async () => {
+    let asked = 0;
+    const { env } = fakeEnv({
+      embeddedPicture: () => {
+        asked += 1;
+        return Promise.resolve({ bytes: PNG, type: "image/png" });
+      },
+    });
+    const r = await exportTrack(env, root(), target(t1), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(asked).toBe(0);
+    expect(listedSleeve(r.folder)).toMatchObject({
+      source: "library",
+      file: "pictures/sleeve.jpg",
+    });
+  });
+
+  it("comes from the file when the server's picture doesn't come", async () => {
+    const { env } = fakeEnv({
+      picture: (url) =>
+        Promise.resolve(url.includes("/aa/1/") ? null : { bytes: JPEG, type: "image/jpeg" }),
+      embeddedPicture: () => Promise.resolve({ bytes: PNG, type: "image/png" }),
+    });
+    const r = await exportTrack(env, root(), target(t1), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(listedSleeve(r.folder)).toMatchObject({ source: "audio file" });
+    expect(r.missing.find((m) => m.what === "sleeve")).toBeUndefined();
+  });
+
+  it("names the setting when reading pictures from audio files is off", async () => {
+    const { env } = fakeEnv({ pools: () => bare, embeddedPicture: () => Promise.resolve("off") });
+    const r = await exportTrack(env, root(), target(bareT1), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(listedSleeve(r.folder)).toBeUndefined();
+    expect(r.missing.find((m) => m.what === "sleeve")?.remedy).toBe(
+      "Turn on Settings › Appearance › Album art from audio files, then export again.",
+    );
+  });
+
+  it("says none was found when neither the server nor the files have one", async () => {
+    const { env } = fakeEnv({ pools: () => bare });
+    const r = await exportTrack(env, root(), target(bareT1), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(r.missing.find((m) => m.what === "sleeve")).toEqual({
+      what: "sleeve",
+      why: "The library has no picture for this album, and none was found in its audio files.",
+      remedy: "None from TastyTunes.",
+    });
+  });
+
+  it("is read from an album's first track for an album's export", async () => {
+    const asked: string[] = [];
+    const { env } = fakeEnv({
+      pools: () => bare,
+      embeddedPicture: (_udn, id) => {
+        asked.push(id);
+        return Promise.resolve({ bytes: PNG, type: "image/png" });
+      },
+    });
+    const r = await exportAlbum(env, root(), target({ ...album, artUrl: null }), opts());
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(asked).toEqual(["t-1"]);
+    expect(r.files.filter((f) => f.path === "pictures/sleeve.png")).toHaveLength(1);
+  });
+});
+
 describe("an album's export", () => {
   it("writes album.json and a folder per track in running order, the pictures once", async () => {
     const { env } = fakeEnv();
@@ -643,6 +747,10 @@ describe("an album's export", () => {
     expect(tracks[0]).toMatchObject({ folder: "tracks/01 - Lamplighter", analyzed: true });
     expect(existsSync(join(r.folder, "tracks/02 - Undertow/track.json"))).toBe(true);
     expect(r.files.filter((f) => f.path.endsWith("sleeve.jpg"))).toHaveLength(1);
+    const readme = readFileSync(join(r.folder, "README.md"), "utf-8");
+    expect(readme).toContain("## album.json");
+    expect(readme).toContain("It is format `tastytunes.export/1`.");
+    expect(readme).toMatch(/Wikipedia's text, under\s+the CC BY-SA license/);
     // a gap two tracks share is said once with its count
     expect(r.missing.find((m) => m.what.startsWith("analysis"))?.what).toBe(
       "analysis (2 of 3 tracks)",

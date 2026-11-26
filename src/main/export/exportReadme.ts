@@ -1,4 +1,22 @@
 import type { ExportOptions } from "./exporter";
+import { EXPORT_FORMAT } from "./trackRecord";
+
+/** album.json's own fields, in an album's export. */
+const ALBUM_JSON = `## album.json
+
+- \`identity\`: title, artist, year, genres, the number of tracks and discs, the length in
+  seconds, and the media server and the album's id on it.
+- \`measured\`: how many tracks were analyzed, and the album's DR and loudness in LUFS, given only
+  when every track is.
+- \`notes\`: the album's title, year, type, label, genres, credits and summary, with its Wikipedia
+  and MusicBrainz addresses.
+- \`held_by\`: \`hearted\`, whether the album is a favorite.
+- \`tracks\`: the tracks in running order, each with its disc and number, title, artist, length in
+  seconds, its folder under \`tracks/\`, whether it was analyzed and whether its lyrics are timed.
+- \`missing\`: as in each track.json, a gap every track shares said once, with how many tracks it
+  touches.
+
+`;
 
 /**
  * THE README IN EVERY EXPORT (0.17.0, export for an agent): what each file and field is, the
@@ -22,14 +40,14 @@ export function exportReadme(kind: "track" | "album", opts: ExportOptions): stri
 
 This folder holds what TastyTunes knew about this ${kind} when it was exported: who made it, the
 file, the audio analysis, the lyrics, the credits and notes, how often it was played, and the
-pictures. It is format \`tastytunes.export/1\`. Every file is plain JSON or text, with the unit in
+pictures. It is format \`${EXPORT_FORMAT}\`. Every file is plain JSON or text, with the unit in
 each field's name or beside it.
 
 ## Files
 
 ${layout}
 
-## track.json
+${kind === "album" ? ALBUM_JSON : ""}## track.json
 
 - \`identity\`: title, artists, album, album artist, composers, year, genres, track and disc
   numbers, and the duration in seconds, as the library's tags give them.
@@ -68,22 +86,28 @@ ${layout}
 ## analysis.json
 
 Measured from the audio file itself, in TastyTunes. \`analysis_version\` names the version of the
-analysis that measured it.
+analysis that measured it. It holds a value for every frame of the track, so it is large, and is
+best read with a script rather than as text.
 
 - \`tempo\`: beats per minute, the confidence (0 to 1), which beat is the downbeat (0 to 3), and
   every beat's time in seconds. Every fourth beat from \`downbeat_index\` is a downbeat, the
   first beat of a bar.
 - \`key\`: the key and the confidence. \`chord_changes_seconds\`: where the harmony changes.
-- \`sections\`: the boundaries between sections in seconds, each section's kind and energy.
+- \`sections\`: the boundaries between sections in seconds (\`bounds_seconds\`, the first section
+  starting at 0 and the last running to the end), and each section's kind and energy (\`kinds\`,
+  \`energy\`), one value per section in order.
 - \`silences\`: each silence's start and end. \`drops\`: where each build starts and where it
   lands, its strength (0 to 1), and how long the music eased off, went near silent and cut out
   just before it.
-- \`onsets\`: every drum hit found, its time, its strength (0 to 1, against the track's strongest)
-  and its kind (kick, snare or hat).
-- \`curves\`: values sampled \`fps\` times a second. \`loudness_dbfs\`; \`bands_dbfs\`, six frequency
-  bands per frame between the edges in \`edges_hz\`; \`brightness\` and \`noisiness\` (0 to 1);
-  \`pan\` (-1 left to 1 right) and \`width\` (0 mono to 1 wide); \`chroma\`, the strength of each
-  of the twelve pitch classes per frame (0 to 1).
+- \`onsets\`: every drum hit found, as lists in the same order: its time (\`at_seconds\`), its
+  strength (\`strength\`, 0 to 1, against the track's strongest) and its kind (\`kind\`, one of
+  the kinds in \`kinds\`: kick, snare or hat).
+- \`curves\`: values sampled \`fps\` times a second, each curve giving its \`fps\`, its number of
+  \`frames\` and its \`values\`. \`loudness_dbfs\`; \`bands_dbfs\`, six frequency bands per frame
+  between the edges in \`edges_hz\`; \`brightness\` and \`noisiness\` (0 to 1); \`pan\` (-1 left
+  to 1 right) and \`width\` (0 mono to 1 wide); \`chroma\`, the strength of each of the twelve
+  pitch classes per frame (0 to 1). Loudness and the bands run from -60 to 0 dBFS, where -60
+  stands for -60 or quieter.
 - \`waveform\`: the peak and RMS level (0 to 1) at evenly spaced points across the track.
 
 ## pictures
@@ -91,14 +115,21 @@ analysis that measured it.
 \`pictures.json\` lists each picture: what it is (\`sleeve\`; \`release\`, a scan of one pressing
 of the album from the Cover Art Archive, its \`types\` saying which, such as Back or Booklet, and
 \`release\` naming the pressing on MusicBrainz; \`artist\`; or \`shelf\` for the artist's other
-albums in the library), where it came from, and its \`file\` here when it was copied. A picture
-with no file is listed with its address only. Exporting again with fill makes a new folder that
+albums in the library), where it came from (\`source\`: \`library\` for the media server's
+picture, \`audio file\` for the one inside the track's file, \`Cover Art Archive\`, \`chosen\` for
+a photo picked in TastyTunes, \`wikipedia\`, \`commons\`, or \`fanart.tv\`), its address
+(\`address\` on the internet, \`local_address\` on the owner's network), a Commons picture's
+\`page\`, and its \`file\` here when it was copied. A picture with no file is listed with its
+address only. Exporting again with fill makes a new folder that
 has it, and this one stays as it is.
 
 ## Rights
 
 The pictures, lyrics, notes and audio belong to their owners. This export is for the owner's own
-use, as the music in their library is.${
+use, as the music in their library is. The album and artist summaries are Wikipedia's text, under
+the CC BY-SA license, so reusing one requires crediting its article (its address is in the notes
+beside it). Pictures from Wikipedia and Wikimedia Commons each have their own license, shown on
+the picture's page (a Commons picture's is \`page\` in \`pictures.json\`).${
     opts.redact
       ? `\n\nThis export is redacted: it leaves out addresses on the owner's network, server and device ids, and the dates of plays, and its pictures carry none of the details a camera or an editor wrote into them.${
           opts.audio === "copy"
