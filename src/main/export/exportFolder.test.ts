@@ -2,7 +2,16 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "n
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ExportCapReached, ExportWriter, exportDirName, reasonOf, safeName } from "./exportFolder";
+import {
+  ExportCapReached,
+  ExportWriter,
+  RENAME_WAITS_MS,
+  exportDirName,
+  reasonOf,
+  renameWhenFree,
+  renameWhenFreeAsync,
+  safeName,
+} from "./exportFolder";
 
 describe("names from tags", () => {
   it("can't leave the folder, hide, or be empty", () => {
@@ -101,6 +110,69 @@ describe("an export's folder", () => {
     expect(() => w.write("album.json", "{}", "final")).toThrow();
     expect(readdirSync(w.dir).sort()).toEqual(["album.json", "audio.flac", "track.json"]);
     expect(readdirSync(join(w.dir, "album.json"))).toEqual(["inside"]);
+  });
+});
+
+describe("a rename something holds", () => {
+  const held = (code: string): NodeJS.ErrnoException =>
+    Object.assign(new Error(`${code}: held, rename 'a.part' -> 'a'`), { code });
+
+  it("is tried again while an antivirus or an indexer holds the file, then done", async () => {
+    const tries: string[] = [];
+    const waits: number[] = [];
+    const move = (from: string, to: string): void => {
+      tries.push(`${from} -> ${to}`);
+      if (tries.length <= 2) throw held(tries.length === 1 ? "EPERM" : "EBUSY");
+    };
+    renameWhenFree("a.part", "a", move, (ms) => waits.push(ms));
+    expect(tries).toEqual(["a.part -> a", "a.part -> a", "a.part -> a"]);
+    expect(waits).toEqual(RENAME_WAITS_MS.slice(0, 2));
+
+    let asked = 0;
+    const later: number[] = [];
+    await renameWhenFreeAsync(
+      "b.part",
+      "b",
+      () => (++asked <= 2 ? Promise.reject(held("EACCES")) : Promise.resolve()),
+      (ms) => {
+        later.push(ms);
+        return Promise.resolve();
+      },
+    );
+    expect(asked).toBe(3);
+    expect(later).toEqual(RENAME_WAITS_MS.slice(0, 2));
+  });
+
+  it("gives up after about two seconds, and at once for any other failure", async () => {
+    const waits: number[] = [];
+    let asked = 0;
+    expect(() =>
+      renameWhenFree(
+        "a.part",
+        "a",
+        () => {
+          asked += 1;
+          throw held("EBUSY");
+        },
+        (ms) => waits.push(ms),
+      ),
+    ).toThrow(/EBUSY/);
+    expect(asked).toBe(RENAME_WAITS_MS.length + 1);
+    expect(waits.reduce((a, b) => a + b, 0)).toBe(2000);
+
+    let once = 0;
+    await expect(
+      renameWhenFreeAsync(
+        "b.part",
+        "b",
+        () => {
+          once += 1;
+          return Promise.reject(held("ENOENT"));
+        },
+        () => Promise.reject(new Error("never waits")),
+      ),
+    ).rejects.toThrow(/ENOENT/);
+    expect(once).toBe(1);
   });
 });
 

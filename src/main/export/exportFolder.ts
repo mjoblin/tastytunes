@@ -1,4 +1,5 @@
 import { createWriteStream, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { rename } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, normalize, sep } from "node:path";
 import { Readable } from "node:stream";
@@ -65,6 +66,63 @@ export class ExportCapReached extends Error {}
 /** What a file is to the cap: a picture ("media"), a record such as analysis.json ("record"), or
  *  the README and the record written last ("final"). An audio copy (copy) stops shortest. */
 export type WriteKind = "media" | "record" | "final";
+
+/** Windows: what a rename meets while an antivirus, the search indexer or a sync client such as
+ *  OneDrive holds the file just written. Such a rename is tried again after each of these waits,
+ *  about two seconds in all; any other failure fails at once. */
+const HELD = new Set(["EPERM", "EACCES", "EBUSY"]);
+export const RENAME_WAITS_MS = [50, 150, 300, 500, 1000];
+
+/** How long to wait before trying a rename again after its `tries`th failure, or null to give up. */
+function waitAfter(e: unknown, tries: number): number | null {
+  const code = (e as NodeJS.ErrnoException).code;
+  return code && HELD.has(code) && tries <= RENAME_WAITS_MS.length
+    ? RENAME_WAITS_MS[tries - 1]
+    : null;
+}
+
+/** A pause on this thread: a write's rename is synchronous, as its write is. */
+const pause = (ms: number): void => {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+};
+
+/** A finished file to its own name, tried again while something holds it (HELD). */
+export function renameWhenFree(
+  from: string,
+  to: string,
+  move: (from: string, to: string) => void = renameSync,
+  wait: (ms: number) => void = pause,
+): void {
+  for (let tries = 1; ; tries++) {
+    try {
+      move(from, to);
+      return;
+    } catch (e) {
+      const ms = waitAfter(e, tries);
+      if (ms == null) throw e;
+      wait(ms);
+    }
+  }
+}
+
+/** renameWhenFree for an audio copy, waiting without holding up the app. */
+export async function renameWhenFreeAsync(
+  from: string,
+  to: string,
+  move: (from: string, to: string) => Promise<void> = rename,
+  wait: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms)),
+): Promise<void> {
+  for (let tries = 1; ; tries++) {
+    try {
+      await move(from, to);
+      return;
+    } catch (e) {
+      const ms = waitAfter(e, tries);
+      if (ms == null) throw e;
+      await wait(ms);
+    }
+  }
+}
 
 /** A path as an error message quotes it (an absolute one), with a rename's arrow before it. */
 const QUOTED_PATH = /(\s*->\s*|\s)?'((?:[A-Za-z]:)?[\\/][^']*)'/g;
@@ -159,7 +217,7 @@ export class ExportWriter {
     const part = partName(full);
     try {
       writeFileSync(part, data);
-      renameSync(part, full);
+      renameWhenFree(part, full);
     } catch (e) {
       rmSync(part, { force: true });
       throw e;
@@ -205,7 +263,7 @@ export class ExportWriter {
       await pipeline(counted, createWriteStream(part));
       if (expected != null && seen < expected)
         throw new CopyFailed(`the media server sent ${seen} of ${expected} bytes`);
-      renameSync(part, full);
+      await renameWhenFreeAsync(part, full);
     } catch (e) {
       // the part written is this export's own and incomplete: it goes, and the reply says so
       rmSync(part, { force: true });
