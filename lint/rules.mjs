@@ -742,4 +742,19 @@ export const ONE_HOME = [
       code: "const x = () => void tt.mcpTokenNew();",
     },
   },
+  {
+    id: "list-screen-icons",
+    was: "none (0.17.0: the second screen's list tabs and the menu bar panel each imported the Queue, Presets and Playlists icons, and the panel's No playlists drew the Queue's)",
+    // the second screen and the menu bar panel draw the Queue, Presets and Playlists as the app's
+    // navigation panel does, from the screen registry, never from an icon import of their own
+    selector:
+      "ImportDeclaration[source.value='lucide-react'] > ImportSpecifier[imported.name=/^(ListMusic|ListOrdered|Radio)$/]",
+    files: [`^${R}display/`, "playback/TrayPanel(Tabs)?\\.tsx$"],
+    message:
+      "The second screen and the menu bar panel take the Queue, Presets and Playlists icons from screenIcon (lib/screens.ts), the app's own",
+    bad: {
+      file: `${R}display/PageTransport.tsx`,
+      code: 'import { ListMusic } from "lucide-react";',
+    },
+  },
 ];

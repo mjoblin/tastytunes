@@ -2,14 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import {
   LayoutGrid,
   List,
-  ListMusic,
-  ListOrdered,
   Minus,
   Pause,
   Play,
   Plus,
   Power,
-  Radio,
   SkipBack,
   SkipForward,
   Square,
@@ -18,6 +15,7 @@ import {
 import type { DisplayPlaylistRow, DisplayPresetRow, DisplayQueueRow } from "@shared/displayControl";
 import { transportAbilities, type TransportAbilities } from "@shared/transport";
 import { cx, fmtDuration } from "@/lib/format";
+import { screenIcon } from "@/lib/screens";
 import { onScreenKey } from "@/lib/keyboardOwner";
 import { useStore } from "@/store";
 import { Switch } from "@/components/controls/Switch";
@@ -300,11 +298,11 @@ export function PageTransport({
                   attrs={{ "data-page-queue-button": "" }}
                 >
                   {queue ? (
-                    <ListMusic size={22} />
+                    <QueueIcon size={22} />
                   ) : presets ? (
-                    <Radio size={22} />
+                    <PresetsIcon size={22} />
                   ) : (
-                    <ListOrdered size={22} />
+                    <PlaylistsIcon size={22} />
                   )}
                 </Disc>
               )}
@@ -423,11 +421,16 @@ function useHeightWhile(ref: React.RefObject<HTMLDivElement | null>, on: boolean
   return h;
 }
 
+/** The Queue, Presets and Playlists icons, the app's own (its screen registry's). */
+const QueueIcon = screenIcon("queue");
+const PresetsIcon = screenIcon("presets");
+const PlaylistsIcon = screenIcon("playlists");
+
 /** The list's tabs in their order, with what each is called and drawn as. */
 const LIST_TABS: ReadonlyArray<{ id: ListTab; label: string; icon: React.ReactNode }> = [
-  { id: "queue", label: "Queue", icon: <ListMusic size={16} /> },
-  { id: "presets", label: "Presets", icon: <Radio size={16} /> },
-  { id: "playlists", label: "Playlists", icon: <ListOrdered size={16} /> },
+  { id: "queue", label: "Queue", icon: <QueueIcon size={16} /> },
+  { id: "presets", label: "Presets", icon: <PresetsIcon size={16} /> },
+  { id: "playlists", label: "Playlists", icon: <PlaylistsIcon size={16} /> },
 ];
 
 /**
@@ -880,7 +883,7 @@ export function SleepControls({
                 onPress={() => onList(!listOpen)}
                 attrs={{ "data-page-presets-button": "" }}
               >
-                <Radio size={22} />
+                <PresetsIcon size={22} />
               </Disc>
             )}
             <Disc verb="wake" label="Wake" size="main">

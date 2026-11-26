@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Disc3, ListMusic, Radio, RadioTower, X } from "lucide-react";
+import { Disc3, RadioTower, X } from "lucide-react";
 import { playKey, playlistTotalSecs, type ScreenLayout } from "@shared/model";
 import { FACT_SEP } from "@/lib/mediaFacts";
 import { tt } from "@/api";
@@ -15,6 +15,7 @@ import { fromRecent } from "@/lib/mediaRef";
 import { playRefNow } from "@/lib/mediaActions";
 import { scrollToVisible } from "@/lib/scroll";
 import { cx, fmtDuration, fmtRelative } from "@/lib/format";
+import { screenIcon } from "@/lib/screens";
 import { useLitPresets } from "@/hooks/useLitPresets";
 import { useDisc, type Disc } from "@/hooks/useDisc";
 import { useQueueSourceActive } from "@/hooks/useQueueSourceActive";
@@ -194,12 +195,12 @@ export function QueueTab({
     if (followQueue) scrollToVisible(playingRow.current, 8);
   }, [playId, followQueue]);
 
-  if (offline) return <OfflineTab icon={ListMusic} what="Queue" they="It lives" />;
+  if (offline) return <OfflineTab icon={screenIcon("queue")} what="Queue" they="It lives" />;
   if (disc) return <DiscTab disc={disc} opens={opens} density={density} />;
   if (items.length === 0) {
     return (
       <TabEmpty
-        icon={ListMusic}
+        icon={screenIcon("queue")}
         title="Queue is empty"
         hint="Play an album or a playlist to fill it."
       />
@@ -360,11 +361,11 @@ export function PresetsTab({
   const lit = useLitPresets(items);
   const isPlaying = (id: number | null): boolean => id != null && lit.has(id);
 
-  if (offline) return <OfflineTab icon={Radio} what="Presets" they="They live" />;
+  if (offline) return <OfflineTab icon={screenIcon("presets")} what="Presets" they="They live" />;
   if (items.length === 0) {
     return (
       <TabEmpty
-        icon={Radio}
+        icon={screenIcon("presets")}
         title="No presets"
         hint="Save stations and albums to the streamer's presets."
       />
@@ -487,7 +488,7 @@ export function PlaylistsTab({
   if (playlists.length === 0) {
     return (
       <TabEmpty
-        icon={ListMusic}
+        icon={screenIcon("playlists")}
         title="No playlists"
         hint="Build one in the app, start it from here."
       />

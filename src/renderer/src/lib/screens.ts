@@ -102,6 +102,15 @@ export const SETTINGS_SCREEN: ScreenDef = {
 export const SCREENS: ScreenDef[] = [...NAV_SCREENS, SETTINGS_SCREEN];
 
 /**
+ * A screen's icon, for the places that show a screen's contents outside its own screen (the second
+ * screen's list tabs and buttons, the menu bar panel's empty states), so the Queue drawn there is
+ * the Queue in the navigation panel. Every Screen is in SCREENS.
+ */
+export function screenIcon(id: Screen): ScreenDef["icon"] {
+  return (SCREENS.find((s) => s.id === id) ?? NAV_SCREENS[0]).icon;
+}
+
+/**
  * Screens that can never be hidden from the nav (feature: hideable nav items).
  * 'settings' lives in the nav's pinned bottom cluster and stays locked — always
  * shown, no right-click hide menu — same as 'now-playing' up top.
