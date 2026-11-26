@@ -372,6 +372,32 @@ jobs:
           path: dist/*.exe
           if-no-files-found: ignore
 
+      # THE HELPER IN EACH PAYLOAD, SIGNED, OR THE LEG FAILS (0.17.0), as the Mac leg checks its own:
+      # the Now Playing helper beside TastyTunes.exe in the x64 and the arm64 folders the installer
+      # was made from, with a valid Authenticode signature. Both packaging steps sign (the Azure
+      # login above is on every run); on a tag the release is still a draft here, so a failure
+      # publishes nothing.
+      - name: The Now Playing helper is packaged and signed
+        shell: pwsh
+        run: |
+          $failed = $false
+          foreach ($dir in 'dist/win-unpacked', 'dist/win-arm64-unpacked') {
+            $helper = Join-Path $dir 'TastyTunes Now Playing.exe'
+            if (-not (Test-Path -LiteralPath $helper)) {
+              Write-Output "::error::the Now Playing helper is missing from $dir"
+              $failed = $true
+              continue
+            }
+            $sig = Get-AuthenticodeSignature -LiteralPath $helper
+            if ($sig.Status -ne 'Valid') {
+              Write-Output "::error::the Now Playing helper in $dir is not validly signed ($($sig.Status): $($sig.StatusMessage))"
+              $failed = $true
+            } else {
+              Write-Output "$helper is signed by $($sig.SignerCertificate.Subject)"
+            }
+          }
+          if ($failed) { exit 1 }
+
   # EVERY INSTALLER ATTACHED BEFORE ANYONE PUBLISHES: the twelve files a release carries, read back
   # from the draft once every leg is done (a leg that published nothing used to show only in its
   # own log, and the check was by eye)
