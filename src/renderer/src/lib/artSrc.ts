@@ -11,15 +11,18 @@ export { artKeyOf } from "@shared/artUrl";
  * CSS, a 480 px card up to 240; anything drawn larger, the Now Playing hero,
  * keeps the original. `key` is the picture's content identity when the caller
  * has the node (artKeyOf), so the streamer's rotating art ids find the same
- * thumbnail; without one the URL is the key.
+ * thumbnail; without one the URL is the key. A picture the display server hands
+ * out by id (/art/<id>, on the page another screen opens) is asked of that server
+ * at the same tier, which it makes from the same cache (0.17.0); drawn larger, the
+ * page's cover, it is the picture as it is.
  */
 export function artSrc(url: string | null | undefined, px: number, key?: string): string | null {
   if (!url) return null;
   if (artUrlResizable(url)) return artUrlAt(url, px);
-  // a picture the display server hands out by id (Display on other screens) is served as it is
-  if (/^(data|blob|tt-art):/.test(url) || url.startsWith("/art/")) return url;
+  if (/^(data|blob|tt-art):/.test(url)) return url;
   const want = px * 2;
   if (want > 480) return url;
   const tier = want <= 320 ? "thumb" : "card";
+  if (url.startsWith("/art/")) return `${url}?size=${tier}`;
   return `tt-art://thumb/${tier}/${encodeURIComponent(key ?? url)}?u=${encodeURIComponent(url)}`;
 }

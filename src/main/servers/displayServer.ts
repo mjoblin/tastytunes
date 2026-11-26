@@ -13,6 +13,7 @@ import {
   type DisplayVerbArgs,
 } from "@shared/displayControl";
 import type { PushMessage, Snapshot } from "@shared/ipc";
+import type { ArtTier } from "../lookups/artThumbs";
 import {
   audioAnalysisKey,
   type AudioAnalysis,
@@ -38,7 +39,9 @@ import { hostAllowed } from "./hostCheck";
  *   page saying where to find the address. A new token ends every open screen at once
  *   (closeScreens), and their reconnect meets that page.
  * - The page's data is the reduced feed (displayFeed): the playing track, its state, the display
- *   settings; pictures by the id the feed handed out, never by address.
+ *   settings; pictures by the id the feed handed out, never by address. A list's row or card asks
+ *   for its picture's small copy (?size=, lib/artSrc), made and kept by the window's own thumbnail
+ *   cache (lookups/artThumbs); the cover and the scenes take the picture as it is.
  * - THE LIVE CHANNEL IS WHOLE ON ITS OWN: every connection opens with the reduced snapshot, so a
  *   reconnect after a wake or a restart never shows the old track, and a ping every few seconds
  *   lets the page tell a quiet app from a lost one. Before the snapshot it says which build of the
@@ -73,6 +76,9 @@ export interface DisplayDeps {
   lyrics(query: LyricsQuery): Promise<LyricsResult | null | "unreachable">;
   lyricsAllowed(): boolean;
   picture(url: string): Promise<{ bytes: Buffer; type: string } | null>;
+  /** A picture's small copy at a tier of the window's thumbnail cache (lookups/artThumbs), for a
+   *  list's row or card: made once and kept, a picture that can't be resized as it came. */
+  thumb(url: string, tier: ArtTier): Promise<{ bytes: Buffer; type: string } | null>;
   /** The library file a query names, as the window's Info finds it (a show: no index rebuilt). */
   trackInfo(query: MediaInfoQuery): Promise<MediaInfoTarget | null>;
   /** A stored analysis by its content key. */
@@ -123,7 +129,8 @@ const MAX_SCREENS = 16;
 export const MAX_RATE_KEYS = 4 * MAX_SCREENS;
 /** A screen whose unread pushes pass this has stopped reading: it is let go. */
 const MAX_UNREAD_BYTES = 1 << 20;
-/** The last few pictures, kept so a page's reload or a second screen doesn't fetch them again. */
+/** The last few pictures as they are (the cover, the scenes), kept so a page's reload or a second
+ *  screen doesn't fetch them again; a list's small copies are the thumbnail cache's. */
 const KEPT_PICTURES = 6;
 const KEPT_PICTURE_BYTES = 24 * 1024 * 1024;
 const PAGE_CSP = [
@@ -137,6 +144,8 @@ const PAGE_CSP = [
   "form-action 'none'",
   "frame-ancestors 'none'",
 ].join("; ");
+/** The small copies a list asks for, by the thumbnail cache's tiers (lib/artSrc asks). */
+const isTier = (size: string | null): size is ArtTier => size === "thumb" || size === "card";
 /** A picture is only ever a picture: opened as a page, an SVG's script can't run. */
 const PICTURE_CSP = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 const TYPES: Record<string, string> = {
@@ -483,7 +492,7 @@ export class DisplayServer {
       if (path === "/api/track") return await this.track(res, url);
       if (path === "/api/analysis") return this.storedAnalysis(res, url);
       const art = /^\/art\/([0-9a-f]{24})$/.exec(path);
-      if (art) return await this.picture(res, art[1]);
+      if (art) return await this.picture(res, art[1], url.searchParams.get("size"));
       if (path.startsWith("/assets/"))
         return this.file(res, path.slice(1), {
           "cache-control": "public, max-age=31536000, immutable",
@@ -682,9 +691,14 @@ export class DisplayServer {
     this.json(res, this.trackKeys.has(key) ? this.deps.analysis(key) : null);
   }
 
-  private async picture(res: ServerResponse, id: string): Promise<void> {
+  /** A picture by the id handed out: its small copy when a list asks for one, else as it is. */
+  private async picture(res: ServerResponse, id: string, size: string | null): Promise<void> {
     const url = this.artIds.get(id);
-    const got = url ? await this.pictureOf(id, url) : null;
+    const got = !url
+      ? null
+      : isTier(size)
+        ? await this.deps.thumb(url, size).catch(() => null)
+        : await this.pictureOf(id, url);
     if (!got) {
       this.base(res, 404);
       return void res.end();

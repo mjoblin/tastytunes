@@ -10,6 +10,7 @@ import {
   type DisplayVerb,
   type DisplayVerbArgs,
 } from "@shared/displayControl";
+import { isDeviceArt } from "@shared/artUrl";
 import type { DisplayStatus } from "@shared/ipc";
 import { playlistTotalSecs, type AppSettings } from "@shared/model";
 import { litPresetIds } from "@shared/litPresets";
@@ -18,6 +19,7 @@ import { commandForMedia, transportAbilities } from "@shared/transport";
 import { jsonFileStore } from "../data/jsonStore";
 import { getPlaylists } from "../data/playlists";
 import { artHostTrust, fetchPicture } from "../lookups/artFetch";
+import { artThumb } from "../lookups/artThumbs";
 import { fetchLyrics } from "../lookups/lyrics";
 import { audioAnalysisGet } from "../lookups/audioAnalysis";
 import { lookupMediaInfo } from "../media/mediaInfo";
@@ -353,6 +355,13 @@ export const displayServer = new DisplayServer({
       timeoutMs: 8_000,
       logged: false,
     }),
+  // a list's row or card: the window's own thumbnail cache, keyed as the window's queue rows key
+  // it (by the address), so a picture either drew is on disk for the other, and the streamer's
+  // own art server is asked one picture at a time
+  thumb: (url, tier) => {
+    const host = connectedHost();
+    return artThumb(url, tier, url, artHostTrust(host), isDeviceArt(url, host));
+  },
   // the window's own question, a show: a page never rebuilds an index
   trackInfo: (query) => lookupMediaInfo(connectedHost(), query, "show"),
   analysis: (key) => audioAnalysisGet(key),

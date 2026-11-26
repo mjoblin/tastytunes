@@ -51,7 +51,11 @@ afterEach(() => {
 });
 
 async function rig(
-  opts: { picture?: (url: string) => Promise<never>; token?: () => Promise<string> } = {},
+  opts: {
+    picture?: (url: string) => Promise<never>;
+    thumb?: (url: string) => Promise<never>;
+    token?: () => Promise<string>;
+  } = {},
 ) {
   const page = mkdtempSync(join(tmpdir(), "tt-display-"));
   writeFileSync(join(page, "display.html"), "<html>page</html>");
@@ -60,6 +64,7 @@ async function rig(
   writeFileSync(join(page, "apple-touch-icon.png"), "png");
   writeFileSync(join(tmpdir(), "outside.txt"), "outside");
   const fetched: string[] = [];
+  const thumbs: string[] = [];
   const asked: string[] = [];
   const logged: string[] = [];
   const steered: Array<{
@@ -96,6 +101,12 @@ async function rig(
         return new Promise((r) =>
           setTimeout(() => r({ bytes: Buffer.from("img"), type: "image/jpeg" }), 20),
         );
+      }),
+    thumb:
+      opts.thumb ??
+      ((url, tier) => {
+        thumbs.push(`${tier} ${url}`);
+        return Promise.resolve({ bytes: Buffer.from(`small ${tier}`), type: "image/jpeg" });
       }),
     trackInfo: (q) =>
       Promise.resolve(
@@ -233,7 +244,7 @@ async function rig(
       req.on("error", (e) => (e.message === "socket hang up" ? undefined : reject(e)));
       req.end();
     });
-  return { get, live, steer, fetched, asked, logged, steered, control, server };
+  return { get, live, steer, fetched, thumbs, asked, logged, steered, control, server };
 }
 
 const cookie = `tt_display=${TOKEN}`;
@@ -673,6 +684,36 @@ describe("Display on other screens' server", () => {
     expect(String(a.headers["content-security-policy"])).toContain("sandbox");
     expect((await get(path, { cookie })).status).toBe(200);
     expect(fetched).toEqual(["http://192.168.1.5/a.jpg"]);
+  });
+
+  it("answers a list's row and card with a small copy, the cover and the scenes with the picture", async () => {
+    const { get, fetched, thumbs } = await rig();
+    const snap = JSON.parse((await get("/api/snapshot", { cookie })).body) as Snapshot;
+    const path = snap.playState!.metadata!.art_url!;
+    const row = await get(`${path}?size=thumb`, { cookie });
+    expect(row.status).toBe(200);
+    expect(row.body).toBe("small thumb");
+    expect(row.headers["content-type"]).toBe("image/jpeg");
+    expect(String(row.headers["content-security-policy"])).toContain("sandbox");
+    expect((await get(`${path}?size=card`, { cookie })).body).toBe("small card");
+    expect(thumbs).toEqual(["thumb http://192.168.1.5/a.jpg", "card http://192.168.1.5/a.jpg"]);
+    expect(fetched).toEqual([]);
+    // no size, or one it doesn't make: the picture as it is
+    expect((await get(path, { cookie })).body).toBe("img");
+    expect((await get(`${path}?size=9999`, { cookie })).body).toBe("img");
+    expect(fetched).toEqual(["http://192.168.1.5/a.jpg"]);
+    expect(thumbs).toHaveLength(2);
+  });
+
+  it("makes a small copy only of a picture it handed out, and answers one it couldn't make as missing", async () => {
+    const { get, thumbs } = await rig();
+    expect((await get(`/art/${"0".repeat(24)}?size=thumb`, { cookie })).status).toBe(404);
+    expect((await get(`/art/${"0".repeat(24)}?size=thumb`)).status).toBe(401);
+    expect(thumbs).toEqual([]);
+    const failing = await rig({ thumb: () => Promise.reject(new Error("timed out")) });
+    const snap = JSON.parse((await failing.get("/api/snapshot", { cookie })).body) as Snapshot;
+    const path = snap.playState!.metadata!.art_url!;
+    expect((await failing.get(`${path}?size=thumb`, { cookie })).status).toBe(404);
   });
 
   it("answers a picture it couldn't fetch as missing, never a hung request", async () => {
