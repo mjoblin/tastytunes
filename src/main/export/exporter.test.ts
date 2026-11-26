@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -548,6 +548,39 @@ describe("a track's export, when things go wrong", () => {
     if (r.kind !== "exported") throw new Error(r.kind);
     expect(r.files.some((f) => f.path.startsWith("audio."))).toBe(false);
     expect(r.left_out.join(" ")).toMatch(/not audio/);
+  });
+
+  it("says a copy the media server gave no address for in left_out, a link only in its note", async () => {
+    const { env } = fakeEnv({ audioUrl: () => Promise.resolve(null) });
+    const copied = await exportTrack(env, root(), target(t1), opts({ audio: "copy" }));
+    const linked = await exportTrack(env, root(), target(t1), opts({ audio: "link" }));
+    if (copied.kind !== "exported" || linked.kind !== "exported") throw new Error("not exported");
+    const line = "audio.flac: The media server didn't give the track's address.";
+    expect(copied.left_out).toEqual([line]);
+    expect(readJson(copied.folder, "track.json")["left_out"]).toEqual([line]);
+    expect(linked.left_out).toEqual([]);
+    expect(readJson(linked.folder, "track.json")["audio"]).toEqual({
+      mode: "link",
+      note: "The media server didn't give the track's address.",
+    });
+  });
+
+  it("says why a file couldn't be written without naming where the export is", async () => {
+    const dir = root();
+    const { env } = fakeEnv({
+      plays: () => {
+        // a folder where the sleeve goes, so its write fails as a disk's would
+        const [made] = readdirSync(dir);
+        mkdirSync(join(dir, made, "pictures", "sleeve.jpg", "taken"), { recursive: true });
+        return Promise.resolve([]);
+      },
+    });
+    const r = await exportTrack(env, dir, target(t1), opts({ redact: true }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    expect(r.left_out).toHaveLength(1);
+    expect(r.left_out[0]).toMatch(/^pictures\/sleeve\.jpg: E[A-Z]+: /);
+    expect(r.left_out[0]).not.toContain(dir);
+    expect(readJson(r.folder, "track.json")["left_out"]).toEqual(r.left_out);
   });
 
   it("refuses a second export, naming the folder the first is writing", async () => {

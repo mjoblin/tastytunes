@@ -1,4 +1,5 @@
 import { createWriteStream, mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { join, normalize, sep } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -61,6 +62,26 @@ export class ExportCapReached extends Error {}
 /** What a file is to the cap: a picture or an audio copy ("media"), a record such as
  *  analysis.json ("record"), or the README and the record written last ("final"). */
 export type WriteKind = "media" | "record" | "final";
+
+/** A path as an error message quotes it (an absolute one), with a rename's arrow before it. */
+const QUOTED_PATH = /(\s*->\s*|\s)?'((?:[A-Za-z]:)?[\\/][^']*)'/g;
+
+/**
+ * A failure as left_out says it: the error's code and its plain reason, a path inside the export
+ * by its place there and any other left out, so no record names a folder on the owner's computer
+ * (a home folder is named for its account), redacted or not.
+ */
+export function reasonOf(e: unknown, dir: string, home: string = homedir()): string {
+  const err = e instanceof Error ? (e as NodeJS.ErrnoException) : null;
+  let said = (err ? err.message : String(e))
+    .split(dir + sep)
+    .join("")
+    .replace(QUOTED_PATH, "");
+  if (home.length > 1) said = said.split(home).join("~");
+  said = said.trim();
+  const code = err?.code;
+  return code && !said.startsWith(code) ? `${code}: ${said}` : said;
+}
 
 /** The name a file is written under until it is whole. */
 const partName = (full: string): string => `${full}.part`;

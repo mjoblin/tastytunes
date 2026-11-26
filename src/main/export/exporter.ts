@@ -20,10 +20,10 @@ import {
 } from "@shared/model";
 import { nameKey } from "@shared/keys";
 import {
-  CopyFailed,
   ExportCapReached,
   ExportWriter,
   exportDirName,
+  reasonOf,
   safeName,
   type WriteKind,
 } from "./exportFolder";
@@ -428,7 +428,7 @@ function putter(w: ExportWriter): Put {
       leftOut.push(
         e instanceof ExportCapReached
           ? `${rel}: the export reached its size cap`
-          : `${rel}: ${(e as Error).message}`,
+          : `${rel}: ${reasonOf(e, w.dir)}`,
       );
       return false;
     }
@@ -674,8 +674,14 @@ async function writeAudio(
   opts: ExportOptions,
 ): Promise<Record<string, unknown>> {
   if (opts.audio === "none") return { mode: "none" };
+  const named = AUDIO_EXT[t.node.format?.codec ?? ""];
   const at = await env.audioUrl(t.serverUdn, t.node.id).catch(() => null);
-  if (!at) return { mode: opts.audio, note: "The media server didn't give the track's address." };
+  if (!at) {
+    const why = "The media server didn't give the track's address.";
+    // a copy asked for and never started is said in left_out, as a failed one is
+    if (opts.audio === "copy") put.leftOut.push(`${dir}audio${named ? `.${named}` : ""}: ${why}`);
+    return { mode: opts.audio, note: why };
+  }
   const url = at.url;
   if (opts.audio === "link")
     return opts.redact
@@ -688,8 +694,7 @@ async function writeAudio(
           local_address: url,
           note: "Plays while the media server is up, from the owner's network.",
         };
-  const ext =
-    AUDIO_EXT[t.node.format?.codec ?? ""] ?? /\.(\w{2,4})(?:\?|$)/.exec(url)?.[1] ?? "audio";
+  const ext = named ?? /\.(\w{2,4})(?:\?|$)/.exec(url)?.[1] ?? "audio";
   const rel = `${dir}audio.${ext}`;
   const got = await env.audioBody(url, at.serverHost).catch(() => ({
     why: "The media server didn't hand over the file.",
@@ -713,9 +718,7 @@ async function writeAudio(
     const why =
       e instanceof ExportCapReached
         ? "Left out: the export reached its size cap."
-        : e instanceof CopyFailed
-          ? `Left out: ${e.message}.`
-          : `Left out: ${(e as Error).message}.`;
+        : `Left out: ${reasonOf(e, w.dir)}.`;
     put.leftOut.push(`${rel}: ${why.replace(/^Left out: /, "")}`);
     return { mode: "copy", note: why };
   }
@@ -759,7 +762,7 @@ async function writeTrackFiles(
       );
     audio = await writeAudio(env, w, put, dir, t, opts);
   } catch (e) {
-    put.leftOut.push(`${dir || "the track"}: stopped early, ${(e as Error).message}`);
+    put.leftOut.push(`${dir || "the track"}: stopped early, ${reasonOf(e, w.dir)}`);
   }
   const leftOut = put.leftOut.filter((l) => l.startsWith(dir));
   const track = { ...rec.track, ...extra, audio, missing: rec.missing, left_out: leftOut };
@@ -956,7 +959,7 @@ export function exportTrack(
         pictures: "pictures/pictures.json",
       });
     } catch (e) {
-      put.leftOut.push(`the export stopped early: ${(e as Error).message}`);
+      put.leftOut.push(`the export stopped early: ${reasonOf(e, w.dir)}`);
     }
     if (rec) await writeTrackFiles(env, w, put, "", t, opts, { ...rec, missing }, extra, "final");
     else {
@@ -1040,7 +1043,7 @@ export function exportAlbum(
         } catch (e) {
           // not in album.json's tracks, so said here
           put.leftOut.push(
-            `${folder.slice(0, -1)}: not exported, its record couldn't be made (${(e as Error).message})`,
+            `${folder.slice(0, -1)}: not exported, its record couldn't be made (${reasonOf(e, w.dir)})`,
           );
         }
       }
@@ -1061,7 +1064,7 @@ export function exportAlbum(
         )),
       );
     } catch (e) {
-      put.leftOut.push(`the export stopped early: ${(e as Error).message}`);
+      put.leftOut.push(`the export stopped early: ${reasonOf(e, w.dir)}`);
     }
     const albumRec = buildAlbumRecord({
       album: a.node,

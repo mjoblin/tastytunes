@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { describe, expect, it } from "vitest";
-import { ExportCapReached, ExportWriter, exportDirName, safeName } from "./exportFolder";
+import { ExportCapReached, ExportWriter, exportDirName, reasonOf, safeName } from "./exportFolder";
 
 describe("names from tags", () => {
   it("can't leave the folder, hide, or be empty", () => {
@@ -88,5 +88,53 @@ describe("an export's folder", () => {
     expect(() => w.write("album.json", "{}", "final")).toThrow();
     expect(readdirSync(w.dir).sort()).toEqual(["album.json", "audio.flac", "track.json"]);
     expect(readdirSync(join(w.dir, "album.json"))).toEqual(["inside"]);
+  });
+});
+
+describe("a failure's reason", () => {
+  const home = join(sep, "home", "ann");
+  const dir = join(home, "Exports", "Dusk Parade - Harbour Lights (2026-11-22 2140)");
+  const errno = (code: string, message: string): NodeJS.ErrnoException =>
+    Object.assign(new Error(message), { code });
+
+  it("names a file inside the export by its place there", () => {
+    const part = join(dir, "pictures", "sleeve.jpg.part");
+    const full = join(dir, "pictures", "sleeve.jpg");
+    const message = `EPERM: operation not permitted, rename '${part}' -> '${full}'`;
+    expect(reasonOf(errno("EPERM", message), dir, home)).toBe(
+      `EPERM: operation not permitted, rename '${join("pictures", "sleeve.jpg.part")}' -> '${join("pictures", "sleeve.jpg")}'`,
+    );
+  });
+
+  it("leaves out any other path, and the home folder wherever it is", () => {
+    const cache = join(home, "Library", "Caches", "x.json");
+    expect(
+      reasonOf(errno("ENOENT", `ENOENT: no such file or directory, open '${cache}'`), dir, home),
+    ).toBe("ENOENT: no such file or directory, open");
+    expect(reasonOf(new Error(`couldn't read ${cache}`), dir, home)).toBe(
+      `couldn't read ${join("~", "Library", "Caches", "x.json")}`,
+    );
+  });
+
+  it("gives the error's code with its reason, and a plain one as it is", () => {
+    expect(reasonOf(errno("ERR_STREAM_PREMATURE_CLOSE", "Premature close"), dir, home)).toBe(
+      "ERR_STREAM_PREMATURE_CLOSE: Premature close",
+    );
+    expect(reasonOf(new Error("connection reset"), dir, home)).toBe("connection reset");
+    expect(reasonOf("stopped", dir, home)).toBe("stopped");
+  });
+
+  it("never names the folder of a write that really failed", () => {
+    const root = mkdtempSync(join(tmpdir(), "tt-exp-"));
+    const w = new ExportWriter(root, "Failing");
+    mkdirSync(join(w.dir, "album.json", "inside"), { recursive: true });
+    let reason = "";
+    try {
+      w.write("album.json", "{}", "final");
+    } catch (e) {
+      reason = reasonOf(e, w.dir);
+    }
+    expect(reason).toMatch(/^E[A-Z]+: /);
+    expect(reason).not.toContain(root);
   });
 });
