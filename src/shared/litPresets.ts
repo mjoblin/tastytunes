@@ -25,6 +25,16 @@ function urlsMatch(a: string, b: string): boolean {
   }
 }
 
+/** A radio preset, by its class or its type (one saved from the Radio screen has no airable id). */
+function isRadioPreset(p: PresetItem): boolean {
+  return /radio/i.test(p.class ?? "") || p.type === "Radio";
+}
+
+/** A station's preset: its play is radio (main/app/nowPlayingRules). */
+export function isStationPreset(p: PresetItem): boolean {
+  return p.airable_radio_id != null || isRadioPreset(p);
+}
+
 /** What the rule reads: the streamer's state as the window's store or main's cache holds it. */
 export interface LitInput {
   zoneState: ZoneState | null;
@@ -144,8 +154,6 @@ function derive(items: readonly PresetItem[], s: LitInput): Set<number> {
   };
   // Raw-URL radio presets (saved from the Radio screen) carry no airable id
   // — the station NAME is their identity.
-  const isRadioPreset = (p: PresetItem): boolean =>
-    /radio/i.test(p.class ?? "") || p.type === "Radio";
   const stationMatch = (p: PresetItem): boolean => {
     const station = md?.station != null ? nameKey(md.station) : null;
     return station != null && p.name != null && nameKey(p.name) === station;

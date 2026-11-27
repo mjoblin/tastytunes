@@ -264,6 +264,16 @@ describe("a play started here", () => {
     expect(unlit.observe(tidal(), true, 50)).toBe(false);
   });
 
+  it("is the preset's own play when it comes after a lit recall, though the lamp lit another's", () => {
+    // a service preset's lamp is the firmware's flag, which may stay on under a phone's AirPlay
+    const s = new StartedHere();
+    s.recalled(airplay(), 0, true);
+    expect(s.observe(airplay(), true, 100)).toBe(true);
+    expect(s.observe(tidal(), true, 2_000)).toBe(true);
+    expect(s.observe(tidal("Next Track"), true, 60_000)).toBe(true);
+    expect(s.observe(airplay(), true, 61_000)).toBe(false);
+  });
+
   it("is never a phone's AirPlay playing as a recall went whose preset wasn't lit", () => {
     const s = new StartedHere();
     s.recalled(airplay(), 0, false);
@@ -306,6 +316,23 @@ describe("a play started here", () => {
     t.recalled(asleep, 0);
     expect(t.observe(track("TIDAL", null, "connecting"), true, 100)).toBe(false);
     expect(t.observe(station("connecting"), true, 200)).toBe(false);
+    expect(t.observe(tidal(), true, 3_000)).toBe(true);
+  });
+
+  it("ends at the station's play for a station's preset recalled from standby, never another app's after it", () => {
+    for (const before of [asleep, waking]) {
+      const s = new StartedHere();
+      s.recalled(before, 0, false, true);
+      expect(s.observe(waking, true, 50)).toBe(false);
+      expect(s.observe(station("connecting"), true, 110)).toBe(false);
+      expect(s.observe(station("play"), true, 1_600)).toBe(false);
+      // a phone's AirPlay inside the recall's 20 s is another app's, not the recall's
+      expect(s.observe(airplay(), true, 5_000)).toBe(false);
+    }
+    // another preset so recalled still waits past the station for its own play
+    const t = new StartedHere();
+    t.recalled(asleep, 0, false, false);
+    expect(t.observe(station("play"), true, 1_600)).toBe(false);
     expect(t.observe(tidal(), true, 3_000)).toBe(true);
   });
 

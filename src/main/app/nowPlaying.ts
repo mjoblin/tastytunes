@@ -152,9 +152,10 @@ export function nowPlayingPush(msg: PushMessage): void {
 
 /** A preset recall went out from the app (DeviceManager.onRecallSent: every one, the same preset
  *  again included, where the recalledPreset push says only when the last recall changes): the
- *  play it starts is TastyTunes' own, and the play already there when the preset was lit. */
-export function nowPlayingRecalled(lit: boolean): void {
-  bridge?.recalled(lit);
+ *  play it starts is TastyTunes' own, and the play already there when the preset was lit;
+ *  `station` when the preset is a station's. */
+export function nowPlayingRecalled(lit: boolean, station: boolean): void {
+  bridge?.recalled(lit, station);
 }
 
 /** A setting that changes what is claimed (mediaKeysExternal) takes effect at once. */

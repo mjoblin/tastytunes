@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { litPresetIds, type LitInput } from "./litPresets";
+import { isStationPreset, litPresetIds, type LitInput } from "./litPresets";
 import type { PresetItem, ZonePlayState } from "./smoip";
 
 const radio = (id: number, rid: number): PresetItem =>
@@ -72,5 +72,16 @@ describe("which presets are playing (one rule, the window's and another screen's
         base({ metadata: { radio_id: 100 } as never }, { lastRecalledPresetId: 4 }),
       ),
     ]).toEqual([4]);
+  });
+});
+
+describe("a station's preset", () => {
+  it("is one with an airable id, or saved from the Radio screen, never an album's", () => {
+    expect(isStationPreset(radio(1, 100))).toBe(true);
+    const byUrl = { ...radio(2, 0), airable_radio_id: null, type: "Radio", class: null };
+    expect(isStationPreset(byUrl as PresetItem)).toBe(true);
+    expect(isStationPreset(album(3, "Amber Nights", "http://nas/a.jpg"))).toBe(false);
+    const tidal = { ...album(4, "Mix", "x"), type: "TIDAL", class: "stream.service.tidal" };
+    expect(isStationPreset(tidal as PresetItem)).toBe(false);
   });
 });
