@@ -272,7 +272,8 @@ tt.onPush((msg) => {
     .applyPush(msg.kind === "settings" ? { ...msg, settings: forThisPage(msg.settings) } : msg);
 });
 /** The page's last resort: a render error leaves the screen black for a few seconds and reloads it
- *  (display/reload), where the window's surfaces each say so with Try again and Reload. */
+ *  once the app answers, saying it can't reach the app while it doesn't (display/reload), where
+ *  the window's surfaces each say so with Try again and Reload. */
 class ReloadBoundary extends Component<{ children: React.ReactNode }, { failed: boolean }> {
   state = { failed: false };
 

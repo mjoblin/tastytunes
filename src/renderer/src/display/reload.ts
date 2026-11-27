@@ -4,7 +4,10 @@
  * boundary) or a part of the page that didn't arrive (display/entry) reloads it after a wait, longer
  * each time it keeps failing (RELOAD_AFTER_MS), the count kept for this tab and let go once the page
  * has run cleanly for CLEAN_RUN_MS, so a page that fails now and then waits the shortest.
+ * A failed page draws nothing, so once the app hasn't answered, the screen says it can't reach it
+ * (sayWaiting), rather than stay black with no word.
  */
+import { APP_UNREACHABLE } from "./dark";
 
 export const RELOAD_AFTER_MS = [3_000, 10_000, 30_000, 60_000] as const;
 export const CLEAN_RUN_MS = 60_000;
@@ -54,18 +57,40 @@ export function runningCleanly(): void {
  * After each wait, ask the app first and reload only once it answers (any answer, a refused one
  * included: the page's own server is up): a reload while the app is still down (it restarted
  * between the page's files) lands on the browser's own error page, with no script left to try
- * again. Not up: the next, longer wait, counted as a reload.
+ * again. Not up: the next, longer wait, counted as a reload; from the first, the page is waiting
+ * for the app (`waiting`), which it says.
  */
 export async function reloadWhenUp(deps: {
   store: Store | null;
   sleep: (ms: number) => Promise<void>;
   answers: () => Promise<boolean>;
   reload: () => void;
+  waiting: () => void;
 }): Promise<void> {
-  for (;;) {
+  for (let asked = 0; ; asked++) {
     await deps.sleep(reloadWait(deps.store));
     if (await deps.answers()) return deps.reload();
+    if (asked === 0) deps.waiting();
   }
+}
+
+/** The waiting line's element. */
+const WAITING_ID = "display-waiting";
+
+/** The dark page's line for the app out of reach (display/dark), drawn once and plainly where the
+ *  dark page draws it, low and centered: the page that failed draws nothing (its boundary draws
+ *  nothing, or the page never loaded), and its styles may not have arrived, so the color is the
+ *  dark theme's dim (styles.css --color-dim), the page being black whatever its theme. */
+function sayWaiting(): void {
+  if (document.getElementById(WAITING_ID)) return;
+  const line = document.createElement("p");
+  line.id = WAITING_ID;
+  line.textContent = APP_UNREACHABLE;
+  line.setAttribute(
+    "style",
+    "position:fixed;left:0;right:0;bottom:calc(env(safe-area-inset-bottom, 0px) + 0.75rem);margin:0 auto;max-width:min(36rem,90vw);padding:0 1rem;text-align:center;font:15px/1.375 var(--font-sans, system-ui, sans-serif);color:#a69e90",
+  );
+  document.body.append(line);
 }
 
 /** Reload the page once the app answers, after its wait (once, however many failures led here). */
@@ -83,5 +108,6 @@ export function reloadSoon(why: unknown): void {
         () => false,
       ),
     reload: () => location.reload(),
+    waiting: sayWaiting,
   });
 }
