@@ -28,6 +28,9 @@ export interface McpStatus {
   /** Reachable endpoint while running, e.g. http://192.168.1.20:8555/mcp. */
   url: string | null;
   error: string | null;
+  /** The token couldn't be made as the server started (its save failed): Settings says so beside
+   *  New token, which tries again. */
+  tokenFailed?: boolean;
 }
 
 // The CATALOG — MCP_CLUSTERS, McpClusterInfo, McpToolInfo, mcpClusterEnabled —
