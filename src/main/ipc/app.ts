@@ -30,7 +30,12 @@ export function registerAppIpc(): void {
   handle(IPC.openAccessibilitySettings, () => openAccessibilitySettings());
   // Display on other screens: its status and a new address (app/display)
   handle(IPC.getDisplayStatus, () => displayStatus());
-  handle(IPC.displayNewAddress, () => newDisplayAddress());
+  handle(IPC.displayNewAddress, async () => {
+    const made = await newDisplayAddress();
+    // the agents' token was in the same unreadable file: a running agents' server makes its own now
+    if (made.keysSetAside) mcpBridge.keysSetAside();
+    return made;
+  });
   // the screens that may control playback (app/display's screenBook)
   handle(IPC.getDisplayScreens, () => Promise.resolve(screenBook.list()));
   handle(IPC.displayScreenAllow, (_e, id: unknown, allowed: unknown) => {
