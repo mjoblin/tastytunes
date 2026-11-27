@@ -82,3 +82,11 @@ export function PageTabs<T extends string>({
     </div>
   );
 }
+
+/** A page panel's scrolling body, under its tabs (the lists' and the scene panel's alike): 8px at
+ *  the sides, and at each end its edge's ramp (styles.css fade-edges, the app's pages' own), so a
+ *  row passing under the tabs or the panel's foot dissolves rather than being cut through its
+ *  words; at rest the first row and, at full scroll, the last sit clear of it. */
+export const PANEL_EDGE_PX = 12;
+export const PANEL_BODY =
+  "fade-edges min-h-0 overflow-y-auto overscroll-contain px-2 py-3 [--fade-top-solid:12px] [--fade-bottom:12px]";
