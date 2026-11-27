@@ -49,6 +49,7 @@ import {
   catchUpOnResume,
   noteSuspend,
   pickCatchUp,
+  runMissedSchedule,
   startScheduler,
 } from "./scheduler";
 
@@ -101,6 +102,17 @@ describe("pickCatchUp", () => {
   it("does not catch up a miss from before the sleep", () => {
     expect(pickCatchUp([sched()], { now: at(7, 4), sleptAt: at(7, 2) })).toBeNull();
   });
+
+  it("never offers an earlier miss over a later one already acted on", () => {
+    const early = sched({ id: "early" });
+    const late = sched({ id: "late", time: "07:05" });
+    const ran = new Map([["late", `${new Date(at(7, 5)).toDateString()} 07:05`]]);
+    const opts = { now: at(7, 6), sleptAt: at(6, 55) };
+    expect(pickCatchUp([early, late], { ...opts, fired: ran })).toBeNull();
+    // the earlier one acted on leaves the later to offer
+    const before = new Map([["early", `${new Date(at(7, 0)).toDateString()} 07:00`]]);
+    expect(pickCatchUp([early, late], { ...opts, fired: before })?.schedule.id).toBe("late");
+  });
 });
 
 /** A moment on one fixed day, for the fake clock. */
@@ -111,7 +123,7 @@ function windowDm(phase: "connected" | "connecting") {
   return {
     connectionNow: { phase } as { phase: string },
     snapshot: () => ({ systemInfo: { udn: "window-udn" }, devices: [] }),
-    streamerNow: { playState: null, presets: null },
+    streamerNow: { playState: null as { state: string } | null, presets: null },
     discover: async () => {},
     log: vi.fn(),
     setMissedSchedule: vi.fn(),
@@ -172,7 +184,7 @@ describe("the offer after a wake", () => {
     vi.useRealTimers();
   });
 
-  it("is the only answer to another streamer's schedule, though the tick comes while it reaches it", async () => {
+  it("leaves a schedule woken inside its own minute to the tick, which runs it, never offered too", async () => {
     // woken at 07:00:05, inside the minute of a schedule for another streamer
     vi.setSystemTime(on(7, 0, 5));
     sys.settings.schedules = [
@@ -184,15 +196,89 @@ describe("the offer after a wake", () => {
     other.hold();
     startScheduler(dm as never);
     catchUpOnResume(dm as never);
-    // the offer picks the schedule at 07:00:07 and waits on Kitchen; the tick comes at 07:00:08
+    // the offer looks at 07:00:07 and leaves it; the tick comes at 07:00:08 and waits on Kitchen
+    await vi.advanceTimersByTimeAsync(3_000);
+    other.answer(true);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(other.remote.command).toHaveBeenCalledWith({ type: "power", power: "ON" });
+    // looked at again once the minute is out: run, so nothing is offered
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(dm.setMissedSchedule).not.toHaveBeenCalled();
+  });
+
+  it("runs a schedule woken inside its own minute while music plays, as any at its time", async () => {
+    // right after a wake, "playing" may be the state from before the sleep
+    vi.setSystemTime(on(7, 0, 5));
+    sys.settings.schedules = [sched({ id: "playing" })];
+    const dm = windowDm("connected");
+    dm.streamerNow.playState = { state: "play" };
+    noteSuspend(on(6, 55));
+    startScheduler(dm as never);
+    catchUpOnResume(dm as never);
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(dm.command).toHaveBeenCalledWith({ type: "power", power: "ON" });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(dm.setMissedSchedule).not.toHaveBeenCalled();
+    expect(dm.log).not.toHaveBeenCalled();
+  });
+
+  it("offers a schedule woken inside its minute once the minute is out, when no tick ran it", async () => {
+    vi.setSystemTime(on(7, 0, 30));
+    sys.settings.schedules = [sched({ id: "untaken" })];
+    const dm = windowDm("connected");
+    noteSuspend(on(6, 55));
+    catchUpOnResume(dm as never);
+    await vi.advanceTimersByTimeAsync(29_000);
+    expect(dm.setMissedSchedule).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(dm.setMissedSchedule).toHaveBeenCalledWith({ scheduleId: "untaken", dueAt: on(7, 0) });
+    expect(dm.command).not.toHaveBeenCalled();
+  });
+
+  it("offers a schedule for another streamer woken after its minute, the tick leaving it be", async () => {
+    vi.setSystemTime(on(7, 4));
+    sys.settings.schedules = [
+      sched({ id: "kitchen-late", streamer: { udn: "kitchen-udn", name: "Kitchen" } }),
+    ];
+    sys.settings.knownDevices = [{ udn: "kitchen-udn", host: "10.0.0.9" }];
+    const dm = windowDm("connected");
+    noteSuspend(on(6, 55));
+    other.hold();
+    startScheduler(dm as never);
+    catchUpOnResume(dm as never);
+    // the offer claims it at 07:04:02 and waits on Kitchen; the tick comes at 07:04:03
     await vi.advanceTimersByTimeAsync(3_000);
     other.answer(true);
     await vi.advanceTimersByTimeAsync(0);
     expect(dm.setMissedSchedule).toHaveBeenCalledWith({
-      scheduleId: "kitchen",
+      scheduleId: "kitchen-late",
       dueAt: on(7, 0),
     });
     expect(other.remote.command).not.toHaveBeenCalled();
+  });
+
+  it("runs the later of two schedules woken inside its minute, and offers the earlier miss not at all", async () => {
+    // wake schedules at 06:58 and 07:00, woken at 07:00:05: the tick first, or the offer's look
+    for (const tickFirst of [true, false]) {
+      vi.setSystemTime(on(7, 0, 5));
+      const early = sched({ id: `early-${tickFirst}`, time: "06:58", presetId: 2 });
+      const late = sched({ id: `late-${tickFirst}`, presetId: 3 });
+      sys.settings.schedules = [early, late];
+      const dm = windowDm("connected");
+      noteSuspend(on(6, 55));
+      startScheduler(dm as never);
+      if (tickFirst) await vi.advanceTimersByTimeAsync(3_000);
+      catchUpOnResume(dm as never);
+      await vi.advanceTimersByTimeAsync(70_000);
+      expect(dm.command).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "recallPreset", presetId: 3 }),
+      );
+      expect(dm.command).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "recallPreset", presetId: 2 }),
+      );
+      expect(dm.setMissedSchedule).not.toHaveBeenCalled();
+      vi.clearAllTimers();
+    }
   });
 
   it("says in the log when the window's streamer doesn't reconnect in time to offer", async () => {
@@ -208,5 +294,25 @@ describe("the offer after a wake", () => {
       "the streamer didn't reconnect after the wake: the missed schedule at 07:00 wasn't offered",
     );
     expect(dm.setMissedSchedule).not.toHaveBeenCalled();
+  });
+
+  it("says in the log when Start now finds the window's streamer gone", async () => {
+    vi.setSystemTime(on(7, 4));
+    sys.settings.schedules = [sched({ id: "gone" })];
+    const dm = windowDm("connected");
+    noteSuspend(on(6, 55));
+    catchUpOnResume(dm as never);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(dm.setMissedSchedule).toHaveBeenCalledWith({ scheduleId: "gone", dueAt: on(7, 0) });
+    dm.connectionNow = { phase: "connecting" };
+    runMissedSchedule(dm as never);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(dm.setMissedSchedule).toHaveBeenLastCalledWith(null);
+    expect(dm.log).toHaveBeenCalledWith(
+      "warn",
+      "schedule",
+      "the streamer isn't connected: the schedule at 07:00 didn't run",
+    );
+    expect(dm.command).not.toHaveBeenCalled();
   });
 });

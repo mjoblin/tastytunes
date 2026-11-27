@@ -22,7 +22,8 @@
 //   · OFFER, DON'T FIRE — and only ONE. Music appearing unbidden on wake is
 //     startling even at four minutes late, so the miss raises a notification
 //     and the user decides. Exactly one offer per sleep: the latest missed
-//     schedule, never a queue of them.
+//     schedule, never a queue of them, and none when the latest wasn't missed
+//     (woken inside its minute, the tick runs it on time).
 import { Notification } from "electron";
 import { errorMessage } from "@shared/guards";
 import type { Schedule } from "@shared/model";
@@ -96,7 +97,10 @@ interface ScheduleTarget {
 async function targetOf(dm: DeviceManager, s: Schedule): Promise<ScheduleTarget | null> {
   const name = s.streamer?.name ?? "the streamer";
   if (isWindows(dm, s)) {
-    if (dm.connectionNow.phase !== "connected") return null;
+    if (dm.connectionNow.phase !== "connected") {
+      dm.log("warn", "schedule", `${name} isn't connected: the schedule at ${s.time} didn't run`);
+      return null;
+    }
     return {
       fireable: dm,
       playing: () => dm.streamerNow.playState?.state === "play",
@@ -201,7 +205,10 @@ export interface CatchUpPick {
  *
  * Returns the LATEST eligible miss or null. Latest rather than all: two
  * schedules minutes apart would otherwise recall one preset and then the other
- * seconds later, and the newer instruction is the one the user meant.
+ * seconds later, and the newer instruction is the one the user meant. So the
+ * latest counts though it was acted on: one the tick ran after the wake (still
+ * inside its minute) or one already offered leaves nothing to offer, never the
+ * earlier miss in its place.
  */
 export function pickCatchUp(
   schedules: readonly Schedule[],
@@ -210,6 +217,8 @@ export function pickCatchUp(
   const { now, sleptAt: slept, fired } = opts;
   if (slept == null) return null;
   let best: CatchUpPick | null = null;
+  /** When the latest instance already acted on was due. */
+  let actedOn = -Infinity;
   for (const s of schedules) {
     if (!s.enabled || s.action !== "on" || s.days.length === 0) continue;
     const [hh, mm] = s.time.split(":").map(Number);
@@ -228,11 +237,14 @@ export function pickCatchUp(
       // cause (the app was quit, the streamer was offline) and its own fix.
       if (dueAt <= slept) continue;
       const instance = instanceKey(d, s.time);
-      if (fired?.get(s.id) === instance) continue;
+      if (fired?.get(s.id) === instance) {
+        actedOn = Math.max(actedOn, dueAt);
+        continue;
+      }
       if (!best || dueAt > best.dueAt) best = { schedule: s, dueAt, instance };
     }
   }
-  return best;
+  return best && best.dueAt > actedOn ? best : null;
 }
 
 /** Record the moment the machine went to sleep (powerMonitor 'suspend'). */
@@ -254,12 +266,18 @@ export function catchUpOnResume(dm: DeviceManager): void {
 
   let waited = 0;
   const attempt = async (): Promise<void> => {
-    const pick = pickCatchUp(getSettings().schedules, {
-      now: Date.now(),
-      sleptAt: slept,
-      fired: lastFired,
-    });
+    const now = Date.now();
+    const pick = pickCatchUp(getSettings().schedules, { now, sleptAt: slept, fired: lastFired });
     if (!pick) return;
+    // Woken inside the schedule's own minute, it isn't missed: the tick runs it on time, as at
+    // any minute (music playing or not), and nothing here claims it. Looked at again once the
+    // minute is out: run by then, it leaves nothing to offer; not run (the tick came after the
+    // minute, or the streamer wasn't back in it), it is a miss like any other.
+    const minuteOut = pick.dueAt + 60_000;
+    if (now < minuteOut) {
+      setTimeout(() => void attempt(), minuteOut - now);
+      return;
+    }
     // the window's streamer waits for the window's reconnect; another is reached on its own
     if (isWindows(dm, pick.schedule) && dm.connectionNow.phase !== "connected") {
       waited += RECONNECT_POLL_MS;
@@ -277,8 +295,8 @@ export function catchUpOnResume(dm: DeviceManager): void {
     // Claim the instance even though we only OFFER: the Map means "don't act
     // on this firing again", and a second resume must not re-ask. Claimed
     // before the streamer is reached, as the tick claims before it fires:
-    // reaching another streamer takes seconds, and a tick in that gap fired
-    // the schedule and the offer still asked for it.
+    // reaching another streamer takes seconds, and a look still waiting from
+    // an earlier wake must find it taken in that gap.
     lastFired.set(pick.schedule.id, pick.instance);
     // the checks and the offer read the streamer the schedule names (0.16.0: they read the
     // window's, so a schedule for another room was offered by the window's state and preset)
