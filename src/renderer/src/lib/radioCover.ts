@@ -17,8 +17,12 @@ import type { NowPlayingMeta } from "@/lib/format";
  * NO LOGO FOR A MOMENT: the last song's cover stays while the next one's is asked (at most
  * HOLD_MS), and through a gap in the station's text (a frame without the song, at most GAP_MS), so
  * a song change goes cover to cover; the logo shows on a miss, between songs that stay unnamed,
- * on a station's first song until its cover comes, and at once for another station (another logo).
- * A song's answer is kept by its artist and title, so a song asked once shows its cover at once.
+ * and at once for another station (another logo). With no cover to hold (a fresh start, another
+ * station) the surface shows no picture while the first answer comes (at most FIRST_MS, `waiting`)
+ * rather than the logo for a moment. A song's answer is kept by its artist and title, so a song
+ * asked once shows its cover at once; a song with none is asked again (RETRY_MS, TRIES), since a
+ * failed ask (MusicBrainz busy, the archive slow) answers none too, and main keeps the songs that
+ * truly have none, so asking those again costs nothing.
  *
  * ONE HOME: each big surface passes what its best-art rule chose (lib/bestArt) through
  * useRadioCover, so the radio's step sits on top of that rule rather than inside it.
@@ -28,7 +32,12 @@ import type { NowPlayingMeta } from "@/lib/format";
 export const HOLD_MS = 6_000;
 /** How long the last cover is kept while the station names no song. */
 export const GAP_MS = 3_000;
-/** How long a song with no cover is taken at its word: a miss may have been a failed ask. */
+/** How long a surface with no cover to hold shows no picture while the first answer comes. */
+export const FIRST_MS = 2_500;
+/** A song with no cover is asked again after this long, at most TRIES times in all while it plays. */
+export const RETRY_MS = 20_000;
+export const TRIES = 3;
+/** How long a song with no cover is taken at its word, past its tries: it may play again later. */
 const MISS_MS = 5 * 60_000;
 
 /** The song a station announces, as artist and song; null off the radio, or when its title
@@ -42,22 +51,27 @@ export function radioSongOf(
 }
 
 /**
- * STATIONS THAT SEND THEIR OWN SONG PICTURES keep them: a station whose picture changed when its
- * song did sends a picture per song, so its pictures stand and nothing is asked for it again this
- * session. Kept apart from the hook so it can be tested.
+ * STATIONS THAT SEND THEIR OWN SONG PICTURES keep them: a station that has shown three different
+ * pictures across its songs sends a picture per song, so its pictures stand and nothing is asked
+ * for it again this session. Three, so its logo and one stray picture (a first frame, an ad's)
+ * never turn its covers off. Kept apart from the hook so it can be tested.
  */
 export function stationArtMemory(): {
   note(station: string, song: string, art: string | null): boolean;
   sends(station: string): boolean;
 } {
   const own = new Set<string>();
-  const last = new Map<string, { song: string; art: string | null }>();
+  const last = new Map<string, string>();
+  const seen = new Map<string, Set<string>>();
   return {
-    /** Notes the station's picture for its song; whether the station sends its own pictures. */
+    /** Notes the station's picture for a song; whether the station sends its own pictures. */
     note(station, song, art) {
-      const prev = last.get(station);
-      if (prev && prev.song !== song && prev.art && art && prev.art !== art) own.add(station);
-      last.set(station, { song, art });
+      if (last.get(station) === song) return own.has(station);
+      last.set(station, song);
+      const pictures = seen.get(station) ?? new Set<string>();
+      if (art) pictures.add(art);
+      seen.set(station, pictures);
+      if (pictures.size >= 3) own.add(station);
       return own.has(station);
     },
     /** Whether the station is known to send its own pictures. */
@@ -67,8 +81,9 @@ export function stationArtMemory(): {
 
 const memory = stationArtMemory();
 
-/** Each song's answer, by artist and title: its cover, or null for none (taken for MISS_MS). */
-const answers = new Lru<string, { url: string | null; at: number }>(60);
+/** Each song's answer, by artist and title: its cover, or null for none (asked again up to TRIES
+ *  times, then taken for MISS_MS), with the asks it took. */
+const answers = new Lru<string, { url: string | null; at: number; tries: number }>(60);
 const asking = new Map<string, Promise<void>>();
 const listeners = new Set<() => void>();
 
@@ -79,13 +94,19 @@ function answerOf(key: string): string | null | undefined {
   return a.url;
 }
 
+/** The asks a song's answer has taken (none yet, or past MISS_MS: none). */
+const triesOf = (key: string): number =>
+  answerOf(key) === undefined ? 0 : (answers.peek(key)?.tries ?? 0);
+
 function ask(key: string, artist: string, song: string): void {
-  if (asking.has(key) || answerOf(key) !== undefined) return;
+  const answer = answerOf(key);
+  if (asking.has(key) || answer || (answer === null && triesOf(key) >= TRIES)) return;
+  const tries = triesOf(key) + 1;
   const p = tt
     .radioCover(artist, song)
     .catch(() => null)
     .then((url) => {
-      answers.set(key, { url, at: Date.now() });
+      answers.set(key, { url, at: Date.now(), tries });
       asking.delete(key);
       for (const heard of listeners) heard();
     });
@@ -93,7 +114,9 @@ function ask(key: string, artist: string, song: string): void {
 }
 
 /** The picture a big surface shows: the song's cover while a station plays a song that has one,
- *  else `art` as its best-art rule chose it. `meta` null asks nothing (a wash with nothing up). */
+ *  else `art` as its best-art rule chose it, and none while there is no cover to hold and the
+ *  song's first answer is coming (FIRST_MS: an empty place, never the station's logo for a
+ *  moment). `meta` null asks nothing (a wash with nothing up). */
 export function useRadioCover(meta: NowPlayingMeta | null, art: string | null): string | null {
   const wanted = useStore((s) => s.settings.radioCovers && s.settings.albumArtLookup);
   const [, heard] = useState(0);
@@ -109,6 +132,7 @@ export function useRadioCover(meta: NowPlayingMeta | null, art: string | null): 
   const logo = radio ? (meta?.artUrl ?? null) : null;
   const key = song ? `${song.artist}␟${song.song}` : null;
   const answer = key ? answerOf(key) : undefined;
+  const tries = key ? triesOf(key) : 0;
   const own = station != null && memory.sends(station);
 
   const lookUp = useEffectEvent(() => {
@@ -117,6 +141,15 @@ export function useRadioCover(meta: NowPlayingMeta | null, art: string | null): 
     else ask(key, song.artist, song.song);
   });
   useEffect(() => lookUp(), [key]);
+  // a song with no cover asked again: a failed ask answers none too
+  const askAgain = useEffectEvent(() => {
+    if (key && song) ask(key, song.artist, song.song);
+  });
+  useEffect(() => {
+    if (answer !== null || !key || tries >= TRIES) return;
+    const t = setTimeout(askAgain, RETRY_MS);
+    return () => clearTimeout(t);
+  }, [answer, key, tries]);
 
   // the last cover shown here, kept over a change or a gap while it is the same station's
   const [held, setHeld] = useState<{ logo: string | null; url: string } | null>(null);
@@ -131,9 +164,23 @@ export function useRadioCover(meta: NowPlayingMeta | null, art: string | null): 
     const t = setTimeout(() => setHeld(null), key ? HOLD_MS : GAP_MS);
     return () => clearTimeout(t);
   }, [holding, key]);
+  // with no cover to hold, no picture while the first answer comes
+  const [waited, setWaited] = useState<string | null>(null);
+  useEffect(() => {
+    if (!key) return;
+    const t = setTimeout(() => setWaited(key), FIRST_MS);
+    return () => clearTimeout(t);
+  }, [key]);
 
   if (!radio || own) return art;
   if (answer) return answer;
   if (holding) return held.url;
+  if (key != null && answer === undefined && waited !== key) return null;
   return art;
 }
+
+/** Whether a big surface's empty place stays quiet: while a station has a picture of its own, a
+ *  moment without one is its song's first cover coming (useRadioCover), so the radio's placeholder
+ *  never shows there, even for the frame the cover takes to decode. */
+export const quietPlace = (meta: Pick<NowPlayingMeta, "isRadio" | "artUrl">): boolean =>
+  meta.isRadio && meta.artUrl != null;

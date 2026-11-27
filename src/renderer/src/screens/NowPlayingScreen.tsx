@@ -31,7 +31,7 @@ import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { SignalLamp } from "@/components/device/SignalLamp";
 import { ArtImage } from "@/components/media/ArtImage";
 import { useBestArt } from "@/lib/bestArt";
-import { useRadioCover } from "@/lib/radioCover";
+import { quietPlace, useRadioCover } from "@/lib/radioCover";
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { LyricsPanel } from "@/components/overlays/LyricsPanel";
 import { LyricLine } from "@/components/playback/LyricLine";
@@ -569,7 +569,13 @@ export function NowPlayingScreen(): React.JSX.Element {
                   src={tileArt}
                   className="w-full h-full object-cover rounded-2xl art-glow"
                   fallback={
-                    <div className="w-full h-full rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
+                    // an empty place while a station's song's first cover comes (lib/radioCover)
+                    <div
+                      className={cx(
+                        "w-full h-full rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center",
+                        quietPlace(meta) && "opacity-0",
+                      )}
+                    >
                       {meta.isRadio ? (
                         <RadioTower size={72} strokeWidth={1} className="text-faint" />
                       ) : (

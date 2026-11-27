@@ -7,7 +7,7 @@ import { usePlayhead } from "@/hooks/usePlayhead";
 import { useArtLoadable } from "@/hooks/useArtLoadable";
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { useBestArt } from "@/lib/bestArt";
-import { useRadioCover } from "@/lib/radioCover";
+import { quietPlace, useRadioCover } from "@/lib/radioCover";
 import { useFadedText, useLyrics } from "@/hooks/useLyrics";
 import { useSettledSnapshot } from "@/hooks/useSettledSnapshot";
 import { cx, deriveNowPlaying } from "@/lib/format";
@@ -350,7 +350,13 @@ export function DisplayMode(): React.JSX.Element {
               src={art}
               className="w-[var(--display-art,46vmin)] h-[var(--display-art,46vmin)] motion-safe:transition-[width,height] motion-safe:duration-500 ease-out object-cover rounded-2xl art-glow"
               fallback={
-                <div className="w-[var(--display-art,46vmin)] h-[var(--display-art,46vmin)] motion-safe:transition-[width,height] motion-safe:duration-500 ease-out rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
+                // an empty place while a station's song's first cover comes (lib/radioCover)
+                <div
+                  className={cx(
+                    "w-[var(--display-art,46vmin)] h-[var(--display-art,46vmin)] motion-safe:transition-[width,height] motion-safe:duration-500 ease-out rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center",
+                    quietPlace(meta) && "opacity-0",
+                  )}
+                >
                   {meta.isRadio ? (
                     <RadioTower size={90} strokeWidth={1} className="text-faint" />
                   ) : (
