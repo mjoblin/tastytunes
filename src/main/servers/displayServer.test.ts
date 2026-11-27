@@ -396,6 +396,7 @@ describe("Display on other screens' server", () => {
         duration: 200,
         art: pic("q", i),
         playing: i === QUEUE_BEFORE,
+        parked: false,
       })),
       presets: Array.from({ length: PRESETS_MAX }, (_, i) => ({
         id: i + 1,
@@ -453,6 +454,7 @@ describe("Display on other screens' server", () => {
           duration: 200,
           art: "http://192.168.1.5/q.jpg",
           playing: true,
+          parked: false,
         },
       ],
       presets: [

@@ -997,13 +997,13 @@ function QueueRows({
   cards: boolean;
 }): React.JSX.Element {
   const playingRow = useRef<HTMLDivElement | null>(null);
-  // the playing track at the top as it opens, what comes next below it
+  // the playing track at the top as it opens (or where the queue is parked), what comes next below
   useLandOn(playingRow);
   if (cards)
     return (
       <div className={cardsBody}>
         {rows.map((r) => (
-          <div key={r.id} ref={r.playing ? playingRow : undefined} className="min-w-0">
+          <div key={r.id} ref={r.playing || r.parked ? playingRow : undefined} className="min-w-0">
             <MediaTile
               attrs={{ "data-page-queue-row": String(r.id) }}
               art={r.art}
@@ -1020,7 +1020,7 @@ function QueueRows({
   return (
     <div className={rowsBody}>
       {rows.map((r) => (
-        <div key={r.id} ref={r.playing ? playingRow : undefined}>
+        <div key={r.id} ref={r.playing || r.parked ? playingRow : undefined}>
           <MediaRow
             touch
             attrs={{ "data-page-queue-row": String(r.id) }}
@@ -1029,6 +1029,7 @@ function QueueRows({
             kind="track"
             artUrl={r.art}
             playing={r.playing}
+            parked={r.parked}
             duration={r.duration}
             onClick={() => void steer("playQueue", r.id)}
           />

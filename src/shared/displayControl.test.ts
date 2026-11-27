@@ -87,6 +87,18 @@ describe("a screen's name and verbs", () => {
     expect(queueWindow(items.slice(0, QUEUE_ALL), 1290)).toHaveLength(QUEUE_ALL);
     expect(queueWindow(items.slice(0, QUEUE_ALL + 1), 1290)[0].id).toBe(1290 - QUEUE_BEFORE);
   });
+
+  it("marks the queue's row parked, never playing, while another source plays", () => {
+    const items = Array.from({ length: 5 }, (_, i) => ({
+      id: 2000 + i,
+      position: i,
+      metadata: { title: `T${i}`, artist: "A", album: "B", duration: 200, art_url: null },
+    })) as unknown as Parameters<typeof queueWindow>[0];
+    const rows = queueWindow(items, 2002, false);
+    expect(rows.filter((r) => r.playing)).toEqual([]);
+    expect(rows.filter((r) => r.parked).map((r) => r.id)).toEqual([2002]);
+    expect(queueWindow(items, 2002).filter((r) => r.parked)).toEqual([]);
+  });
 });
 
 const NOW = 1_700_000_000_000;
