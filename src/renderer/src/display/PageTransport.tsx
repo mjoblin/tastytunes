@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import type {
+  DisplayControlAnswer,
   DisplayPlaylistRow,
   DisplayPresetRow,
   DisplayQueueRow,
@@ -33,7 +34,15 @@ import { scrollToTop } from "@/lib/scroll";
 import { MediaTile } from "@/components/media/MediaTile";
 import { SettingLine } from "@/components/display/ScenePicker";
 import { PageSeekBar } from "@/components/media/Waveform";
-import { playPlaylist, seekTo, sleepIn, steer, useControl, type ButtonVerb } from "./control";
+import {
+  playPlaylist,
+  seekTo,
+  sleepIn,
+  steer,
+  useControl,
+  wasDone,
+  type ButtonVerb,
+} from "./control";
 import { whyDark } from "./dark";
 import { dropWhenAway, holdPress, RING_BACK_MS, STANDBY_HOLD_MS, type HoldPress } from "./hold";
 import {
@@ -42,6 +51,7 @@ import {
   sleepBadge,
   sleepChoices,
   sleepCountdown,
+  sleepRefused,
   sleepThen,
 } from "./sleepTimer";
 import { musicGoing } from "./rest";
@@ -269,6 +279,7 @@ export function PageTransport({
           open={sleepOpen}
           faded={sleepFade.faded}
           onClose={() => onSleep(false)}
+          onRefused={(text) => say(text, PASSING_LINE_MS)}
         />
       )}
       <div
@@ -338,13 +349,7 @@ export function PageTransport({
               // the finger. Above them, not below: low on an iPad a sideways drag is the system's
               // (it switches apps, and the page never hears the finger lift), while the buttons
               // only take taps, which reach the page there
-              <PageSeekBar
-                live={shown}
-                onSeek={async (secs) => {
-                  const answer = await seekTo(secs);
-                  return answer != null && "done" in answer;
-                }}
-              />
+              <PageSeekBar live={shown} onSeek={async (secs) => wasDone(await seekTo(secs))} />
             )}
             <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-2">
               {/* the list stands apart from the transport by the same gap as the volume does */}
@@ -511,8 +516,11 @@ function Disc({
 const HOLDING_HINT = "Keep holding for standby";
 const LET_GO_HINT = "Let go for standby";
 const SHORT_HINT = "Hold to put the streamer in standby";
+/** What it says when the app didn't put the streamer in standby. */
+const STANDBY_REFUSED = "TastyTunes couldn't put the streamer in standby.";
 
-/** How long a passing line above the buttons stays (the hint after a short press). */
+/** How long a passing line above the buttons stays: the hint after a short press, a standby or a
+ *  sleep timer choice the app didn't do (the sheet's own, display/sleepTimer sleepRefused). */
 const PASSING_LINE_MS = 2_000;
 
 /** Says `text` in the line above the buttons, for `ms` or until the next word (null: nothing). */
@@ -565,7 +573,9 @@ function PowerDisc({ live, say }: { live: boolean; say: Say }): React.JSX.Elemen
         // the ring lets go with the finger
         setRing("rest");
         say(null);
-        void steer("standby");
+        void steer("standby").then((answer) => {
+          if (!wasDone(answer)) say(STANDBY_REFUSED, PASSING_LINE_MS);
+        });
       },
       short: () => {
         setRing("back");
@@ -707,7 +717,8 @@ const SHEET_CHIP =
  * THE SLEEP TIMER'S SHEET: above the moon, the list panel's surface. Not armed, the window's
  * lengths and End of track (where the window offers it); armed, the time left and Cancel the
  * timer. Either way, what the app will do then, by its own setting. A tap on a choice sends it
- * and closes the sheet; a touch outside closes it.
+ * and closes the sheet, and a choice the app didn't do (End of track no longer offered, the rate
+ * cap) is said in the line above the buttons; a touch outside closes it.
  */
 function SleepSheet({
   sleep,
@@ -716,6 +727,7 @@ function SleepSheet({
   open,
   faded,
   onClose,
+  onRefused,
 }: {
   sleep: DisplaySleep;
   /** The top of the buttons: the sheet keeps above them. */
@@ -725,9 +737,17 @@ function SleepSheet({
   open: boolean;
   faded: string;
   onClose(): void;
+  /** A choice the app didn't do, in words. */
+  onRefused(text: string): void;
 }): React.JSX.Element {
-  const choose = (send: () => void): void => {
-    send();
+  const choose = (
+    verb: "sleep" | "sleepCancel",
+    send: () => Promise<DisplayControlAnswer | null>,
+  ): void => {
+    void send().then((answer) => {
+      const refused = sleepRefused(verb, answer);
+      if (refused) onRefused(refused);
+    });
     onClose();
   };
   return (
@@ -754,7 +774,7 @@ function SleepSheet({
             <button
               type="button"
               data-page-sleep-cancel
-              onClick={() => choose(() => void steer("sleepCancel"))}
+              onClick={() => choose("sleepCancel", () => steer("sleepCancel"))}
               className={cx(SHEET_CHIP, "mt-3 w-full text-alert")}
             >
               Cancel the timer
@@ -769,7 +789,7 @@ function SleepSheet({
                   key={c.minutes}
                   type="button"
                   data-page-sleep-choice={c.minutes}
-                  onClick={() => choose(() => void sleepIn(c.minutes))}
+                  onClick={() => choose("sleep", () => sleepIn(c.minutes))}
                   className={cx(SHEET_CHIP, c.minutes === "track" && "col-span-3")}
                 >
                   {c.label}

@@ -8,6 +8,7 @@ import {
   sleepBadge,
   sleepChoices,
   sleepCountdown,
+  sleepRefused,
   sleepThen,
 } from "./sleepTimer";
 
@@ -67,6 +68,25 @@ describe("the sheet", () => {
       "track",
     ]);
     expect(sleepChoices({ ...sleep, endOfTrack: true }).at(-1)?.label).toBe("End of track");
+  });
+
+  it("says when the app didn't set the timer, or didn't cancel it, and nothing when it did", () => {
+    expect(sleepRefused("sleep", { done: true })).toBeNull();
+    expect(sleepRefused("sleepCancel", { done: true })).toBeNull();
+    // End of track no longer offered, the rate cap, the switch turned off, the app out of reach
+    for (const answer of [
+      { refused: "nothing" },
+      { refused: "busy" },
+      { refused: "presets" },
+      null,
+    ] as const)
+      expect(sleepRefused("sleep", answer)).toBe("TastyTunes couldn't set the sleep timer.");
+    for (const answer of [{ refused: "busy" }, { refused: "presets" }, null] as const)
+      expect(sleepRefused("sleepCancel", answer)).toBe(
+        "TastyTunes couldn't cancel the sleep timer.",
+      );
+    // no timer left to cancel: it ran out, or was cancelled in the app
+    expect(sleepRefused("sleepCancel", { refused: "nothing" })).toBeNull();
   });
 
   it("sits centered over its button, kept inside the screen's edges", () => {
