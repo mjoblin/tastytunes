@@ -15,6 +15,7 @@ import {
 import type { DisplayPlaylistRow, DisplayPresetRow, DisplayQueueRow } from "@shared/displayControl";
 import { transportAbilities, type TransportAbilities } from "@shared/transport";
 import { cx, fmtDuration } from "@/lib/format";
+import { useFadePresence } from "@/hooks/useFadePresence";
 import { screenIcon } from "@/lib/screens";
 import { onScreenKey } from "@/lib/keyboardOwner";
 import { useStore } from "@/store";
@@ -169,6 +170,11 @@ export function PageTransport({
   // the buttons' height, which the list keeps above: two rows on a phone, the volume wrapping
   const strip = useRef<HTMLDivElement | null>(null);
   const stripH = useHeightWhile(strip, queueOpen);
+  // the list fades in rising and out dropping, as a panel seen from across a room does
+  const listFade = useFadePresence(
+    queueOpen && (control.queue != null || control.presets != null || control.playlists != null),
+    { rise: true },
+  );
   // the keys, with the buttons hidden too
   useEffect(() => {
     if (!usable) return;
@@ -210,12 +216,14 @@ export function PageTransport({
         )}
         style={{ transition: shown ? DIM_IN : DIM_OUT }}
       />
-      {list && queueOpen && (
+      {list && listFade.mounted && (
         <ListPanel
           queue={queue}
           presets={presets}
           playlists={playlists}
           bottom={`calc(${bottom} + ${stripH + 12}px)`}
+          open={queueOpen}
+          faded={listFade.faded}
           onClose={() => onQueue(false)}
         />
       )}
@@ -446,6 +454,8 @@ function ListPanel({
   presets,
   playlists,
   bottom,
+  open,
+  faded,
   onClose,
 }: {
   queue: DisplayQueueRow[] | null;
@@ -453,6 +463,10 @@ function ListPanel({
   playlists: DisplayPlaylistRow[] | null;
   /** The top of the buttons: the panel keeps above them. */
   bottom: string;
+  /** Whether it is open: a closing panel is still drawn while it fades (hooks/useFadePresence). */
+  open: boolean;
+  /** Its fade's classes. */
+  faded: string;
   onClose(): void;
 }): React.JSX.Element {
   const here = LIST_TABS.filter((t) => ({ queue, presets, playlists })[t.id] != null);
@@ -475,11 +489,17 @@ function ListPanel({
     "grid h-11 w-11 shrink-0 place-items-center rounded-lg text-dim motion-safe:active:scale-90 [-webkit-tap-highlight-color:transparent]";
   return (
     <>
-      <div className="absolute inset-0 z-[45]" onClick={onClose} />
+      {/* a touch outside closes it; gone the moment it closes, so a touch during the fade-out
+          reaches the page */}
+      {open && <div className="absolute inset-0 z-[45]" onClick={onClose} />}
       <div
-        data-page-queue
+        // marked open only while it is: a closing panel, still drawn as it fades, is not the list
+        data-page-queue={open || undefined}
         data-page-list={showing}
-        className="absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] left-1/2 z-50 flex w-[min(max(36rem,60vw),60rem,calc(100%_-_2rem))] -translate-x-1/2 flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
+        className={cx(
+          "absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] left-1/2 z-50 flex w-[min(max(36rem,60vw),60rem,calc(100%_-_2rem))] -translate-x-1/2 flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none",
+          faded,
+        )}
         style={{ bottom }}
       >
         {/* 8px from the panel's edge all round */}
@@ -820,6 +840,7 @@ export function SleepControls({
   const ready = wake === "ready";
   const presets = ready ? control.presets : null;
   const resume = ready ? control.resume : null;
+  const presetsFade = useFadePresence(presets != null && listOpen, { rise: true });
   const showing = shown ? "opacity-100" : "pointer-events-none opacity-0";
   const bottom = "calc(env(safe-area-inset-bottom, 0px) + 0.75rem)";
   return (
@@ -835,12 +856,14 @@ export function SleepControls({
       >
         <TtMark className="text-[64px] text-ink opacity-40" />
       </div>
-      {presets && listOpen && (
+      {presets && presetsFade.mounted && (
         <ListPanel
           queue={null}
           presets={presets}
           playlists={null}
           bottom={`calc(${bottom} + ${groupH + 12}px)`}
+          open={listOpen}
+          faded={presetsFade.faded}
           onClose={() => onList(false)}
         />
       )}
