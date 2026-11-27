@@ -56,7 +56,11 @@ export function SignalLamp({
    * starts off-screen.
    */
   tipClass = "tip-top",
-}: { tipClass?: string } = {}): React.JSX.Element | null {
+  /** The lamp's own box: a row of chips sets it -my-2, so the button's padding overhangs the row
+   *  and the row's height is the chips' whether the lamp is drawn or not (it is gone while a skip's
+   *  quality is unknown, and the lines under the row moved with it). */
+  className,
+}: { tipClass?: string; className?: string } = {}): React.JSX.Element | null {
   const playState = useStore((s) => s.playState);
   const nowPlaying = useStore((s) => s.nowPlaying);
   // Click point, not a boolean: the detail card is a PopoverCard, which
@@ -79,7 +83,7 @@ export function SignalLamp({
   if (md?.mqa && md.mqa !== "none") rows.push(["MQA", md.mqa]);
 
   return (
-    <div className="relative">
+    <div className={cx("relative", className)}>
       <button
         data-tip={at ? undefined : `Signal: ${SIGNAL_LABELS[quality]}`}
         aria-label={`Signal: ${SIGNAL_LABELS[quality]}`}

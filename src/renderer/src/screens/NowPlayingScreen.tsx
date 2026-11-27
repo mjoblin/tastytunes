@@ -186,6 +186,7 @@ export function NowPlayingScreen(): React.JSX.Element {
   // reordering the queue), so it renders live and merely fades with the group.
   const liveTrackSig = `${meta.title ?? ""}␟${meta.subtitle ?? ""}␟${meta.album ?? ""}`;
   const { shown: shownTrack, visible: trackVisible } = useSettledSnapshot(liveTrackSig, () => ({
+    sig: liveTrackSig,
     title: meta.title,
     subtitle: meta.subtitle,
     album: meta.album,
@@ -236,8 +237,21 @@ export function NowPlayingScreen(): React.JSX.Element {
       : null;
   const heroArt = useBestArt(meta.artUrl, heroQuery, queueSourceActive);
   const { art: tileArt } = useDecodedArt(heroArt);
-  // Live, not snapshotted — the queue moves independently of the track.
+  // Live, not snapshotted — the queue moves independently of the track. But while a track change
+  // is under way (the group fading out on the old track, or not yet back) the place holds with
+  // the title above it: live, it named the next track's place under the last track's title.
   const place = queuePlace(playState, nowPlaying);
+  const placeSettled = trackVisible && liveTrackSig === shownTrack.sig;
+  const placeIndex = place?.index ?? null;
+  const placeLength = place?.length ?? null;
+  const [heldPlace, setHeldPlace] = useState(place);
+  useEffect(() => {
+    if (!placeSettled) return;
+    setHeldPlace(
+      placeIndex == null || placeLength == null ? null : { index: placeIndex, length: placeLength },
+    );
+  }, [placeSettled, placeIndex, placeLength]);
+  const shownPlace = placeSettled ? place : heldPlace;
 
   // Only surface "buffering" once it has persisted a beat — brief buffers on a
   // seek or track change shouldn't flash a label. Other states show at once.
@@ -719,7 +733,7 @@ export function NowPlayingScreen(): React.JSX.Element {
                   </span>
                 ))}
                 <PlayingDrChip />
-                <SignalLamp />
+                <SignalLamp className="-my-2" />
               </div>
             )}
 
@@ -728,7 +742,7 @@ export function NowPlayingScreen(): React.JSX.Element {
             )}
 
             {/* a stopped disc names its size where a track names its place */}
-            {(meta.disc || place) && (
+            {(meta.disc || shownPlace) && (
               <div
                 data-np-place
                 className={cx(
@@ -738,7 +752,7 @@ export function NowPlayingScreen(): React.JSX.Element {
               >
                 {meta.disc
                   ? `${meta.disc.tracks} ${meta.disc.tracks === 1 ? "track" : "tracks"}${FACT_SEP}${fmtDuration(meta.disc.secs)}`
-                  : place && `track ${place.index + 1} of ${place.length}`}
+                  : shownPlace && `track ${shownPlace.index + 1} of ${shownPlace.length}`}
               </div>
             )}
 
