@@ -54,8 +54,44 @@ describe("a page that fails loads again", () => {
       },
       answers: () => Promise.resolve(++asks >= 3),
       reload: () => void reloaded++,
+      waiting: () => {},
     });
     expect(slept).toEqual([3_000, 10_000, 30_000]);
     expect(reloaded).toBe(1);
+  });
+
+  it("says it is waiting from the first ask the app doesn't answer, once", async () => {
+    const said: string[] = [];
+    let asks = 0;
+    await reloadWhenUp({
+      store: tab(),
+      sleep: (ms) => {
+        said.push(`slept ${ms}`);
+        return Promise.resolve();
+      },
+      answers: () => Promise.resolve(++asks >= 4),
+      reload: () => void said.push("reloaded"),
+      waiting: () => void said.push("waiting"),
+    });
+    expect(said).toEqual([
+      "slept 3000",
+      "waiting",
+      "slept 10000",
+      "slept 30000",
+      "slept 60000",
+      "reloaded",
+    ]);
+  });
+
+  it("says nothing when the app answers the first ask: the page only reloads", async () => {
+    const said: string[] = [];
+    await reloadWhenUp({
+      store: tab(),
+      sleep: () => Promise.resolve(),
+      answers: () => Promise.resolve(true),
+      reload: () => void said.push("reloaded"),
+      waiting: () => void said.push("waiting"),
+    });
+    expect(said).toEqual(["reloaded"]);
   });
 });
