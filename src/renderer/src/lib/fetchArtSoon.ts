@@ -11,7 +11,9 @@ const AGAIN_MS = [3000, 10000];
  * now waits for that listing (ipc/lookups' fetchArt); this asks again after a beat and after a
  * longer one for anything else passing, and answers null only when all three found nothing. A
  * caller keeps that null for the session no more than any other failure: it is not an answer
- * about the cover. `live` says whether the caller still wants it.
+ * about the cover. `live` says whether the caller still wants it. The scenes' colors and the deck
+ * scenes' picture ask through it too (components/display/palette, feed), each inside a lookup
+ * every caller shares (lib/lru keptLookup).
  *
  * A PICTURE ALREADY IN HAND is answered as it is: the file's embedded cover and the log's own copy
  * (lib/bestArt) arrive as data URLs, which main never fetches (0.16.0: refused three times over

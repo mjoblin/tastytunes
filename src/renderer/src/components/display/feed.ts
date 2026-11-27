@@ -2,7 +2,6 @@ import { useEffect, useRef } from "react";
 import { STRIP_BANDS, TEMPO_CONFIDENCE_FLOOR } from "@shared/model";
 import { isRadioMetadata, repeatModeOf } from "@shared/smoip";
 import { useStore } from "@/store";
-import { tt } from "@/api";
 import { deriveNowPlaying, queuePlace } from "@/lib/format";
 import { useLyrics, type SyncedLine } from "@/hooks/useLyrics";
 import { DISPLAY_FONTS } from "@/hooks/useDisplayFont";
@@ -23,6 +22,7 @@ import type {
 import { easeTowards, frameDelta } from "./clock";
 import { clamp, cubic, noise } from "./scenes/lib";
 import { keptLookup, Lru } from "@/lib/lru";
+import { fetchArtSoon } from "@/lib/fetchArtSoon";
 import { FeedHits } from "./feedHits";
 
 /**
@@ -586,14 +586,16 @@ function firstAfter(at: Float32Array, secs: number): number {
 
 /** The deck scenes' pictures, decoded once per URL and kept for a few tracks, so a
  *  scene switch or a return to a track draws at once. One that didn't come (out of reach a
- *  moment, or a picture that wouldn't decode) is not kept, and is asked for again next time. */
+ *  moment) is asked for again after a beat and a longer one, as the wash's is (lib/fetchArtSoon);
+ *  one that still didn't, or wouldn't decode, is not kept, and is asked for again next time. One
+ *  ask whoever asks, so it runs its course. */
 const ART_IMAGES_MAX = 8;
 const artImages = new Lru<string, Promise<HTMLImageElement | null>>(ART_IMAGES_MAX);
-function artImage(url: string): Promise<HTMLImageElement | null> {
+export function artImage(url: string): Promise<HTMLImageElement | null> {
   return keptLookup(artImages, url, async () => {
     // a data URL (never a tainted canvas): the scenes' canvases are read back by the
-    // cathode finish, which a cross-origin picture would forbid
-    const dataUrl = url.startsWith("data:") ? url : ((await tt.fetchArt(url))?.dataUrl ?? null);
+    // cathode finish, which a cross-origin picture would forbid (one in hand is answered as it is)
+    const dataUrl = (await fetchArtSoon(url, () => true))?.dataUrl ?? null;
     if (!dataUrl) return null;
     const img = new Image();
     img.src = dataUrl;
