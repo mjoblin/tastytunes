@@ -127,7 +127,8 @@ export const VOLUME_RATE = { count: 4, ms: 1_000 } as const;
  *  of the one before as the next arrives) and the playing cover, which its push names before the
  *  line does. Worked out from what a line can name, so the two can't drift apart. */
 export const MAX_ART_IDS = 2 * LINE_PICTURES_MAX + 1;
-/** The analysis keys handed out with the playing file, kept for its next few asks. */
+/** The analysis keys handed out with the playing file, kept for its next few asks (and forgotten
+ *  with the screens, closeScreens). */
 const MAX_TRACK_KEYS = 20;
 /** A ping this often; the page counts the app lost after a few missed (display/live). */
 export const PING_MS = 5_000;
@@ -369,10 +370,12 @@ export class DisplayServer {
   }
 
   /** Every open screen let go, the server still listening: after a new address, each screen's
-   *  reconnect meets the "open the address" page. */
+   *  reconnect meets the "open the address" page. The analysis keys go with them (at a stop too),
+   *  so no page opened after hears of a track asked about before. */
   closeScreens(): void {
     for (const c of this.clients.keys()) c.end();
     this.clients.clear();
+    this.trackKeys.clear();
     this.http?.closeAllConnections();
   }
 
@@ -704,8 +707,9 @@ export class DisplayServer {
   }
 
   /** The window stored a track's analysis: a page showing that track asks for it now, rather
-   *  than at the next track. Only a key handed out with the playing file is named, so a page hears
-   *  of no other track. */
+   *  than at the next track. Only a key handed out with a playing file is named: one of the last
+   *  MAX_TRACK_KEYS a page asked about since the screens were last let go (closeScreens), so a page
+   *  may hear of a track that played before it opened, never of one no page asked about. */
   analysisStored(key: string): void {
     if (this.clients.size === 0 || !this.trackKeys.has(key)) return;
     this.send(`event: measured\ndata: ${JSON.stringify(key)}\n\n`);

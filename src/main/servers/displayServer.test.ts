@@ -863,6 +863,20 @@ describe("the scenes' analysis on a page", () => {
     expect(said).toEqual(["band|record|song|200"]);
   });
 
+  it("forgets the keys it gave out when the screens are let go, at a new address or a stop", async () => {
+    const { get, live, server } = await rig();
+    const key = "band|record|song|200";
+    await get("/api/track?title=Song&artist=Band&album=Record&duration=200", { cookie });
+    server.closeScreens();
+    // a page opened afterwards hears of no track asked about before, and is handed nothing by it
+    const opened = await live(cookie);
+    server.analysisStored(key);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(opened.more()).not.toContain("event: measured");
+    const asked = await get(`/api/analysis?key=${encodeURIComponent(key)}`, { cookie });
+    expect(JSON.parse(asked.body)).toBeNull();
+  });
+
   it("hands over a stored analysis only by a key it gave out with the playing file", async () => {
     const { get } = await rig();
     const key = encodeURIComponent("band|record|song|200");
