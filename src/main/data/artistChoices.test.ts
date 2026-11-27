@@ -1,4 +1,4 @@
-import { mkdirSync, readdirSync, rmSync, utimesSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, rmSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app } from "electron";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -261,5 +261,75 @@ describe("choices kept before 0.15.0's name key", () => {
     expect(fresh.choiceOf("Sigur Ro\u0301s")).toMatchObject({ url: img("newer") });
     expect(fresh.choiceOf("Björk")).toMatchObject({ url: img("bjork") });
     expect(fresh.choiceOf("Bjo\u0308rk")).toMatchObject({ url: img("bjork") });
+  });
+});
+
+describe("a later version's choices, kept", () => {
+  const img = (n: string): string => `https://thumb.wikimedia.org/${n}.jpg`;
+  const written = (): Record<string, Record<string, unknown>> =>
+    JSON.parse(
+      readFileSync(join(app.getPath("userData"), "artist-choices.json"), "utf-8"),
+    ) as Record<string, Record<string, unknown>>;
+
+  it("writes back a field it doesn't read on a choice it does, and a choice of a later kind", async () => {
+    const COPY = "ffffffffffffffffffffffff.jpg";
+    writeFileSync(join(dir(), COPY), "jpeg");
+    const later = { kind: "gallery", urls: [img("a"), img("b")], at: 4 };
+    const fresh = await readWhole(
+      JSON.stringify({
+        band: {
+          kind: "image",
+          url: img("band"),
+          at: 5,
+          credit: "A. Photographer",
+          crop: [0, 0, 1],
+        },
+        someone: later,
+      }),
+    );
+    // read as this version reads it
+    expect(fresh.choiceOf("Band")).toMatchObject({ kind: "image", url: img("band"), at: 5 });
+    expect(fresh.resolveChoice("Band", [])?.url).toBe(img("band"));
+    // a change through the normal path: another artist's choice, then Band's copy
+    fresh.setChoice("Other", { kind: "image", url: img("other") });
+    expect(fresh.setCopy("Band", 5, COPY)).toBe(true);
+    const file = written();
+    expect(file.band).toEqual({
+      kind: "image",
+      url: img("band"),
+      at: 5,
+      copy: COPY,
+      credit: "A. Photographer",
+      crop: [0, 0, 1],
+    });
+    expect(file.someone).toEqual(later);
+    expect(file.other).toMatchObject({ kind: "image", url: img("other") });
+    // read again, it is all still there
+    vi.resetModules();
+    const again = await import("./artistChoices");
+    again.setChoice("Other", null);
+    expect(written().band).toMatchObject({ credit: "A. Photographer", crop: [0, 0, 1] });
+    expect(written().someone).toEqual(later);
+    // a new choice made here replaces the old one whole
+    again.setChoice("Band", { kind: "image", url: img("new") });
+    expect(Object.keys(written().band).sort()).toEqual(["at", "kind", "url"]);
+    again.setChoice("Band", null);
+    rmSync(join(dir(), COPY), { force: true });
+  });
+
+  it("keeps the copied files while a choice holds a field it doesn't read", async () => {
+    const orphan = "999999999999999999999999.jpg";
+    writeFileSync(join(dir(), orphan), "x");
+    const twoHoursAgo = new Date(Date.now() - 7_200_000);
+    utimesSync(join(dir(), orphan), twoHoursAgo, twoHoursAgo);
+    // the later field may name a file where this version doesn't look
+    const fresh = await readWhole(
+      JSON.stringify({ band: { kind: "image", url: img("band"), at: 5, alt: orphan } }),
+    );
+    fresh.setChoice("Other", { kind: "image", url: img("other") });
+    expect(readdirSync(dir())).toContain(orphan);
+    fresh.setChoice("Other", null);
+    fresh.setChoice("Band", null);
+    rmSync(join(dir(), orphan), { force: true });
   });
 });
