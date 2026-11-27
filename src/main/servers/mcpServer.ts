@@ -179,6 +179,16 @@ export class McpBridge {
     this.start(mcp);
   }
 
+  /** The saved keys were set aside to make a new second-screen address (data/secrets renewSecret,
+   *  the file unreadable): a running server starts again, so its token is made now rather than at
+   *  its next start, and Settings hears it. */
+  keysSetAside(): void {
+    const mcp = getSettings().mcp;
+    if (!mcp.enabled || !this.http) return;
+    this.stop(true);
+    this.start(mcp);
+  }
+
   stop(restarting = false): void {
     if (!this.http) return;
     // close() only stops NEW connections — drop live keep-alive sockets too,
