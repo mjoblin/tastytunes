@@ -268,6 +268,17 @@ export async function setSecret(name: SecretName, value: string | null): Promise
  */
 export async function renewSecret(name: SecretName, value: string): Promise<boolean> {
   load();
+  // the file is read once a session, and what kept it from being read may have passed (a scanner
+  // or a sync client holding it at launch, a permission since fixed): read it once more, and set
+  // it aside only if it still can't be, so keys that read now are kept
+  if (fileUnreadable) {
+    stored = null;
+    carried = new Map();
+    envelope = {};
+    unreadable.clear();
+    fileUnreadable = false;
+    load();
+  }
   if (fileUnreadable) {
     const aside = moveAside(filePath(), "unreadable");
     stored = new Map();

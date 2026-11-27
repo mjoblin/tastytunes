@@ -45,6 +45,7 @@ import { albumArtElsewhere } from "../media/albumArtElsewhere";
 import { demoHost } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
 import { nameKey } from "@shared/keys";
+import { syncDisplay } from "../app/display";
 
 /** Internet lookups, each behind its own switch: lyrics, ListenBrainz, artist, album, disc and track context, cover art, radio directories, embedded and fetched pictures, and the lookup caches. (Split out of index.ts's registerIpc in the 0.11.0 sweep.) */
 
@@ -203,7 +204,12 @@ export function registerLookupsIpc(): void {
       : { verdict: "unreachable", userName: null };
   });
   handle(IPC.mcpTokenReveal, async () => (await getSecret("mcpToken")) ?? "");
-  handle(IPC.mcpTokenNew, async () => ({ keysSetAside: await newMcpToken() }));
+  handle(IPC.mcpTokenNew, async () => {
+    const keysSetAside = await newMcpToken();
+    // the second screen's address was in the same unreadable file: its card hears the new store
+    if (keysSetAside) void syncDisplay();
+    return { keysSetAside };
+  });
   handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
     getSettings().artistInfo ? fetchArtistInfoForCredit(artist, !!force) : null,
   );
