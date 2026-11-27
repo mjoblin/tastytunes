@@ -4,10 +4,10 @@ import { SCENE_TEXT } from "@shared/scenes";
 /**
  * WHAT A SCREEN KEEPS FOR ITSELF (0.17.0, Display on other screens): a screen can show a scene
  * other than the one TastyTunes shows (the lyrics on a tablet across the room, say), and set the
- * scenes' display-wide settings its own way (the glass's flicker, the corners, the drops, the
- * sync with the sound, which a screen across the network may want to differ). Kept in this
- * browser only and never sent to the app: the page has no way back (the plan's rule 5, a choice
- * made on the page stays on the page). A setting the screen hasn't set is the app's.
+ * scenes' display-wide settings its own way (the glass's flicker, the corners, the lyric line, the
+ * drops, the sync with the sound, which a screen across the network may want to differ). Kept in
+ * this browser only and never sent to the app: the page has no way back (the plan's rule 5, a
+ * choice made on the page stays on the page). A setting the screen hasn't set is the app's.
  */
 const KEY = "tastytunes.display";
 
@@ -23,6 +23,9 @@ const OWN = {
   displayCornerTitle: isBool,
   displayCornerClock: isBool,
   displayProgress: isBool,
+  // the window's switch is Display mode's corner button, which the page doesn't draw: the page's
+  // is a line of its own in Settings (ScenePicker's SyncRow)
+  displayLyrics: isBool,
   displayDrops: (v: unknown) => v === "loose" || v === "normal" || v === "strict",
   displaySyncMs: (v: unknown) => typeof v === "number" && Number.isFinite(v) && Math.abs(v) <= 1000,
 } satisfies Partial<Record<keyof AppSettings, (v: unknown) => boolean>>;
@@ -63,7 +66,8 @@ const VIEW_FIRST: Record<ListTab, ListView> = {
 /** Every setting a screen may keep. */
 export const OWN_KEYS = Object.keys(OWN) as OwnKey[];
 type Own = Partial<Pick<AppSettings, OwnKey>>;
-/** The scenes' display-wide settings (the window's All scenes): every kept key but the scene. */
+/** The scenes' display-wide settings (the window's All scenes, and the lyric line): every kept
+ *  key but the scene. */
 export const ALL_SCENES_KEYS = OWN_KEYS.filter((k) => k !== "displayScene");
 
 // what this screen keeps when the browser's storage refuses it (a private window), for the

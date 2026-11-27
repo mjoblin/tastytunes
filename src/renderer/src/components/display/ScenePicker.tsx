@@ -355,10 +355,15 @@ export function SyncRow({
   host,
   sleeveOnly = false,
   touch = false,
+  lyrics = false,
 }: {
   host: PickerHost;
   /** A page on a screen that can't draw scenes: the Show row alone (the rest shape scenes). */
   sleeveOnly?: boolean;
+  /** The page's Lyrics line, under Show, while lyrics are on in Settings: the window's switch for
+   *  the lyric line is Display mode's corner button, which the page doesn't draw. A line of its
+   *  own, since a fourth switch in Show wrapped onto a second line in a tablet's panel. */
+  lyrics?: boolean;
   /** A page on a tablet: 44px controls, larger words, the glass's controls on a line of their
    *  own (zoomed, the window's rows wrapped into each other in a tablet's panel). */
   touch?: boolean;
@@ -374,6 +379,8 @@ export function SyncRow({
   const cornerTitle = useStore((s) => s.settings.displayCornerTitle ?? true);
   const cornerClock = useStore((s) => s.settings.displayCornerClock ?? true);
   const progress = useStore((s) => s.settings.displayProgress ?? true);
+  const lyricsFound = useStore((s) => s.settings.lyrics);
+  const lyricLine = useStore((s) => s.settings.displayLyrics);
   // the slider is answered locally: a save is an IPC round trip to disk, and a controlled value
   // that waits for it drags behind the thumb
   const [sync, setSync] = useState(value);
@@ -491,6 +498,18 @@ export function SyncRow({
               onChange={(v) => void saveSettings({ displayProgress: v })}
             />
             Progress
+          </label>
+        </SettingLine>
+      )}
+      {host === "display" && lyrics && lyricsFound && (
+        <SettingLine label="Lyrics" touch={touch}>
+          <label data-page-lyrics className={labelled}>
+            <Switch
+              size={sw}
+              checked={lyricLine}
+              onChange={(v) => void saveSettings({ displayLyrics: v })}
+            />
+            <span className="sr-only">Lyrics</span>
           </label>
         </SettingLine>
       )}
