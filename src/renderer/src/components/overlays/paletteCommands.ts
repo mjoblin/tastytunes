@@ -42,7 +42,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { SCENES } from "@/components/display/scenes";
-import { sleepTrackKey, type SleepAction } from "@shared/model";
+import { canSleepAtTrackEnd, SLEEP_DURATIONS, sleepActionOf, sleepTimerFor } from "@shared/model";
 import { activatePlaylist } from "@/lib/playlists";
 import { audioCaps, brightnessOptions, nextRepeatMode, repeatModeOf } from "@shared/smoip";
 import { isFavorited, toggleFavorite } from "@/lib/favorites";
@@ -52,7 +52,6 @@ import { systemTheme } from "@/hooks/useTheme";
 import { activeSourceId, controlSet, deriveNowPlaying } from "@/lib/format";
 import { MOD, SCREENS, sanitizeNavHidden, sanitizeNavHiddenTools } from "@/lib/screens";
 import { toggleInfo } from "@/lib/infoHotkey";
-import { SLEEP_DURATIONS } from "@/components/playback/SleepTimer";
 import { FACT_SEP } from "@/lib/mediaFacts";
 
 // The command palette's COMMANDS as one pure builder (2026-09-13, the size
@@ -381,10 +380,7 @@ export function buildCommands(ctx: CommandContext): Command[] {
 
   // -------- Sleep timer
   if (connected && !inStandby) {
-    const action: SleepAction =
-      settings.sleepAction === "pause" || settings.sleepAction === "standby"
-        ? settings.sleepAction
-        : "standby";
+    const action = sleepActionOf(settings.sleepAction);
     const verb = action === "standby" ? "Standby" : "Pause";
     for (const d of SLEEP_DURATIONS) {
       cmds.push({
@@ -394,19 +390,10 @@ export function buildCommands(ctx: CommandContext): Command[] {
         hint: verb,
         icon: Moon,
         keywords: "timer countdown",
-        run: () =>
-          void tt.setSleep({
-            action,
-            minutes: d.minutes,
-            firesAt: Date.now() + d.minutes * 60_000,
-            trackKey: null,
-          }),
+        run: () => void tt.setSleep(sleepTimerFor(d.minutes, action, playState, Date.now())),
       });
     }
-    const meta = deriveNowPlaying(playState, nowPlaying);
-    const duration =
-      playState?.metadata?.duration ?? nowPlaying?.display?.progress?.duration ?? null;
-    if (sleepTrackKey(playState) != null && duration != null && duration > 0 && !meta.isRadio) {
+    if (canSleepAtTrackEnd(playState, nowPlaying)) {
       cmds.push({
         id: "sleep:eot",
         label: "Sleep at end of track",
@@ -414,13 +401,7 @@ export function buildCommands(ctx: CommandContext): Command[] {
         hint: verb,
         icon: Moon,
         keywords: "timer end of track",
-        run: () =>
-          void tt.setSleep({
-            action,
-            minutes: null,
-            firesAt: null,
-            trackKey: sleepTrackKey(playState),
-          }),
+        run: () => void tt.setSleep(sleepTimerFor("track", action, playState, Date.now())),
       });
     }
     if (sleep) {

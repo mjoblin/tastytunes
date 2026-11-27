@@ -1,7 +1,7 @@
 // Time-driven actions: scheduled actions (alarms, fades, standby) and the sleep timer.
 
 import { nameKey } from "@shared/keys";
-import type { ZonePlayState } from "../smoip";
+import type { ZoneNowPlaying, ZonePlayState } from "../smoip";
 
 // ----------------------------------------------------------- scheduled actions
 
@@ -104,4 +104,41 @@ export function sleepTrackKey(ps: ZonePlayState | null): string | null {
   const md = ps.metadata;
   if (md?.title) return `t:${md.title}:${md.artist ?? ""}`;
   return null;
+}
+
+/** The sleep timer's lengths, one list: the playback bar's menu, the command palette and a second
+ *  screen offer exactly these (and the display server takes no other from a screen). */
+export const SLEEP_DURATIONS: ReadonlyArray<{ minutes: number; label: string }> = [
+  { minutes: 15, label: "15 min" },
+  { minutes: 30, label: "30 min" },
+  { minutes: 45, label: "45 min" },
+  { minutes: 60, label: "1 hr" },
+  { minutes: 90, label: "1.5 hr" },
+  { minutes: 120, label: "2 hr" },
+];
+
+/** The stored sleep action (settings.sleepAction), never trusted blindly: an older settings file
+ *  (or a skewed dev reload) can leave it unset, which would arm a timer with no action. */
+export const sleepActionOf = (stored: unknown): SleepAction =>
+  stored === "pause" || stored === "standby" ? stored : "standby";
+
+/** Whether "End of track" is offered: an identifiable track with a length is playing, not a
+ *  station (whose stream has no end to wait for). */
+export function canSleepAtTrackEnd(ps: ZonePlayState | null, np: ZoneNowPlaying | null): boolean {
+  const duration = ps?.metadata?.duration ?? np?.display?.progress?.duration ?? null;
+  if (sleepTrackKey(ps) == null || duration == null || duration <= 0) return false;
+  const kind = ps?.metadata?.class ?? np?.display?.class ?? "";
+  return !/radio/i.test(kind) && ps?.metadata?.station == null;
+}
+
+/** The timer a choice arms: one of the lengths from `now`, or "track", the end of the playing one. */
+export function sleepTimerFor(
+  choice: number | "track",
+  action: SleepAction,
+  ps: ZonePlayState | null,
+  now: number,
+): SleepTimer {
+  return choice === "track"
+    ? { action, minutes: null, firesAt: null, trackKey: sleepTrackKey(ps) }
+    : { action, minutes: choice, firesAt: now + choice * 60_000, trackKey: null };
 }

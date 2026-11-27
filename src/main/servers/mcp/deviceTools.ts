@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { sleepTrackKey } from "@shared/model";
+import { sleepActionOf, sleepTrackKey } from "@shared/model";
 import { getSettings } from "../../data/persist";
 import { seekLanding } from "../../device/commandFrames";
 import {
@@ -432,8 +432,7 @@ export function deviceTools(ctx: ToolContext): Record<string, ToolImpl> {
       handler: async (a) => {
         const t = await ctx.target(a.device);
         const s = t.snapshot();
-        const stored = getSettings().sleepAction;
-        const action = a.action ?? (stored === "pause" ? "pause" : "standby");
+        const action = a.action ?? sleepActionOf(getSettings().sleepAction);
         if (a.end_of_track) {
           const key = sleepTrackKey(s.playState);
           if (key == null) return err("Nothing identifiable is playing — use minutes instead.");
