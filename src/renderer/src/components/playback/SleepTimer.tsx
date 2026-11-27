@@ -1,22 +1,18 @@
 import { useEffect, useState } from "react";
 import { Moon } from "lucide-react";
-import { sleepTrackKey, type SleepAction } from "@shared/model";
+import {
+  canSleepAtTrackEnd,
+  SLEEP_DURATIONS,
+  sleepActionOf,
+  sleepTimerFor,
+  type SleepAction,
+} from "@shared/model";
 import { tt } from "@/api";
 import { useStore } from "@/store";
-import { cx, deriveNowPlaying, fmtTime } from "@/lib/format";
+import { cx, fmtTime } from "@/lib/format";
 import { PopoverChrome } from "@/hooks/usePopover";
 import { POPOVER_CARD } from "@/components/chrome/Overlay";
 import { Switch } from "@/components/controls/Switch";
-
-/** The sleep-timer menu, ONE list (2026-08-16): the bar popover and the command palette both offer exactly these. */
-export const SLEEP_DURATIONS: ReadonlyArray<{ minutes: number; label: string }> = [
-  { minutes: 15, label: "15 min" },
-  { minutes: 30, label: "30 min" },
-  { minutes: 45, label: "45 min" },
-  { minutes: 60, label: "1 hr" },
-  { minutes: 90, label: "1.5 hr" },
-  { minutes: 120, label: "2 hr" },
-];
 
 const ACTION_VERB: Record<SleepAction, string> = { pause: "Pause", standby: "Standby" };
 
@@ -30,9 +26,8 @@ export function SleepTimer(): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [now, setNow] = useState(() => Date.now());
 
-  // Never trust the stored value blindly — an older settings file (or a skewed
-  // dev reload) can leave it unset, which would arm a timer with no action.
-  const action: SleepAction = stored === "pause" || stored === "standby" ? stored : "standby";
+  // the stored value, never trusted blindly (shared/model sleepActionOf)
+  const action = sleepActionOf(stored);
   const sleepFade = useStore((s) => s.settings.sleepFade);
   const preAmp = useStore((s) => s.zoneState?.volume_percent != null);
   const endOfTrack = sleep != null && sleep.minutes == null;
@@ -47,18 +42,15 @@ export function SleepTimer(): React.JSX.Element {
   const remainingSecs =
     sleep?.firesAt != null ? Math.max(0, Math.round((sleep.firesAt - now) / 1000)) : null;
 
-  const duration = playState?.metadata?.duration ?? nowPlaying?.display?.progress?.duration ?? null;
-  const meta = deriveNowPlaying(playState, nowPlaying);
-  const canEndOfTrack =
-    sleepTrackKey(playState) != null && duration != null && duration > 0 && !meta.isRadio;
+  const canEndOfTrack = canSleepAtTrackEnd(playState, nowPlaying);
 
   // The timer itself lives in the main process (it must survive this window
   // closing); these calls arm/adjust it and the store mirrors its pushes.
   const arm = (minutes: number): void => {
-    void tt.setSleep({ action, minutes, firesAt: Date.now() + minutes * 60_000, trackKey: null });
+    void tt.setSleep(sleepTimerFor(minutes, action, playState, Date.now()));
   };
   const armEndOfTrack = (): void => {
-    void tt.setSleep({ action, minutes: null, firesAt: null, trackKey: sleepTrackKey(playState) });
+    void tt.setSleep(sleepTimerFor("track", action, playState, Date.now()));
   };
   const chooseAction = (next: SleepAction): void => {
     void saveSettings({ sleepAction: next });

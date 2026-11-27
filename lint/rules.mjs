@@ -99,9 +99,9 @@ export const ONE_HOME = [
     was: "S21",
     selector:
       "ObjectExpression:has(> Property[key.name='minutes'][value.value=15]):has(> Property[key.name='label'][value.value='15 min'])",
-    files: [`^${R}`],
-    allow: ["playback/SleepTimer\\.tsx$"],
-    message: "The sleep durations are defined once, in SleepTimer (SLEEP_DURATIONS)",
+    files: ["^src/"],
+    allow: ["^src/shared/model/schedules\\.ts$"],
+    message: "The sleep durations are defined once, in shared/model (SLEEP_DURATIONS)",
     bad: {
       file: `${R}components/device/DeviceControls.tsx`,
       code: "const d = [{ minutes: 15, label: '15 min' }];",
