@@ -233,7 +233,6 @@ export function PageTransport({
   }, [usable]);
   if (lockedHere || control.state === "off" || control.state === "declined") return null;
   const asking = control.state === "asking";
-  const anyButton = can.canPrev || can.canToggle || can.canStop || can.canNext;
   const vol = control.volume;
   const level = vol?.percent ?? vol?.step ?? null;
   const showing = shown ? "opacity-100" : "pointer-events-none opacity-0";
@@ -380,34 +379,35 @@ export function PageTransport({
                   )}
                 </Disc>
               )}
-              {anyButton && (
-                <div className="flex items-center gap-2">
-                  {can.canPrev && (
-                    <Disc verb="previous" label="Previous" size="side">
-                      <SkipBack size={24} fill="currentColor" />
-                    </Disc>
-                  )}
-                  {can.canToggle ? (
-                    <Disc verb="toggle" label={playing ? "Pause" : "Play"} size="main">
-                      {playing ? (
-                        <Pause size={32} fill="currentColor" />
-                      ) : (
-                        <Play size={32} fill="currentColor" className="translate-x-0.5" />
-                      )}
-                    </Disc>
-                  ) : can.canStop ? (
-                    // a source that can stop and not pause (a stream): Stop in pause's place
-                    <Disc verb="stop" label="Stop" size="main">
-                      <Square size={26} fill="currentColor" />
-                    </Disc>
-                  ) : null}
-                  {can.canNext && (
-                    <Disc verb="next" label="Next" size="side">
-                      <SkipForward size={24} fill="currentColor" />
-                    </Disc>
-                  )}
-                </div>
-              )}
+              {/* previous, play or pause, and next always in their places, a disc the source can't
+                  use now dimmed, so the row never shifts as the streamer's abilities come and go */}
+              <div className="flex items-center gap-2">
+                <Disc verb="previous" label="Previous" size="side" disabled={!can.canPrev}>
+                  <SkipBack size={24} fill="currentColor" />
+                </Disc>
+                {!can.canToggle && can.canStop ? (
+                  // a source that can stop and not pause (a stream): Stop in pause's place
+                  <Disc verb="stop" label="Stop" size="main">
+                    <Square size={26} fill="currentColor" />
+                  </Disc>
+                ) : (
+                  <Disc
+                    verb="toggle"
+                    label={playing ? "Pause" : "Play"}
+                    size="main"
+                    disabled={!can.canToggle}
+                  >
+                    {playing ? (
+                      <Pause size={32} fill="currentColor" />
+                    ) : (
+                      <Play size={32} fill="currentColor" className="translate-x-0.5" />
+                    )}
+                  </Disc>
+                )}
+                <Disc verb="next" label="Next" size="side" disabled={!can.canNext}>
+                  <SkipForward size={24} fill="currentColor" />
+                </Disc>
+              </div>
               {vol && (
                 <div data-page-volume className="flex items-center gap-1">
                   <Disc verb="volumeDown" label="Volume down" size="side">
@@ -468,11 +468,13 @@ const HOLD_BUTTON =
   "group grid touch-none place-items-center p-1 [-webkit-tap-highlight-color:transparent]";
 
 /** A disc's face: 72px in the centre, 56px beside it, lit while what it opens is open. */
-const discFace = (size: "main" | "side", lit: boolean): string =>
+const discFace = (size: "main" | "side", lit: boolean, off = false): string =>
   cx(
     "relative grid place-items-center rounded-full shadow-lg ring-1 backdrop-blur transition-transform duration-100 group-active:scale-90 motion-reduce:transition-none",
     lit ? "bg-accentdim text-accent ring-accent/50" : "bg-panel/85 text-ink ring-edge",
     size === "main" ? "h-[72px] w-[72px]" : "h-14 w-14",
+    // a disc that can't act now keeps its place, dimmed, so the others never move round it
+    off && "opacity-40 group-active:scale-100",
   );
 
 /** One of the page's round buttons. A press shows at once (decisions/0007); the verb goes on
@@ -486,6 +488,7 @@ function Disc({
   buttonRef,
   label,
   size,
+  disabled = false,
   children,
 }: {
   /** What it asks of the app; or `onPress`, for a button that acts on the page (the queue). */
@@ -499,6 +502,8 @@ function Disc({
   buttonRef?: React.Ref<HTMLButtonElement>;
   label: string;
   size: "main" | "side";
+  /** It can't act now (the source offers no previous track, say): drawn dimmed in its place. */
+  disabled?: boolean;
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
@@ -509,10 +514,11 @@ function Disc({
       data-page-verb={verb}
       aria-label={label}
       aria-pressed={onPress ? active : undefined}
+      disabled={disabled}
       onClick={() => (onPress ? onPress() : verb && void steer(verb))}
       className={DISC_BUTTON}
     >
-      <span className={discFace(size, lit)}>{children}</span>
+      <span className={discFace(size, lit, disabled)}>{children}</span>
     </button>
   );
 }
@@ -941,10 +947,14 @@ function ListPanel({
   );
 }
 
-/** The list's body: 8px all round, so the playing row's ring has room at the top as at the
- *  bottom (flush, the first row's ring was cut off). */
-const listBody = "min-h-0 overflow-y-auto overscroll-contain p-2";
-const rowsBody = cx(listBody, "space-y-1");
+/** The list's body: 8px at the sides, and at each end its edge's ramp (styles.css fade-edges, the
+ *  app's pages' own): a row passing under the tabs or the panel's foot dissolves rather than being
+ *  cut through its words, and at rest the first row and, at full scroll, the last sit clear of it,
+ *  the playing row's ring with them. */
+const LIST_EDGE_PX = 12;
+const listBody =
+  "fade-edges min-h-0 overflow-y-auto overscroll-contain px-2 py-3 [--fade-top-solid:12px] [--fade-bottom:12px]";
+const rowsBody = cx(listBody, "space-y-1.5");
 // the panel 60% of a wide screen (never under 36rem, at most 60rem): five cards across on an 11-inch
 // tablet in landscape, six on a 13-inch, four in portrait, two on a phone, so more than one row
 // shows on a short screen
@@ -959,7 +969,7 @@ function useLandOn(ref: React.RefObject<HTMLDivElement | null>): void {
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const land = (): void => scrollToTop(el, 8);
+    const land = (): void => scrollToTop(el, LIST_EDGE_PX);
     land();
     const box = el.closest(".overflow-y-auto");
     const seen = box ? new ResizeObserver(land) : null;
