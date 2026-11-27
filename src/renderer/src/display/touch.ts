@@ -27,7 +27,8 @@ export const keptWhole = (swallowed: boolean, onPress: boolean): boolean => swal
 
 /** What a minute with nobody at the screen lets go of: a panel or a list open closes ("close", the
  *  buttons going four seconds later as after any touch); with neither open, a finger whose lift
- *  never came lets the buttons go as its lift would have ("hide"); otherwise nothing. */
+ *  never came lets the buttons go as its lift would have ("hide"), and as they go, the controls
+ *  that held it let it go too (the seek bar's mark, the power disc's press); otherwise nothing. */
 export const lapsed = (hold: boolean, down: boolean): "close" | "hide" | null =>
   hold ? "close" : down ? "hide" : null;
 

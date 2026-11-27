@@ -368,7 +368,9 @@ export function DisplayWaveform({
  *   that slides off and is taken by the browser (a cancel) sends nothing.
  * - Only while `live` (the buttons up): a touch that lands while they are away does nothing.
  * - A lift that never came (a touch the system took) holds nothing up: the next touch is taken
- *   afresh, and a capture lost without a lift lets go, sending nothing.
+ *   afresh, a capture lost without a lift lets go, sending nothing, and so do the buttons going
+ *   (the page's minute lets go of a finger it never heard lift, display/touch), the finger's mark
+ *   with them, so the bar never shows it at the next touch.
  * - A seek is for the track the finger went down in: one that changed before the lift (the track
  *   ended under the finger, or was skipped elsewhere) sends nothing, never a point in the next.
  */
@@ -411,6 +413,12 @@ export function PageSeekBar({
     if (canvasRef.current && ready)
       draw(canvasRef.current, analysis, shown, { strip: true, style: "envelope" });
   }, [analysis, ready, shown]);
+  // the buttons gone with a finger still down: its lift would send nothing, and its mark goes
+  useEffect(() => {
+    if (live) return;
+    finger.current = null;
+    setAt(null);
+  }, [live]);
 
   if (duration == null || duration <= 0) return null;
   const shareAt = (x: number): number | null => {
