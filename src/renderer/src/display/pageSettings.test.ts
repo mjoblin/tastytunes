@@ -39,13 +39,28 @@ describe("what a screen keeps for itself", () => {
     expect(forThisPage(app).displayScene).toBe("tide");
   });
 
+  it("keeps the lyric line for itself, and lets it go with the scenes' settings", () => {
+    store();
+    keepOwn({ displayLyrics: false });
+    expect(forThisPage(app).displayLyrics).toBe(false);
+    expect(app.displayLyrics).toBe(true);
+    expect(ALL_SCENES_KEYS).toContain("displayLyrics");
+    forgetOwn(ALL_SCENES_KEYS);
+    expect(forThisPage(app).displayLyrics).toBe(true);
+  });
+
   it("keeps only the display settings, each a value it may have", () => {
     const m = store();
     keepOwn({ theme: "light", lyrics: false, displaySyncMs: 120 });
     expect(ownSettings()).toEqual({ displaySyncMs: 120 });
     m.set(
       "tastytunes.display",
-      JSON.stringify({ displayScene: "nonsense", displayFinish: "chrome", displaySyncMs: 5e9 }),
+      JSON.stringify({
+        displayScene: "nonsense",
+        displayFinish: "chrome",
+        displaySyncMs: 5e9,
+        displayLyrics: "off",
+      }),
     );
     expect(ownSettings()).toEqual({});
   });

@@ -46,7 +46,8 @@ type Tab = "scene" | "settings";
  * THE PAGE'S SCENE PICKER (0.17.0, Display on other screens): at a touch (display/touch) a scene
  * button shows in the corner, and opens a panel of two tabs. Scene: the scenes by name, "Same as
  * TastyTunes" first. Settings: the window's All scenes rows (the glass, Show, the drops, the
- * sync), sized for a finger, set for this screen alone until "Use TastyTunes' settings", and
+ * sync) and the lyric line (the window's is a corner button), sized for a finger, set for this
+ * screen alone until "Use TastyTunes' settings", and
  * anything else this screen keeps for itself (`extra`: its controls). The window's picker calls
  * them "All scenes" beside "Reading" and "This scene"; here, beside a scene's description, that
  * read as "show all the scenes". A screen that can't draw scenes opens Settings alone. Beside the
@@ -208,7 +209,7 @@ export function ScenePanel({
               )}
               {showingTab === "settings" && (
                 <div data-page-scene-settings className="px-3 pt-1 pb-1">
-                  <SyncRow host="display" sleeveOnly={!scenes} touch />
+                  <SyncRow host="display" sleeveOnly={!scenes} touch lyrics />
                   {keptHere && (
                     <div className="border-t border-edge pt-3.5 pb-1">
                       <HeaderChip
