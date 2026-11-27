@@ -14,12 +14,14 @@ import {
   type PowerFacts,
 } from "@shared/displayControl";
 import { isDeviceArt } from "@shared/artUrl";
+import { errorMessage } from "@shared/guards";
 import type { DisplayStatus } from "@shared/ipc";
 import { playlistTotalSecs, type AppSettings } from "@shared/model";
 import { litPresetIds } from "@shared/litPresets";
 import { activeSourceId, isCbusMode, isPreAmpMode } from "@shared/smoip";
 import { commandForMedia, transportAbilities } from "@shared/transport";
 import { jsonFileStore } from "../data/jsonStore";
+import { carriedNone, withCarried } from "../data/savedChecks";
 import { getPlaylists } from "../data/playlists";
 import { artHostTrust, fetchPicture } from "../lookups/artFetch";
 import { artThumb } from "../lookups/artThumbs";
@@ -28,7 +30,7 @@ import { audioAnalysisGet } from "../lookups/audioAnalysis";
 import { lookupMediaInfo } from "../media/mediaInfo";
 import { displayToken, getSettings, newDisplayToken } from "../data/persist";
 import { DisplayServer } from "../servers/displayServer";
-import { isStoredScreen, ScreenBook } from "../servers/displayScreens";
+import { ScreenBook, storedScreens } from "../servers/displayScreens";
 import { lanAddress } from "../servers/lanAddress";
 import { alsoHearSettings, broadcastDisplayScreens, broadcastDisplayStatus } from "./broadcast";
 import { connectedHost, deviceManager } from "./runtime";
@@ -52,19 +54,17 @@ import { connectedHost, deviceManager } from "./runtime";
 
 const MAX_PICTURE_BYTES = 8 * 1024 * 1024;
 
+/** A later version's screens and the list's own form, written back as found (data/savedChecks). */
+let screensCarried = carriedNone();
+
 const screensFile = jsonFileStore<DisplayScreen[]>({
   pathOf: () => join(app.getPath("userData"), "display-screens.json"),
   scope: "display screens",
+  encode: (next) => withCarried(next, screensCarried),
+  kept: () => screensCarried.notes,
   load: (parsed, setAside) => {
-    if (parsed === undefined) return [];
-    if (!Array.isArray(parsed)) {
-      setAside.push("display screens: not a list");
-      return [];
-    }
-    const kept = parsed.filter(isStoredScreen);
-    if (kept.length < parsed.length)
-      setAside.push(`display screens: ${parsed.length - kept.length} that couldn't be read`);
-    return kept;
+    screensCarried = carriedNone();
+    return storedScreens(parsed, setAside, screensCarried);
   },
 });
 
@@ -447,6 +447,9 @@ let state: { port: number | null; error: string | null; addressUnreadable: boole
 
 /** Said on the card when the saved address couldn't be read (data/secrets' unreadable). */
 const ADDRESS_UNREADABLE = "Couldn't read the saved address. Click New address to make a new one.";
+/** Said on the card when the first address couldn't be saved (a full disk, a refused keychain). */
+const ADDRESS_NOT_MADE =
+  "Couldn't make an address. Turn Second screen off and back on to try again.";
 
 export async function displayStatus(): Promise<DisplayStatus> {
   if (state.port == null)
@@ -468,10 +471,26 @@ export async function displayStatus(): Promise<DisplayStatus> {
   };
 }
 
+/** The address Settings was last told. */
+let shownUrl: string | null = null;
+
 async function pushStatus(): Promise<DisplayStatus> {
   const status = await displayStatus();
+  shownUrl = status.url;
   broadcastDisplayStatus(status);
   return status;
+}
+
+/** A streamer connected: the address is worked out again, and Settings hears it when it differs.
+ *  Second screen switched on at launch starts before the app connects, so its first address
+ *  can't prefer the streamer's network (servers/lanAddress); this one can, as the agents' server's
+ *  does (servers/mcpServer streamerConnected). */
+export async function displayStreamerConnected(): Promise<void> {
+  if (state.port == null) return;
+  const status = await displayStatus().catch(() => null);
+  if (!status || status.url === shownUrl) return;
+  shownUrl = status.url;
+  broadcastDisplayStatus(status);
 }
 
 const portOk = (p: number): boolean =>
@@ -497,13 +516,21 @@ export async function syncDisplay(s: AppSettings = getSettings()): Promise<Displ
   if (displayServer.running && displayServer.port === want.port) return pushStatus();
   displayServer.stop();
   // the address read (or minted, the first time) before the server starts: one saved that couldn't
-  // be read is kept as it is, and the server waits for New address rather than make one unasked
-  const token = await displayToken();
+  // be read is kept as it is, and the server waits for New address rather than make one unasked;
+  // a first one that couldn't be saved (undefined) is said on the card and in the log
+  const token = await displayToken().catch((e: unknown) => {
+    deviceManager.log("error", "display", `the address couldn't be made (${errorMessage(e)})`);
+    return undefined;
+  });
   // the read can wait on the keychain (a system prompt), and the switch or the port may have
   // changed meanwhile: what is wanted now is what counts, never the settings this call began with,
   // so a switch turned off during the read leaves nothing serving
   const now = getSettings().displayServer;
   if (!now.enabled || now.port !== want.port) return syncDisplay(getSettings());
+  if (token === undefined) {
+    state = { port: null, error: ADDRESS_NOT_MADE, addressUnreadable: false };
+    return pushStatus();
+  }
   if (token == null) {
     state = { port: null, error: ADDRESS_UNREADABLE, addressUnreadable: true };
     return pushStatus();
@@ -527,11 +554,20 @@ export async function syncDisplay(s: AppSettings = getSettings()): Promise<Displ
 }
 
 /** A new address: every screen on the old one is let go at once, and its reconnect meets the
- *  "open the address" page. */
-export async function newDisplayAddress(): Promise<DisplayStatus> {
-  await newDisplayToken();
+ *  "open the address" page; keysSetAside when the saved keys couldn't be read and were set aside
+ *  to make it (data/secrets renewSecret). */
+export async function newDisplayAddress(): Promise<{
+  status: DisplayStatus;
+  keysSetAside: boolean;
+}> {
+  const keysSetAside = await newDisplayToken();
   displayServer.closeScreens();
   // and every approval with it
   screenBook.clear();
-  return syncDisplay();
+  // a later version's screens kept in the file go too: they may be approvals
+  if (screensCarried.rows.length > 0) {
+    screensCarried = { ...screensCarried, rows: [], notes: [] };
+    screensFile.set([]);
+  }
+  return { status: await syncDisplay(), keysSetAside };
 }

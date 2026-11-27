@@ -23,7 +23,7 @@ import {
  * computer's browser opens (with its token), a new address when one has been shared too widely or
  * the saved one couldn't be read, and the port. The status is read fresh when the card shows (the
  * computer's address can have changed), then follows main's pushes as the server starts, stops or
- * fails.
+ * fails, and as a streamer connects (the address on its network, where this computer has one).
  *
  * CONTROLS ON THE OTHER SCREENS: a switch of its own, off by default (turning on viewing never
  * grants control), under it the volume and the controls that start music (presets, Wake, picking
@@ -40,8 +40,9 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
   const { copied, copy } = useCopied();
   // the QR code is the address as a picture, so it is shown only when asked for
   const [qrShown, setQrShown] = useState(false);
-  // New address refused (the saved secrets couldn't be read or written): said in the card
-  const [newFailed, setNewFailed] = useState(false);
+  // what the last New address said in the card: refused (the saved secrets couldn't be set aside
+  // or written), or made once the saved keys, which couldn't be read, were set aside
+  const [newSaid, setNewSaid] = useState<NewSaid>(null);
   const on = settings.displayServer.enabled;
   const port = settings.displayServer.port;
   useEffect(() => {
@@ -62,13 +63,19 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
           <div data-display-error className="flex items-center justify-between gap-4">
             <div className="text-[12px] text-dim">{status.error}</div>
             {status.addressUnreadable && (
-              <NewAddress controls={settings.displayControl} onFailed={setNewFailed} />
+              <NewAddress controls={settings.displayControl} onSaid={setNewSaid} />
             )}
           </div>
         )}
-        {on && newFailed && (
+        {on && newSaid === "failed" && (
           <div data-display-new-address-error className="text-[12px] text-dim">
             Couldn't make a new address. Try again.
+          </div>
+        )}
+        {on && newSaid === "set-aside" && (
+          <div data-display-new-address-set-aside className="text-[12px] text-dim">
+            Made a new address. The saved keys couldn't be read, so they were set aside and any keys
+            need to be entered again.
           </div>
         )}
         {on && status?.url && (
@@ -92,7 +99,7 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
                 >
                   {qrShown ? "Hide QR code" : "Show QR code"}
                 </HeaderChip>
-                <NewAddress controls={settings.displayControl} onFailed={setNewFailed} />
+                <NewAddress controls={settings.displayControl} onSaid={setNewSaid} />
               </div>
             </div>
             {qrShown && (
@@ -133,15 +140,19 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
   );
 }
 
+/** What a New address says in the card (NewAddress). */
+type NewSaid = "failed" | "set-aside" | null;
+
 /** New address, confirmed first: it can't be undone, and every screen on the old address is let
  *  go, every approval with it, and a Home Screen app made from it (decisions/0011). One that
- *  couldn't be made says so (`onFailed`), and the next try clears it. */
+ *  couldn't be made says so, and so does one made once the saved keys, which couldn't be read,
+ *  were set aside (`onSaid`); the next try clears it. */
 function NewAddress({
   controls,
-  onFailed,
+  onSaid,
 }: {
   controls: boolean;
-  onFailed: (failed: boolean) => void;
+  onSaid: (said: NewSaid) => void;
 }): React.JSX.Element {
   const confirm = useConfirmPopover();
   return (
@@ -155,11 +166,14 @@ function NewAddress({
               : "Make a new address? Screens using the current one stop working until they open the new one.",
             verb: "New address",
             onConfirm: () => {
-              onFailed(false);
+              onSaid(null);
               void tt
                 .displayNewAddress()
-                .then(setDisplayStatus)
-                .catch(() => onFailed(true));
+                .then(({ status, keysSetAside }) => {
+                  setDisplayStatus(status);
+                  if (keysSetAside) onSaid("set-aside");
+                })
+                .catch(() => onSaid("failed"));
             },
           })
         }

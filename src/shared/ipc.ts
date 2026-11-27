@@ -403,8 +403,9 @@ export interface TastyTunesApi {
   openAccessibilitySettings(): Promise<void>;
   /** Display on other screens as it stands (main/app/display). */
   getDisplayStatus(): Promise<DisplayStatus>;
-  /** A new address for Display on other screens: screens on the old one need the new one. */
-  displayNewAddress(): Promise<DisplayStatus>;
+  /** A new address for Display on other screens: screens on the old one need the new one;
+   *  keysSetAside when the saved keys couldn't be read and were set aside to make it. */
+  displayNewAddress(): Promise<{ status: DisplayStatus; keysSetAside: boolean }>;
   /** The screens that asked to control playback, and the one being asked about now. */
   getDisplayScreens(): Promise<DisplayScreens>;
   /** Allow a screen to control playback, or not now (the prompt, or Settings' list). */
