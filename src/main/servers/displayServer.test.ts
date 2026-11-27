@@ -602,8 +602,14 @@ describe("Display on other screens' server", () => {
       standby: false,
       sleep: null,
     };
+    const before = Date.now();
     const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
     expect(opened.first).toContain('event: control\ndata: {"state":"ask"');
+    // with the app's clock as it went out, which a screen counts the sleep timer from
+    const line = await vi.waitFor(() => /event: control\ndata: (.*)\n\n/.exec(opened.more())![1]);
+    const told = (JSON.parse(line) as { now: number }).now;
+    expect(told).toBeGreaterThanOrEqual(before);
+    expect(told).toBeLessThanOrEqual(Date.now());
     control.now = {
       state: "off",
       volume: null,
@@ -619,11 +625,12 @@ describe("Display on other screens' server", () => {
     server.pushControl();
     await new Promise((r) => setTimeout(r, 50));
     expect(opened.more()).toContain('event: control\ndata: {"state":"off"');
-    // said once: the same again sends nothing
-    const before = opened.more().length;
+    // said once: the same again sends nothing, however the clock has moved since
+    const sent = opened.more().length;
+    await new Promise((r) => setTimeout(r, 5));
     server.pushControl();
     await new Promise((r) => setTimeout(r, 50));
-    expect(opened.more().length).toBe(before);
+    expect(opened.more().length).toBe(sent);
   });
 
   it("tells an open screen of the sleep timer as it is armed", async () => {

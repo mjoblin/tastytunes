@@ -15,7 +15,9 @@ import type {
  * its own bar (step four), never through the window's strip.
  *
  * Where this screen stands arrives on its own line of the live channel (display/live): off, ask,
- * asking, declined or allowed, with the volume and the next track when allowed.
+ * asking, declined or allowed, with the volume and the next track when allowed. Each line brings
+ * the app's clock too, and the page keeps how far it is from its own (appNow): the sleep timer
+ * runs out by the app's clock, and a TV's or an old tablet's can be minutes off.
  */
 
 const OFF: DisplayControl = {
@@ -32,8 +34,21 @@ const OFF: DisplayControl = {
 };
 let control: DisplayControl = OFF;
 const heard = new Set<() => void>();
+/** How far the app's clock is ahead of this browser's, in ms (behind when below zero), as the last
+ *  line from the app said. */
+let appAhead = 0;
 
-export function hearControl(next: DisplayControl): void {
+/** A line from the app: where this screen stands, and the app's clock as it went out (`pageNow`,
+ *  this browser's clock as it arrived). */
+export function hearControl(next: DisplayControl, pageNow: number = Date.now()): void {
+  if (typeof next.now === "number" && Number.isFinite(next.now)) appAhead = next.now - pageNow;
+  tell(next);
+}
+
+/** The app's time now, ms since the epoch: this browser's clock moved by the last line's word. */
+export const appNow = (pageNow: number = Date.now()): number => pageNow + appAhead;
+
+function tell(next: DisplayControl): void {
   control = next;
   for (const l of heard) l();
 }
@@ -100,7 +115,7 @@ async function post(what: {
     const body = (await res.json().catch(() => null)) as DisplayControlAnswer | null;
     // the screen asked: it hears "asking" on its line too, but the tap's own answer is sooner
     if (body && "refused" in body && body.refused === "asking" && control.state === "ask")
-      hearControl({ ...control, state: "asking" });
+      tell({ ...control, state: "asking" });
     return body;
   } catch {
     return null;
