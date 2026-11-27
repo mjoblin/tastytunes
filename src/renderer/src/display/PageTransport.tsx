@@ -57,6 +57,7 @@ import {
 } from "./sleepTimer";
 import { musicGoing } from "./rest";
 import { PageTabs } from "./PageTabs";
+import { onControl } from "./touch";
 import {
   controlsLocked,
   keepListView,
@@ -286,6 +287,13 @@ export function PageTransport({
       <div
         ref={strip}
         data-page-transport={control.state}
+        // the strip spans the screen above the list's and the sheet's catcher: a touch on it that
+        // isn't on one of its controls closes them too, as one anywhere else outside them does
+        onClick={(e) => {
+          if (!(queueOpen || sleepOpen) || onControl(e.target)) return;
+          onQueue(false);
+          onSleep(false);
+        }}
         className={cx(
           "absolute inset-x-0 z-[46] flex flex-col items-center gap-1.5 px-4 transition-opacity duration-300 select-none",
           showing,

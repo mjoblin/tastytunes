@@ -55,7 +55,7 @@ export const lapsed = (hold: boolean, down: boolean): "close" | "hide" | null =>
  *  or the seek bar's own area). */
 const CONTROL =
   'button, a, input, select, textarea, label, [role="button"], [role="switch"], [role="tab"], [role="slider"], [data-page-scenes], [data-page-queue], [data-page-sleep-sheet], [data-page-seek]';
-const onControl = (t: EventTarget | null): boolean =>
+export const onControl = (t: EventTarget | null): boolean =>
   t instanceof Element && t.closest(CONTROL) != null;
 /** A control that acts on the finger itself rather than on its click (keptWhole). */
 const ON_PRESS = "[data-page-seek], [data-page-hold]";
