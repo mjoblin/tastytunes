@@ -182,9 +182,9 @@ export class NowPlayingBridge {
 
   /** A preset recall went out from the app: the play it starts is TastyTunes' own, never the one
    *  playing as it went, which is noted now (nowPlayingRules' StartedHere), unless `lit`: the
-   *  caller saw the preset playing, so the play there is its own. */
-  recalled(lit = false): void {
-    this.started.recalled(this.deps.view().playState, this.deps.now(), lit);
+   *  preset was playing, so the play there is its own too. `station`: the preset is a station's. */
+  recalled(lit = false, station = false): void {
+    this.started.recalled(this.deps.view().playState, this.deps.now(), lit, station);
     this.update();
   }
 

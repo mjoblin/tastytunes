@@ -49,10 +49,13 @@ import { SmoipSocket } from "./smoipSocket";
 import {
   applyFrame,
   emptyCache,
+  litFromCache,
   presetVolumeFor,
   PresetVolumeAfterRecall,
+  type RecallsNow,
   type StreamerCache,
 } from "./streamerCache";
+import { isStationPreset } from "@shared/litPresets";
 import * as smoipHttp from "./smoipHttp";
 import { getSettings, updateSettings } from "../data/persist";
 import { getRecents } from "../data/recents";
@@ -606,22 +609,25 @@ export class DeviceManager {
       case "resumeHeld":
         return this.resumeHeld(socket);
       case "recallPreset": {
-        // a recall of what already plays rightly changes nothing: the caller says so when it sees
-        // the preset lit, and the app's own last recall still playing says so too
+        // a recall of what already plays rightly changes nothing: its lamp says so, the caller's
+        // or main's own for every caller (read before this recall becomes the last), and the
+        // app's own last recall still playing says so too
+        const lit = cmd.alreadyPlaying === true || this.litPresetsNow().has(cmd.presetId);
         const already =
-          cmd.alreadyPlaying === true ||
+          lit ||
           (this.lastRecalledPresetId === cmd.presetId && this.cache.playState?.state === "play");
         this.setRecalledPreset(cmd.presetId);
         // recalled again, it is given another chance, as the windows give it (clearDeadPreset)
         this.deadPresets = this.deadPresets.filter((x) => x !== cmd.presetId);
         const udn = this.cache.systemInfo?.udn ?? null;
-        const name = this.cache.presets?.presets?.find((p) => p.id === cmd.presetId)?.name ?? null;
+        const preset = this.cache.presets?.presets?.find((p) => p.id === cmd.presetId) ?? null;
+        const name = preset?.name ?? null;
         listeningRecord.openContext({ kind: "preset", id: cmd.presetId, name, streamer: udn });
         socket.send("/zone/recall_preset", { preset: cmd.presetId });
         // every recall, while the cache still holds what played as it went (the streamer's answer
-        // comes on a later frame), as the watch below notes it; lit by the caller's own word, never
-        // the guess from the last recall, which another app's play since would pass
-        this.onRecallSent?.(cmd.presetId, cmd.alreadyPlaying === true);
+        // comes on a later frame), as the watch below notes it; lit by its lamp, never the guess
+        // from the last recall, which another app's play since would pass
+        this.onRecallSent?.(cmd.presetId, lit, preset != null && isStationPreset(preset));
         this.recallWatch.recalled(cmd.presetId, already);
         // Feature 10: the preset's local volume override rides along on every recall through the
         // app, once the recall lands, unless the caller (a schedule with its own volume) opts out.
@@ -1026,12 +1032,17 @@ export class DeviceManager {
    *  without a snapshot. */
   /** What the presets' lamp reads beside the cache (shared/litPresets): the app's last recall,
    *  the recalls that came to nothing, and a wake on its way. */
-  get recallsNow(): { lastRecalled: number | null; dead: readonly number[]; waking: boolean } {
+  get recallsNow(): RecallsNow {
     return {
       lastRecalled: this.lastRecalledPresetId,
       dead: this.deadPresets,
       waking: this.wakePromise != null,
     };
+  }
+
+  /** The presets playing now, by the lamp's rule over this connection (litFromCache). */
+  litPresetsNow(): Set<number> {
+    return litFromCache(this.cache, this.recallsNow, getSettings().queueSignatures);
   }
 
   /** What TastyTunes holds to pick up where it left off on this streamer, or null. */
@@ -1090,9 +1101,9 @@ export class DeviceManager {
    * Main's own tap on every preset recall the app sends, the same preset again included: the
    * recalledPreset push says only when the app's last recall changes. The system's Now Playing
    * takes the play a recall starts as TastyTunes' own (app/nowPlaying), and the play already there
-   * when `lit` (the caller saw the preset playing).
+   * when `lit` (its preset was playing); `station`: the preset is a station's.
    */
-  onRecallSent: ((presetId: number, lit: boolean) => void) | null = null;
+  onRecallSent: ((presetId: number, lit: boolean, station: boolean) => void) | null = null;
 
   private push(msg: PushMessage): void {
     for (const wc of webContents.getAllWebContents()) {

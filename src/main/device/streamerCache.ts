@@ -1,5 +1,6 @@
 import type { StreamerCommand } from "@shared/ipc";
 import { presetVolumeHolds, presetVolumeKey, type FirmwareStatus } from "@shared/model";
+import { litPresetIds } from "@shared/litPresets";
 import { getSettings } from "../data/persist";
 import { DEAD_RECALL_MS } from "./recallWatch";
 import type {
@@ -43,6 +44,41 @@ export interface StreamerCache {
   systemDisplay: SystemDisplay | null;
   displaySpec: SystemDisplaySpec | null;
   powerSpec: SystemPowerSpec | null;
+}
+
+/** What the presets' lamp reads beside a cache: the app's last recall, the recalls that came to
+ *  nothing, and a wake on its way (DeviceManager.recallsNow). */
+export interface RecallsNow {
+  lastRecalled: number | null;
+  dead: readonly number[];
+  waking: boolean;
+}
+
+/**
+ * THE PRESETS LIT, AS MAIN READS THEM: the window's own rule (shared/litPresets) over what the
+ * cache holds. The one home for main's lamp, which every recall reads (DeviceManager.command, so
+ * a lit preset recalled from the number keys, the palette, Search, a link, an agent or a schedule
+ * is known for one already playing, as one from the Presets screen is) and another screen's
+ * presets show (app/display).
+ */
+export function litFromCache(
+  cache: Readonly<StreamerCache>,
+  recalls: RecallsNow,
+  queueSignatures: Record<string, string>,
+): Set<number> {
+  const items = (cache.presets?.presets ?? []).filter((p) => p.id != null);
+  return litPresetIds(items, {
+    zoneState: cache.zoneState,
+    nowPlaying: cache.nowPlaying,
+    playState: cache.playState,
+    queue: cache.queue,
+    systemInfo: cache.systemInfo,
+    systemPower: cache.systemPower,
+    waking: recalls.waking,
+    lastRecalledPresetId: recalls.lastRecalled,
+    deadPresets: recalls.dead,
+    queueSignatures,
+  });
 }
 
 export const emptyCache = (): StreamerCache => ({

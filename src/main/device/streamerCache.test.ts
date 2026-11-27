@@ -5,6 +5,7 @@ import {
   WAKE_COMMANDS,
   applyFrame,
   emptyCache,
+  litFromCache,
 } from "./streamerCache";
 import { DEAD_RECALL_MS } from "./recallWatch";
 
@@ -44,6 +45,38 @@ describe("a streamer's cache, filled by its frames", () => {
     expect(WAKE_COMMANDS.has("recallPreset")).toBe(true);
     expect(WAKE_COMMANDS.has("pause")).toBe(false);
     expect(WAKE_COMMANDS.has("setVolumePercent")).toBe(false);
+  });
+});
+
+// Main's one reading of the presets' lamp, which every recall takes, whoever sent it
+describe("the presets lit, as main reads them", () => {
+  const filled = () => {
+    const cache = emptyCache();
+    applyFrame(cache, "/system/power", { power: "ON" });
+    applyFrame(cache, "/presets/list", {
+      presets: [
+        { id: 1, name: "FIP", type: "Radio", class: "stream.radio", airable_radio_id: 42 },
+        { id: 2, name: "Other", type: "Radio", class: "stream.radio", airable_radio_id: 7 },
+      ],
+    });
+    applyFrame(cache, "/zone/play_state", {
+      state: "play",
+      metadata: { class: "md.radio.airable", source: "IR", station: "FIP", radio_id: 42 },
+    });
+    return cache;
+  };
+  const recalls = { lastRecalled: null, dead: [], waking: false };
+
+  it("lights the preset of what plays by what the cache holds, recalled from anywhere", () => {
+    expect([...litFromCache(filled(), recalls, {})]).toEqual([1]);
+  });
+
+  it("lights nothing while a wake is on its way, or for a recall that came to nothing", () => {
+    expect(litFromCache(filled(), { ...recalls, waking: true }, {}).size).toBe(0);
+    expect(litFromCache(filled(), { ...recalls, dead: [1] }, {}).size).toBe(0);
+    const asleep = filled();
+    applyFrame(asleep, "/system/power", { power: "NETWORK" });
+    expect(litFromCache(asleep, recalls, {}).size).toBe(0);
   });
 });
 
