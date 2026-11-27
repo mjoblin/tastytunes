@@ -377,6 +377,9 @@ export interface TastyTunesApi {
   /** An album's cover from another library or the Cover Art Archive; `failed`, the album's own
    *  address that failed, is never offered back. */
   albumArt(artist: string, album: string, failed?: string | null): Promise<string | null>;
+  /** A radio song's own cover, the station having announced it as artist and song: null when
+   *  either switch is off, nothing matched strictly, or there is no cover (lookups/radioCover). */
+  radioCover(artist: string, song: string): Promise<string | null>;
   discover(): Promise<DiscoveredDevice[]>;
   connect(host: string): Promise<void>;
   disconnect(): Promise<void>;
@@ -711,6 +714,7 @@ export interface TastyTunesApi {
 export const IPC = {
   getSnapshot: "tt:getSnapshot",
   albumArt: "tt:albumArt",
+  radioCover: "tt:radioCover",
   discover: "tt:discover",
   connect: "tt:connect",
   disconnect: "tt:disconnect",

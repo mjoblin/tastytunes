@@ -13,10 +13,12 @@ import {
   type DisplayVerb,
   type DisplayVerbArgs,
 } from "@shared/displayControl";
+import { splitRadioTitle } from "@shared/elsewhere";
 import type { PushMessage, Snapshot } from "@shared/ipc";
 import type { ArtTier } from "../lookups/artThumbs";
 import {
   audioAnalysisKey,
+  playKey,
   type AudioAnalysis,
   type LyricsQuery,
   type LyricsResult,
@@ -92,6 +94,10 @@ export interface DisplayDeps {
   trackInfo(query: MediaInfoQuery): Promise<MediaInfoTarget | null>;
   /** A stored analysis by its content key. */
   analysis(contentKey: string): AudioAnalysis | null;
+  /** A radio song's own cover, when the switches want one (lookups/radioCover). */
+  radioCover(artist: string, song: string): Promise<string | null>;
+  /** The log's own copy of a cover whose address died, by the play's key (lookups/recentArt). */
+  recentCover(key: string): string | null;
   token(): Promise<string>;
   /** The built renderer (out/renderer): display.html and its assets. */
   pageDir: string;
@@ -288,6 +294,30 @@ export function asksForPlaying(
     (q.album == null || is(q.album, md?.album, d?.line3)) &&
     (q.duration == null || q.duration === md?.duration)
   );
+}
+
+/** The playing station's song as the page splits it (lib/radioCover's radioSongOf over
+ *  lib/format's deriveNowPlaying: the station's line under its name), or null off the radio or
+ *  for a title that doesn't split into both. */
+export function playingRadioSong(snap: Snapshot): { artist: string; song: string } | null {
+  const md = snap.playState?.metadata;
+  const d = snap.nowPlaying?.display;
+  const radio = /radio/i.test(md?.class ?? d?.class ?? "") || md?.station != null;
+  const text = md?.title ?? d?.line2 ?? null;
+  if (!radio || !text) return null;
+  const { artist, song } = splitRadioTitle(text, null);
+  return artist && song ? { artist, song } : null;
+}
+
+/** The playing track's key in the log (playKey) as the page asks its saved cover by it, from
+ *  the same lines deriveNowPlaying reads; null on the radio or with nothing titled. */
+export function playingCoverKey(snap: Snapshot): string | null {
+  const md = snap.playState?.metadata;
+  const d = snap.nowPlaying?.display;
+  if (/radio/i.test(md?.class ?? d?.class ?? "") || md?.station != null) return null;
+  const title = md?.title ?? d?.line1 ?? null;
+  if (!title) return null;
+  return playKey(title, md?.artist ?? d?.line2 ?? null, md?.album ?? d?.line3 ?? null);
 }
 
 export class DisplayServer {
@@ -506,6 +536,7 @@ export class DisplayServer {
       if (path === "/api/lyrics") return await this.lyrics(res, url);
       if (path === "/api/track") return await this.track(res, url);
       if (path === "/api/analysis") return this.storedAnalysis(res, url);
+      if (path === "/api/cover") return await this.cover(res, url);
       const art = /^\/art\/([0-9a-f]{24})$/.exec(path);
       if (art) return await this.picture(res, art[1], url.searchParams.get("size"));
       if (path.startsWith("/assets/"))
@@ -719,6 +750,21 @@ export class DisplayServer {
   private storedAnalysis(res: ServerResponse, url: URL): void {
     const key = url.searchParams.get("key") ?? "";
     this.json(res, this.trackKeys.has(key) ? this.deps.analysis(key) : null);
+  }
+
+  /** A cover past the streamer's picture, for the playing track only, as a data URL or null: a
+   *  radio song's own (asked by its artist and song), or the log's copy of a cover whose address
+   *  died (asked by the play's key). */
+  private async cover(res: ServerResponse, url: URL): Promise<void> {
+    const p = url.searchParams;
+    const snap = this.deps.snapshot();
+    const key = p.get("key");
+    if (key != null)
+      return this.json(res, key === playingCoverKey(snap) ? this.deps.recentCover(key) : null);
+    const playing = playingRadioSong(snap);
+    if (!playing || p.get("artist") !== playing.artist || p.get("song") !== playing.song)
+      return this.json(res, null);
+    this.json(res, await this.deps.radioCover(playing.artist, playing.song));
   }
 
   /** A picture by the id handed out: its small copy when a list asks for one, else as it is. */

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Snapshot } from "@shared/ipc";
-import { DEFAULT_SETTINGS } from "@shared/model";
+import { DEFAULT_SETTINGS, playKey } from "@shared/model";
 import {
   LINE_PICTURES_MAX,
   PLAYLISTS_SENT,
@@ -20,6 +20,8 @@ import {
   DisplayServer,
   MAX_RATE_KEYS,
   PING_MS,
+  playingCoverKey,
+  playingRadioSong,
   VOLUME_RATE,
 } from "./displayServer";
 
@@ -55,6 +57,7 @@ async function rig(
     picture?: (url: string) => Promise<never>;
     thumb?: (url: string) => Promise<never>;
     token?: () => Promise<string>;
+    snap?: Snapshot;
   } = {},
 ) {
   const page = mkdtempSync(join(tmpdir(), "tt-display-"));
@@ -66,6 +69,7 @@ async function rig(
   const fetched: string[] = [];
   const thumbs: string[] = [];
   const asked: string[] = [];
+  const covers: string[] = [];
   const logged: string[] = [];
   const steered: Array<{
     screen: string;
@@ -91,7 +95,7 @@ async function rig(
     },
   };
   server = new DisplayServer({
-    snapshot: () => snapshot,
+    snapshot: () => opts.snap ?? snapshot,
     lyrics: (q) => {
       asked.push(`${q.artist}|${q.title}`);
       return Promise.resolve({ plain: "words" } as never);
@@ -134,6 +138,12 @@ async function rig(
           : null,
       ),
     analysis: (key) => (key === "band|record|song|200" ? ({ dr: 9 } as never) : null),
+    radioCover: (artist, song) => {
+      covers.push(`${artist}|${song}`);
+      return Promise.resolve("data:image/png;base64,c29uZw==");
+    },
+    recentCover: (key) =>
+      key === playKey("Song", "Band", "Record") ? "data:image/png;base64,c2F2ZWQ=" : null,
     token: opts.token ?? (() => Promise.resolve(token)),
     pageDir: page,
     log: (text) => logged.push(text),
@@ -250,7 +260,7 @@ async function rig(
       req.on("error", (e) => (e.message === "socket hang up" ? undefined : reject(e)));
       req.end();
     });
-  return { get, live, steer, fetched, thumbs, asked, logged, steered, control, server };
+  return { get, live, steer, fetched, thumbs, asked, covers, logged, steered, control, server };
 }
 
 const cookie = `tt_display=${TOKEN}`;
@@ -728,6 +738,24 @@ describe("Display on other screens' server", () => {
     expect(asked).toEqual(["Band|Song"]);
   });
 
+  it("hands over the log's copy of a cover only for the track that is playing", async () => {
+    const { get, covers } = await rig();
+    const key = encodeURIComponent(playKey("Song", "Band", "Record"));
+    const saved = await get(`/api/cover?key=${key}`, { cookie });
+    expect(JSON.parse(saved.body)).toBe("data:image/png;base64,c2F2ZWQ=");
+    const other = await get(
+      `/api/cover?key=${encodeURIComponent(playKey("Other", "Band", null))}`,
+      {
+        cookie,
+      },
+    );
+    expect(JSON.parse(other.body)).toBeNull();
+    // off the radio, a song's cover is never asked for
+    const radio = await get("/api/cover?artist=Band&song=Song", { cookie });
+    expect(JSON.parse(radio.body)).toBeNull();
+    expect(covers).toEqual([]);
+  });
+
   it("serves a picture as a picture only, fetched once however many ask", async () => {
     const { get, fetched } = await rig();
     const snap = JSON.parse((await get("/api/snapshot", { cookie })).body) as Snapshot;
@@ -922,5 +950,50 @@ describe("a lyrics request for the playing track", () => {
     expect(asksForPlaying({ ...q, title: "Song", album: null }, snap, { noArtist: true })).toBe(
       false,
     );
+  });
+});
+
+describe("the covers past the streamer's picture", () => {
+  const station = (title: string | null, art = "https://logo.example/fm.png") =>
+    ({
+      playState: {
+        state: "play",
+        metadata: { class: "md.radio.airable", station: "Mock FM", title, art_url: art },
+      },
+      nowPlaying: null,
+    }) as unknown as Snapshot;
+
+  it("reads the playing station's song as the page splits it", () => {
+    expect(playingRadioSong(station("Sam Fender feat. Olivia Dean - Rein Me In"))).toEqual({
+      artist: "Sam Fender feat. Olivia Dean",
+      song: "Rein Me In",
+    });
+    // a show's name, the station's own message, or nothing announced: no song
+    expect(playingRadioSong(station("Breakfast with the Team"))).toBeNull();
+    expect(playingRadioSong(station(null))).toBeNull();
+    // a library track is no station's song
+    expect(playingRadioSong(snapshot)).toBeNull();
+  });
+
+  it("asks for a song's cover only while its station plays it", async () => {
+    const { get, covers } = await rig({
+      snap: station("Lady Gaga & Bruno Mars - Die With A Smile"),
+    });
+    const p = new URLSearchParams({ artist: "Lady Gaga & Bruno Mars", song: "Die With A Smile" });
+    const playing = await get(`/api/cover?${p.toString()}`, { cookie });
+    expect(JSON.parse(playing.body)).toBe("data:image/png;base64,c29uZw==");
+    const other = await get("/api/cover?artist=Band&song=Song", { cookie });
+    expect(JSON.parse(other.body)).toBeNull();
+    // a station has no saved cover in the log
+    const key = await get(`/api/cover?key=${encodeURIComponent(playKey("Song", "Band", null))}`, {
+      cookie,
+    });
+    expect(JSON.parse(key.body)).toBeNull();
+    expect(covers).toEqual(["Lady Gaga & Bruno Mars|Die With A Smile"]);
+  });
+
+  it("keys the playing track as the log keys it, and never a station", () => {
+    expect(playingCoverKey(snapshot)).toBe(playKey("Song", "Band", "Record"));
+    expect(playingCoverKey(station("Band - Song"))).toBeNull();
   });
 });
