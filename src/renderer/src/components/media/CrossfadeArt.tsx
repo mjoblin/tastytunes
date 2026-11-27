@@ -12,6 +12,11 @@ import { useDecodedArt } from "@/hooks/useDecodedArt";
  * half-loaded box (device-proxied and remote-station art can be slow), and the
  * outgoing layer is dropped on the fade's own animationend rather than a JS
  * timer mirroring the CSS duration (.art-fade-in owns that number).
+ *
+ * THE OUTGOING LAYER IS THE ONE THAT WAS SHOWING: each layer is keyed by its own count, so the
+ * picture fading out keeps its element and is never drawn afresh. A picture held as data (a radio
+ * song's cover, lib/radioCover) took a frame or two to decode in a new element, Safari's most of
+ * all, and with the incoming one still clear the change flashed the background between them.
  */
 export function CrossfadeArt({
   src,
@@ -39,22 +44,26 @@ export function CrossfadeArt({
     curRef.current = next;
     setCur(next);
   }, [src, pending]);
+  const layers = prev ? [prev, cur] : [cur];
   return (
     <div className={fill ? "absolute inset-0" : "relative"}>
-      {prev && (
-        <div key={`p${prev.k}`} className="absolute inset-0">
-          <ArtImage src={prev.src} className={className} fallback={fallback} />
-        </div>
+      {layers.map((layer) =>
+        layer === cur ? (
+          <div
+            key={layer.k}
+            className={fill ? "art-fade-in absolute inset-0" : "art-fade-in"}
+            onAnimationEnd={(e) => {
+              if (e.target === e.currentTarget) setPrev(null);
+            }}
+          >
+            <ArtImage src={layer.src} className={className} fallback={fallback} />
+          </div>
+        ) : (
+          <div key={layer.k} className="absolute inset-0">
+            <ArtImage src={layer.src} className={className} fallback={fallback} />
+          </div>
+        ),
       )}
-      <div
-        key={`c${cur.k}`}
-        className={fill ? "art-fade-in absolute inset-0" : "art-fade-in"}
-        onAnimationEnd={(e) => {
-          if (e.target === e.currentTarget) setPrev(null);
-        }}
-      >
-        <ArtImage src={cur.src} className={className} fallback={fallback} />
-      </div>
     </div>
   );
 }
