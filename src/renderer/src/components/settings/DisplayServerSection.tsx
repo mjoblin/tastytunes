@@ -74,8 +74,8 @@ export function DisplayServerSection({ settings, save }: SectionProps): React.JS
         )}
         {on && newSaid === "set-aside" && (
           <div data-display-new-address-set-aside className="text-[12px] text-dim">
-            Made a new address. The saved keys couldn't be read, so they were set aside and any keys
-            need to be entered again.
+            Made a new address. The saved keys couldn't be read, so any keys need to be entered
+            again.
           </div>
         )}
         {on && status?.url && (

@@ -167,8 +167,8 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
                 )}
                 {lan && newTokenSaid === "set-aside" && (
                   <div data-mcp-token-set-aside className="text-[12px] text-dim">
-                    Made a new token. The saved keys couldn't be read, so they were set aside and
-                    any keys need to be entered again.
+                    Made a new token. The saved keys couldn't be read, so any keys need to be
+                    entered again.
                   </div>
                 )}
                 {lan && (
