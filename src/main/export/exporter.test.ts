@@ -1001,8 +1001,9 @@ describe("an album's export", () => {
   });
 
   it("keeps room for its sleeve when the copies would fill the cap", async () => {
-    // three copies of 950,000 bytes would leave about 130,000 of the 3,000,000 the pictures and
-    // the copies may use; the pictures' slice stops the third, and the 200,000-byte sleeve fits
+    // the pictures first (the sleeve and a shelf picture, 200,000 bytes each), then the copies:
+    // three of 950,000 bytes would pass the 3,000,000 the pictures and the copies may use, so the
+    // third is left out and the sleeve is in
     const sleeve = new Uint8Array(200_000);
     sleeve.set(JPEG);
     const { env } = fakeEnv({
@@ -1021,6 +1022,36 @@ describe("an album's export", () => {
       "tracks/03 - Breakwater/audio.flac: the export reached its size cap.",
     ]);
     expect(files).toContain("pictures/sleeve.jpg");
+  });
+
+  it("keeps every copy an album just under the cap has room for", async () => {
+    // the pictures (400,000 bytes) and three copies of 850,000 fit the 3,000,000 media may use,
+    // where a third copy once stopped 500,000 short of it, the folder well under its cap
+    const sleeve = new Uint8Array(200_000);
+    sleeve.set(JPEG);
+    const { env } = fakeEnv({
+      analysis: () => null,
+      capBytes: 4_000_000,
+      picture: () => Promise.resolve({ bytes: sleeve, type: "image/jpeg" }),
+      audioBody: () =>
+        Promise.resolve({ body: new Blob([new Uint8Array(850_000)]).stream(), bytes: 850_000 }),
+    });
+    const r = await exportAlbum(env, root(), target(album), opts({ audio: "copy" }));
+    if (r.kind !== "exported") throw new Error(r.kind);
+    const files = r.files.map((f) => f.path);
+    for (const f of [
+      "pictures/sleeve.jpg",
+      "pictures/shelf-01.jpg",
+      "tracks/01 - Lamplighter/audio.flac",
+      "tracks/02 - Undertow/audio.flac",
+      "tracks/03 - Breakwater/audio.flac",
+      "album.json",
+    ])
+      expect(files, f).toContain(f);
+    expect(r.left_out).toEqual([]);
+    // the pictures went first, the copies after them
+    const at = (f: string): number => files.indexOf(f);
+    expect(at("pictures/sleeve.jpg")).toBeLessThan(at("tracks/01 - Lamplighter/audio.flac"));
   });
 
   it("redacted, leaves the owner's network out of every file of an album", async () => {

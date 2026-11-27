@@ -1003,16 +1003,30 @@ export function exportAlbum(
       node: MediaNode;
       record: Awaited<ReturnType<typeof trackRecordOf>>;
     }> = [];
+    // not in album.json's tracks, so said here
+    const notExported = (folder: string, e: unknown): void => {
+      put.leftOut.push(
+        `${folder.slice(0, -1)}: not exported, its record couldn't be made (${reasonOf(e, w.dir)})`,
+      );
+    };
     const compilation = isCompilation(a.node, tracks);
     const artist = compilation ? null : a.node.artist;
     let notes: Awaited<ReturnType<typeof notesOf>> | null = null;
     let shared: Shared | null = null;
     let tracksLate = false;
+    /** Each track's record, its lookups made: its files are written after the pictures. */
+    const made: Array<{
+      folder: string;
+      t: ExportTarget;
+      record: Awaited<ReturnType<typeof trackRecordOf>>;
+    }> = [];
     try {
       shared = await sharedFrom(env);
       // the album's notes, then every track's lookups, and only then the release's scans and the
       // artist's pictures, listed after them and fetched on their own time: a slow archive can't
-      // spend the tracks' lyrics and credits, and the next export, the lookups kept, gets further
+      // spend the tracks' lyrics and credits, and the next export, the lookups kept, gets further;
+      // the tracks' files last, after the pictures, as a track's own export writes them: the
+      // audio copies may then use all the room the pictures left, and can't crowd out the sleeve
       notes = await notesOf(env, a.node.artist, a.node.title, artist, "album", budget);
       if (compilation)
         missing.push({
@@ -1028,24 +1042,13 @@ export function exportAlbum(
         const t = { node: n, serverUdn: a.serverUdn, serverName: a.serverName };
         const folder = `tracks/${String(i + 1).padStart(2, "0")} - ${safeName(n.title)}/`;
         try {
-          const rec = await trackRecordOf(env, t, opts, shared, budget, tried);
-          await writeTrackFiles(
-            env,
-            w,
-            put,
+          made.push({
             folder,
             t,
-            opts,
-            rec,
-            { position: trackPosition(n) },
-            "record",
-          );
-          done.push({ folder: folder.slice(0, -1), node: n, record: rec });
+            record: await trackRecordOf(env, t, opts, shared, budget, tried),
+          });
         } catch (e) {
-          // not in album.json's tracks, so said here
-          put.leftOut.push(
-            `${folder.slice(0, -1)}: not exported, its record couldn't be made (${reasonOf(e, w.dir)})`,
-          );
+          notExported(folder, e);
         }
       }
       tracksLate = budget.late > 0;
@@ -1066,6 +1069,15 @@ export function exportAlbum(
       );
     } catch (e) {
       put.leftOut.push(`the export stopped early: ${reasonOf(e, w.dir)}`);
+    }
+    for (const { folder, t, record } of made) {
+      try {
+        const extra = { position: trackPosition(t.node) };
+        await writeTrackFiles(env, w, put, folder, t, opts, record, extra, "record");
+        done.push({ folder: folder.slice(0, -1), node: t.node, record });
+      } catch (e) {
+        notExported(folder, e);
+      }
     }
     const albumRec = buildAlbumRecord({
       album: a.node,

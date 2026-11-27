@@ -73,17 +73,20 @@ describe("an export's folder", () => {
     expect(w.bytes).toBe(4000);
   });
 
-  it("keeps a slice of the media room for the pictures, which an audio copy can't use", async () => {
+  it("lets an audio copy use all the media room the pictures left, the records' room kept", async () => {
     const root = mkdtempSync(join(tmpdir(), "tt-exp-"));
-    // a cap of 8000: media stops 2000 short of it, an audio copy 1000 short of that
+    // a cap of 8000: media, a copy included, stops 2000 short of it
     const w = new ExportWriter(root, "Pictures", 8000);
     const bytes = (n: number) => new Blob([new Uint8Array(n)]).stream();
+    w.write("pictures/sleeve.jpg", "x".repeat(1000));
     await expect(w.copy("01/audio.flac", bytes(5001))).rejects.toThrow(ExportCapReached);
+    await expect(w.copy("01/audio.flac", bytes(1), 5001)).rejects.toThrow(ExportCapReached);
     await w.copy("01/audio.flac", bytes(5000), 5000);
     await expect(w.copy("02/audio.flac", bytes(1))).rejects.toThrow(ExportCapReached);
-    // the copies have used all they may, and the sleeve still fits
-    w.write("pictures/sleeve.jpg", "x".repeat(1000));
-    expect(w.bytes).toBe(6000);
+    // the records' room is still there for them
+    w.write("tracks/01/track.json", "x".repeat(1500), "record");
+    w.write("album.json", "x".repeat(500), "final");
+    expect(w.bytes).toBe(8000);
   });
 
   it("writes a file under a .part name until it is whole", async () => {
@@ -199,6 +202,24 @@ describe("a failure's reason", () => {
     expect(reasonOf(new Error(`couldn't read ${cache}`), dir, home)).toBe(
       `couldn't read ${join("~", "Library", "Caches", "x.json")}`,
     );
+  });
+
+  it("leaves out the whole of a quoted path whose home folder has an apostrophe in its name", () => {
+    const own = join(sep, "home", "o'brien");
+    const cache = join(own, "Library", "Caches", "x.json");
+    const message = `ENOENT: no such file or directory, open '${cache}'`;
+    expect(reasonOf(errno("ENOENT", message), join(own, "Exports", "Dusk"), own)).toBe(
+      "ENOENT: no such file or directory, open",
+    );
+    expect(reasonOf(errno("EACCES", `EACCES: permission denied, mkdir '${own}'`), dir, own)).toBe(
+      "EACCES: permission denied, mkdir",
+    );
+    expect(reasonOf(new Error(`couldn't read ${cache}`), dir, own)).toBe(
+      `couldn't read ${join("~", "Library", "Caches", "x.json")}`,
+    );
+    // another account's folder whose name starts with this one's is a path like any other
+    const theirs = join(sep, "home", "anna", "x.json");
+    expect(reasonOf(errno("ENOENT", `ENOENT: open '${theirs}'`), dir, home)).toBe("ENOENT: open");
   });
 
   it("gives the error's code with its reason, and a plain one as it is", () => {
