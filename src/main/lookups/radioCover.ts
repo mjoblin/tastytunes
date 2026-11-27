@@ -12,6 +12,10 @@
 // live records and mixes never stand for a song, and neither does a record not credited to the
 // song's own artist (a various-artists album the archive never tagged a compilation).
 //
+// When no recording leads to a record (a hit's studio recording can fall past the search's first
+// page, behind live takes and compilation copies that score alike), the song's own single is
+// asked for by its title (songGroups): a hit nearly always had one.
+//
 // Cached as a data URL in a bounded disk LRU, INCLUDING definitive misses (no recording matched,
 // or no cover for any of its albums), so a station's rotation is asked once; a failed search or
 // fetch is nobody's verdict and is asked again. Gated at the IPC layer by the Missing album art
@@ -30,7 +34,7 @@ const MIN_MATCH_SCORE = 75;
 const GROUPS_MAX = 3;
 const FETCH_MS = 10_000;
 /** The choosing rules' version, in every cache key: raised when they change what a song shows. */
-const RULES = 2;
+const RULES = 3;
 
 const cache = new DiskCache<string | null>("radiocover", CACHE_MAX);
 const asking = new Map<string, Promise<string | null>>();
@@ -133,25 +137,93 @@ export function coverGroups(recordings: MbRecording[], artist: string, song: str
   return [...new Set(rows.map((r) => r.id))].slice(0, GROUPS_MAX);
 }
 
+export interface MbReleaseGroup {
+  id: string;
+  title: string;
+  score?: number;
+  "primary-type"?: string | null;
+  "secondary-types"?: string[];
+  "first-release-date"?: string | null;
+  "artist-credit"?: MbCredit[];
+}
+
+/** A release group found by its own title must be this sure: the song's single or its album. */
+const MIN_GROUP_SCORE = 90;
+
+/**
+ * THE SONG'S OWN SINGLE, when no recording led to one (a hit's studio recording can fall outside
+ * the search's first page, behind its live takes and compilation copies, which all score alike):
+ * a release group titled as the song (exactly, or with a version's note aside on both sides) and
+ * credited to its lead artist, never a compilation, live record or mix; an album first, then a
+ * single, then an EP, the earliest of each, at most GROUPS_MAX.
+ */
+export function songGroups(groups: MbReleaseGroup[], artist: string, song: string): string[] {
+  const lead = looseKey(leadArtist(artist));
+  const title = looseKey(song);
+  const bare = looseKey(withoutVersion(song));
+  const named = groups.filter(
+    (g) =>
+      (g.score ?? 0) >= MIN_GROUP_SCORE &&
+      creditsLead(g["artist-credit"], lead) &&
+      !(g["secondary-types"] ?? []).some((t) => NEVER.has(t.toLowerCase())),
+  );
+  const exact = named.filter((g) => looseKey(g.title) === title);
+  const matched = exact.length
+    ? exact
+    : named.filter((g) => looseKey(withoutVersion(g.title)) === bare);
+  return matched
+    .map((g) => ({
+      id: g.id,
+      rank: TYPE_RANK[(g["primary-type"] ?? "").toLowerCase()] ?? 3,
+      date: g["first-release-date"] || "9999",
+    }))
+    .sort((a, b) => a.rank - b.rank || a.date.localeCompare(b.date))
+    .map((g) => g.id)
+    .slice(0, GROUPS_MAX);
+}
+
 const recordingsOf = (body: unknown): MbRecording[] =>
   (body as { recordings?: MbRecording[] } | null)?.recordings ?? [];
+const groupsOf = (body: unknown): MbReleaseGroup[] =>
+  (body as { "release-groups"?: MbReleaseGroup[] } | null)?.["release-groups"] ?? [];
+
+/** Recordings asked for at once: a hit's live takes and compilation copies score alike with its
+ *  studio recording, and ten could leave it out. */
+const RECORDINGS_ASKED = 25;
 
 function search(lead: string, song: string) {
   const query = `recording:${JSON.stringify(song)} AND artist:${JSON.stringify(lead)}`;
-  return mbFetch(`${MB}/ws/2/recording?query=${encodeURIComponent(query)}&fmt=json&limit=10`, true);
+  return mbFetch(
+    `${MB}/ws/2/recording?query=${encodeURIComponent(query)}&fmt=json&limit=${RECORDINGS_ASKED}`,
+    true,
+  );
+}
+
+function searchGroups(lead: string, song: string) {
+  const query = `releasegroup:${JSON.stringify(song)} AND artist:${JSON.stringify(lead)}`;
+  return mbFetch(
+    `${MB}/ws/2/release-group?query=${encodeURIComponent(query)}&fmt=json&limit=10`,
+    true,
+  );
 }
 
 async function find(artist: string, song: string, key: string): Promise<string | null> {
   const lead = leadArtist(artist);
   let got = await search(lead, song);
-  if (got.kind !== "ok") return null; // no answer: nothing to show, nothing to remember
-  let groups = coverGroups(recordingsOf(got.body), artist, song);
+  if (got.kind === "error") return null; // no answer: nothing to show, nothing to remember
+  let groups = got.kind === "ok" ? coverGroups(recordingsOf(got.body), artist, song) : [];
   // a version's note the archive's title doesn't carry: asked once more without it
   const bare = withoutVersion(song);
   if (groups.length === 0 && bare !== song) {
     got = await search(lead, bare);
-    if (got.kind !== "ok") return null;
-    groups = coverGroups(recordingsOf(got.body), artist, bare);
+    if (got.kind === "error") return null;
+    groups = got.kind === "ok" ? coverGroups(recordingsOf(got.body), artist, bare) : [];
+  }
+  // no recording led to a record: the song's own single (or an album of its name), by its title
+  if (groups.length === 0) {
+    got = await searchGroups(lead, song);
+    if (got.kind === "error") return null;
+    groups = got.kind === "ok" ? songGroups(groupsOf(got.body), artist, song) : [];
   }
   let definitive = true;
   for (const id of groups) {
