@@ -1,4 +1,12 @@
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -323,7 +331,8 @@ describe("a secrets file that can't be read", () => {
   const path = (): string => join(userData, "secrets.json");
   const b64 = (s: string): string => Buffer.from(s).toString("base64");
 
-  /** Every secret unreadable, nothing minted, and no save over the file, whose bytes stay as found. */
+  /** Every secret unreadable, nothing minted, and no save over the file, whose bytes stay as found
+   *  (New address and New token are the way out: "the way out of a secrets file" below). */
   const holdsAsFound = async (asFound: () => string): Promise<void> => {
     const before = asFound();
     const { secrets, persist } = await fresh();
@@ -338,9 +347,8 @@ describe("a secrets file that can't be read", () => {
     }
     expect(await persist.displayToken()).toBeNull();
     await persist.ensureMcpToken();
-    await expect(persist.newDisplayToken()).rejects.toThrow();
-    await expect(persist.newMcpToken()).rejects.toThrow();
     await expect(secrets.setSecret("lbToken", "lb-token-1234")).rejects.toThrow();
+    await expect(secrets.setSecret("displayToken", "made-here-1234")).rejects.toThrow();
     await expect(secrets.setSecret("fanartKey", null)).rejects.toThrow();
     expect(await secrets.readSecret("lbToken")).toEqual({ state: "unreadable" });
     expect(asFound()).toBe(before);
@@ -413,5 +421,165 @@ describe("a secrets file that can't be read", () => {
     expect(file("settings.json")).toContain("lb-secret-9876");
     expect(file("settings.json")).toContain("mcp-secret-5432");
     expect(file("secrets.json")).toBe("not json");
+  });
+});
+
+describe("the way out of a secrets file that can't be read", () => {
+  const path = (): string => join(userData, "secrets.json");
+  const asides = (): string[] =>
+    readdirSync(userData)
+      .filter((f) => f.startsWith("secrets.unreadable-"))
+      .sort();
+
+  it("sets the file aside for New address, starts a new store with the address, and says so", async () => {
+    const broken = `{"v":1,"entries":{"lbToken":{"enc":false,"value":"lb-1`;
+    writeFileSync(path(), broken);
+    // older copies set aside before: the newest three are kept, as for the other files
+    for (const d of ["01", "02", "03"])
+      writeFileSync(join(userData, `secrets.unreadable-2020-01-${d}T00-00-00.json`), "older");
+    const { secrets, persist } = await fresh();
+    expect(await persist.displayToken()).toBeNull();
+    expect(await persist.newDisplayToken()).toBe(true);
+    const kept = asides();
+    expect(kept).toHaveLength(3);
+    expect(kept).not.toContain("secrets.unreadable-2020-01-01T00-00-00.json");
+    expect(readFileSync(join(userData, kept.at(-1)!), "utf8")).toBe(broken);
+    // the new store holds the new address alone, and is saved to like any other from now on
+    const made = await persist.displayToken();
+    expect(made).toMatch(/^[\w-]{20,}$/);
+    expect(Object.keys((JSON.parse(file("secrets.json")) as { entries: object }).entries)).toEqual([
+      "displayToken",
+    ]);
+    expect(await secrets.readSecret("lbToken")).toEqual({ state: "absent" });
+    await secrets.setSecret("lbToken", "lb-token-2222");
+    expect(await (await fresh()).persist.displayToken()).toBe(made);
+    // said once: the next New address is an ordinary one
+    expect(await persist.newDisplayToken()).toBe(false);
+    expect(await secrets.getSecret("lbToken")).toBe("lb-token-2222");
+  });
+
+  it("sets the file aside for New token the same way, a folder in its place among them", async () => {
+    for (const make of [() => writeFileSync(path(), '{"v":1}'), () => mkdirSync(path())]) {
+      userData = mkdtempSync(join(tmpdir(), "tt-secrets-"));
+      make();
+      const { secrets, persist } = await fresh();
+      expect(await secrets.secretHint("mcpToken")).toMatchObject({ unreadable: true });
+      expect(await persist.newMcpToken()).toBe(true);
+      expect(asides()).toHaveLength(1);
+      expect(await secrets.secretHint("mcpToken")).toMatchObject({
+        saved: true,
+        unreadable: false,
+      });
+      expect(statSync(path()).isFile()).toBe(true);
+    }
+  });
+
+  it("keeps refusing, the file as found, when it can't be moved aside", async () => {
+    // a filesystem without modes (Windows), or a test run as root, moves it anyway
+    if (process.platform === "win32" || process.getuid?.() === 0) return;
+    writeFileSync(path(), "not json");
+    const { persist } = await fresh();
+    chmodSync(userData, 0o500);
+    try {
+      await expect(persist.newDisplayToken()).rejects.toThrow();
+      await expect(persist.newMcpToken()).rejects.toThrow();
+    } finally {
+      chmodSync(userData, 0o700);
+    }
+    expect(file("secrets.json")).toBe("not json");
+    expect(asides()).toEqual([]);
+    // and once it can be, the next New address is the way out
+    expect(await persist.newDisplayToken()).toBe(true);
+  });
+});
+
+describe("a save that can't be written", () => {
+  it("leaves every secret as the file still has it", async () => {
+    // a filesystem without modes (Windows), or a test run as root, writes it anyway
+    if (process.platform === "win32" || process.getuid?.() === 0) return;
+    const { secrets, persist } = await fresh();
+    await secrets.setSecret("lbToken", "lb-token-1111");
+    const address = await persist.displayToken();
+    chmodSync(userData, 0o500);
+    try {
+      await expect(secrets.setSecret("lbToken", "lb-token-2222")).rejects.toThrow();
+      await expect(secrets.setSecret("lbToken", null)).rejects.toThrow();
+      await expect(secrets.setSecret("fanartKey", "fanart-3333")).rejects.toThrow();
+      // a new address that couldn't be saved never ends the old one
+      await expect(persist.newDisplayToken()).rejects.toThrow();
+    } finally {
+      chmodSync(userData, 0o700);
+    }
+    expect(await secrets.getSecret("lbToken")).toBe("lb-token-1111");
+    expect(secrets.hasSecret("lbToken")).toBe(true);
+    expect(await secrets.readSecret("fanartKey")).toEqual({ state: "absent" });
+    expect(secrets.hasSecret("fanartKey")).toBe(false);
+    expect(await persist.displayToken()).toBe(address);
+    expect(await (await fresh()).secrets.getSecret("lbToken")).toBe("lb-token-1111");
+  });
+
+  it("makes no first address when its save fails, and makes one once it can", async () => {
+    if (process.platform === "win32" || process.getuid?.() === 0) return;
+    const { secrets, persist } = await fresh();
+    chmodSync(userData, 0o500);
+    try {
+      await expect(persist.displayToken()).rejects.toThrow();
+    } finally {
+      chmodSync(userData, 0o700);
+    }
+    expect(await secrets.readSecret("displayToken")).toEqual({ state: "absent" });
+    expect(await persist.displayToken()).toMatch(/^[\w-]{20,}$/);
+  });
+});
+
+describe("a later version's secrets", () => {
+  const read = (): { entries: Record<string, unknown> } & Record<string, unknown> =>
+    JSON.parse(file("secrets.json")) as { entries: Record<string, unknown> } & Record<
+      string,
+      unknown
+    >;
+
+  it("keeps an entry of another shape as stored, reads it as unreadable and mints nothing over it", async () => {
+    const sealed = { scheme: "sealed-2", box: "abcd" };
+    const withNote = { enc: false, value: "fanart-1234", checkedAt: 99 };
+    writeFileSync(
+      join(userData, "secrets.json"),
+      JSON.stringify({
+        v: 1,
+        written: "by a later version",
+        entries: { displayToken: sealed, mcpToken: "a later form", fanartKey: withNote },
+      }),
+    );
+    const { secrets, persist } = await fresh();
+    for (const name of ["displayToken", "mcpToken"] as const) {
+      expect(await secrets.readSecret(name)).toEqual({ state: "unreadable" });
+      expect(secrets.hasSecret(name)).toBe(false);
+      expect(await secrets.secretHint(name)).toEqual({
+        saved: false,
+        ends: null,
+        unreadable: true,
+      });
+    }
+    expect(await persist.displayToken()).toBeNull();
+    await persist.ensureMcpToken();
+    // the entry this version reads, a field it doesn't on it, reads as saved
+    expect(await secrets.getSecret("fanartKey")).toBe("fanart-1234");
+    // a change through the normal path writes every one of them back as found
+    await secrets.setSecret("lbToken", "lb-token-5555");
+    const after = read();
+    expect(after.written).toBe("by a later version");
+    expect(after.entries.displayToken).toEqual(sealed);
+    expect(after.entries.mcpToken).toBe("a later form");
+    expect(after.entries.fanartKey).toEqual(withNote);
+    expect(
+      Buffer.from((after.entries.lbToken as { value: string }).value, "base64").toString(),
+    ).toBe(`enc:${[..."lb-token-5555"].reverse().join("")}`);
+    // read again, still kept; New address replaces it, the deliberate way to a new one
+    const again = await fresh();
+    expect(await again.persist.displayToken()).toBeNull();
+    expect(await again.persist.newDisplayToken()).toBe(false);
+    expect(await again.persist.displayToken()).toMatch(/^[\w-]{20,}$/);
+    expect(read().entries.mcpToken).toBe("a later form");
+    expect(read().entries.displayToken).toMatchObject({ enc: true });
   });
 });

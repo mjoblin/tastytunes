@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { app, safeStorage } from "electron";
 import { errorMessage, isRecord, kindOf } from "@shared/guards";
 import { atomicWriteFileSync } from "./jsonStore";
-import { noteSaved } from "./savedFiles";
+import { moveAside, noteSaved } from "./savedFiles";
 import { devOverride } from "../app/devOverride";
 
 // THE SECRETS STORE (0.13.0 round 10). The
@@ -21,8 +21,9 @@ export type SecretName = "lbToken" | "mcpToken" | "fanartKey" | "displayToken";
 
 /** A secret as the store holds it: its value; absent, none saved; or unreadable, one saved that
  *  this system can't decrypt (another computer's keychain, a reset or locked one, an ask that was
- *  turned down), kept on disk as it is, or any secret while the file can't be read. A token is
- *  minted only when absent, never over an unreadable one (data/persist). */
+ *  turned down), kept on disk as it is, one of a shape this version doesn't read, or any secret
+ *  while the file can't be read. A token is minted only when absent, never over an unreadable one
+ *  (data/persist). */
 export type SecretRead = { state: "saved"; value: string } | { state: "absent" | "unreadable" };
 
 interface Stored {
@@ -44,14 +45,25 @@ const filePath = (): string => join(app.getPath("userData"), "secrets.json");
 
 /** The file's entries as stored, read once. */
 let stored: Map<string, Stored> | null = null;
+/** A LATER VERSION'S ENTRIES ARE KEPT (0.17.0; 1.0 is the oldest reader such a file will meet): an
+ *  entry of a shape this version doesn't read (not an encrypted flag and a value) is kept exactly
+ *  as stored and written back untouched with every save, and read as one that can't be read, never
+ *  as none saved, so nothing is minted over it; it goes only when that secret is saved or forgotten
+ *  here. The file's own fields beside its entries are written back as found too. */
+let carried = new Map<string, unknown>();
+let envelope: Record<string, unknown> = {};
 /** THE FILE THAT CAN'T BE READ IS NOT AN EMPTY ONE (0.17.0): only a missing file has nothing
  *  saved. One there that can't be read (no permission, a disk error, not the store's JSON) reads
  *  every secret as unreadable, so nothing is minted over them, and no save writes over it this
  *  session; the next launch reads it again. A save refuses rather than move the file aside and
  *  start a new one: the next launch would find no display address and no agents' token in the new
  *  file and mint new ones, ending every screen's address and every agent's setup without a word,
- *  even when the cause had passed. */
+ *  even when the cause had passed. The owner's New address or New token is the one way out
+ *  (renewSecret). */
 let fileUnreadable = false;
+/** The file was moved aside for a New address or New token (renewSecret) and that act hasn't
+ *  said so yet. */
+let asideUnsaid = false;
 /** The values decrypted so far, in the main process's memory only. */
 const values = new Map<string, string>();
 /** A decryption under way, so two asks for one entry reach the keychain once. */
@@ -110,9 +122,19 @@ function load(): Map<string, Stored> {
     cantRead(isRecord(parsed) ? "it held no entries" : `it held ${kindOf(parsed)}`);
     return stored;
   }
-  for (const [name, e] of Object.entries(parsed.entries))
-    if (isRecord(e) && typeof e.value === "string" && e.value)
-      stored.set(name, { enc: e.enc === true, value: e.value });
+  const { entries: _entries, ...rest } = parsed;
+  envelope = rest;
+  for (const [name, e] of Object.entries(parsed.entries)) {
+    // a field this version doesn't know on an entry it reads is kept with it until it is replaced
+    if (isRecord(e) && typeof e.enc === "boolean" && typeof e.value === "string" && e.value)
+      stored.set(name, { ...e, enc: e.enc, value: e.value });
+    else carried.set(name, e);
+  }
+  if (carried.size > 0)
+    noteSaved(
+      "info",
+      `secrets.json: ${[...carried.keys()].join(", ")} not in a form this version reads, kept as stored`,
+    );
   return stored;
 }
 
@@ -121,7 +143,7 @@ function valueOf(name: string): Promise<SecretRead> {
   const known = values.get(name);
   if (known != null) return Promise.resolve(saved(known));
   const e = load().get(name);
-  if (!e) return Promise.resolve(fileUnreadable ? UNREADABLE : ABSENT);
+  if (!e) return Promise.resolve(fileUnreadable || carried.has(name) ? UNREADABLE : ABSENT);
   if (unreadable.has(name)) return Promise.resolve(UNREADABLE);
   if (!e.enc) {
     values.set(name, e.value);
@@ -176,13 +198,20 @@ function writable(): void {
   if (fileUnreadable) throw new Error("secrets.json couldn't be read, so nothing is saved over it");
 }
 
-function save(): void {
+/** The file written with these entries, a later version's kept ones beside them. */
+function write(entries: ReadonlyMap<string, Stored>, kept: ReadonlyMap<string, unknown>): void {
   writable();
-  const entries: Record<string, Stored> = {};
-  for (const [name, e] of load()) entries[name] = e;
   // readable to its owner only from the first byte, the temporary file included; a filesystem
   // without modes (Windows) ignores it, and DPAPI's encryption is the protection there
-  atomicWriteFileSync(filePath(), JSON.stringify({ v: 1, entries }), 0o600);
+  atomicWriteFileSync(
+    filePath(),
+    JSON.stringify({ v: 1, ...envelope, entries: Object.fromEntries([...kept, ...entries]) }),
+    0o600,
+  );
+}
+
+function save(): void {
+  write(load(), carried);
 }
 
 /** A secret's value, for the main process's own use; null when none is saved or it can't be read. */
@@ -202,21 +231,62 @@ export function hasSecret(name: SecretName): boolean {
   return load().has(name) && !unreadable.has(name);
 }
 
-/** Save a secret, or forget it (null or blank); a rejection while the file couldn't be read. */
+/** Save a secret, or forget it (null or blank); a rejection while the file couldn't be read, or
+ *  when the file couldn't be written. */
 export async function setSecret(name: SecretName, value: string | null): Promise<void> {
   // refused before anything changes, so what is held stays what the file says
   writable();
   const v = value?.trim() ?? "";
+  let entry: Stored | null = null;
   if (v) {
     const enc = await canEncrypt();
-    load().set(name, { enc, value: enc ? await encrypt(v) : v });
-    values.set(name, v);
-  } else {
-    load().delete(name);
-    values.delete(name);
+    entry = { enc, value: enc ? await encrypt(v) : v };
   }
+  // WRITTEN BEFORE IT IS HELD (0.17.0): what is held changes only once the file has it, so a save
+  // that fails (a full disk) leaves the secret in use as the file still has it, and a new address
+  // that couldn't be saved never ends the old one
+  const next = new Map(load());
+  const kept = new Map(carried);
+  if (entry) next.set(name, entry);
+  else next.delete(name);
+  kept.delete(name);
+  write(next, kept);
+  stored = next;
+  carried = kept;
+  if (entry) values.set(name, v);
+  else values.delete(name);
   unreadable.delete(name);
-  save();
+}
+
+/**
+ * A new value its owner asked for (a confirmed New address or New token), saved as setSecret
+ * saves it. THE WAY OUT OF A FILE THAT CAN'T BE READ (0.17.0): asking for a new address or token is
+ * asking for the old one to end, so this act alone moves the file aside first (as data/savedFiles
+ * keeps a file it can't read, secrets.unreadable-<date>.json) and starts a new store with this
+ * value; every other save still refuses. True when the file was set aside for it, so the card can
+ * say the other keys need to be entered again; a rejection when it couldn't be moved or written.
+ */
+export async function renewSecret(name: SecretName, value: string): Promise<boolean> {
+  load();
+  if (fileUnreadable) {
+    const aside = moveAside(filePath(), "unreadable");
+    stored = new Map();
+    carried = new Map();
+    envelope = {};
+    values.clear();
+    unreadable.clear();
+    fileUnreadable = false;
+    asideUnsaid = true;
+    noteSaved(
+      "warn",
+      `secrets.json couldn't be read, so it was kept as ${basename(aside)} and a new one started for a new ${name}`,
+    );
+  }
+  await setSecret(name, value);
+  // said by the act that saved, should the first try's write have failed after the move
+  const said = asideUnsaid;
+  asideUnsaid = false;
+  return said;
 }
 
 /** What Settings may know of a secret: whether one is saved, its last four characters, and
@@ -224,7 +294,8 @@ export async function setSecret(name: SecretName, value: string | null): Promise
 export async function secretHint(
   name: SecretName,
 ): Promise<{ saved: boolean; ends: string | null; unreadable: boolean }> {
-  if (!load().has(name)) return { saved: false, ends: null, unreadable: fileUnreadable };
+  if (!load().has(name))
+    return { saved: false, ends: null, unreadable: fileUnreadable || carried.has(name) };
   const read = await valueOf(name);
   return read.state === "saved"
     ? { saved: true, ends: read.value.slice(-4), unreadable: false }

@@ -203,7 +203,7 @@ export function registerLookupsIpc(): void {
       : { verdict: "unreachable", userName: null };
   });
   handle(IPC.mcpTokenReveal, async () => (await getSecret("mcpToken")) ?? "");
-  handle(IPC.mcpTokenNew, () => newMcpToken());
+  handle(IPC.mcpTokenNew, async () => ({ keysSetAside: await newMcpToken() }));
   handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
     getSettings().artistInfo ? fetchArtistInfoForCredit(artist, !!force) : null,
   );

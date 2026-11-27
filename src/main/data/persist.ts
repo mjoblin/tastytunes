@@ -13,7 +13,7 @@ import {
 import { atomicWriteFileSync } from "./jsonStore";
 import { checkSettingsKinds } from "./savedChecks";
 import { keepAsFound, noteSaved, readSaved, saveFailed } from "./savedFiles";
-import { readSecret, setSecret } from "./secrets";
+import { readSecret, renewSecret, setSecret } from "./secrets";
 
 let cached: AppSettings | null = null;
 /** settings.json couldn't be read this session: nothing writes over it (data/savedFiles). */
@@ -145,9 +145,11 @@ export async function ensureMcpToken(): Promise<void> {
   if ((await readSecret("mcpToken")).state === "absent") await setSecret("mcpToken", mintToken());
 }
 
-/** A new MCP token: every agent on the old one stops working until it has this one. */
-export function newMcpToken(): Promise<void> {
-  return setSecret("mcpToken", mintToken());
+/** A new MCP token (New token, confirmed): every agent on the old one stops working until it has
+ *  this one. True when the saved keys couldn't be read and were set aside to make it
+ *  (data/secrets renewSecret). */
+export function newMcpToken(): Promise<boolean> {
+  return renewSecret("mcpToken", mintToken());
 }
 
 /** The token in Display on other screens' address, minted the first time it is turned on; null
@@ -170,10 +172,11 @@ export function displayToken(): Promise<string | null> {
 }
 let minting: Promise<string | null> | null = null;
 
-/** A new display address: every screen on the old one shows the "open the address" page until
- *  it is opened again. */
-export function newDisplayToken(): Promise<void> {
-  return setSecret("displayToken", mintToken());
+/** A new display address (New address, confirmed): every screen on the old one shows the "open
+ *  the address" page until it is opened again. True when the saved keys couldn't be read and were
+ *  set aside to make it (data/secrets renewSecret). */
+export function newDisplayToken(): Promise<boolean> {
+  return renewSecret("displayToken", mintToken());
 }
 
 export function updateSettings(patch: Partial<AppSettings>): AppSettings {
