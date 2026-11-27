@@ -23,19 +23,21 @@ describe("the song a station announces", () => {
 });
 
 describe("a station that sends its own song pictures", () => {
-  it("keeps them once its picture changed with its song", () => {
+  it("keeps them once it has shown three different pictures across its songs", () => {
     const m = stationArtMemory();
     expect(m.note("Paradise", "a", "https://p/1.jpg")).toBe(false);
     expect(m.note("Paradise", "a", "https://p/1.jpg")).toBe(false);
-    expect(m.note("Paradise", "b", "https://p/2.jpg")).toBe(true);
-    expect(m.note("Paradise", "c", "https://p/2.jpg")).toBe(true);
+    expect(m.note("Paradise", "b", "https://p/2.jpg")).toBe(false);
+    expect(m.note("Paradise", "c", "https://p/3.jpg")).toBe(true);
     expect(m.sends("Paradise")).toBe(true);
   });
 
-  it("is not one while its logo stays the same from song to song", () => {
+  it("is not one for its logo and a stray picture between songs", () => {
     const m = stationArtMemory();
     expect(m.note("Hits", "a", "https://logo")).toBe(false);
-    expect(m.note("Hits", "b", "https://logo")).toBe(false);
+    expect(m.note("Hits", "b", "https://ad")).toBe(false);
+    expect(m.note("Hits", "c", "https://logo")).toBe(false);
+    expect(m.note("Hits", "d", "https://logo")).toBe(false);
     expect(m.note("Other", "a", "https://other")).toBe(false);
     expect(m.sends("Hits")).toBe(false);
   });
