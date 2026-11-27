@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   LayoutGrid,
   List,
@@ -35,7 +35,7 @@ import { SettingLine } from "@/components/display/ScenePicker";
 import { PageSeekBar } from "@/components/media/Waveform";
 import { playPlaylist, seekTo, sleepIn, steer, useControl, type ButtonVerb } from "./control";
 import { whyDark } from "./dark";
-import { holdPress, RING_BACK_MS, SHORT_HINT_MS, STANDBY_HOLD_MS, type HoldPress } from "./hold";
+import { dropWhenAway, holdPress, RING_BACK_MS, STANDBY_HOLD_MS, type HoldPress } from "./hold";
 import {
   badgeChangesIn,
   sheetPlace,
@@ -93,7 +93,8 @@ import {
  * - STANDBY AND THE SLEEP TIMER (with Presets, playlists and power, while the streamer is on): a
  *   moon and a power disc at the end of the row, as in the window's playback bar. Power puts the
  *   streamer in standby only for a press held STANDBY_HOLD_MS (display/hold), a ring filling round
- *   it over the hold; a shorter press says how, in a line above the buttons. No key does it. The
+ *   it over the hold, and sent as the finger lifts; a shorter press says how, in a line above the
+ *   buttons, and a press that ends any other way sends nothing. No key does it. The
  *   moon opens a sheet above it to set the app's own sleep timer (display/sleepTimer); armed, the
  *   moon is lit with the minutes left over it. The sheet and the list are never open together.
  */
@@ -201,7 +202,7 @@ export function PageTransport({
   const sheetAt = useSheetPlace(moon, strip, sleepOpen);
   const sleepFade = useFadePresence(sleepOpen && control.sleep != null, { rise: true });
   // the line above the buttons a press on power speaks in
-  const [hint, setHint] = useState<string | null>(null);
+  const [hint, say] = useLine();
   // the list fades in rising and out dropping, as a panel seen from across a room does
   const listFade = useFadePresence(
     queueOpen && (control.queue != null || control.presets != null || control.playlists != null),
@@ -440,7 +441,7 @@ export function PageTransport({
                       )}
                     </Disc>
                   )}
-                  {control.standby && <PowerDisc onHint={setHint} />}
+                  {control.standby && <PowerDisc live={shown} say={say} />}
                 </div>
               )}
             </div>
@@ -505,9 +506,36 @@ function Disc({
   );
 }
 
-/** What the line above the buttons says while power is held, and after a press too short. */
+/** What the line above the buttons says while power is held, once the hold is full, and after a
+ *  press too short. */
 const HOLDING_HINT = "Keep holding for standby";
+const LET_GO_HINT = "Let go for standby";
 const SHORT_HINT = "Hold to put the streamer in standby";
+
+/** How long a passing line above the buttons stays (the hint after a short press). */
+const PASSING_LINE_MS = 2_000;
+
+/** Says `text` in the line above the buttons, for `ms` or until the next word (null: nothing). */
+type Say = (text: string | null, ms?: number) => void;
+
+/** The line above the buttons: one thing at a time, a word replacing the one before and its time. */
+function useLine(): [string | null, Say] {
+  const [line, setLine] = useState<string | null>(null);
+  const goes = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const say = useCallback<Say>((text, ms) => {
+    if (goes.current) clearTimeout(goes.current);
+    goes.current = null;
+    setLine(text);
+    if (text != null && ms != null) goes.current = setTimeout(() => setLine(null), ms);
+  }, []);
+  useEffect(
+    () => () => {
+      if (goes.current) clearTimeout(goes.current);
+    },
+    [],
+  );
+  return [line, say];
+}
 
 /** The hold ring's circle: 3px, just outside the disc's edge, in a box 5px wider all round. */
 const RING_R = 30.5;
@@ -516,40 +544,49 @@ type RingPhase = "rest" | "filling" | "full" | "back";
 
 /**
  * STANDBY, BY A HOLD: the window's own standby (network standby, so the screen's Wake brings the
- * streamer back), sent only once a press has lasted STANDBY_HOLD_MS, the ring full round the disc;
- * a press let go before it, or a finger or pointer leaving the disc, sends nothing, the ring going
- * back and the line above saying how. No click and no key sends it. The press is the finger's own
+ * streamer back), sent only as the finger lifts from a press that has lasted STANDBY_HOLD_MS, the
+ * ring full round the disc and the line above saying to let go. A press let go before it sends
+ * nothing, the ring going back and the line above saying how; so does a full one that never lifts
+ * on the disc: a finger or pointer leaving it, the page hidden or behind another window
+ * (display/hold), or the buttons gone (`live`: a lift the page never heard, let go by the page's
+ * minute, display/touch). No click and no key sends it. The press is the finger's own
  * (display/touch keeps a press that only shows the buttons from it whole, as the seek bar's).
  */
-function PowerDisc({ onHint }: { onHint(text: string | null): void }): React.JSX.Element {
+function PowerDisc({ live, say }: { live: boolean; say: Say }): React.JSX.Element {
   const [ring, setRing] = useState<RingPhase>("rest");
   const press = useRef<HoldPress | null>(null);
-  const hintGoes = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     const held = holdPress(STANDBY_HOLD_MS, {
-      held: () => {
+      full: () => {
         setRing("full");
-        onHint(null);
+        say(LET_GO_HINT);
+      },
+      held: () => {
+        // the ring lets go with the finger
+        setRing("rest");
+        say(null);
         void steer("standby");
       },
       short: () => {
         setRing("back");
-        onHint(SHORT_HINT);
-        hintGoes.current = setTimeout(() => onHint(null), SHORT_HINT_MS);
+        say(SHORT_HINT, PASSING_LINE_MS);
+      },
+      dropped: () => {
+        setRing("back");
+        say(null);
       },
     });
     press.current = held;
+    const unwatch = dropWhenAway(held);
     return () => {
+      unwatch();
       held.stop();
-      if (hintGoes.current) clearTimeout(hintGoes.current);
-      onHint(null);
+      say(null);
     };
-  }, [onHint]);
-  const end = (): void => {
-    press.current?.end();
-    // a hold that sent standby lets its ring go as the finger lifts
-    setRing((r) => (r === "full" ? "rest" : r));
-  };
+  }, [say]);
+  useEffect(() => {
+    if (!live) press.current?.drop();
+  }, [live]);
   return (
     <button
       type="button"
@@ -561,14 +598,13 @@ function PowerDisc({ onHint }: { onHint(text: string | null): void }): React.JSX
         // press for a finger as it does for a pointer
         if (e.currentTarget.hasPointerCapture(e.pointerId))
           e.currentTarget.releasePointerCapture(e.pointerId);
-        if (hintGoes.current) clearTimeout(hintGoes.current);
-        onHint(HOLDING_HINT);
+        say(HOLDING_HINT);
         setRing("filling");
         press.current?.down();
       }}
-      onPointerUp={end}
-      onPointerLeave={end}
-      onPointerCancel={end}
+      onPointerUp={() => press.current?.lift()}
+      onPointerLeave={() => press.current?.leave()}
+      onPointerCancel={() => press.current?.leave()}
       // a long press is a menu's or a callout's on some tablets
       onContextMenu={(e) => e.preventDefault()}
       className={cx(DISC_BUTTON, "[-webkit-touch-callout:none]")}
