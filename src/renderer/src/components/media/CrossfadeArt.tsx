@@ -17,6 +17,13 @@ import { useDecodedArt } from "@/hooks/useDecodedArt";
  * picture fading out keeps its element and is never drawn afresh. A picture held as data (a radio
  * song's cover, lib/radioCover) took a frame or two to decode in a new element, Safari's most of
  * all, and with the incoming one still clear the change flashed the background between them.
+ *
+ * THE INCOMING LAYER IS POSITIONED TOO: the outgoing one is (absolute, to lie beneath), and a
+ * positioned box paints over an in-flow one; the incoming layer stayed above only while its fade
+ * gave it a stacking context of its own (opacity under 1). The moment the fade ended the outgoing
+ * picture painted back on top until it was dropped, a frame in Chromium and long enough in
+ * Safari to flash the old picture at the end of every crossfade. Relative, it stays above in DOM
+ * order whatever its opacity, and its place in the flow is unchanged.
  */
 export function CrossfadeArt({
   src,
@@ -51,7 +58,7 @@ export function CrossfadeArt({
         layer === cur ? (
           <div
             key={layer.k}
-            className={fill ? "art-fade-in absolute inset-0" : "art-fade-in"}
+            className={fill ? "art-fade-in absolute inset-0" : "art-fade-in relative"}
             onAnimationEnd={(e) => {
               if (e.target === e.currentTarget) setPrev(null);
             }}
