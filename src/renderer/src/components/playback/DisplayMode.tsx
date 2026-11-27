@@ -504,6 +504,7 @@ function DisplayLyric({
         )}
       >
         <div
+          data-display-lyric-text
           className={cx(
             "font-display text-[clamp(17px,2.8vmin,30px)] leading-snug line-clamp-2 text-balance transition-opacity duration-200",
             visible ? "opacity-100" : "opacity-0",
