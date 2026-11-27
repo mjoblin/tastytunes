@@ -206,8 +206,9 @@ export function registerLookupsIpc(): void {
   handle(IPC.mcpTokenReveal, async () => (await getSecret("mcpToken")) ?? "");
   handle(IPC.mcpTokenNew, async () => {
     const keysSetAside = await newMcpToken();
-    // the second screen's address was in the same unreadable file: its card hears the new store
-    if (keysSetAside) void syncDisplay();
+    // the second screen's address is in the same file: whether it was set aside or read again by
+    // this New token, its card hears the file as it now stands (a sync with nothing new does nothing)
+    void syncDisplay();
     return { keysSetAside };
   });
   handle(IPC.fetchArtistInfo, (_e, artist: string, force?: boolean) =>
