@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { tt } from "@/api";
 import type { Rgb, ScenePalette } from "./scenes/types";
 import { keptLookup, Lru } from "@/lib/lru";
 import { coverPixels } from "@/lib/coverPixels";
+import { fetchArtSoon } from "@/lib/fetchArtSoon";
 import { hslToRgb, rgbToHsl, roundRgb } from "@/lib/color";
 
 /**
@@ -119,12 +119,14 @@ async function artAccents(dataUrl: string, light: boolean): Promise<ArtColors | 
 
 const cache = new Lru<string, Promise<ArtColors | null>>(60);
 
-/** A cover's colors in a theme, worked out once and kept. Null when the cover didn't come (the app,
- *  or the page's server, out of reach a moment) or couldn't be read, and that isn't kept: the next
- *  ask tries again (lib/lru's keptLookup). */
+/** A cover's colors in a theme, worked out once and kept. A cover that didn't come (the app, or the
+ *  page's server, out of reach a moment) is asked for again after a beat and a longer one, as the
+ *  wash's is (lib/fetchArtSoon); null when none of those came, or it couldn't be read, and that
+ *  isn't kept: the next ask tries again (lib/lru's keptLookup). One ask whoever asks, so it runs
+ *  its course. */
 export function coverColors(artUrl: string, light: boolean): Promise<ArtColors | null> {
   return keptLookup(cache, `${light}|${artUrl}`, async () => {
-    const art = await tt.fetchArt(artUrl);
+    const art = await fetchArtSoon(artUrl, () => true);
     return art ? artAccents(art.dataUrl, light) : null;
   });
 }
