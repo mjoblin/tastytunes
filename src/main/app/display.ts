@@ -17,7 +17,6 @@ import { isDeviceArt } from "@shared/artUrl";
 import { errorMessage } from "@shared/guards";
 import type { DisplayStatus } from "@shared/ipc";
 import { playlistTotalSecs, type AppSettings } from "@shared/model";
-import { litPresetIds } from "@shared/litPresets";
 import { activeSourceId, isCbusMode, isPreAmpMode } from "@shared/smoip";
 import { commandForMedia, transportAbilities } from "@shared/transport";
 import { jsonFileStore } from "../data/jsonStore";
@@ -120,24 +119,13 @@ function queueHere(): DisplayControl["queue"] {
   return queueWindow(items, playingQueueId());
 }
 
-/** The presets, each lit by the window's own rule (shared/litPresets). */
+/** The presets, each lit by the window's own rule (shared/litPresets, as main reads it). */
 function presetsHere(): DisplayControl["presets"] {
   const v = deviceManager.streamerNow;
   const items = (v.presets?.presets ?? []).filter((p) => p.id != null);
   if (items.length === 0) return null;
   const r = deviceManager.recallsNow;
-  const lit = litPresetIds(items, {
-    zoneState: v.zoneState,
-    nowPlaying: v.nowPlaying,
-    playState: v.playState,
-    queue: v.queue,
-    systemInfo: v.systemInfo,
-    systemPower: v.systemPower,
-    waking: r.waking,
-    lastRecalledPresetId: r.lastRecalled,
-    deadPresets: r.dead,
-    queueSignatures: getSettings().queueSignatures,
-  });
+  const lit = deviceManager.litPresetsNow();
   return items.map((p) => {
     const id = p.id as number;
     return {
@@ -362,8 +350,8 @@ function steer(
       const there = id != null && items.some((p) => p.id === id);
       log(`preset ${id} from ${name}: ${there ? "recallPreset" : "nothing to do"}`);
       if (!there || id == null) return { refused: "nothing" };
-      const lit = presetsHere()?.find((p) => p.id === id)?.lit ?? false;
-      deviceManager.fire({ type: "recallPreset", presetId: id, alreadyPlaying: lit });
+      // whether it already plays, main works out for every recall
+      deviceManager.fire({ type: "recallPreset", presetId: id });
       return { done: true };
     }
     if (verb === "wake") {
