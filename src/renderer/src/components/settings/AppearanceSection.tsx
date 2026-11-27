@@ -151,6 +151,16 @@ export function AppearanceSection({ settings, save }: SectionProps): React.JSX.E
             checked={settings.artFromFiles}
             onChange={(artFromFiles) => void save({ artFromFiles })}
           />
+
+          {/* the radio's big pictures: the song's cover over the station's logo (lib/radioCover),
+              asked only while Settings › Connections' Missing album art lets requests go out */}
+          <Toggle
+            label="Song covers on radio"
+            hint="Displays the song's album cover instead of the station's logo when the station names the song. Needs Missing album art in Settings › Connections."
+            disabled={!settings.albumArtLookup}
+            checked={settings.radioCovers}
+            onChange={(radioCovers) => void save({ radioCovers })}
+          />
         </SettingsCard>
       </section>
 
