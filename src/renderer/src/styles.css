@@ -1332,19 +1332,24 @@ img {
 .display-page [data-controls-shown] [data-display-lyric] {
   opacity: 0;
 }
+/* and the Sleeve's details (the title, the artist and album, the format chips) step back with the
+   lyric: the buttons, the next track and the seek bar stand taller than the lyric's band, and on a
+   tablet they met the artist, or the title once the lyric line was off and the cover took the band
+   back. The cover stays; the details fade with the class's own 300ms (DisplayMode) */
+.display-page [data-controls-shown] [data-display-details] {
+  opacity: 0;
+}
 .display-page [data-controls-shown] [data-display-scene-toast] {
   bottom: 13rem;
 }
 /* the seek bar (step four, display/PageTransport) is the strip at the bottom edge raised above the
-   buttons: while it is up, the strip steps back from the edge as the bar rises, the format chips
-   step back from the bar, which reaches into their band (on a tablet in landscape it met them),
-   and the scene's name keeps above it */
-.display-page [data-display-waveform],
-.display-page [data-display-badges] {
+   buttons: while it is up, the strip steps back from the edge as the bar rises (the format chips,
+   whose band it reaches into, are gone already with the details), and the scene's name keeps
+   above it */
+.display-page [data-display-waveform] {
   transition: opacity 300ms ease;
 }
-.display-page:has([data-page-seek-live]) [data-display-waveform],
-.display-page:has([data-page-seek-live]) [data-display-badges] {
+.display-page:has([data-page-seek-live]) [data-display-waveform] {
   opacity: 0;
 }
 .display-page:has([data-page-seek-live]) [data-display-scene-toast] {

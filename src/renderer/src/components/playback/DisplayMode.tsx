@@ -347,7 +347,10 @@ export function DisplayMode(): React.JSX.Element {
               }
             />
 
+            {/* the track's details: a page on another screen steps them back while its buttons
+                show (styles.css, .display-page [data-controls-shown]) */}
             <div
+              data-display-details
               className={cx(
                 "absolute top-full left-1/2 -translate-x-1/2 mt-9 w-[70vw] text-center space-y-1 transition-opacity duration-300",
                 textVisible ? "opacity-100" : "opacity-0",

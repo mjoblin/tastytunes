@@ -72,8 +72,9 @@ import {
  * in the centre, shown at the same touch and for the same four seconds as the corner buttons
  * (display/touch: the first touch only shows them). They sit over the picture and never move it:
  * the picture dims a little while they show, a little more under them, so the discs read on any
- * scene and the screen says it is listening; the Sleeve's lyric line steps back until they go
- * (styles.css, .display-page[data-controls-shown]).
+ * scene and the screen says it is listening; the Sleeve's lyric line and its details (the title,
+ * the artist and album, the chips) step back until they go, the cover staying (styles.css,
+ * .display-page[data-controls-shown]).
  *
  * - A screen draws only what it may do: nothing while the app's switch is off or this screen was
  *   turned down, and only the buttons the source offers (shared/transport, the window's own
