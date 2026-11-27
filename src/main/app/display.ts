@@ -117,8 +117,9 @@ function nextInQueue(): DisplayControl["next"] {
 /** The queue around the playing track, while the queue is what plays and has anything in it. */
 function queueHere(): DisplayControl["queue"] {
   const items = deviceManager.streamerNow.queue?.items ?? [];
-  if (!queueAudible() || items.length === 0) return null;
-  return queueWindow(items, playingQueueId());
+  if (items.length === 0) return null;
+  // parked while another source plays: the window's Queue shows it so, and a row plays from there
+  return queueWindow(items, playingQueueId(), queueAudible());
 }
 
 /** The presets, each lit by the window's own rule (shared/litPresets, as main reads it). */
@@ -267,13 +268,12 @@ function steer(
     deviceManager.fire({ type: "volumeStepChange", delta: verb === "volumeUp" ? 1 : -1 });
     return { done: true };
   }
-  // a track already in the queue, while the queue is what plays: view and select, nothing edited
+  // a track already in the queue: view and select, nothing edited; parked while another source
+  // plays, a row takes the streamer back to the queue there, as the window's Queue does
   if (verb === "playQueue") {
     const there = (deviceManager.streamerNow.queue?.items ?? []).some((it) => it.id === id);
-    log(
-      `play queue row ${id} from ${name}: ${there && queueAudible() ? "playQueueId" : "nothing to do"}`,
-    );
-    if (id == null || !there || !queueAudible()) return { refused: "nothing" };
+    log(`play queue row ${id} from ${name}: ${there ? "playQueueId" : "nothing to do"}`);
+    if (id == null || !there) return { refused: "nothing" };
     deviceManager.fire({ type: "playQueueId", queueId: id });
     return { done: true };
   }

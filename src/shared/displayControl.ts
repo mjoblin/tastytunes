@@ -91,7 +91,9 @@ export interface DisplayControl {
    *  when the queue doesn't know it. */
   next: { title: string; artist: string | null } | null;
   /** The queue around the playing track (queueWindow), for a screen allowed to control while the
-   *  queue is what plays; null otherwise. Pictures by the display server's id, never by address. */
+   *  queue has anything, parked while another source plays (a row's play takes the streamer back
+   *  to it, as the window's Queue does); null otherwise. Pictures by the display server's id,
+   *  never by address. */
   queue: DisplayQueueRow[] | null;
   /** The presets, for a screen allowed to control with Presets, playlists and power on; null otherwise. */
   presets: DisplayPresetRow[] | null;
@@ -168,6 +170,9 @@ export interface DisplayQueueRow {
   duration: number | null;
   art: string | null;
   playing: boolean;
+  /** Where the queue stands while another source plays (radio, AirPlay): the row it will pick up
+   *  from, marked as the window's Queue marks it, never as playing. */
+  parked: boolean;
 }
 
 /** A queue this long or shorter goes to a screen whole (an album, a playlist, an evening's
@@ -193,6 +198,8 @@ export const LINE_PICTURES_MAX =
 export function queueWindow(
   items: readonly QueueListItem[],
   playId: number | null,
+  /** Whether the queue is what plays: else its row at `playId` is parked, not playing. */
+  audible = true,
 ): DisplayQueueRow[] {
   const at = playId == null ? -1 : items.findIndex((i) => i.id === playId);
   const whole = items.length <= QUEUE_ALL;
@@ -209,7 +216,8 @@ export function queueWindow(
       album: md?.album ?? null,
       duration: md?.duration ?? null,
       art: md?.art_url ?? null,
-      playing: item.id === playId,
+      playing: audible && item.id === playId,
+      parked: !audible && item.id === playId,
     });
   }
   return rows;
