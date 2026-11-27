@@ -93,19 +93,19 @@ export interface DisplayControl {
   /** The queue around the playing track (queueWindow), for a screen allowed to control while the
    *  queue is what plays; null otherwise. Pictures by the display server's id, never by address. */
   queue: DisplayQueueRow[] | null;
-  /** The presets, for a screen allowed to control with Presets, playlists and wake on; null otherwise. */
+  /** The presets, for a screen allowed to control with Presets, playlists and power on; null otherwise. */
   presets: DisplayPresetRow[] | null;
   /** The app's playlists, under the same switch, while the streamer is on (loading one doesn't
    *  wake it); null otherwise. */
   playlists: DisplayPlaylistRow[] | null;
-  /** With Presets, playlists and wake on, while the streamer isn't playing for the page: "ready", the app is
+  /** With Presets, playlists and power on, while the streamer isn't playing for the page: "ready", the app is
    *  connected to a streamer in standby, so Wake works; "unreachable", the app isn't connected (in
    *  Cambridge's default Eco standby the streamer leaves the network), so the screen says so and
    *  draws no button that does nothing; null otherwise. */
   wake: "ready" | "unreachable" | null;
-  /** What TastyTunes holds to pick up where it left off (with Presets, playlists and wake on), or null. */
+  /** What TastyTunes holds to pick up where it left off (with Presets, playlists and power on), or null. */
   resume: { title: string; detail: string | null } | null;
-  /** With Presets, playlists and wake on, while the streamer is connected and on: standby, which
+  /** With Presets, playlists and power on, while the streamer is connected and on: standby, which
    *  the page sends only for a press held long enough (display/PageTransport). */
   standby: boolean;
   /** The app's sleep timer, under the same switch and while the streamer is on; null otherwise. */
@@ -222,7 +222,7 @@ export interface PowerFacts {
   timer: SleepTimer | null;
 }
 
-/** Standby and the sleep timer as a screen with Presets, playlists and wake is told of them: both
+/** Standby and the sleep timer as a screen with Presets, playlists and power is told of them: both
  *  offered while the streamer is on (a sleeping one has Wake instead), the timer as it stands. */
 export function powerLine(f: PowerFacts): Pick<DisplayControl, "standby" | "sleep"> {
   if (!f.on) return { standby: false, sleep: null };

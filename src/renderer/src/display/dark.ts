@@ -8,7 +8,7 @@
  */
 
 /** What the page heard: the app, its connection to the streamer, and this screen's own Wake
- *  (allowed, unlocked, with Presets, playlists and wake on; null otherwise). */
+ *  (allowed, unlocked, with Presets, playlists and power on; null otherwise). */
 export interface DarkFacts {
   heard: boolean;
   connected: boolean;

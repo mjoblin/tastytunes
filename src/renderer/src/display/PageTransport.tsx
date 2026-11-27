@@ -90,7 +90,7 @@ import {
  *   strip raised from the bottom edge to a finger's height (components/media/Waveform's
  *   PageSeekBar), one seek for each lift of a finger. At rest the strip at the edge stays a
  *   picture.
- * - STANDBY AND THE SLEEP TIMER (with Presets, playlists and wake, while the streamer is on): a
+ * - STANDBY AND THE SLEEP TIMER (with Presets, playlists and power, while the streamer is on): a
  *   moon and a power disc at the end of the row, as in the window's playback bar. Power puts the
  *   streamer in standby only for a press held STANDBY_HOLD_MS (display/hold), a ring filling round
  *   it over the hold; a shorter press says how, in a line above the buttons. No key does it. The
@@ -1147,7 +1147,7 @@ function PresetRows({
  * streamer is out of reach, the page is black, and a touch brings up the TastyTunes mark faint in
  * the middle, so a touched black screen says what it is, and low, where the playback buttons
  * always are, one line saying why (display/dark). Neither is drawn at rest (no light at night). A
- * screen allowed with Presets, playlists and wake on has its controls under the line: "Pick up
+ * screen allowed with Presets, playlists and power on has its controls under the line: "Pick up
  * where you left off" with what it would play, and below it the presets' list and Wake, apart by
  * the gap the volume keeps. Wake only where a wake can work; where the streamer is out of reach
  * (Eco standby), the line says to wake it with its remote.
