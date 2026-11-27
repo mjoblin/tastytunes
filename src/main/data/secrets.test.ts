@@ -458,6 +458,21 @@ describe("the way out of a secrets file that can't be read", () => {
     expect(await secrets.getSecret("lbToken")).toBe("lb-token-2222");
   });
 
+  it("keeps a file that reads by the time New address is asked for, setting nothing aside", async () => {
+    writeFileSync(path(), `{"v":1,"entries":{"lbToken":{"enc":false,"value":"lb-1`);
+    const { secrets, persist } = await fresh();
+    expect(await persist.displayToken()).toBeNull();
+    // what kept it from being read has passed: the file is whole again
+    writeFileSync(
+      path(),
+      JSON.stringify({ v: 1, entries: { lbToken: { enc: false, value: "lb-1" } } }),
+    );
+    expect(await persist.newDisplayToken()).toBe(false);
+    expect(asides()).toHaveLength(0);
+    expect(await secrets.getSecret("lbToken")).toBe("lb-1");
+    expect(await persist.displayToken()).toMatch(/^[\w-]{20,}$/);
+  });
+
   it("sets the file aside for New token the same way, a folder in its place among them", async () => {
     for (const make of [() => writeFileSync(path(), '{"v":1}'), () => mkdirSync(path())]) {
       userData = mkdtempSync(join(tmpdir(), "tt-secrets-"));

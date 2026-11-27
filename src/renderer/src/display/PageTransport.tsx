@@ -462,6 +462,10 @@ export function PageTransport({
 /** A disc's button: its touch target a little larger than the disc. */
 const DISC_BUTTON =
   "group grid touch-manipulation place-items-center p-1 [-webkit-tap-highlight-color:transparent]";
+/** The power disc's button: a disc's, but a finger on it is never the browser's to pan with, so one
+ *  that drifts during the hold doesn't end it (touch-none in place of touch-manipulation). */
+const HOLD_BUTTON =
+  "group grid touch-none place-items-center p-1 [-webkit-tap-highlight-color:transparent]";
 
 /** A disc's face: 72px in the centre, 56px beside it, lit while what it opens is open. */
 const discFace = (size: "main" | "side", lit: boolean): string =>
@@ -619,7 +623,7 @@ function PowerDisc({ live, say }: { live: boolean; say: Say }): React.JSX.Elemen
       onPointerCancel={() => press.current?.leave()}
       // a long press is a menu's or a callout's on some tablets
       onContextMenu={(e) => e.preventDefault()}
-      className={cx(DISC_BUTTON, "[-webkit-touch-callout:none]")}
+      className={cx(HOLD_BUTTON, "[-webkit-touch-callout:none]")}
     >
       <span className={discFace("side", false)}>
         <Power size={22} />
