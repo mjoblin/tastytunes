@@ -21,7 +21,7 @@ describe("the moon's badge", () => {
     expect(sleepBadge(NOW + 22 * MIN + 30_000, NOW)).toBe("23m");
     expect(sleepBadge(NOW + 1, NOW)).toBe("1m");
     expect(sleepBadge(NOW - 5_000, NOW)).toBe("0m");
-    expect(sleepBadge(null, NOW)).toBe("track");
+    expect(sleepBadge(null, NOW)).toBe("end");
   });
 
   it("changes once a minute, at the moment its minutes go down", () => {

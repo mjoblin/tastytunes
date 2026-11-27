@@ -13,9 +13,9 @@ import { fmtTime } from "@/lib/format";
 export const SHEET_WIDTH = 340;
 export const SHEET_MARGIN = 16;
 
-/** The moon's badge: the minutes left, rounded up ("23m"), or "track" for the end of the track. */
+/** The moon's badge: the minutes left, rounded up ("23m"), or "end" for the end of the track. */
 export function sleepBadge(firesAt: number | null, now: number): string {
-  if (firesAt == null) return "track";
+  if (firesAt == null) return "end";
   return `${Math.max(0, Math.ceil((firesAt - now) / 60_000))}m`;
 }
 
