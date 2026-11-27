@@ -15,16 +15,19 @@ type Rec = Parameters<typeof coverGroups>[0][number];
 const rec = (
   title: string,
   artist: string,
-  releases: Array<[id: string, type: string, date: string, extra?: string[], status?: string]>,
+  releases: Array<
+    [id: string, type: string, date: string, extra?: string[], status?: string, by?: string]
+  >,
   score = 100,
 ): Rec => ({
   id: `${title}-${artist}`,
   title,
   score,
   "artist-credit": [{ name: artist }],
-  releases: releases.map(([id, type, date, extra = [], status = "Official"]) => ({
+  releases: releases.map(([id, type, date, extra = [], status = "Official", by]) => ({
     status,
     date,
+    ...(by ? { "artist-credit": [{ name: by }] } : {}),
     "release-group": { id, "primary-type": type, "secondary-types": extra },
   })),
 });
@@ -81,6 +84,22 @@ describe("the albums whose cover stands for the song", () => {
       ],
       "The Chainsmokers feat. Halsey",
       "Closer",
+    );
+    expect(got).toEqual(["single"]);
+  });
+
+  it("never stands another artist's record or a various-artists one for the song", () => {
+    const got = coverGroups(
+      [
+        rec("Crazy in Love", "Beyoncé", [
+          // a various-artists album never tagged a compilation, dated by its year alone
+          ["divas", "Album", "2003", [], "Official", "Various Artists"],
+          ["tribute", "Album", "2002", [], "Official", "Someone Else"],
+          ["single", "Single", "2003-06-30", [], "Official", "Beyoncé"],
+        ]),
+      ],
+      "Beyonce feat. Jay-Z",
+      "Crazy in Love",
     );
     expect(got).toEqual(["single"]);
   });

@@ -9,7 +9,8 @@
 // artist must be the station's lead artist. Anything else (a show's name, an ad, a station
 // that puts the song first) finds nothing, and the logo stays. Of the recording's releases the
 // official album comes first, then a single, then an EP, the earliest of each; compilations,
-// live records and mixes never stand for a song.
+// live records and mixes never stand for a song, and neither does a record not credited to the
+// song's own artist (a various-artists album the archive never tagged a compilation).
 //
 // Cached as a data URL in a bounded disk LRU, INCLUDING definitive misses (no recording matched,
 // or no cover for any of its albums), so a station's rotation is asked once; a failed search or
@@ -28,6 +29,8 @@ const MIN_MATCH_SCORE = 75;
 /** Release groups tried for a cover before the song counts as having none. */
 const GROUPS_MAX = 3;
 const FETCH_MS = 10_000;
+/** The choosing rules' version, in every cache key: raised when they change what a song shows. */
+const RULES = 2;
 
 const cache = new DiskCache<string | null>("radiocover", CACHE_MAX);
 const asking = new Map<string, Promise<string | null>>();
@@ -40,6 +43,8 @@ interface MbCredit {
 interface MbRelease {
   status?: string | null;
   date?: string | null;
+  /** The release's own credit, where the search gives one (a compilation's "Various Artists"). */
+  "artist-credit"?: MbCredit[];
   "release-group"?: { id?: string; "primary-type"?: string | null; "secondary-types"?: string[] };
 }
 export interface MbRecording {
@@ -113,6 +118,9 @@ export function coverGroups(recordings: MbRecording[], artist: string, song: str
       const rg = rel["release-group"];
       if (!rg?.id) continue;
       if ((rg["secondary-types"] ?? []).some((t) => NEVER.has(t.toLowerCase()))) continue;
+      // the artist's own record only: a various-artists album the archive never tagged a
+      // compilation, or another artist's, never stands for the song
+      if (rel["artist-credit"] && !creditsLead(rel["artist-credit"], lead)) continue;
       rows.push({
         id: rg.id,
         official: rel.status?.toLowerCase() === "official" ? 0 : 1,
@@ -173,7 +181,9 @@ export function fetchRadioCover(artist: string, song: string): Promise<string | 
   const a = artist.trim();
   const s = song.trim();
   if (!a || !s) return Promise.resolve(null);
-  const key = `${looseKey(a)}|${looseKey(s)}`;
+  // the choosing rules' version leads the key: a song chosen under older rules is chosen again,
+  // and its old entry ages out of the LRU
+  const key = `${RULES}|${looseKey(a)}|${looseKey(s)}`;
   if (cache.has(key)) return Promise.resolve(cache.get(key) ?? null);
   let p = asking.get(key);
   if (!p) {
