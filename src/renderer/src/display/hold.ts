@@ -14,7 +14,7 @@
  */
 
 /** How long the power disc is held for standby. */
-export const STANDBY_HOLD_MS = 750;
+export const STANDBY_HOLD_MS = 1_500;
 /** The ring's way back when a press ends without standby. */
 export const RING_BACK_MS = 150;
 
