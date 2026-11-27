@@ -35,8 +35,9 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
   const [tokenEnds, setTokenEnds] = useState<string | null>(null);
   // one saved that couldn't be read is kept as it is, never replaced unasked: the card says so
   const [tokenUnreadable, setTokenUnreadable] = useState(false);
-  // New token refused (the saved secrets couldn't be read or written): said in the card too
-  const [newTokenFailed, setNewTokenFailed] = useState(false);
+  // what the last New token said in the card: refused (the saved secrets couldn't be set aside or
+  // written), or made once the saved keys, which couldn't be read, were set aside
+  const [newTokenSaid, setNewTokenSaid] = useState<"failed" | "set-aside" | null>(null);
   const readToken = (): void => {
     void tt
       .secretsStatus()
@@ -153,9 +154,21 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
                     Couldn't read the saved token. Click New token to make a new one.
                   </div>
                 )}
-                {lan && newTokenFailed && (
+                {/* the first token couldn't be saved as the server started (main says so) */}
+                {lan && status.tokenFailed && tokenEnds == null && newTokenSaid == null && (
+                  <div data-mcp-token-not-made className="text-[12px] text-dim">
+                    Couldn't make a token. Click New token to try again.
+                  </div>
+                )}
+                {lan && newTokenSaid === "failed" && (
                   <div data-mcp-token-new-error className="text-[12px] text-dim">
                     Couldn't make a new token. Try again.
+                  </div>
+                )}
+                {lan && newTokenSaid === "set-aside" && (
+                  <div data-mcp-token-set-aside className="text-[12px] text-dim">
+                    Made a new token. The saved keys couldn't be read, so they were set aside and
+                    any keys need to be entered again.
                   </div>
                 )}
                 {lan && (
@@ -178,11 +191,14 @@ export function McpSection({ settings, save }: SectionProps): React.JSX.Element 
                             "Make a new token? Agents using the current one stop working until they have the new one.",
                           verb: "New token",
                           onConfirm: () => {
-                            setNewTokenFailed(false);
+                            setNewTokenSaid(null);
                             void tt
                               .mcpTokenNew()
-                              .then(readToken)
-                              .catch(() => setNewTokenFailed(true));
+                              .then(({ keysSetAside }) => {
+                                readToken();
+                                if (keysSetAside) setNewTokenSaid("set-aside");
+                              })
+                              .catch(() => setNewTokenSaid("failed"));
                           },
                         })
                       }

@@ -28,6 +28,7 @@ import {
   type McpToolInfo,
 } from "@shared/mcpCatalog";
 import { app } from "electron";
+import { errorMessage } from "@shared/guards";
 import type { MenuCommand } from "@shared/ipc";
 import type { DeviceManager } from "../device/deviceManager";
 import { ensureMcpToken, getSettings, updateSettings } from "../data/persist";
@@ -132,6 +133,10 @@ export class McpBridge {
   private shownUrl: string | null = null;
   /** The token's mint, which a request from the network waits for before it is checked. */
   private tokenReady: Promise<void> = Promise.resolve();
+  /** The token couldn't be made as the server last started: said with the status, for Settings. */
+  private tokenFailed = false;
+  /** Counts the starts, so a mint that fails late speaks only for the start that made it. */
+  private starts = 0;
   /** Fired when an MCP tool mutates settings (schedules) — the renderer
    *  learns via a {kind:'settings'} push; index.ts wires this to the window. */
   onSettingsMutated: ((next: AppSettings) => void) | null = null;
@@ -191,8 +196,24 @@ export class McpBridge {
   }
 
   private start(mcp: McpSettings): void {
-    // the token is minted the first time the server runs, never for an install that never does
-    this.tokenReady = ensureMcpToken().catch(() => {});
+    // the token is minted the first time the server runs, never for an install that never does;
+    // one that couldn't be saved (a full disk, a refused keychain) is said in the log and on the
+    // card, whose New token tries again
+    const run = ++this.starts;
+    this.tokenFailed = false;
+    this.tokenReady = ensureMcpToken().catch((e: unknown) => {
+      if (run !== this.starts) return;
+      this.tokenFailed = true;
+      const why = `the token couldn't be made (${errorMessage(e)})`;
+      // listening already: Settings hears it now; else with the address, once it listens
+      if (this.http && this.shownUrl != null)
+        this.dm.setMcpStatus(
+          { running: true, url: this.shownUrl, error: null, tokenFailed: true },
+          why,
+          "error",
+        );
+      else this.dm.log("error", "mcp", why);
+    });
     const host = mcp.bind === "lan" ? "0.0.0.0" : "127.0.0.1";
     const server = createServer((req, res) => void this.route(req, res, mcp.bind));
     server.on("error", (e: NodeJS.ErrnoException) => {
@@ -226,7 +247,10 @@ export class McpBridge {
 
   private say(url: string, bind: McpSettings["bind"]): void {
     this.shownUrl = url;
-    this.dm.setMcpStatus({ running: true, url, error: null }, `listening on ${url} (${bind})`);
+    this.dm.setMcpStatus(
+      { running: true, url, error: null, ...(this.tokenFailed ? { tokenFailed: true } : {}) },
+      `listening on ${url} (${bind})`,
+    );
   }
 
   /** A streamer connected: the address is worked out again. The server switched on at launch
