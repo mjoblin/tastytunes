@@ -164,19 +164,28 @@ export function useRadioCover(meta: NowPlayingMeta | null, art: string | null): 
     const t = setTimeout(() => setHeld(null), key ? HOLD_MS : GAP_MS);
     return () => clearTimeout(t);
   }, [holding, key]);
-  // with no cover to hold, no picture while the first answer comes
+  // with no cover to hold and nothing shown yet (a fresh start), no picture while the first answer
+  // comes; a station whose logo this surface already shows keeps it until the cover comes, so a
+  // song named after a station starts goes logo to cover, never through an empty place
   const [waited, setWaited] = useState<string | null>(null);
   useEffect(() => {
     if (!key) return;
     const t = setTimeout(() => setWaited(key), FIRST_MS);
     return () => clearTimeout(t);
   }, [key]);
+  const [logoShown, setLogoShown] = useState<string | null>(null);
 
-  if (!radio || own) return art;
-  if (answer) return answer;
-  if (holding) return held.url;
-  if (key != null && answer === undefined && waited !== key) return null;
-  return art;
+  let shown: string | null;
+  if (!radio || own) shown = art;
+  else if (answer) shown = answer;
+  else if (holding) shown = held.url;
+  else if (key != null && answer === undefined && waited !== key && logoShown !== logo)
+    shown = null;
+  else shown = logo;
+  useEffect(() => {
+    if (radio && logo != null && shown === logo) setLogoShown(logo);
+  }, [radio, logo, shown]);
+  return shown;
 }
 
 /** Whether a big surface's empty place stays quiet: while a station has a picture of its own, a
