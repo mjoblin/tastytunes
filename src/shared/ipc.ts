@@ -449,8 +449,9 @@ export interface TastyTunesApi {
   ): Promise<{ verdict: "works" | "refused" | "unreachable" | "removed"; userName: string | null }>;
   /** The MCP token itself, for a Copy the person pressed; nothing else asks for it. */
   mcpTokenReveal(): Promise<string>;
-  /** A new MCP token: agents using the old one stop working until they have this one. */
-  mcpTokenNew(): Promise<void>;
+  /** A new MCP token: agents using the old one stop working until they have this one;
+   *  keysSetAside when the saved keys couldn't be read and were set aside to make it. */
+  mcpTokenNew(): Promise<{ keysSetAside: boolean }>;
   /** Consent step 1: start downloading the offered update. */
   updateDownload(): Promise<void>;
   /** Consent step 2: restart into the downloaded update now. */

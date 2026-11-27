@@ -86,6 +86,15 @@ function pruneAside(path: string, label: string): void {
   for (const old of copies.slice(KEEP)) rmSync(join(dirname(path), old), { force: true });
 }
 
+/** The file moved aside (asideName), the newest KEEP of that kind kept: where it went. A throw when
+ *  it couldn't be moved. Also the secrets store's way out of a file it can't read (data/secrets). */
+export function moveAside(path: string, label: string, now = new Date()): string {
+  const aside = asideName(path, label, now);
+  renameSync(path, aside);
+  pruneAside(path, label);
+  return aside;
+}
+
 export type SavedRead =
   | { state: "missing" }
   | { state: "read"; parsed: unknown }
@@ -116,10 +125,9 @@ export function readSaved(path: string, now = new Date()): SavedRead {
     // a byte-order mark first (an editor's save, 0.16.0) is no reason to set the file aside
     return { state: "read", parsed: JSON.parse(text.replace(/^\uFEFF/, "")) as unknown };
   } catch {
-    const aside = asideName(path, "unreadable", now);
+    let aside: string;
     try {
-      renameSync(path, aside);
-      pruneAside(path, "unreadable");
+      aside = moveAside(path, "unreadable", now);
     } catch (err) {
       noteSaved(
         "error",
