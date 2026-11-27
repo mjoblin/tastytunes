@@ -169,8 +169,14 @@ export function DisplayMode(): React.JSX.Element {
 
   const artLoadable = useArtLoadable(art);
   const lyricsToggleable = settings.lyrics && !meta.isRadio && !!meta.subtitle;
-  // the lyric's room follows the switch, never the song, so the art keeps its place across tracks
-  const lyricRoom = settings.lyrics && settings.displayLyrics;
+  // THE LYRIC'S ROOM FOLLOWS THE LYRICS THE SONG HAS: a song with none (a station, a track with
+  // no synced lyrics) keeps the art and its text where they sit with the lyrics off, and a song
+  // with them makes the room, the lyric fading in once the art has risen. The lyric line reports
+  // what a song has once its lookup answers, and the room holds while a new track's is asked, so
+  // an album with lyrics on every track never moves.
+  const [hasLyrics, setHasLyrics] = useState(false);
+  const lyricLine = lyricsToggleable && settings.displayLyrics;
+  const lyricRoom = lyricLine && hasLyrics;
   const toggleLyrics = async (): Promise<void> => {
     await saveSettings({ displayLyrics: !settings.displayLyrics });
   };
@@ -325,7 +331,9 @@ export function DisplayMode(): React.JSX.Element {
         <X size={18} />
       </button>
 
-      {(!stage || standIn) && lyricsToggleable && settings.displayLyrics && <DisplayLyric />}
+      {(!stage || standIn) && lyricsToggleable && settings.displayLyrics && (
+        <DisplayLyric onLyrics={setHasLyrics} roomMade={lyricRoom} />
+      )}
 
       {(!stage || standIn) && (
         <div
@@ -337,12 +345,12 @@ export function DisplayMode(): React.JSX.Element {
             text absolutely beneath it — a longer/shorter title, a missing
             subtitle, or a changing badge count then grow downward instead of
             re-centering the whole group and shifting the art. */}
-          <div className="relative -translate-y-[var(--display-lift,7vmin)]">
+          <div className="relative -translate-y-[var(--display-lift,7vmin)] motion-safe:transition-transform motion-safe:duration-500 ease-out">
             <CrossfadeArt
               src={art}
-              className="w-[var(--display-art,46vmin)] h-[var(--display-art,46vmin)] object-cover rounded-2xl art-glow"
+              className="w-[var(--display-art,46vmin)] h-[var(--display-art,46vmin)] motion-safe:transition-[width,height] motion-safe:duration-500 ease-out object-cover rounded-2xl art-glow"
               fallback={
-                <div className="w-[var(--display-art,46vmin)] h-[var(--display-art,46vmin)] rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
+                <div className="w-[var(--display-art,46vmin)] h-[var(--display-art,46vmin)] motion-safe:transition-[width,height] motion-safe:duration-500 ease-out rounded-2xl bg-raised ring-1 ring-edge flex items-center justify-center">
                   {meta.isRadio ? (
                     <RadioTower size={90} strokeWidth={1} className="text-faint" />
                   ) : (
@@ -437,10 +445,10 @@ function useHeldArt(art: string | null, changing: boolean): string | null {
 
 /**
  * THE LYRIC'S ROOM (a short screen: a tablet in landscape under a browser's bars, a short window):
- * with the lyrics switched on, the art and the text hung beneath it keep clear of the lyric's two
- * lines above the bottom. The art rises only as far as it must (never less than today's 7vmin)
- * and shrinks only when rising isn't enough, keeping 24px above it; on a tall screen nothing
- * moves. The text's height is its usual one-line title, the artist and the format chips: a title
+ * while a song's lyrics show (DisplayMode's lyricRoom), the art and the text hung beneath it keep
+ * clear of the lyric's two lines above the bottom, gliding there and back as a song has them or
+ * not. The art rises only as far as it must (never less than today's 7vmin) and shrinks only when
+ * rising isn't enough, keeping 24px above it; on a tall screen nothing moves. The text's height is its usual one-line title, the artist and the format chips: a title
  * that wraps to two lines can still meet a two-line lyric on the shortest screens.
  */
 const TEXT_H = "(90px + 1.25 * clamp(26px, 4.5vmin, 52px) + 1.25 * clamp(15px, 2.2vmin, 24px))";
@@ -456,8 +464,23 @@ const LYRIC_ROOM = {
  * column, whatever it does. Dim ♪ through LRC gaps/intros (same as the
  * Now Playing inline line); renders nothing without synced lyrics.
  */
-function DisplayLyric(): React.JSX.Element | null {
-  const { synced, currentIndex } = useLyrics();
+function DisplayLyric({
+  onLyrics,
+  roomMade,
+}: {
+  /** What the song has, once its lookup answers: synced lyrics or not (Display's room follows). */
+  onLyrics(has: boolean): void;
+  /** Display has made the lyric's room: the line shows only then, once the art has risen. */
+  roomMade: boolean;
+}): React.JSX.Element | null {
+  const { synced, currentIndex, status } = useLyrics();
+  // a lookup under way says nothing: the room stays as the last track had it
+  const has = status === "loading" ? null : !!synced?.length;
+  useEffect(() => {
+    if (has != null) onLyrics(has);
+  }, [has, onLyrics]);
+  // gone (a station, the switch off, a scene drawing its own), no room is kept for it
+  useEffect(() => () => onLyrics(false), [onLyrics]);
   const line = synced && currentIndex >= 0 ? synced[currentIndex].text : "";
   const { shown, visible } = useFadedText(synced ? line || "♪" : "");
   if (!synced) return null;
@@ -467,14 +490,22 @@ function DisplayLyric(): React.JSX.Element | null {
       data-display-lyric
       className="absolute inset-x-0 bottom-16 px-16 text-center pointer-events-none"
     >
+      {/* in once the art has risen into the room (its 500ms), out at once */}
       <div
         className={cx(
-          "font-display text-[clamp(17px,2.8vmin,30px)] leading-snug line-clamp-2 text-balance transition-opacity duration-200",
-          visible ? "opacity-100" : "opacity-0",
-          placeholder ? "text-faint" : "text-gold/90",
+          "transition-opacity",
+          roomMade ? "opacity-100 duration-300 delay-500" : "opacity-0 duration-150",
         )}
       >
-        {shown}
+        <div
+          className={cx(
+            "font-display text-[clamp(17px,2.8vmin,30px)] leading-snug line-clamp-2 text-balance transition-opacity duration-200",
+            visible ? "opacity-100" : "opacity-0",
+            placeholder ? "text-faint" : "text-gold/90",
+          )}
+        >
+          {shown}
+        </div>
       </div>
     </div>
   );
