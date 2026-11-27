@@ -24,7 +24,13 @@ import {
   type MediaInfoTarget,
   type MediaNode,
 } from "@shared/model";
-import { artIdOf, displayControlLine, displayPush, displaySnapshot } from "./displayFeed";
+import {
+  artIdOf,
+  clockedLine,
+  displayControlLine,
+  displayPush,
+  displaySnapshot,
+} from "./displayFeed";
 import { SCREEN_ID } from "./displayScreens";
 import { hostAllowed } from "./hostCheck";
 
@@ -385,7 +391,8 @@ export class DisplayServer {
       const line = this.controlLine(client.screen);
       if (line === client.control) continue;
       client.control = line;
-      if (!this.write(c, `event: control\ndata: ${line}\n\n`)) this.clients.delete(c);
+      if (!this.write(c, `event: control\ndata: ${clockedLine(line, Date.now())}\n\n`))
+        this.clients.delete(c);
     }
   }
 
@@ -406,7 +413,8 @@ export class DisplayServer {
     for (const c of this.clients.keys()) if (!this.write(c, line)) this.clients.delete(c);
   }
 
-  /** Where a screen stands, as sent: its queue's pictures by an id this server handed out. */
+  /** Where a screen stands, as sent: its queue's pictures by an id this server handed out. Written
+   *  with the app's clock (clockedLine), which this leaves out so a line is compared without it. */
   private controlLine(screen: string | null): string {
     return JSON.stringify(displayControlLine(this.deps.controlFor(screen), this.art));
   }
@@ -627,7 +635,7 @@ export class DisplayServer {
     res.write(`event: snapshot\ndata: ${JSON.stringify(snap)}\n\n`);
     const screen = screenOf(req);
     const control = this.controlLine(screen);
-    res.write(`event: control\ndata: ${control}\n\n`);
+    res.write(`event: control\ndata: ${clockedLine(control, Date.now())}\n\n`);
     this.clients.set(res, { token, screen, control });
     req.on("close", () => this.clients.delete(res));
   }

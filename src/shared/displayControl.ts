@@ -113,6 +113,11 @@ export interface DisplayControl {
   /** This screen's short code (screenCode), which the page shows while it asks; absent before the
    *  page has heard its first line, and for a screen without an id. */
   code?: string | null;
+  /** The app's clock as the line went out (ms since the epoch): the page counts the sleep timer's
+   *  time left from it, since a TV's or an old tablet's own clock can be minutes off. Added as the
+   *  line is written (servers/displayFeed clockedLine), never part of what a screen is told again
+   *  for, and absent on a line the page made for itself. */
+  now?: number;
 }
 
 /** The app's sleep timer as a screen sees it: set and cancelled from there, its action and its

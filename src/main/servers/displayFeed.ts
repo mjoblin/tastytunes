@@ -245,6 +245,13 @@ export function displayControlLine(c: DisplayControl, art: ArtRegistry): Display
   };
 }
 
+/** A control line as it is written: the line as compared (displayControlLine, as JSON) with the
+ *  app's clock as it goes out (DisplayControl's now) at its end. Outside what is compared, so a
+ *  screen hears its line again only when where it stands changes, never for the clock alone. A
+ *  line is never empty (it always names its state). */
+export const clockedLine = (line: string, now: number): string =>
+  `${line.slice(0, -1)},"now":${now}}`;
+
 /** A push the page may hear, reduced; null for any other kind. */
 export function displayPush(msg: PushMessage, art: ArtRegistry): PushMessage | null {
   switch (msg.kind) {

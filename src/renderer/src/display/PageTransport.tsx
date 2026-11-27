@@ -35,6 +35,7 @@ import { MediaTile } from "@/components/media/MediaTile";
 import { SettingLine } from "@/components/display/ScenePicker";
 import { PageSeekBar } from "@/components/media/Waveform";
 import {
+  appNow,
   playPlaylist,
   seekTo,
   sleepIn,
@@ -651,12 +652,13 @@ function PowerDisc({ live, say }: { live: boolean; say: Say }): React.JSX.Elemen
 }
 
 /** The minutes left on the moon, over its top edge, changing once a minute (keyed by when the
- *  timer runs out, so a timer armed again starts from now). */
+ *  timer runs out, so a timer armed again starts from now). Counted by the app's clock, as the
+ *  timer runs (display/control appNow). */
 function SleepBadge({ firesAt }: { firesAt: number | null }): React.JSX.Element {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => appNow());
   useEffect(() => {
     if (firesAt == null) return;
-    const t = setTimeout(() => setNow(Date.now()), badgeChangesIn(firesAt, now));
+    const t = setTimeout(() => setNow(appNow()), badgeChangesIn(firesAt, now));
     return () => clearTimeout(t);
   }, [firesAt, now]);
   return (
@@ -669,12 +671,13 @@ function SleepBadge({ firesAt }: { firesAt: number | null }): React.JSX.Element 
   );
 }
 
-/** The time left, by the second while the sheet shows it (keyed as the badge is). */
+/** The time left, by the second while the sheet shows it (keyed as the badge is, and counted by
+ *  the app's clock as it is). */
 function SleepCountdown({ firesAt }: { firesAt: number | null }): React.JSX.Element {
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => appNow());
   useEffect(() => {
     if (firesAt == null) return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
+    const t = setInterval(() => setNow(appNow()), 1000);
     return () => clearInterval(t);
   }, [firesAt]);
   return (

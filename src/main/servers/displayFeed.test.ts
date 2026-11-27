@@ -3,6 +3,7 @@ import type { Snapshot } from "@shared/ipc";
 import { DEFAULT_SETTINGS, type MediaIndexStatus } from "@shared/model";
 import {
   artIdOf,
+  clockedLine,
   displayIndexes,
   displayPush,
   displaySettings,
@@ -184,5 +185,18 @@ describe("what a screen on the network may see", () => {
   it("tells a page the waveforms work here, so its strip and seek bar draw them as the window's do", () => {
     expect(displaySettings({ ...DEFAULT_SETTINGS, waveformSeen: true }).waveformSeen).toBe(true);
     expect(displaySettings({ ...DEFAULT_SETTINGS, waveformSeen: false }).waveformSeen).toBe(false);
+  });
+});
+
+describe("a control line as written", () => {
+  it("adds the app's clock to the line as compared, which stays as it was", () => {
+    const line = JSON.stringify({ state: "allowed", volume: { percent: 40, step: null } });
+    const written = clockedLine(line, 1_700_000_000_000);
+    expect(JSON.parse(written)).toEqual({
+      state: "allowed",
+      volume: { percent: 40, step: null },
+      now: 1_700_000_000_000,
+    });
+    expect(written.startsWith(line.slice(0, -1))).toBe(true);
   });
 });
