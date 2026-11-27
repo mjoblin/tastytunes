@@ -212,7 +212,8 @@ export function PageTransport({
   const moon = useRef<HTMLButtonElement | null>(null);
   const sheetAt = useSheetPlace(moon, strip, sleepOpen);
   const sleepFade = useFadePresence(sleepOpen && control.sleep != null, { rise: true });
-  // the line above the buttons a press on power speaks in
+  // the line above the buttons: what a press on power is doing, and a standby or a sleep timer
+  // choice the app didn't do
   const [hint, say] = useLine();
   // the list fades in rising and out dropping, as a panel seen from across a room does
   const listFade = useFadePresence(
@@ -296,8 +297,8 @@ export function PageTransport({
         // cathode glass's curved bottom edge
         style={{ bottom }}
       >
-        {/* what a press on power is doing, just above the buttons and out of their flow, so the
-            list above them never moves for it */}
+        {/* what a press on power is doing, or a choice the app didn't do, just above the buttons
+            and out of their flow, so the list above them never moves for it */}
         <div
           aria-live="polite"
           className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2"
