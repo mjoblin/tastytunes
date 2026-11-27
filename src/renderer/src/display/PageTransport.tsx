@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   LayoutGrid,
   List,
   Minus,
+  Moon,
   Pause,
   Play,
   Plus,
@@ -12,7 +13,12 @@ import {
   Square,
   X,
 } from "lucide-react";
-import type { DisplayPlaylistRow, DisplayPresetRow, DisplayQueueRow } from "@shared/displayControl";
+import type {
+  DisplayPlaylistRow,
+  DisplayPresetRow,
+  DisplayQueueRow,
+  DisplaySleep,
+} from "@shared/displayControl";
 import { transportAbilities, type TransportAbilities } from "@shared/transport";
 import { cx, fmtDuration } from "@/lib/format";
 import { useFadePresence } from "@/hooks/useFadePresence";
@@ -27,8 +33,17 @@ import { scrollToTop } from "@/lib/scroll";
 import { MediaTile } from "@/components/media/MediaTile";
 import { SettingLine } from "@/components/display/ScenePicker";
 import { PageSeekBar } from "@/components/media/Waveform";
-import { playPlaylist, seekTo, steer, useControl, type ButtonVerb } from "./control";
+import { playPlaylist, seekTo, sleepIn, steer, useControl, type ButtonVerb } from "./control";
 import { whyDark } from "./dark";
+import { holdPress, RING_BACK_MS, SHORT_HINT_MS, STANDBY_HOLD_MS, type HoldPress } from "./hold";
+import {
+  badgeChangesIn,
+  sheetPlace,
+  sleepBadge,
+  sleepChoices,
+  sleepCountdown,
+  sleepThen,
+} from "./sleepTimer";
 import { musicGoing } from "./rest";
 import { PageTabs } from "./PageTabs";
 import {
@@ -75,6 +90,12 @@ import {
  *   strip raised from the bottom edge to a finger's height (components/media/Waveform's
  *   PageSeekBar), one seek for each lift of a finger. At rest the strip at the edge stays a
  *   picture.
+ * - STANDBY AND THE SLEEP TIMER (with Presets, playlists and wake, while the streamer is on): a
+ *   moon and a power disc at the end of the row, as in the window's playback bar. Power puts the
+ *   streamer in standby only for a press held STANDBY_HOLD_MS (display/hold), a ring filling round
+ *   it over the hold; a shorter press says how, in a line above the buttons. No key does it. The
+ *   moon opens a sheet above it to set the app's own sleep timer (display/sleepTimer); armed, the
+ *   moon is lit with the minutes left over it. The sheet and the list are never open together.
  */
 
 /** The dim's fade down as the buttons show, and back up as they go (the comment where it is drawn). */
@@ -154,12 +175,17 @@ export function PageTransport({
   shown,
   queueOpen,
   onQueue,
+  sleepOpen,
+  onSleep,
 }: {
   /** The page's buttons show (display/touch). */
   shown: boolean;
   /** The queue view is open (display/page holds the buttons up while it is). */
   queueOpen: boolean;
   onQueue(open: boolean): void;
+  /** The sleep timer's sheet is open (held like the list, never open with it). */
+  sleepOpen: boolean;
+  onSleep(open: boolean): void;
 }): React.JSX.Element | null {
   const control = useControl();
   const [lockedHere] = useLocked();
@@ -169,7 +195,13 @@ export function PageTransport({
   const usable = !lockedHere && (control.state === "ask" || control.state === "allowed");
   // the buttons' height, which the list keeps above: two rows on a phone, the volume wrapping
   const strip = useRef<HTMLDivElement | null>(null);
-  const stripH = useHeightWhile(strip, queueOpen);
+  const stripH = useHeightWhile(strip, queueOpen || sleepOpen);
+  // the sleep timer's sheet, above the moon it opens from, rising and dropping as the list does
+  const moon = useRef<HTMLButtonElement | null>(null);
+  const sheetAt = useSheetPlace(moon, strip, sleepOpen);
+  const sleepFade = useFadePresence(sleepOpen && control.sleep != null, { rise: true });
+  // the line above the buttons a press on power speaks in
+  const [hint, setHint] = useState<string | null>(null);
   // the list fades in rising and out dropping, as a panel seen from across a room does
   const listFade = useFadePresence(
     queueOpen && (control.queue != null || control.presets != null || control.playlists != null),
@@ -196,6 +228,7 @@ export function PageTransport({
   const presets = control.presets;
   const playlists = control.playlists;
   const list = queue != null || presets != null || playlists != null;
+  const sleep = control.sleep;
   // over a scene a little higher (styles.css, --page-transport-lift)
   const bottom = "calc(env(safe-area-inset-bottom, 0px) + var(--page-transport-lift, 0.75rem))";
   return (
@@ -227,6 +260,16 @@ export function PageTransport({
           onClose={() => onQueue(false)}
         />
       )}
+      {sleep && sleepFade.mounted && (
+        <SleepSheet
+          sleep={sleep}
+          bottom={`calc(${bottom} + ${stripH + 12}px)`}
+          at={sheetAt}
+          open={sleepOpen}
+          faded={sleepFade.faded}
+          onClose={() => onSleep(false)}
+        />
+      )}
       <div
         ref={strip}
         data-page-transport={control.state}
@@ -240,6 +283,21 @@ export function PageTransport({
         // cathode glass's curved bottom edge
         style={{ bottom }}
       >
+        {/* what a press on power is doing, just above the buttons and out of their flow, so the
+            list above them never moves for it */}
+        <div
+          aria-live="polite"
+          className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2"
+        >
+          {hint && (
+            <div
+              data-page-hold-hint
+              className="whitespace-nowrap rounded-full bg-panel/75 px-3 py-0.5 text-[13px] text-dim backdrop-blur"
+            >
+              {hint}
+            </div>
+          )}
+        </div>
         {asking ? (
           <div
             data-page-transport-asking
@@ -360,6 +418,31 @@ export function PageTransport({
                   </Disc>
                 </div>
               )}
+              {/* the sleep timer and standby at the end, as in the window's playback bar */}
+              {(sleep || control.standby) && (
+                <div data-page-power className="flex items-center gap-2">
+                  {sleep && (
+                    <Disc
+                      label={sleepOpen ? "Close the sleep timer" : "Sleep timer"}
+                      size="side"
+                      active={sleepOpen}
+                      lit={sleepOpen || sleep.armed != null}
+                      onPress={() => onSleep(!sleepOpen)}
+                      buttonRef={moon}
+                      attrs={{ "data-page-sleep-button": "" }}
+                    >
+                      <Moon size={22} />
+                      {sleep.armed && (
+                        <SleepBadge
+                          key={String(sleep.armed.firesAt)}
+                          firesAt={sleep.armed.firesAt}
+                        />
+                      )}
+                    </Disc>
+                  )}
+                  {control.standby && <PowerDisc onHint={setHint} />}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -368,13 +451,27 @@ export function PageTransport({
   );
 }
 
-/** One of the page's round buttons: 72px in the centre, 56px beside it, its touch target a little
- *  larger than the disc. A press shows at once (decisions/0007); the verb goes on release. */
+/** A disc's button: its touch target a little larger than the disc. */
+const DISC_BUTTON =
+  "group grid touch-manipulation place-items-center p-1 [-webkit-tap-highlight-color:transparent]";
+
+/** A disc's face: 72px in the centre, 56px beside it, lit while what it opens is open. */
+const discFace = (size: "main" | "side", lit: boolean): string =>
+  cx(
+    "relative grid place-items-center rounded-full shadow-lg ring-1 backdrop-blur transition-transform duration-100 group-active:scale-90 motion-reduce:transition-none",
+    lit ? "bg-accentdim text-accent ring-accent/50" : "bg-panel/85 text-ink ring-edge",
+    size === "main" ? "h-[72px] w-[72px]" : "h-14 w-14",
+  );
+
+/** One of the page's round buttons. A press shows at once (decisions/0007); the verb goes on
+ *  release. */
 function Disc({
   verb,
   onPress,
   active = false,
+  lit = active,
   attrs,
+  buttonRef,
   label,
   size,
   children,
@@ -382,9 +479,12 @@ function Disc({
   /** What it asks of the app; or `onPress`, for a button that acts on the page (the queue). */
   verb?: ButtonVerb;
   onPress?(): void;
-  /** Its list is open (the queue's button). */
+  /** What it opens is open (the list's button, the moon's). */
   active?: boolean;
+  /** Drawn lit: while open, and for the moon while the timer is armed too. */
+  lit?: boolean;
   attrs?: Record<string, string>;
+  buttonRef?: React.Ref<HTMLButtonElement>;
   label: string;
   size: "main" | "side";
   children: React.ReactNode;
@@ -392,23 +492,258 @@ function Disc({
   return (
     <button
       type="button"
+      ref={buttonRef}
       {...attrs}
       data-page-verb={verb}
       aria-label={label}
       aria-pressed={onPress ? active : undefined}
       onClick={() => (onPress ? onPress() : verb && void steer(verb))}
-      className="group grid touch-manipulation place-items-center p-1 [-webkit-tap-highlight-color:transparent]"
+      className={DISC_BUTTON}
     >
-      <span
-        className={cx(
-          "grid place-items-center rounded-full shadow-lg ring-1 backdrop-blur transition-transform duration-100 group-active:scale-90 motion-reduce:transition-none",
-          active ? "bg-accentdim text-accent ring-accent/50" : "bg-panel/85 text-ink ring-edge",
-          size === "main" ? "h-[72px] w-[72px]" : "h-14 w-14",
-        )}
-      >
-        {children}
+      <span className={discFace(size, lit)}>{children}</span>
+    </button>
+  );
+}
+
+/** What the line above the buttons says while power is held, and after a press too short. */
+const HOLDING_HINT = "Keep holding for standby";
+const SHORT_HINT = "Hold to put the streamer in standby";
+
+/** The hold ring's circle: 3px, just outside the disc's edge, in a box 5px wider all round. */
+const RING_R = 30.5;
+const RING_LENGTH = 2 * Math.PI * RING_R;
+type RingPhase = "rest" | "filling" | "full" | "back";
+
+/**
+ * STANDBY, BY A HOLD: the window's own standby (network standby, so the screen's Wake brings the
+ * streamer back), sent only once a press has lasted STANDBY_HOLD_MS, the ring full round the disc;
+ * a press let go before it, or a finger or pointer leaving the disc, sends nothing, the ring going
+ * back and the line above saying how. No click and no key sends it. The press is the finger's own
+ * (display/touch keeps a press that only shows the buttons from it whole, as the seek bar's).
+ */
+function PowerDisc({ onHint }: { onHint(text: string | null): void }): React.JSX.Element {
+  const [ring, setRing] = useState<RingPhase>("rest");
+  const press = useRef<HoldPress | null>(null);
+  const hintGoes = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    const held = holdPress(STANDBY_HOLD_MS, {
+      held: () => {
+        setRing("full");
+        onHint(null);
+        void steer("standby");
+      },
+      short: () => {
+        setRing("back");
+        onHint(SHORT_HINT);
+        hintGoes.current = setTimeout(() => onHint(null), SHORT_HINT_MS);
+      },
+    });
+    press.current = held;
+    return () => {
+      held.stop();
+      if (hintGoes.current) clearTimeout(hintGoes.current);
+      onHint(null);
+    };
+  }, [onHint]);
+  const end = (): void => {
+    press.current?.end();
+    // a hold that sent standby lets its ring go as the finger lifts
+    setRing((r) => (r === "full" ? "rest" : r));
+  };
+  return (
+    <button
+      type="button"
+      data-page-hold="standby"
+      aria-label="Standby"
+      onPointerDown={(e) => {
+        if (!e.isPrimary || (e.pointerType === "mouse" && e.button !== 0)) return;
+        // a finger is held to the control it went down on: let go, so leaving the disc ends the
+        // press for a finger as it does for a pointer
+        if (e.currentTarget.hasPointerCapture(e.pointerId))
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        if (hintGoes.current) clearTimeout(hintGoes.current);
+        onHint(HOLDING_HINT);
+        setRing("filling");
+        press.current?.down();
+      }}
+      onPointerUp={end}
+      onPointerLeave={end}
+      onPointerCancel={end}
+      // a long press is a menu's or a callout's on some tablets
+      onContextMenu={(e) => e.preventDefault()}
+      className={cx(DISC_BUTTON, "[-webkit-touch-callout:none]")}
+    >
+      <span className={discFace("side", false)}>
+        <Power size={22} />
+        <svg
+          aria-hidden
+          viewBox="0 0 66 66"
+          className="pointer-events-none absolute -top-[5px] -left-[5px] h-[66px] w-[66px] -rotate-90 text-accent"
+        >
+          <circle
+            cx="33"
+            cy="33"
+            r={RING_R}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="3"
+            strokeDasharray={RING_LENGTH}
+            strokeDashoffset={ring === "filling" || ring === "full" ? 0 : RING_LENGTH}
+            style={{
+              transition:
+                ring === "filling"
+                  ? `stroke-dashoffset ${STANDBY_HOLD_MS}ms linear`
+                  : ring === "back"
+                    ? `stroke-dashoffset ${RING_BACK_MS}ms ease-out`
+                    : "none",
+            }}
+          />
+        </svg>
       </span>
     </button>
+  );
+}
+
+/** The minutes left on the moon, over its top edge, changing once a minute (keyed by when the
+ *  timer runs out, so a timer armed again starts from now). */
+function SleepBadge({ firesAt }: { firesAt: number | null }): React.JSX.Element {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (firesAt == null) return;
+    const t = setTimeout(() => setNow(Date.now()), badgeChangesIn(firesAt, now));
+    return () => clearTimeout(t);
+  }, [firesAt, now]);
+  return (
+    <span
+      data-page-sleep-badge
+      className="pointer-events-none absolute -top-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full bg-panel px-1.5 py-[3px] font-mono text-[11px] font-semibold leading-none tabular-nums text-accent ring-1 ring-accent/50"
+    >
+      {sleepBadge(firesAt, now)}
+    </span>
+  );
+}
+
+/** The time left, by the second while the sheet shows it (keyed as the badge is). */
+function SleepCountdown({ firesAt }: { firesAt: number | null }): React.JSX.Element {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (firesAt == null) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [firesAt]);
+  return (
+    <div
+      data-page-sleep-countdown
+      className="mt-1.5 font-mono text-[30px] leading-none font-semibold tabular-nums text-accent"
+    >
+      {sleepCountdown(firesAt, now)}
+    </div>
+  );
+}
+
+/** The sheet's place, over the moon and inside the screen (display/sleepTimer sheetPlace):
+ *  measured as it opens and again when the screen changes size. */
+function useSheetPlace(
+  anchor: React.RefObject<HTMLButtonElement | null>,
+  box: React.RefObject<HTMLDivElement | null>,
+  on: boolean,
+): { left: number; width: number } | null {
+  const [at, setAt] = useState<{ left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    if (!on) return;
+    const place = (): void => {
+      const a = anchor.current?.getBoundingClientRect();
+      const b = box.current?.getBoundingClientRect();
+      if (a && b) setAt(sheetPlace(a.left + a.width / 2 - b.left, b.width));
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [anchor, box, on]);
+  return at;
+}
+
+/** A choice on the sheet: large enough for a finger across a room. */
+const SHEET_CHIP =
+  "h-12 rounded-xl bg-veil text-[15px] text-ink ring-1 ring-edge motion-safe:transition-transform motion-safe:active:scale-95 [-webkit-tap-highlight-color:transparent]";
+
+/**
+ * THE SLEEP TIMER'S SHEET: above the moon, the list panel's surface. Not armed, the window's
+ * lengths and End of track (where the window offers it); armed, the time left and Cancel the
+ * timer. Either way, what the app will do then, by its own setting. A tap on a choice sends it
+ * and closes the sheet; a touch outside closes it.
+ */
+function SleepSheet({
+  sleep,
+  bottom,
+  at,
+  open,
+  faded,
+  onClose,
+}: {
+  sleep: DisplaySleep;
+  /** The top of the buttons: the sheet keeps above them. */
+  bottom: string;
+  /** Its place across the screen, once measured. */
+  at: { left: number; width: number } | null;
+  open: boolean;
+  faded: string;
+  onClose(): void;
+}): React.JSX.Element {
+  const choose = (send: () => void): void => {
+    send();
+    onClose();
+  };
+  return (
+    <>
+      {open && <div className="absolute inset-0 z-[45]" onClick={onClose} />}
+      <div
+        data-page-sleep-sheet={open || undefined}
+        data-page-sleep-armed={sleep.armed ? "" : undefined}
+        className={cx(
+          "absolute z-50 rounded-2xl bg-panel/90 p-4 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none",
+          faded,
+        )}
+        style={{
+          bottom,
+          left: at?.left ?? 16,
+          width: at?.width ?? "min(340px, calc(100% - 32px))",
+        }}
+      >
+        <div className="text-[15px] font-medium text-ink">Sleep timer</div>
+        {sleep.armed ? (
+          <>
+            <SleepCountdown key={String(sleep.armed.firesAt)} firesAt={sleep.armed.firesAt} />
+            <p className="mt-2 text-[13px] text-dim">{sleepThen(sleep.action)}</p>
+            <button
+              type="button"
+              data-page-sleep-cancel
+              onClick={() => choose(() => void steer("sleepCancel"))}
+              className={cx(SHEET_CHIP, "mt-3 w-full text-alert")}
+            >
+              Cancel the timer
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="mt-0.5 text-[13px] text-dim">{sleepThen(sleep.action)}</p>
+            <div className="mt-3 grid grid-cols-3 gap-2">
+              {sleepChoices(sleep).map((c) => (
+                <button
+                  key={c.minutes}
+                  type="button"
+                  data-page-sleep-choice={c.minutes}
+                  onClick={() => choose(() => void sleepIn(c.minutes))}
+                  className={cx(SHEET_CHIP, c.minutes === "track" && "col-span-3")}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </>
   );
 }
 

@@ -5,6 +5,7 @@ import { extname, join, normalize, sep } from "node:path";
 import {
   isDisplayVerb,
   isPlaylistId,
+  isSleepChoice,
   LINE_PICTURES_MAX,
   screenName,
   type DisplayControl,
@@ -169,7 +170,7 @@ const NO_ADDRESS = `<!doctype html><meta charset="utf-8"><meta name="viewport" c
 /** The pushes that can change what a screen may do: the switches (settings), the source and its
  *  controls, the volume, the queue, the connection, and for presets and the sleeping screen the
  *  presets, the playlists and a playlist's loading, the power, what is held, a recall's answer and
- *  a wake. */
+ *  a wake, and the sleep timer. */
 const CONTROL_KINDS: ReadonlySet<PushMessage["kind"]> = new Set([
   "settings",
   "connection",
@@ -185,6 +186,7 @@ const CONTROL_KINDS: ReadonlySet<PushMessage["kind"]> = new Set([
   "recalledPreset",
   "presetRecallDead",
   "waking",
+  "sleep",
 ]);
 
 const newScreenId = (): string => randomBytes(16).toString("hex");
@@ -553,6 +555,7 @@ export class DisplayServer {
       verb?: unknown;
       id?: unknown;
       secs?: unknown;
+      minutes?: unknown;
       touch?: unknown;
     } | null;
     if (!body || !isDisplayVerb(body.verb)) return this.refuse(res, 400);
@@ -570,12 +573,17 @@ export class DisplayServer {
     // a playlist is played by its own id, the app's (letters, digits and dashes)
     const playlist = verb === "playPlaylist" && isPlaylistId(body.id) ? body.id : undefined;
     if (verb === "playPlaylist" && playlist === undefined) return this.refuse(res, 400);
+    // the sleep timer runs for one of the window's lengths or to the end of the track, and no
+    // other verb takes one
+    const minutes = verb === "sleep" && isSleepChoice(body.minutes) ? body.minutes : undefined;
+    if (verb === "sleep" && minutes === undefined) return this.refuse(res, 400);
     if (!this.withinRate(screen, verb)) return this.json(res, { refused: "busy" }, 429);
     const name = screenName(req.headers["user-agent"] ?? "", body.touch === true);
     const answer = this.deps.steer(screen, name, verb, {
       id: takesId ? id : undefined,
       secs: verb === "seek" ? secs : undefined,
       playlist,
+      minutes,
     });
     this.json(res, answer, "done" in answer ? 200 : answer.refused === "nothing" ? 409 : 403);
     // the screen hears where it stands now (an ask raised, say)

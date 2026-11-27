@@ -21,7 +21,8 @@ export const swallows = (
 
 /** Whether a swallowed press is kept whole from what it landed on: a control that acts on the
  *  finger itself, going down and lifting, rather than on its click (the seek bar, which seeks at
- *  the lift), where swallowing the click alone would still let it act. */
+ *  the lift; the power disc, which acts on a hold), where swallowing the click alone would still
+ *  let it act. */
 export const keptWhole = (swallowed: boolean, onPress: boolean): boolean => swallowed && onPress;
 
 /** What a minute with nobody at the screen lets go of: a panel or a list open closes ("close", the
@@ -49,14 +50,14 @@ export const lapsed = (hold: boolean, down: boolean): "close" | "hide" | null =>
  * display/PageTransport), whether or not anything is open: it is armed at every press.
  */
 
-/** A control, or anything a touch on means to use (a panel's, a list's or the seek bar's own
- *  area). */
+/** A control, or anything a touch on means to use (a panel's, a list's, the sleep timer's sheet's
+ *  or the seek bar's own area). */
 const CONTROL =
-  'button, a, input, select, textarea, label, [role="button"], [role="switch"], [role="tab"], [role="slider"], [data-page-scenes], [data-page-queue], [data-page-seek]';
+  'button, a, input, select, textarea, label, [role="button"], [role="switch"], [role="tab"], [role="slider"], [data-page-scenes], [data-page-queue], [data-page-sleep-sheet], [data-page-seek]';
 const onControl = (t: EventTarget | null): boolean =>
   t instanceof Element && t.closest(CONTROL) != null;
 /** A control that acts on the finger itself rather than on its click (keptWhole). */
-const ON_PRESS = "[data-page-seek]";
+const ON_PRESS = "[data-page-seek], [data-page-hold]";
 const onPress = (t: EventTarget | null): boolean =>
   t instanceof Element && t.closest(ON_PRESS) != null;
 export function useTouchShown(hold: boolean, onIdle?: () => void): boolean {

@@ -202,7 +202,7 @@ function ControlRows({ settings, save }: SectionProps): React.JSX.Element {
           )}
           <Toggle
             label="Presets, playlists and wake"
-            hint="Play presets and playlists from these screens, and wake the streamer from standby."
+            hint="Play presets and playlists from these screens, set the sleep timer, and put the streamer in standby or wake it."
             checked={settings.displayControlPresets}
             onChange={(displayControlPresets) => void save({ displayControlPresets })}
           />
