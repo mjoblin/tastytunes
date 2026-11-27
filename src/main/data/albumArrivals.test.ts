@@ -82,3 +82,46 @@ describe("a later version's fields on a server are kept", () => {
     expect(written["uuid:e"]).toEqual({ since: 2000, keys: { "two|band": 0 }, alsoLater: true });
   });
 });
+
+describe("a later version's servers and arrivals are kept", () => {
+  it("writes back a server and an album's arrival in a form it doesn't read, and notes over neither", async () => {
+    vi.resetModules();
+    const { app } = await import("electron");
+    const file = join(app.getPath("userData"), "album-arrivals.json");
+    const laterServer = { format: 2, arrivals: [["one|band", 1000]] };
+    const laterAlbum = { at: 3000, by: "rescan" };
+    writeFileSync(
+      file,
+      JSON.stringify({
+        "uuid:f": laterServer,
+        "uuid:g": { since: 1000, keys: { "one|band": 0, "two|band": laterAlbum } },
+      }),
+    );
+    const arrivals = await import("./albumArrivals");
+    // read as this version reads it: the album in a later form is undated, and not new
+    expect(arrivals.arrivalsOf("uuid:g")).toEqual({ "one|band": 0 });
+    arrivals.noteArrivals("uuid:g", [album("One"), album("Two"), album("Three")], false, 5000);
+    expect(arrivals.arrivalsOf("uuid:g")).toEqual({ "one|band": 0, "three|band": 5000 });
+    // the later version's server stands as it is, whatever this version's index holds
+    arrivals.noteArrivals("uuid:f", [album("One")], false, 6000);
+    expect(arrivals.arrivalsOf("uuid:f")).toEqual({});
+    const written = JSON.parse(readFileSync(file, "utf-8")) as Record<string, unknown>;
+    expect(written["uuid:f"]).toEqual(laterServer);
+    expect(written["uuid:g"]).toEqual({
+      since: 1000,
+      keys: { "one|band": 0, "two|band": laterAlbum, "three|band": 5000 },
+    });
+    // and read again, the same
+    vi.resetModules();
+    const again = await import("./albumArrivals");
+    again.noteArrivals("uuid:g", [album("Four")], false, 7000);
+    const after = JSON.parse(readFileSync(file, "utf-8")) as Record<string, unknown>;
+    expect(after["uuid:f"]).toEqual(laterServer);
+    expect((after["uuid:g"] as { keys: Record<string, unknown> }).keys).toEqual({
+      "one|band": 0,
+      "two|band": laterAlbum,
+      "three|band": 5000,
+      "four|band": 7000,
+    });
+  });
+});

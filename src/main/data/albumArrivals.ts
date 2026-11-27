@@ -23,10 +23,29 @@ interface ServerArrivals {
 const CHURN_SHARE = 0.5;
 const CHURN_FLOOR = 20;
 
+// a later version's servers this one doesn't read, and on a server it does an album's arrival in a
+// form it doesn't (1.0 is the oldest reader such a file will meet): kept out of the app and
+// written back as found; a carried server isn't noted over, and a carried album isn't new
+let carried: Record<string, unknown> = {};
+let carriedKeys: Record<string, Record<string, unknown>> = {};
+let carriedNotes: string[] = [];
+
 const store = jsonFileStore<Record<string, ServerArrivals>>({
   pathOf: () => join(app.getPath("userData"), "album-arrivals.json"),
   scope: "album-arrivals",
+  encode: (next) => {
+    const out: Record<string, unknown> = { ...carried };
+    for (const [udn, s] of Object.entries(next)) {
+      const later = carriedKeys[udn];
+      out[udn] = later ? { ...s, keys: { ...later, ...s.keys } } : s;
+    }
+    return out;
+  },
+  kept: () => carriedNotes,
   load: (parsed, setAside) => {
+    carried = {};
+    carriedKeys = {};
+    carriedNotes = [];
     const out: Record<string, ServerArrivals> = {};
     if (parsed === undefined) return out;
     if (!isRecord(parsed)) {
@@ -35,11 +54,24 @@ const store = jsonFileStore<Record<string, ServerArrivals>>({
     }
     for (const [udn, v] of Object.entries(parsed)) {
       if (!isRecord(v) || typeof v.since !== "number" || !isRecord(v.keys)) {
-        setAside.push(`the server ${udn} wasn't one this version reads, left out`);
+        if (isRecord(v)) {
+          carried[udn] = v;
+          carriedNotes.push(`the server ${udn} isn't one this version reads, kept as it was`);
+        } else setAside.push(`the server ${udn} wasn't one this version reads, left out`);
         continue;
       }
       const keys: Record<string, number> = {};
-      for (const [k, at] of Object.entries(v.keys)) if (typeof at === "number") keys[k] = at;
+      const later: Record<string, unknown> = {};
+      for (const [k, at] of Object.entries(v.keys)) {
+        if (typeof at === "number") keys[k] = at;
+        else later[k] = at;
+      }
+      if (Object.keys(later).length > 0) {
+        carriedKeys[udn] = later;
+        carriedNotes.push(
+          `${Object.keys(later).length} of the server ${udn}'s albums aren't in a form this version reads, kept as they were`,
+        );
+      }
       // a field this version doesn't know (a later version's) is kept, and written back with the
       // server's next change (noteArrivals spreads the server)
       out[udn] = { ...v, since: v.since, keys };
@@ -60,13 +92,16 @@ export function noteArrivals(
   now = Date.now(),
 ): void {
   const all = store.get();
+  // a later version's record of this server stands as it is
+  if (udn in carried) return;
   const known = all[udn];
   const keys = albums.map((a) => arrivalKey(a, stableArt));
   if (!known) {
     store.set({ ...all, [udn]: { since: now, keys: Object.fromEntries(keys.map((k) => [k, 0])) } });
     return;
   }
-  const fresh = [...new Set(keys)].filter((k) => !(k in known.keys));
+  const later = carriedKeys[udn] ?? {};
+  const fresh = [...new Set(keys)].filter((k) => !(k in known.keys) && !(k in later));
   if (fresh.length === 0) return;
   const churn = fresh.length > CHURN_FLOOR && fresh.length > keys.length * CHURN_SHARE;
   if (churn)

@@ -73,6 +73,9 @@ function own(c: ArtistChoice): ArtistChoice {
 // meet), by key: kept out of the app and written back, and while there is one the sweep waits
 let carried: Record<string, unknown> = {};
 let carriedNotes: string[] = [];
+// and a choice this version reads holding a field it doesn't (a later version's), kept with the
+// choice and written back with it until the choice is replaced: the sweep waits for that too
+let laterFields = false;
 
 const store = jsonFileStore<Record<string, Stored>>({
   pathOf: () => join(app.getPath("userData"), "artist-choices.json"),
@@ -86,6 +89,7 @@ const store = jsonFileStore<Record<string, Stored>>({
   load: (parsed, setAside) => {
     carried = {};
     carriedNotes = [];
+    laterFields = false;
     const out: Record<string, Stored> = {};
     if (parsed === undefined) return out;
     if (!isRecord(parsed)) {
@@ -100,9 +104,18 @@ const store = jsonFileStore<Record<string, Stored>>({
         } else setAside.push(`the choice for "${k}" isn't one this version reads, left out`);
         continue;
       }
-      const { at, copy } = v as { at?: unknown; copy?: unknown };
+      const { at, copy, ...rest } = v as Record<string, unknown>;
+      const mine = own(v);
+      const later = Object.fromEntries(Object.entries(rest).filter(([f]) => !(f in mine)));
+      if (Object.keys(later).length > 0) {
+        laterFields = true;
+        carriedNotes.push(
+          `the choice for "${k}" holds ${Object.keys(later).join(", ")}, which this version doesn't read, kept as it was`,
+        );
+      }
       const choice: Stored = {
-        ...own(v),
+        ...later,
+        ...mine,
         at: typeof at === "number" ? at : 0,
         ...(v.kind !== "file" && typeof copy === "string" && FILE_NAME.test(copy) ? { copy } : {}),
       };
@@ -159,7 +172,9 @@ export function copyKept(c: StoredChoice): boolean {
  *  or with a choice left out names too few, and every other picture would go with the next
  *  choice, a picture picked from disk among them. */
 function sweepPicked(choices: Record<string, Stored>): void {
-  // a carried choice (a later version's) may name its files where this version doesn't look
+  // a carried choice (a later version's) may name its files where this version doesn't look, and
+  // so may a later version's field on a choice this version reads
+  if (laterFields) return;
   if (!store.readWhole() || Object.keys(carried).length > 0) return;
   const used = new Set(
     Object.values(choices).flatMap((c) => (c.kind === "file" ? [c.file] : c.copy ? [c.copy] : [])),
