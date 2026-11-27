@@ -742,7 +742,13 @@ describe("Display on other screens' server", () => {
     const { get, covers } = await rig();
     const key = encodeURIComponent(playKey("Song", "Band", "Record"));
     const saved = await get(`/api/cover?key=${key}`, { cookie });
-    expect(JSON.parse(saved.body)).toBe("data:image/png;base64,c2F2ZWQ=");
+    // handed over as a picture address, as the line's pictures are, serving the copy's bytes
+    const address = JSON.parse(saved.body) as string;
+    expect(address).toMatch(/^\/art\/[0-9a-f]{24}$/);
+    const picture = await get(address, { cookie });
+    expect(picture.status).toBe(200);
+    expect(picture.headers["content-type"]).toBe("image/png");
+    expect(picture.body).toBe("saved");
     const other = await get(
       `/api/cover?key=${encodeURIComponent(playKey("Other", "Band", null))}`,
       {
@@ -981,7 +987,9 @@ describe("the covers past the streamer's picture", () => {
     });
     const p = new URLSearchParams({ artist: "Lady Gaga & Bruno Mars", song: "Die With A Smile" });
     const playing = await get(`/api/cover?${p.toString()}`, { cookie });
-    expect(JSON.parse(playing.body)).toBe("data:image/png;base64,c29uZw==");
+    const address = JSON.parse(playing.body) as string;
+    expect(address).toMatch(/^\/art\/[0-9a-f]{24}$/);
+    expect((await get(address, { cookie })).body).toBe("song");
     const other = await get("/api/cover?artist=Band&song=Song", { cookie });
     expect(JSON.parse(other.body)).toBeNull();
     // a station has no saved cover in the log

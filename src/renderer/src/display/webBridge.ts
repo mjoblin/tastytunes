@@ -69,14 +69,14 @@ export async function pageArt(url: string): Promise<{ dataUrl: string } | null> 
 }
 
 /** A cover past the streamer's own picture, which the server gives for the playing track only
- *  (main/servers/displayServer, /api/cover): a picture as a data URL, else null. */
+ *  (main/servers/displayServer, /api/cover): the picture's page address, else null. */
 async function pageCover(params: Record<string, string>): Promise<string | null> {
   try {
     const res = await fetch(`/api/cover?${new URLSearchParams(params).toString()}`, {
       credentials: "same-origin",
     });
     const got: unknown = res.ok ? await res.json() : null;
-    return typeof got === "string" && got.startsWith("data:image/") ? got : null;
+    return typeof got === "string" && OWN_ART.test(got) ? got : null;
   } catch {
     return null;
   }

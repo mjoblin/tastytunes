@@ -133,6 +133,14 @@ export const VOLUME_RATE = { count: 4, ms: 1_000 } as const;
  *  of the one before as the next arrives) and the playing cover, which its push names before the
  *  line does. Worked out from what a line can name, so the two can't drift apart. */
 export const MAX_ART_IDS = 2 * LINE_PICTURES_MAX + 1;
+/** The covers past the streamer's picture kept addressable: a page holds its last few songs'. */
+export const MAX_COVER_IDS = 24;
+
+/** A picture the app holds as a data URL (a radio song's cover, the log's copy): its bytes. */
+export function dataPicture(url: string): { bytes: Buffer; type: string } | null {
+  const m = /^data:(image\/[\w.+-]+);base64,(.+)$/s.exec(url);
+  return m ? { bytes: Buffer.from(m[2], "base64"), type: m[1] } : null;
+}
 /** The analysis keys handed out with the playing file, kept for its next few asks (and forgotten
  *  with the screens, closeScreens). */
 const MAX_TRACK_KEYS = 20;
@@ -330,6 +338,9 @@ export class DisplayServer {
   /** Each screen's last few commands, for the rate cap. */
   private readonly sent = new Map<string, number[]>();
   private readonly artIds = new Map<string, string>();
+  /** The covers past the streamer's picture a page was handed (a radio song's own, the log's copy),
+   *  by id: apart from the line's pictures, so a long list never pushes the playing cover out. */
+  private readonly coverIds = new Map<string, string>();
   private readonly trackKeys = new Set<string>();
   private readonly kept = new Map<string, { bytes: Buffer; type: string }>();
   private readonly fetching = new Map<string, Promise<{ bytes: Buffer; type: string } | null>>();
@@ -760,16 +771,32 @@ export class DisplayServer {
     const snap = this.deps.snapshot();
     const key = p.get("key");
     if (key != null)
-      return this.json(res, key === playingCoverKey(snap) ? this.deps.recentCover(key) : null);
+      return this.json(
+        res,
+        key === playingCoverKey(snap) ? this.coverAddress(this.deps.recentCover(key)) : null,
+      );
     const playing = playingRadioSong(snap);
     if (!playing || p.get("artist") !== playing.artist || p.get("song") !== playing.song)
       return this.json(res, null);
-    this.json(res, await this.deps.radioCover(playing.artist, playing.song));
+    this.json(res, this.coverAddress(await this.deps.radioCover(playing.artist, playing.song)));
+  }
+
+  /** A cover's page address, as the line's pictures have theirs: a picture the browser fetches,
+   *  caches and decodes as any other, never a data URL drawn afresh in each new element (Safari's
+   *  took long enough that a crossfade ended before the cover showed, and it popped in). */
+  private coverAddress(url: string | null): string | null {
+    if (!url) return null;
+    const id = artIdOf(url);
+    this.coverIds.delete(id);
+    this.coverIds.set(id, url);
+    while (this.coverIds.size > MAX_COVER_IDS)
+      this.coverIds.delete(this.coverIds.keys().next().value!);
+    return `/art/${id}`;
   }
 
   /** A picture by the id handed out: its small copy when a list asks for one, else as it is. */
   private async picture(res: ServerResponse, id: string, size: string | null): Promise<void> {
-    const url = this.artIds.get(id);
+    const url = this.artIds.get(id) ?? this.coverIds.get(id);
     const got = !url
       ? null
       : isTier(size)
@@ -798,6 +825,12 @@ export class DisplayServer {
     }
     const asked = this.fetching.get(id);
     if (asked) return asked;
+    // a cover the app already holds as data: served as it is
+    const held = dataPicture(url);
+    if (held) {
+      this.keep(id, held);
+      return Promise.resolve(held);
+    }
     const next = this.deps
       .picture(url)
       .catch(() => null)
