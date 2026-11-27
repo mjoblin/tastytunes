@@ -463,6 +463,11 @@ export interface AppSettings {
    *  album, the Cover Art Archive supplies the image). Its own switch,
    *  independent of the context panel. */
   albumArtLookup: boolean;
+  /** Radio's big pictures show the playing song's own cover, the station having announced it
+   *  as "Artist - Song", in place of the station's logo; the small ones keep the logo, and a
+   *  song with no strict match keeps it everywhere (lookups/radioCover). Asked only with
+   *  albumArtLookup on, which governs whether any request goes out. */
+  radioCovers: boolean;
   /**
    * Look stations up in the radio-browser.info directory. OFF means the app
    * never contacts it — not from the Radio screen, not from unified search,
@@ -694,6 +699,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   lbEnabled: false,
   artistInfo: true,
   albumArtLookup: true,
+  radioCovers: true,
   radioDirectory: true,
   schedules: [],
   sleepFade: true,

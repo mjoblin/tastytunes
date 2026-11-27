@@ -31,6 +31,7 @@ import { AddToPlaylistPanel } from "@/components/overlays/AddToPlaylistPanel";
 import { SignalLamp } from "@/components/device/SignalLamp";
 import { ArtImage } from "@/components/media/ArtImage";
 import { useBestArt } from "@/lib/bestArt";
+import { useRadioCover } from "@/lib/radioCover";
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { LyricsPanel } from "@/components/overlays/LyricsPanel";
 import { LyricLine } from "@/components/playback/LyricLine";
@@ -235,7 +236,8 @@ export function NowPlayingScreen(): React.JSX.Element {
     !meta.isRadio && meta.title
       ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
       : null;
-  const heroArt = useBestArt(meta.artUrl, heroQuery, queueSourceActive);
+  // and on the radio, the song's own cover over the station's logo (lib/radioCover)
+  const heroArt = useRadioCover(meta, useBestArt(meta.artUrl, heroQuery, queueSourceActive));
   const { art: tileArt } = useDecodedArt(heroArt);
   // Live, not snapshotted — the queue moves independently of the track. But while a track change
   // is under way (the group fading out on the old track, or not yet back) the place holds with

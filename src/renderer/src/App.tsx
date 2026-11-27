@@ -48,6 +48,7 @@ import { SettingsScreen } from "@/screens/SettingsScreen";
 import { AmbientArt } from "@/components/media/AmbientArt";
 import { useDecodedArt } from "@/hooks/useDecodedArt";
 import { useBestArt } from "@/lib/bestArt";
+import { useRadioCover } from "@/lib/radioCover";
 import { usePrefetchNextArt } from "@/hooks/usePrefetchNextArt";
 import { useFontScaleGuard } from "@/hooks/useFontScaleGuard";
 import { HeaderChip } from "@/components/chrome/Chrome";
@@ -100,12 +101,16 @@ export default function App(): React.JSX.Element {
   const artLoadable = useArtLoadable(artActive);
   // The wash renders the last DECODED art, so a slow remote cover can't blank
   // the window while it downloads (see useDecodedArt).
-  // the wash reads the same best-art rule as the hero (lib/bestArt)
-  const ambientBest = useBestArt(
-    artActive,
-    !meta.isRadio && meta.title
-      ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
-      : null,
+  // the wash reads the same best-art rule as the hero (lib/bestArt), the song's own cover on
+  // the radio included (lib/radioCover)
+  const ambientBest = useRadioCover(
+    artActive ? meta : null,
+    useBestArt(
+      artActive,
+      !meta.isRadio && meta.title
+        ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
+        : null,
+    ),
   );
   const { art: ambientArtUrl } = useDecodedArt(ambientBest);
   useAccentChoice(settings.accent);

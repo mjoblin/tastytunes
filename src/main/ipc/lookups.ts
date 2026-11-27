@@ -42,6 +42,7 @@ import { fetchTrackInfo } from "../lookups/trackInfo";
 import { artistIndex } from "../media/artistIndex";
 import * as mediaIndex from "../media/mediaIndex";
 import { albumArtElsewhere } from "../media/albumArtElsewhere";
+import { wantedRadioCover } from "../lookups/radioCover";
 import { demoHost } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
 import { nameKey } from "@shared/keys";
@@ -252,6 +253,11 @@ export function registerLookupsIpc(): void {
     if (elsewhere) return elsewhere;
     return getSettings().albumArtLookup ? fetchCoverArt(artist, album) : null;
   });
+  // a radio song's own cover: asked only with the lookups on (the Missing album art switch) and
+  // covers on radio wanted (Song covers on radio); either off, the station's logo stays
+  handle(IPC.radioCover, (_e, artist: string, song: string) =>
+    typeof artist === "string" && typeof song === "string" ? wantedRadioCover(artist, song) : null,
+  );
   handle(IPC.lookupCacheStats, () => lookupCacheStats());
   handle(IPC.clearLookupCaches, () => clearLookupCaches());
   handle(IPC.artThumbsStats, () => artThumbsStats());

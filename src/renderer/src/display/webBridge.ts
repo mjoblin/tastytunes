@@ -68,6 +68,20 @@ export async function pageArt(url: string): Promise<{ dataUrl: string } | null> 
   }
 }
 
+/** A cover past the streamer's own picture, which the server gives for the playing track only
+ *  (main/servers/displayServer, /api/cover): a picture as a data URL, else null. */
+async function pageCover(params: Record<string, string>): Promise<string | null> {
+  try {
+    const res = await fetch(`/api/cover?${new URLSearchParams(params).toString()}`, {
+      credentials: "same-origin",
+    });
+    const got: unknown = res.ok ? await res.json() : null;
+    return typeof got === "string" && got.startsWith("data:image/") ? got : null;
+  } catch {
+    return null;
+  }
+}
+
 export function webBridge(): TastyTunesApi {
   let settings: AppSettings | null = null;
   listenPushes((msg) => {
@@ -129,6 +143,11 @@ export function webBridge(): TastyTunesApi {
       return res.ok ? ((await res.json()) as AudioAnalysis | null) : null;
     },
     fetchArt: pageArt,
+    // THE COVERS PAST THE STREAMER'S PICTURE, as the window's best-art rule asks them: a radio
+    // song's own (lib/radioCover), and the log's copy of a cover whose address died (an AirPlay
+    // session's, lib/bestArt)
+    radioCover: (artist: string, song: string) => pageCover({ artist, song }),
+    recentCover: (key: string) => pageCover({ key }),
     command: () => Promise.resolve(),
   };
   // EVERY method, written out from the channel table as the preload does, since the window's

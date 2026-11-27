@@ -46,6 +46,10 @@ export const SHOWN_SETTINGS = [
   // and the evidence the waveforms work on this installation, which Display's strip and the
   // page's seek bar wait for, as the window's do: without it the page drew the plain line only
   "waveformSeen",
+  // a song's cover on the radio (lib/radioCover): off, the page's big picture goes back to the
+  // station's logo as the window's does; the requests' own switch stays with the app, which
+  // answers a page's ask only with both on (lookups/radioCover)
+  "radioCovers",
   "displayFont",
   "displayHintSeen",
   "displayWaveform",

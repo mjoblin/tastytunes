@@ -25,6 +25,8 @@ import { getPlaylists } from "../data/playlists";
 import { artHostTrust, fetchPicture } from "../lookups/artFetch";
 import { artThumb } from "../lookups/artThumbs";
 import { fetchLyrics } from "../lookups/lyrics";
+import { wantedRadioCover } from "../lookups/radioCover";
+import { recentCoverGet } from "../lookups/recentArt";
 import { audioAnalysisGet } from "../lookups/audioAnalysis";
 import { lookupMediaInfo } from "../media/mediaInfo";
 import { displayToken, getSettings, newDisplayToken } from "../data/persist";
@@ -401,6 +403,10 @@ export const displayServer = new DisplayServer({
   // the window's own question, a show: a page never rebuilds an index
   trackInfo: (query) => lookupMediaInfo(connectedHost(), query, "show"),
   analysis: (key) => audioAnalysisGet(key),
+  // the covers past the streamer's picture, as the window asks them: a radio song's own, and the
+  // log's copy of a cover whose address died
+  radioCover: (artist, song) => wantedRadioCover(artist, song),
+  recentCover: (key) => recentCoverGet(key),
   // a saved address that couldn't be read matches nothing (the server isn't started under one)
   token: async () => (await displayToken()) ?? "",
   pageDir: join(__dirname, "../renderer"),

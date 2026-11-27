@@ -7,6 +7,7 @@ import { usePlayhead } from "@/hooks/usePlayhead";
 import { useArtLoadable } from "@/hooks/useArtLoadable";
 import { useFadePresence } from "@/hooks/useFadePresence";
 import { useBestArt } from "@/lib/bestArt";
+import { useRadioCover } from "@/lib/radioCover";
 import { useFadedText, useLyrics } from "@/hooks/useLyrics";
 import { useSettledSnapshot } from "@/hooks/useSettledSnapshot";
 import { cx, deriveNowPlaying } from "@/lib/format";
@@ -111,12 +112,16 @@ export function DisplayMode(): React.JSX.Element {
   );
   useEffect(() => listenForTab(), [settings.displayScene]);
   // Display mode's 46vmin tile is the biggest art in the app: the file's own
-  // picture when the server's is small (lib/bestArt)
-  const best = useBestArt(
-    meta.artUrl,
-    !meta.isRadio && meta.title
-      ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
-      : null,
+  // picture when the server's is small (lib/bestArt), and on the radio the song's
+  // own cover over the station's logo (lib/radioCover)
+  const best = useRadioCover(
+    meta,
+    useBestArt(
+      meta.artUrl,
+      !meta.isRadio && meta.title
+        ? { title: meta.title, artist: meta.subtitle ?? null, album: meta.album ?? null }
+        : null,
+    ),
   );
   const changing = playState?.state === "connecting" || playState?.state === "buffering";
   const art = useHeldArt(best, changing);
