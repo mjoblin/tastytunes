@@ -8,7 +8,7 @@ vi.mock("./mb", () => ({
   MB: "http://mb.test",
   mbFetch: (url: string, urgent?: boolean) => mbFetch(url, urgent),
 }));
-const { coverGroups, leadArtist, looseKey, wantedRadioCover, withoutVersion } =
+const { coverGroups, leadArtist, looseKey, songGroups, wantedRadioCover, withoutVersion } =
   await import("./radioCover");
 type Rec = Parameters<typeof coverGroups>[0][number];
 
@@ -132,6 +132,84 @@ describe("the albums whose cover stands for the song", () => {
     expect(coverGroups(recs, "Taylor Swift", "Love Story (Taylor's Version)")).toEqual(["tv"]);
     // without an exact title, the note set aside on both sides still matches
     expect(coverGroups([recs[0]], "Taylor Swift", "Love Story (Remastered)")).toEqual(["fearless"]);
+  });
+});
+
+describe("the song's own single, when no recording led to a record", () => {
+  type Group = Parameters<typeof songGroups>[0][number];
+  const group = (
+    id: string,
+    title: string,
+    type: string,
+    by: string,
+    score = 100,
+    date = "2012",
+    extra: string[] = [],
+  ): Group => ({
+    id,
+    title,
+    score,
+    "primary-type": type,
+    "secondary-types": extra,
+    "first-release-date": date,
+    "artist-credit": [{ name: by }],
+  });
+
+  it("is the album of the song's name first, then its single", () => {
+    const got = songGroups(
+      [
+        group("single", "Girl on Fire", "Single", "Alicia Keys", 100, "2012-09-04"),
+        group("album", "Girl on Fire", "Album", "Alicia Keys", 100, "2012-11-23"),
+      ],
+      "Alicia Keys",
+      "Girl on Fire",
+    );
+    expect(got).toEqual(["album", "single"]);
+  });
+
+  it("takes the single titled exactly as the station has it, never its remixes", () => {
+    const got = songGroups(
+      [
+        group("single", "Bad Romance", "Single", "Lady Gaga", 100, "2009-10-26"),
+        group("remixes", "Bad Romance (The Remixes)", "Single", "Lady Gaga", 89, "2009-12-21", [
+          "Remix",
+        ]),
+      ],
+      "Lady Gaga",
+      "Bad Romance",
+    );
+    expect(got).toEqual(["single"]);
+  });
+
+  it("needs the lead artist, a sure match and no compilation", () => {
+    expect(
+      songGroups(
+        [group("x", "Crazy in Love", "Single", "Someone Else")],
+        "Beyonce feat. Jay-Z",
+        "Crazy in Love",
+      ),
+    ).toEqual([]);
+    expect(
+      songGroups(
+        [group("x", "Crazy in Love", "Single", "Beyoncé", 80)],
+        "Beyonce feat. Jay-Z",
+        "Crazy in Love",
+      ),
+    ).toEqual([]);
+    expect(
+      songGroups(
+        [group("x", "Crazy in Love", "Album", "Beyoncé", 100, "2010", ["Compilation"])],
+        "Beyonce feat. Jay-Z",
+        "Crazy in Love",
+      ),
+    ).toEqual([]);
+    expect(
+      songGroups(
+        [group("single", "Crazy in Love", "Single", "Beyoncé")],
+        "Beyonce feat. Jay-Z",
+        "Crazy in Love",
+      ),
+    ).toEqual(["single"]);
   });
 });
 
