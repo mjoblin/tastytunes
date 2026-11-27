@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { POST_MS, seekTo, steer } from "./control";
+import { POST_MS, seekTo, steer, wasDone } from "./control";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -54,5 +54,12 @@ describe("a control post", () => {
   it("hands back the app's answer when it comes in time", async () => {
     vi.stubGlobal("fetch", () => Promise.resolve(new Response(JSON.stringify({ done: true }))));
     expect(await steer("toggle")).toEqual({ done: true });
+  });
+
+  it("was done only when the app says so: a refusal or no answer is not", () => {
+    expect(wasDone({ done: true })).toBe(true);
+    expect(wasDone({ refused: "nothing" })).toBe(false);
+    expect(wasDone({ refused: "busy" })).toBe(false);
+    expect(wasDone(null)).toBe(false);
   });
 });

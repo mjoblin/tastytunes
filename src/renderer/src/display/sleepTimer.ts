@@ -1,5 +1,5 @@
 import { SLEEP_DURATIONS, type SleepAction } from "@shared/model";
-import type { DisplaySleep, SleepChoice } from "@shared/displayControl";
+import type { DisplayControlAnswer, DisplaySleep, SleepChoice } from "@shared/displayControl";
 import { fmtTime } from "@/lib/format";
 
 /**
@@ -43,6 +43,18 @@ export function sleepChoices(sleep: DisplaySleep): Array<{ minutes: SleepChoice;
     ...SLEEP_DURATIONS,
     ...(sleep.endOfTrack ? [{ minutes: "track" as const, label: "End of track" }] : []),
   ];
+}
+
+/** What the line above the buttons says when the app didn't do a choice on the sheet (a length,
+ *  End of track, or Cancel the timer), or null when it did. A cancel refused for having nothing
+ *  to cancel (the timer ran out, or was cancelled in the app) came to what was asked. */
+export function sleepRefused(
+  verb: "sleep" | "sleepCancel",
+  answer: DisplayControlAnswer | null,
+): string | null {
+  if (answer != null && "done" in answer) return null;
+  if (verb === "sleep") return "TastyTunes couldn't set the sleep timer.";
+  return answer?.refused === "nothing" ? null : "TastyTunes couldn't cancel the sleep timer.";
 }
 
 /** The sheet's place on a screen `screenW` wide: SHEET_WIDTH (narrower on a phone, inside the

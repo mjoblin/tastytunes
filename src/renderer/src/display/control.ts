@@ -79,6 +79,10 @@ export const playPlaylist = (id: string): Promise<DisplayControlAnswer | null> =
 export const sleepIn = (minutes: SleepChoice): Promise<DisplayControlAnswer | null> =>
   post({ verb: "sleep", minutes });
 
+/** Whether the app did what a post asked: not for a refusal, nor for a post it never answered. */
+export const wasDone = (answer: DisplayControlAnswer | null): boolean =>
+  answer != null && "done" in answer;
+
 async function post(what: {
   verb: DisplayVerb;
   id?: number | string;
