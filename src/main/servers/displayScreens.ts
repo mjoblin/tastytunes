@@ -1,4 +1,6 @@
 import type { DisplayControlState, DisplayScreen, DisplayScreens } from "@shared/displayControl";
+import { isRecord, kindOf } from "@shared/guards";
+import { unwrapList, type Carried } from "../data/savedChecks";
 
 /**
  * THE SCREENS THAT MAY CONTROL (0.17.0, Display on other screens): each screen is approved once,
@@ -70,6 +72,32 @@ export function isStoredScreen(x: unknown): x is DisplayScreen {
   );
 }
 
+/** display-screens.json's screens, each one the book could have kept. A LATER VERSION'S ARE KEPT
+ *  (0.17.0, data/savedChecks): a screen of another shape is kept in `carried` and written back at
+ *  its place (withCarried), a field this version doesn't know rides with its screen, and a list a
+ *  later version wrapped in an object is read through it; only what isn't a record at all is left
+ *  out, named in `setAside`. */
+export function storedScreens(
+  parsed: unknown,
+  setAside: string[],
+  carried: Carried,
+): DisplayScreen[] {
+  if (parsed === undefined) return [];
+  const rows = unwrapList(parsed, carried);
+  if (!Array.isArray(rows)) {
+    setAside.push("display screens: not a list");
+    return [];
+  }
+  return rows.flatMap((row, at) => {
+    if (isStoredScreen(row)) return [row];
+    if (isRecord(row)) {
+      carried.rows.push({ at, row });
+      carried.notes.push(`[${at}] isn't a screen this version reads, kept as it was`);
+    } else setAside.push(`display screens: [${at}] was ${kindOf(row)}, left out`);
+    return [];
+  });
+}
+
 export class ScreenBook {
   /** The screens being asked about, oldest first, each with when it asked. */
   private readonly asks = new Map<string, { screen: DisplayScreen; at: number }>();
@@ -134,7 +162,8 @@ export class ScreenBook {
     if (!known && now - this.lastNotNow < NEW_SCREEN_HOLD_MS) return "busy";
     this.lastAsk = now;
     const asked = {
-      screen: { id, name, firstSeen: known?.firstSeen ?? now, allowed: false },
+      // a field a later version keeps on a screen this one knows stays with it through the answer
+      screen: { ...known, id, name, firstSeen: known?.firstSeen ?? now, allowed: false },
       at: now,
     };
     this.asks.set(id, asked);

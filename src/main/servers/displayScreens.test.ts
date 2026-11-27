@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { DisplayScreen } from "@shared/displayControl";
+import { carriedNone, withCarried } from "../data/savedChecks";
 import {
   ASK_GAP_MS,
   ASK_LAPSE_MS,
@@ -9,6 +10,7 @@ import {
   NEW_SCREEN_HOLD_MS,
   NOT_NOW_MS,
   ScreenBook,
+  storedScreens,
 } from "./displayScreens";
 
 const A = "a".repeat(32);
@@ -262,5 +264,39 @@ describe("the screens that may control", () => {
     expect(isStoredScreen({ id: A, name: "", firstSeen: 1, allowed: true })).toBe(false);
     expect(isStoredScreen({ id: A, name: "iPad", firstSeen: "1", allowed: true })).toBe(false);
     expect(isStoredScreen({ id: A, name: "iPad", firstSeen: 1, allowed: "yes" })).toBe(false);
+  });
+});
+
+describe("a later version's screens", () => {
+  it("are kept at their places, a field this version doesn't read with its screen, a wrapped list read through", () => {
+    const known = { id: A, name: "iPad · Safari", firstSeen: 5, allowed: true, scene: "later" };
+    const later = { id: "e".repeat(64), name: "TV", firstSeen: 6, allowed: true };
+    const carried = carriedNone();
+    const setAside: string[] = [];
+    const rows = storedScreens({ format: 2, items: [later, known, 7] }, setAside, carried);
+    expect(rows).toEqual([known]);
+    expect(setAside).toEqual(["display screens: [2] was a number, left out"]);
+    expect(carried.notes).toEqual(["[0] isn't a screen this version reads, kept as it was"]);
+    expect(withCarried(rows, carried)).toEqual({ format: 2, items: [later, known] });
+    expect(storedScreens("screens", setAside, carriedNone())).toEqual([]);
+    expect(setAside.at(-1)).toBe("display screens: not a list");
+  });
+
+  it("keeps a known screen's field this version doesn't read through its next ask and answer", () => {
+    let stored: DisplayScreen[] = [
+      { id: A, name: "iPad", firstSeen: 5, allowed: false, scene: "later" } as DisplayScreen,
+    ];
+    const b = new ScreenBook({
+      load: () => stored,
+      save: (s) => (stored = s),
+      now: () => 1_000_000,
+      changed: () => {},
+      later: () => {},
+    });
+    expect(b.ask(A, "iPad · Safari", true)).toBe("asking");
+    b.answer(A, true);
+    expect(stored).toEqual([
+      { id: A, name: "iPad · Safari", firstSeen: 5, allowed: true, scene: "later" },
+    ]);
   });
 });

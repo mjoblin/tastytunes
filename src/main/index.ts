@@ -9,7 +9,7 @@ import { lateStep, startupFailed } from "./app/bootFailure";
 import { broadcastSettings, wireListeningPushes } from "./app/broadcast";
 import { syncMediaKeys, watchMediaKeys } from "./app/mediaKeys";
 import { nowPlayingPush, nowPlayingRecalled } from "./app/nowPlaying";
-import { displayServer, syncDisplay } from "./app/display";
+import { displayServer, displayStreamerConnected, syncDisplay } from "./app/display";
 import { installAppMenu } from "./app/menu";
 import { deviceManager, mcpBridge } from "./app/runtime";
 import { catchUpOnResume, noteSuspend, startScheduler } from "./app/scheduler";
@@ -145,9 +145,12 @@ if (!gotLock) {
         nowPlayingPush(msg);
         // and every screen showing Display on other screens (app/display)
         displayServer.push(msg);
-        // the agents' address, on the streamer's network once one connects (servers/mcpServer)
-        if (msg.kind === "connection" && msg.state.phase === "connected")
+        // the agents' address and the second screen's, on the streamer's network once one
+        // connects (servers/mcpServer, app/display)
+        if (msg.kind === "connection" && msg.state.phase === "connected") {
           mcpBridge.streamerConnected();
+          void displayStreamerConnected();
+        }
         // INDEX AT CONNECT: the media indexes used to
         // build only when the Library screen first listed servers, so on a
         // fresh install the Queue's album links and Open in Library could "not
