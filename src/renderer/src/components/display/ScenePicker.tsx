@@ -502,7 +502,11 @@ export function SyncRow({
         </SettingLine>
       )}
       {host === "display" && lyrics && lyricsFound && (
-        <SettingLine label="Lyrics" touch={touch}>
+        <SettingLine
+          label="Lyrics"
+          hint="Displays the line being sung, when the song's lyrics are found."
+          touch={touch}
+        >
           <label data-page-lyrics className={labelled}>
             <Switch
               size={sw}
