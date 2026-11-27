@@ -56,7 +56,7 @@ import {
   sleepThen,
 } from "./sleepTimer";
 import { musicGoing } from "./rest";
-import { PageTabs } from "./PageTabs";
+import { PANEL_BODY, PANEL_EDGE_PX, PageTabs } from "./PageTabs";
 import { onControl } from "./touch";
 import {
   controlsLocked,
@@ -956,13 +956,10 @@ function ListPanel({
   );
 }
 
-/** The list's body: 8px at the sides, and at each end its edge's ramp (styles.css fade-edges, the
- *  app's pages' own): a row passing under the tabs or the panel's foot dissolves rather than being
- *  cut through its words, and at rest the first row and, at full scroll, the last sit clear of it,
- *  the playing row's ring with them. */
-const LIST_EDGE_PX = 12;
-const listBody =
-  "fade-edges min-h-0 overflow-y-auto overscroll-contain px-2 py-3 [--fade-top-solid:12px] [--fade-bottom:12px]";
+/** The list's body: the page's panels' one body (PageTabs' PANEL_BODY), the playing row's ring
+ *  clear of its edges' ramps at rest and at full scroll. */
+const LIST_EDGE_PX = PANEL_EDGE_PX;
+const listBody = PANEL_BODY;
 const rowsBody = cx(listBody, "space-y-1.5");
 // the panel 60% of a wide screen (never under 36rem, at most 60rem): five cards across on an 11-inch
 // tablet in landscape, six on a 13-inch, four in portrait, two on a phone, so more than one row

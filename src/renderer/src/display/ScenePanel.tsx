@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
-import { Check, Maximize, Minimize, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Check, Ellipsis, Maximize, Minimize, SlidersHorizontal, Sparkles } from "lucide-react";
 import type { DisplayScene } from "@shared/model";
 import { cx } from "@/lib/format";
 import { SCENES_ORDERED, sceneDef } from "@/components/display/scenes";
 import { SyncRow } from "@/components/display/ScenePicker";
 import { HeaderChip } from "@/components/chrome/Chrome";
 import { ALL_SCENES_KEYS, ownSettings, type OwnKey } from "./pageSettings";
-import { PageTabs } from "./PageTabs";
+import { PANEL_BODY, PageTabs } from "./PageTabs";
 
 /** Full screen as this browser offers it to a page (Safari on an iPad, the desktop browsers), or
  *  null where it doesn't (a phone, a browser app that keeps the page in its frame). */
@@ -127,23 +127,27 @@ export function ScenePanel({
           {full ? <Minimize size={20} /> : <Maximize size={20} />}
         </button>
       )}
+      {/* one button for the panel whatever its tabs hold (the Scene and Settings tabs, or Settings
+          alone without scenes): neither tab's icon, the tablet's own sign for more options */}
       <button
         type="button"
         data-page-scene-button
-        aria-label={scenes ? "Scene" : "Settings"}
+        aria-label={scenes ? "Scene and settings" : "Settings"}
         aria-expanded={open}
         onClick={() => onOpen(!open)}
         className={cx(corner, "right-4", open ? "text-accent" : "text-dim", showing)}
       >
-        {scenes ? <Sparkles size={20} /> : <SlidersHorizontal size={20} />}
+        <Ellipsis size={20} />
       </button>
       {open && (
         <>
           {/* a touch outside closes it */}
           <div className="absolute inset-0 z-40" onClick={() => onOpen(false)} />
+          {/* its foot 1.75rem above the screen's bottom, past the home bar where a Home Screen app
+              draws under it, so its rounded corners always show */}
           <div
             data-page-scenes
-            className="absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] right-4 z-50 flex max-h-[calc(100%_-_5.5rem)] w-[min(36rem,calc(100%_-_2rem))] flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
+            className="absolute top-[calc(env(safe-area-inset-top,0px)+4.25rem)] right-4 z-50 flex max-h-[calc(100%_-_env(safe-area-inset-top,0px)_-_env(safe-area-inset-bottom,0px)_-_6rem)] w-[min(36rem,calc(100%_-_2rem))] flex-col rounded-2xl bg-panel/90 shadow-2xl ring-1 ring-edge backdrop-blur-md select-none"
           >
             {scenes && (
               <div className="shrink-0 p-2 pb-0">
@@ -167,7 +171,8 @@ export function ScenePanel({
                 />
               </div>
             )}
-            <div className="min-h-0 overflow-y-auto overscroll-contain p-2">
+            {/* its body fades at each end as the lists' do (PageTabs' PANEL_BODY) */}
+            <div className={PANEL_BODY}>
               {showingTab === "scene" && (
                 <>
                   <button
