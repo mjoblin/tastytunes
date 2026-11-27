@@ -2,6 +2,8 @@ import { join } from "node:path";
 import { app } from "electron";
 import {
   PLAYLISTS_SENT,
+  powerLine,
+  powerVerb,
   queueWindow,
   screenCode,
   type DisplayControl,
@@ -9,6 +11,7 @@ import {
   type DisplayScreen,
   type DisplayVerb,
   type DisplayVerbArgs,
+  type PowerFacts,
 } from "@shared/displayControl";
 import { isDeviceArt } from "@shared/artUrl";
 import type { DisplayStatus } from "@shared/ipc";
@@ -42,7 +45,9 @@ import { connectedHost, deviceManager } from "./runtime";
  * is playing. A verb goes the way the media keys go: commandForMedia against what the source can
  * do at that moment (a seek inside the track playing now), then deviceManager.fire; a volume step
  * with its own switch on, through the same command path and so under the one volume limit
- * (decisions/0017). Each in the log, with the screen's name.
+ * (decisions/0017). Standby is the window's own (network standby, so the screen's Wake brings the
+ * streamer back), and the sleep timer the app's own (deviceManager.setSleep), armed as the window
+ * arms it. Each in the log, with the screen's name.
  */
 
 const MAX_PICTURE_BYTES = 8 * 1024 * 1024;
@@ -145,9 +150,6 @@ function presetsHere(): DisplayControl["presets"] {
   });
 }
 
-/** A wake can work: the app is connected to a streamer in standby. In Cambridge's default Eco
- *  standby the streamer leaves the network and the app isn't connected, so a screen says it
- *  can't reach it instead of drawing a button that does nothing. */
 /** The streamer is connected and on: a playlist loads into its queue then (loading one doesn't
  *  wake it, unlike a preset's recall). */
 function streamerOn(): boolean {
@@ -177,6 +179,22 @@ function playlistsHere(): DisplayControl["playlists"] {
   });
 }
 
+/** What standby and the sleep timer on a screen go by: the streamer on, the app's sleep action,
+ *  what is playing (for the end of the track) and the timer as armed. */
+function powerFacts(): PowerFacts {
+  const v = deviceManager.streamerNow;
+  return {
+    on: streamerOn(),
+    action: getSettings().sleepAction,
+    playState: v.playState ?? null,
+    nowPlaying: v.nowPlaying ?? null,
+    timer: deviceManager.sleepNow,
+  };
+}
+
+/** A wake can work: the app is connected to a streamer in standby. In Cambridge's default Eco
+ *  standby the streamer leaves the network and the app isn't connected, so a screen says it
+ *  can't reach it instead of drawing a button that does nothing. */
 function wakeCanWork(): boolean {
   const power = deviceManager.streamerNow.systemPower?.power;
   return deviceManager.connectionNow.phase === "connected" && power != null && power !== "ON";
@@ -210,6 +228,8 @@ function controlFor(screen: string | null): DisplayControl {
       playlists: null,
       wake: null,
       resume: null,
+      standby: false,
+      sleep: null,
       code,
     };
   const starts = s.displayControlPresets;
@@ -229,6 +249,7 @@ function controlFor(screen: string | null): DisplayControl {
           ? "unreachable"
           : null,
     resume: starts ? resumeHere() : null,
+    ...(starts ? powerLine(powerFacts()) : { standby: false, sleep: null }),
   };
 }
 
@@ -239,7 +260,7 @@ function steer(
   screen: string,
   name: string,
   verb: DisplayVerb,
-  { id, secs, playlist }: DisplayVerbArgs,
+  { id, secs, playlist, minutes }: DisplayVerbArgs,
 ): DisplayControlAnswer {
   const s = getSettings();
   const state = screenBook.stateOf(screen, s.displayControl);
@@ -264,6 +285,33 @@ function steer(
     );
     if (id == null || !there || !queueAudible()) return { refused: "nothing" };
     deviceManager.fire({ type: "playQueueId", queueId: id });
+    return { done: true };
+  }
+  // STANDBY AND THE SLEEP TIMER, under the switch of the controls that start music: standby as the
+  // window's power button and the sleep timer send it, network standby (the screen's Wake brings
+  // it back); the timer the app's own, its action and fade the app's settings
+  if (verb === "standby" || verb === "sleep" || verb === "sleepCancel") {
+    if (!s.displayControlPresets) return { refused: "presets" };
+    const does = powerVerb(verb, minutes, powerFacts(), Date.now());
+    const asked =
+      verb === "standby"
+        ? "standby"
+        : verb === "sleepCancel"
+          ? "cancel the sleep timer"
+          : minutes === "track"
+            ? "sleep at the end of the track"
+            : `sleep in ${minutes} min`;
+    const did = !does
+      ? "nothing to do"
+      : "standby" in does
+        ? "power NETWORK"
+        : does.sleep
+          ? `setSleep ${does.sleep.action}`
+          : "setSleep off";
+    log(`${asked} from ${name}: ${did}`);
+    if (!does) return { refused: "nothing" };
+    if ("standby" in does) deviceManager.fire({ type: "power", power: "NETWORK" });
+    else deviceManager.setSleep(does.sleep);
     return { done: true };
   }
   // THE CONTROLS THAT START MUSIC (step three), with their own switch: a preset (a recall on a

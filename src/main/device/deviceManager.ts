@@ -440,6 +440,11 @@ export class DeviceManager {
     this.sleeper.setSleep(sleep);
   }
 
+  /** The sleep timer as armed, read without a snapshot. */
+  get sleepNow(): SleepTimer | null {
+    return this.sleeper.current;
+  }
+
   /** Fire a countdown that came due while the system was asleep (on resume). */
   checkSleepTimer(): void {
     this.sleeper.checkSleepTimer();

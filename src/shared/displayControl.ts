@@ -1,4 +1,12 @@
-import type { QueueListItem } from "./smoip";
+import {
+  canSleepAtTrackEnd,
+  SLEEP_DURATIONS,
+  sleepActionOf,
+  sleepTimerFor,
+  type SleepAction,
+  type SleepTimer,
+} from "./model";
+import type { QueueListItem, ZoneNowPlaying, ZonePlayState } from "./smoip";
 
 /**
  * CONTROLS ON THE OTHER SCREENS (0.17.0, Display on other screens): what a screen may ask of the
@@ -9,7 +17,9 @@ import type { QueueListItem } from "./smoip";
  *   seek to a point in the playing track (step four, its seconds), a volume step up or down,
  *   playing a track already in the queue (the queue view, step two: view and select), and with
  *   their own switch the controls that start music (step three): a preset, one of the app's
- *   playlists (and stopping one on its way into the queue), Wake, picking up where it left off.
+ *   playlists (and stopping one on its way into the queue), Wake, picking up where it left off;
+ *   and under that switch, standby and the app's own sleep timer (one of the window's lengths or
+ *   the end of the track, the action and the fade the app's own settings).
  *   Nothing else is reachable: no level, no queue, preset or playlist edits, no settings.
  * - Each screen is told where it stands (DisplayControl), over its own line of the live channel,
  *   so it draws only what it may do.
@@ -32,6 +42,9 @@ export const DISPLAY_VERBS = [
   "stopPlaylist",
   "wake",
   "resume",
+  "standby",
+  "sleep",
+  "sleepCancel",
 ] as const;
 export type DisplayVerb = (typeof DISPLAY_VERBS)[number];
 
@@ -39,12 +52,21 @@ export const isDisplayVerb = (v: unknown): v is DisplayVerb =>
   typeof v === "string" && (DISPLAY_VERBS as readonly string[]).includes(v);
 
 /** What a verb carries, past the route's checks: `id`, the queue row or the preset (a whole
- *  number); `secs`, where a seek goes; `playlist`, the playlist's own id. */
+ *  number); `secs`, where a seek goes; `playlist`, the playlist's own id; `minutes`, the sleep
+ *  timer's length. */
 export interface DisplayVerbArgs {
   id?: number;
   secs?: number;
   playlist?: string;
+  minutes?: SleepChoice;
 }
+
+/** A sleep timer's length as a screen may ask for it: one of the window's (SLEEP_DURATIONS), in
+ *  minutes, or "track" for the end of the playing track. */
+export type SleepChoice = number | "track";
+
+export const isSleepChoice = (v: unknown): v is SleepChoice =>
+  v === "track" || (typeof v === "number" && SLEEP_DURATIONS.some((d) => d.minutes === v));
 
 /** A playlist's id as a screen may send it: the app's own (a UUID), letters, digits and dashes. */
 export const isPlaylistId = (v: unknown): v is string =>
@@ -83,9 +105,26 @@ export interface DisplayControl {
   wake: "ready" | "unreachable" | null;
   /** What TastyTunes holds to pick up where it left off (with Presets, playlists and wake on), or null. */
   resume: { title: string; detail: string | null } | null;
+  /** With Presets, playlists and wake on, while the streamer is connected and on: standby, which
+   *  the page sends only for a press held long enough (display/PageTransport). */
+  standby: boolean;
+  /** The app's sleep timer, under the same switch and while the streamer is on; null otherwise. */
+  sleep: DisplaySleep | null;
   /** This screen's short code (screenCode), which the page shows while it asks; absent before the
    *  page has heard its first line, and for a screen without an id. */
   code?: string | null;
+}
+
+/** The app's sleep timer as a screen sees it: set and cancelled from there, its action and its
+ *  fade only ever the app's own settings. */
+export interface DisplaySleep {
+  /** What happens when it runs out: the armed timer's own, else the app's setting (sleepAction). */
+  action: SleepAction;
+  /** "End of track" is offered (the window's rule, shared/model canSleepAtTrackEnd). */
+  endOfTrack: boolean;
+  /** Armed: when it runs out (ms since the epoch, by the app's clock), or null for the end of the
+   *  track; null when it isn't armed. */
+  armed: { firesAt: number | null } | null;
 }
 
 /** One preset as a screen sees it: view and select, nothing edited. */
@@ -169,6 +208,49 @@ export function queueWindow(
     });
   }
   return rows;
+}
+
+/** What the app knows when a screen asks for standby or the sleep timer. */
+export interface PowerFacts {
+  /** The app is connected to the streamer and it is on. */
+  on: boolean;
+  /** The app's sleep action as stored (settings.sleepAction). */
+  action: unknown;
+  playState: ZonePlayState | null;
+  nowPlaying: ZoneNowPlaying | null;
+  /** The sleep timer as armed now, or null. */
+  timer: SleepTimer | null;
+}
+
+/** Standby and the sleep timer as a screen with Presets, playlists and wake is told of them: both
+ *  offered while the streamer is on (a sleeping one has Wake instead), the timer as it stands. */
+export function powerLine(f: PowerFacts): Pick<DisplayControl, "standby" | "sleep"> {
+  if (!f.on) return { standby: false, sleep: null };
+  return {
+    standby: true,
+    sleep: {
+      action: f.timer?.action ?? sleepActionOf(f.action),
+      endOfTrack: canSleepAtTrackEnd(f.playState, f.nowPlaying),
+      armed: f.timer ? { firesAt: f.timer.firesAt } : null,
+    },
+  };
+}
+
+/** What a screen's standby or sleep timer verb comes to: standby, a timer armed (the app's own
+ *  action, as the window arms it) or cancelled, or null with nothing to do (the streamer not on,
+ *  the end of a track where none is offered, no timer to cancel). */
+export function powerVerb(
+  verb: "standby" | "sleep" | "sleepCancel",
+  minutes: SleepChoice | undefined,
+  f: PowerFacts,
+  now: number,
+): { standby: true } | { sleep: SleepTimer | null } | null {
+  if (verb === "sleepCancel") return f.timer ? { sleep: null } : null;
+  if (!f.on) return null;
+  if (verb === "standby") return { standby: true };
+  if (minutes == null || !isSleepChoice(minutes)) return null;
+  if (minutes === "track" && !canSleepAtTrackEnd(f.playState, f.nowPlaying)) return null;
+  return { sleep: sleepTimerFor(minutes, sleepActionOf(f.action), f.playState, now) };
 }
 
 /** What the route answers: done, or why not. */

@@ -128,15 +128,26 @@ function Page(): React.JSX.Element {
   const going = useStore((s) => musicGoing(s.playState?.state));
   // the page's own buttons, at a touch (display/touch), held while the panel is open
   const [panelOpen, setPanelOpen] = useState(false);
-  // the queue view (display/PageTransport), held open like the panel; one of the two at a time
-  const [queueOpen, setQueueOpen] = useState(false);
+  // the queue view and the sleep timer's sheet (display/PageTransport), held open like the panel;
+  // one of the three at a time, opening one closing the others
+  const [opened, setOpened] = useState<"list" | "sleep" | null>(null);
+  const queueOpen = opened === "list";
+  const sleepOpen = opened === "sleep";
+  const setQueueOpen = useCallback(
+    (open: boolean): void => setOpened((was) => (open ? "list" : was === "list" ? null : was)),
+    [],
+  );
+  const setSleepOpen = useCallback(
+    (open: boolean): void => setOpened((was) => (open ? "sleep" : was === "sleep" ? null : was)),
+    [],
+  );
   const closeBoth = useCallback((): void => {
     setPanelOpen(false);
-    setQueueOpen(false);
+    setOpened(null);
   }, []);
-  // a minute with nobody at the screen closes both (display/touch), the buttons going as after
+  // a minute with nobody at the screen closes them (display/touch), the buttons going as after
   // any touch
-  const shown = useTouchShown(panelOpen || queueOpen, closeBoth);
+  const shown = useTouchShown(panelOpen || opened != null, closeBoth);
   // and so does the screen going dark: the sleeping screen has no panel to close, and a list
   // carried into it would hold the buttons up all night
   useEffect(() => {
@@ -144,7 +155,7 @@ function Page(): React.JSX.Element {
   }, [awake, closeBoth]);
   const openPanel = (open: boolean): void => {
     setPanelOpen(open);
-    if (open) setQueueOpen(false);
+    if (open) setOpened(null);
   };
   // the playback buttons, where this screen may have them (display/PageTransport)
   const control = useControl();
@@ -159,12 +170,17 @@ function Page(): React.JSX.Element {
     transport && (control.queue != null || control.presets != null || control.playlists != null);
   useEffect(() => {
     if (!listHere) setQueueOpen(false);
-  }, [listHere]);
+  }, [listHere, setQueueOpen]);
+  // and the sleep timer's sheet when the timer isn't offered (the streamer not on, the switch off)
+  const sleepHere = transport && control.sleep != null;
+  useEffect(() => {
+    if (!sleepHere) setSleepOpen(false);
+  }, [sleepHere, setSleepOpen]);
   // the panel in use (a touch in the last few seconds, or open) keeps the page awake, so a
   // resting screen can be set up; so does a touch or an open list on the sleeping screen, where
   // the panel isn't drawn
   const [panelInUse, setPanelInUse] = useState(false);
-  const inUse = panelInUse || shown || queueOpen;
+  const inUse = panelInUse || shown || opened != null;
   // a screen left on: dimmed and drifting while the music is stopped and nobody is at it
   // (display/rest)
   const { resting, offset, dark, still } = useRest(going || inUse);
@@ -217,7 +233,13 @@ function Page(): React.JSX.Element {
       {awake ? (
         <>
           <DisplayMode />
-          <PageTransport shown={transportShown} queueOpen={queueOpen} onQueue={setQueueOpen} />
+          <PageTransport
+            shown={transportShown}
+            queueOpen={queueOpen}
+            onQueue={setQueueOpen}
+            sleepOpen={sleepOpen}
+            onSleep={setSleepOpen}
+          />
           <ScenePanel
             own={own}
             appScene={appScene}

@@ -1,5 +1,10 @@
 import { useSyncExternalStore } from "react";
-import type { DisplayControl, DisplayControlAnswer, DisplayVerb } from "@shared/displayControl";
+import type {
+  DisplayControl,
+  DisplayControlAnswer,
+  DisplayVerb,
+  SleepChoice,
+} from "@shared/displayControl";
 
 /**
  * THE PAGE'S OWN CALL FOR ITS OWN BUTTONS (0.17.0, controls on the other screens). The bridge's
@@ -22,6 +27,8 @@ const OFF: DisplayControl = {
   playlists: null,
   wake: null,
   resume: null,
+  standby: false,
+  sleep: null,
 };
 let control: DisplayControl = OFF;
 const heard = new Set<() => void>();
@@ -51,9 +58,9 @@ export const POST_MS = 4_000;
 /** One verb to the app (`id`: the queue row playQueue plays, the preset playPreset plays). The
  *  answer says whether it was done, or why not (the screen asked the app, the app said not now,
  *  the source can't do it); null when the app couldn't be reached or didn't answer in POST_MS. */
-/** The verbs a button or a key sends: all but a seek, which carries its point (seekTo), and a
- *  playlist, which carries its own id (playPlaylist). */
-export type ButtonVerb = Exclude<DisplayVerb, "seek" | "playPlaylist">;
+/** The verbs a button or a key sends: all but a seek, which carries its point (seekTo), a
+ *  playlist, which carries its own id (playPlaylist), and the sleep timer, its length (sleepIn). */
+export type ButtonVerb = Exclude<DisplayVerb, "seek" | "playPlaylist" | "sleep">;
 
 export const steer = (verb: ButtonVerb, id?: number): Promise<DisplayControlAnswer | null> =>
   post({ verb, ...(id != null ? { id } : {}) });
@@ -67,10 +74,16 @@ export const seekTo = (secs: number): Promise<DisplayControlAnswer | null> =>
 export const playPlaylist = (id: string): Promise<DisplayControlAnswer | null> =>
   post({ verb: "playPlaylist", id });
 
+/** The app's sleep timer, for one of the window's lengths or to the end of the track: its action
+ *  and its fade are the app's own settings. */
+export const sleepIn = (minutes: SleepChoice): Promise<DisplayControlAnswer | null> =>
+  post({ verb: "sleep", minutes });
+
 async function post(what: {
   verb: DisplayVerb;
   id?: number | string;
   secs?: number;
+  minutes?: SleepChoice;
 }): Promise<DisplayControlAnswer | null> {
   try {
     const res = await fetch("/api/control", {

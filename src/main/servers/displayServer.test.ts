@@ -74,6 +74,7 @@ async function rig(
     id?: number;
     secs?: number;
     playlist?: string;
+    minutes?: number | "track";
   }> = [];
   const control: { now: DisplayControl } = {
     now: {
@@ -85,6 +86,8 @@ async function rig(
       playlists: null,
       wake: null,
       resume: null,
+      standby: false,
+      sleep: null,
     },
   };
   server = new DisplayServer({
@@ -135,7 +138,7 @@ async function rig(
     pageDir: page,
     log: (text) => logged.push(text),
     controlFor: () => control.now,
-    steer: (screen, name, verb, { id, secs, playlist }) => {
+    steer: (screen, name, verb, { id, secs, playlist, minutes }) => {
       steered.push({
         screen,
         name,
@@ -143,6 +146,7 @@ async function rig(
         ...(id !== undefined ? { id } : {}),
         ...(secs !== undefined ? { secs } : {}),
         ...(playlist !== undefined ? { playlist } : {}),
+        ...(minutes !== undefined ? { minutes } : {}),
       });
       return { done: true };
     },
@@ -196,6 +200,7 @@ async function rig(
       origin?: string | null;
       id?: unknown;
       secs?: unknown;
+      minutes?: unknown;
     } = {},
   ) =>
     get("/api/control", {
@@ -214,6 +219,7 @@ async function rig(
         touch: true,
         ...("id" in opts ? { id: opts.id } : {}),
         ...("secs" in opts ? { secs: opts.secs } : {}),
+        ...("minutes" in opts ? { minutes: opts.minutes } : {}),
       }),
     });
   /** /api/live's first bytes, then whether the stream ended. */
@@ -398,6 +404,8 @@ describe("Display on other screens' server", () => {
       })),
       wake: null,
       resume: null,
+      standby: false,
+      sleep: null,
     };
     const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
     // a line this long arrives in pieces: wait for the control event's end
@@ -452,6 +460,8 @@ describe("Display on other screens' server", () => {
       ],
       wake: null,
       resume: null,
+      standby: false,
+      sleep: null,
     };
     const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
     expect(opened.first).not.toContain("192.168.1.5");
@@ -490,6 +500,24 @@ describe("Display on other screens' server", () => {
     expect(steered.map((x) => [x.verb, x.playlist, x.id])).toEqual([
       ["playPlaylist", id, undefined],
       ["stopPlaylist", undefined, undefined],
+    ]);
+  });
+
+  it("sets the sleep timer for one of the window's lengths or the end of the track; standby and cancelling take nothing", async () => {
+    const { steer, steered } = await rig();
+    expect((await steer("sleep")).status).toBe(400);
+    for (const minutes of [20, "30", 30.5, -15, 0, "end", null, 7200])
+      expect((await steer("sleep", { minutes })).status).toBe(400);
+    expect((await steer("sleep", { minutes: 30 })).status).toBe(200);
+    expect((await steer("sleep", { minutes: "track" })).status).toBe(200);
+    // no other verb takes a length
+    expect((await steer("standby", { minutes: 30 })).status).toBe(200);
+    expect((await steer("sleepCancel", { minutes: 30 })).status).toBe(200);
+    expect(steered.map((x) => [x.verb, x.minutes])).toEqual([
+      ["sleep", 30],
+      ["sleep", "track"],
+      ["standby", undefined],
+      ["sleepCancel", undefined],
     ]);
   });
 
@@ -571,6 +599,8 @@ describe("Display on other screens' server", () => {
       playlists: null,
       wake: null,
       resume: null,
+      standby: false,
+      sleep: null,
     };
     const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
     expect(opened.first).toContain('event: control\ndata: {"state":"ask"');
@@ -583,6 +613,8 @@ describe("Display on other screens' server", () => {
       playlists: null,
       wake: null,
       resume: null,
+      standby: false,
+      sleep: null,
     };
     server.pushControl();
     await new Promise((r) => setTimeout(r, 50));
@@ -592,6 +624,21 @@ describe("Display on other screens' server", () => {
     server.pushControl();
     await new Promise((r) => setTimeout(r, 50));
     expect(opened.more().length).toBe(before);
+  });
+
+  it("tells an open screen of the sleep timer as it is armed", async () => {
+    const { live, control, server } = await rig();
+    const sleep = { action: "standby" as const, endOfTrack: true, armed: null };
+    control.now = { ...control.now, standby: true, sleep };
+    const opened = await live(`${cookie}; tt_screen=${SCREEN}`);
+    expect(opened.first).toContain('"standby":true');
+    control.now = { ...control.now, sleep: { ...sleep, armed: { firesAt: 1_700_000_000_000 } } };
+    server.push({
+      kind: "sleep",
+      sleep: { action: "standby", minutes: 30, firesAt: 1_700_000_000_000, trackKey: null },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(opened.more()).toContain('"armed":{"firesAt":1700000000000}');
   });
 
   it("serves the reduced snapshot, with pictures by id", async () => {
