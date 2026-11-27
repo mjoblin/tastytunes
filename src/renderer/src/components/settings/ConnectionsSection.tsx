@@ -80,7 +80,7 @@ export function ConnectionsSection({ settings, save }: SectionProps): React.JSX.
 
         <Toggle
           label="Missing album art"
-          hint="Fills in art the media server doesn't have: MusicBrainz identifies the album, the Cover Art Archive supplies the image. Server art always wins. Sends the album's artist and title. Off means no requests will be sent."
+          hint="Fills in art the media server doesn't have: MusicBrainz identifies the album, the Cover Art Archive supplies the image. Server art always wins. Sends the album's artist and title. For internet radio, it also finds the song's cover, sending the song's artist and title. Off means no requests will be sent."
           checked={settings.albumArtLookup}
           onChange={(albumArtLookup) => void save({ albumArtLookup })}
         />
