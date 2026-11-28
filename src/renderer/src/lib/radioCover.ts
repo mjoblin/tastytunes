@@ -20,7 +20,7 @@ import type { NowPlayingMeta } from "@/lib/format";
  * and at once for another station (another logo). With no cover to hold (a fresh start, another
  * station) the surface shows no picture while the first answer comes (at most FIRST_MS, `waiting`)
  * rather than the logo for a moment. A song's answer is kept by its artist and title, so a song
- * asked once shows its cover at once; a song with none is asked again (RETRY_MS, TRIES), since a
+ * asked once shows its cover at once; a song with none is asked again (RETRY_AFTER_MS), since a
  * failed ask (MusicBrainz busy, the archive slow) answers none too, and main keeps the songs that
  * truly have none, so asking those again costs nothing.
  *
@@ -34,9 +34,12 @@ export const HOLD_MS = 6_000;
 export const GAP_MS = 3_000;
 /** How long a surface with no cover to hold shows no picture while the first answer comes. */
 export const FIRST_MS = 2_500;
-/** A song with no cover is asked again after this long, at most TRIES times in all while it plays. */
-export const RETRY_MS = 20_000;
-export const TRIES = 3;
+/** A song with no cover is asked again after each of these waits while it plays: a failed ask
+ *  (MusicBrainz busy, the archive slow) answers none too, and a busy MusicBrainz clears within
+ *  seconds, so the first comes soon. */
+export const RETRY_AFTER_MS = [5_000, 15_000, 30_000] as const;
+/** The asks a song's answer may take in all. */
+export const TRIES = RETRY_AFTER_MS.length + 1;
 /** How long a song with no cover is taken at its word, past its tries: it may play again later. */
 const MISS_MS = 5 * 60_000;
 
@@ -146,8 +149,8 @@ export function useRadioCover(meta: NowPlayingMeta | null, art: string | null): 
     if (key && song) ask(key, song.artist, song.song);
   });
   useEffect(() => {
-    if (answer !== null || !key || tries >= TRIES) return;
-    const t = setTimeout(askAgain, RETRY_MS);
+    if (answer !== null || !key || tries < 1 || tries >= TRIES) return;
+    const t = setTimeout(askAgain, RETRY_AFTER_MS[tries - 1]);
     return () => clearTimeout(t);
   }, [answer, key, tries]);
 

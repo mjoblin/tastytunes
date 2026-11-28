@@ -21,7 +21,7 @@
 // fetch is nobody's verdict and is asked again. Gated at the IPC layer by the Missing album art
 // switch (whether anything is asked) and Song covers on radio (whether the logo gives way).
 import { DiskCache } from "./diskCache";
-import { MB, mbFetch } from "./mb";
+import { MB, mbFetch, type Fetched } from "./mb";
 import { CAA } from "./coverArt";
 import { loggedFetch } from "../netlog";
 import { getSettings } from "../data/persist";
@@ -207,25 +207,56 @@ function searchGroups(lead: string, song: string) {
   );
 }
 
+/** Where each lookup's outcome is told: the app's log under "covers" (ipc/lookups sets it), so a
+ *  slow or missing cover says why, a busy MusicBrainz, a slow archive, or none to be had. */
+let report: (text: string) => void = () => {};
+export function setRadioCoverReport(fn: (text: string) => void): void {
+  report = fn;
+}
+
+/** Why a MusicBrainz search gave no answer, as the log says it. */
+const searchTrouble = (got: Fetched): string =>
+  got.kind === "error" && got.status === 503
+    ? "MusicBrainz busy (503)"
+    : got.kind === "error" && got.status != null
+      ? `MusicBrainz answered ${got.status}`
+      : "MusicBrainz didn't answer";
+
 async function find(artist: string, song: string, key: string): Promise<string | null> {
+  const started = Date.now();
+  const told = (outcome: string): void =>
+    report(`"${artist} - ${song}": ${outcome}, ${((Date.now() - started) / 1000).toFixed(1)} s`);
   const lead = leadArtist(artist);
   let got = await search(lead, song);
-  if (got.kind === "error") return null; // no answer: nothing to show, nothing to remember
+  // no answer: nothing to show, nothing to remember
+  if (got.kind === "error") {
+    told(`couldn't ask, ${searchTrouble(got)}`);
+    return null;
+  }
   let groups = got.kind === "ok" ? coverGroups(recordingsOf(got.body), artist, song) : [];
+  let by = "a recording's record";
   // a version's note the archive's title doesn't carry: asked once more without it
   const bare = withoutVersion(song);
   if (groups.length === 0 && bare !== song) {
     got = await search(lead, bare);
-    if (got.kind === "error") return null;
+    if (got.kind === "error") {
+      told(`couldn't ask, ${searchTrouble(got)}`);
+      return null;
+    }
     groups = got.kind === "ok" ? coverGroups(recordingsOf(got.body), artist, bare) : [];
   }
   // no recording led to a record: the song's own single (or an album of its name), by its title
   if (groups.length === 0) {
     got = await searchGroups(lead, song);
-    if (got.kind === "error") return null;
+    if (got.kind === "error") {
+      told(`couldn't ask, ${searchTrouble(got)}`);
+      return null;
+    }
     groups = got.kind === "ok" ? songGroups(groupsOf(got.body), artist, song) : [];
+    by = "its own single or album, by its title";
   }
   let definitive = true;
+  let trouble: string | null = null;
   for (const id of groups) {
     try {
       const res = await loggedFetch("caa", `${CAA}/release-group/${id}/front-500`, {
@@ -235,16 +266,27 @@ async function find(artist: string, song: string, key: string): Promise<string |
       const type = (res.headers.get("content-type") ?? "").split(";")[0].trim();
       if (!res.ok || !type.startsWith("image/")) {
         definitive = false;
+        trouble = `the archive answered ${res.status}`;
         continue;
       }
       const url = `data:${type};base64,${Buffer.from(await res.arrayBuffer()).toString("base64")}`;
       cache.set(key, url);
+      told(`found, from ${by}`);
       return url;
-    } catch {
+    } catch (e) {
       definitive = false; // network trouble is never a verdict
+      trouble =
+        (e as Error)?.name === "TimeoutError"
+          ? `the archive timed out (${FETCH_MS / 1000} s)`
+          : "the archive didn't answer";
     }
   }
-  if (definitive) cache.set(key, null);
+  if (definitive) {
+    cache.set(key, null);
+    told(
+      groups.length ? "no cover, the archive has none" : "no cover, no record of the artist's own",
+    );
+  } else told(`couldn't fetch, ${trouble ?? "the archive"}`);
   return null;
 }
 
