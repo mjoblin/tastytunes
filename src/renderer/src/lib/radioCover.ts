@@ -161,6 +161,11 @@ export function useRadioCover(meta: NowPlayingMeta | null, art: string | null): 
     // a song with no cover shows the logo, and the next song starts from it
     else if (answer === null || !radio) setHeld(null);
   }, [answer, logo, radio]);
+  // another station's picture is another station: what this one held goes at once, so coming back
+  // to a station never shows its cover from before
+  useEffect(() => {
+    setHeld((h) => (h && h.logo !== logo ? null : h));
+  }, [logo]);
   const holding = held != null && radio && !own && held.logo === logo && answer === undefined;
   useEffect(() => {
     if (!holding) return;
