@@ -8,8 +8,16 @@ vi.mock("./mb", () => ({
   MB: "http://mb.test",
   mbFetch: (url: string, urgent?: boolean) => mbFetch(url, urgent),
 }));
-const { coverGroups, leadArtist, looseKey, songGroups, wantedRadioCover, withoutVersion } =
-  await import("./radioCover");
+const {
+  coverGroups,
+  keptAnswer,
+  leadArtist,
+  looseKey,
+  MISS_LIFE_MS,
+  songGroups,
+  wantedRadioCover,
+  withoutVersion,
+} = await import("./radioCover");
 type Rec = Parameters<typeof coverGroups>[0][number];
 
 const rec = (
@@ -210,6 +218,24 @@ describe("the song's own single, when no recording led to a record", () => {
         "Crazy in Love",
       ),
     ).toEqual(["single"]);
+  });
+});
+
+describe("what the cache says of a song", () => {
+  const now = 1_800_000_000_000;
+  it("keeps a cover for good", () => {
+    expect(keptAnswer("data:image/png;base64,AA==", now)).toBe("data:image/png;base64,AA==");
+  });
+
+  it("takes a song with no cover at its word for a few days, then asks again", () => {
+    expect(keptAnswer({ none: now - 1000 }, now)).toBeNull();
+    expect(keptAnswer({ none: now - MISS_LIFE_MS + 1000 }, now)).toBeNull();
+    expect(keptAnswer({ none: now - MISS_LIFE_MS - 1000 }, now)).toBeUndefined();
+  });
+
+  it("asks again for a none kept before a miss had a date, or for nothing kept", () => {
+    expect(keptAnswer(null, now)).toBeUndefined();
+    expect(keptAnswer(undefined, now)).toBeUndefined();
   });
 });
 
