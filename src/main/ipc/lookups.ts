@@ -42,7 +42,7 @@ import { fetchTrackInfo } from "../lookups/trackInfo";
 import { artistIndex } from "../media/artistIndex";
 import * as mediaIndex from "../media/mediaIndex";
 import { albumArtElsewhere } from "../media/albumArtElsewhere";
-import { wantedRadioCover } from "../lookups/radioCover";
+import { setRadioCoverReport, wantedRadioCover } from "../lookups/radioCover";
 import { demoHost } from "../servers/demoStreamer";
 import { handle } from "../app/guard";
 import { nameKey } from "@shared/keys";
@@ -61,6 +61,8 @@ async function offeredImages(name: string): Promise<string[]> {
 }
 
 export function registerLookupsIpc(): void {
+  // each radio cover lookup's outcome in the app's log, so a slow or missing cover says why
+  setRadioCoverReport((text) => deviceManager.log("info", "covers", text));
   // the rows' and cards' artist pictures: never a lookup (MusicBrainz answers one request a
   // second), only what is known; a photo only with the artist lookups on
   handle(IPC.artistPictures, (_e, names: unknown) => {
