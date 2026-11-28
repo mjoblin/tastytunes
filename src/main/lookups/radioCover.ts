@@ -17,8 +17,9 @@
 // asked for by its title (songGroups): a hit nearly always had one.
 //
 // Cached as a data URL in a bounded disk LRU, INCLUDING definitive misses (no recording matched,
-// or no cover for any of its albums), so a station's rotation is asked once; a failed search or
-// fetch is nobody's verdict and is asked again. Gated at the IPC layer by the Missing album art
+// or no cover for any of its albums), so a station's rotation is asked once; a miss is dated and
+// asked again after MISS_LIFE_MS (a new release's cover reaches the archive late); a failed search
+// or fetch is nobody's verdict and is asked again. Gated at the IPC layer by the Missing album art
 // switch (whether anything is asked) and Song covers on radio (whether the logo gives way).
 import { DiskCache } from "./diskCache";
 import { MB, mbFetch, type Fetched } from "./mb";
@@ -36,7 +37,21 @@ const FETCH_MS = 10_000;
 /** The choosing rules' version, in every cache key: raised when they change what a song shows. */
 const RULES = 3;
 
-const cache = new DiskCache<string | null>("radiocover", CACHE_MAX);
+/** A song settled as having no cover is asked again after this long: a new release's cover often
+ *  reaches the archive days after the song reaches the radio, and a hits station plays it most. */
+export const MISS_LIFE_MS = 3 * 24 * 60 * 60 * 1000;
+/** What the cache keeps for a song: its cover, or when it was settled as having none (null, kept
+ *  before a miss had a date, counts as no verdict). */
+type Kept = string | { none: number } | null;
+const cache = new DiskCache<Kept>("radiocover", CACHE_MAX);
+
+/** What the cache says of a song: its cover; null for a settled none still within its life; or
+ *  undefined, nothing to go on (a none past its life, or one kept before a miss had a date). */
+export function keptAnswer(kept: Kept | undefined, now: number): string | null | undefined {
+  if (typeof kept === "string") return kept;
+  if (kept != null && now - kept.none < MISS_LIFE_MS) return null;
+  return undefined;
+}
 const asking = new Map<string, Promise<string | null>>();
 
 interface MbCredit {
@@ -282,7 +297,7 @@ async function find(artist: string, song: string, key: string): Promise<string |
     }
   }
   if (definitive) {
-    cache.set(key, null);
+    cache.set(key, { none: Date.now() });
     told(
       groups.length ? "no cover, the archive has none" : "no cover, no record of the artist's own",
     );
@@ -298,7 +313,8 @@ export function fetchRadioCover(artist: string, song: string): Promise<string | 
   // the choosing rules' version leads the key: a song chosen under older rules is chosen again,
   // and its old entry ages out of the LRU
   const key = `${RULES}|${looseKey(a)}|${looseKey(s)}`;
-  if (cache.has(key)) return Promise.resolve(cache.get(key) ?? null);
+  const known = cache.has(key) ? keptAnswer(cache.get(key), Date.now()) : undefined;
+  if (known !== undefined) return Promise.resolve(known);
   let p = asking.get(key);
   if (!p) {
     p = find(a, s, key).finally(() => asking.delete(key));
